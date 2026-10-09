@@ -39,14 +39,14 @@
             <div class="gs-grid-2">
                 <MudTextField @bind-Value="_merchantName" Label="Merchant" Variant="Variant.Outlined" />
                 <MudDatePicker @bind-Date="_purchaseDate" Label="Purchase date" Variant="Variant.Outlined" />
-                <MudNumericField @bind-Value="_subtotal" Label="Items subtotal" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                <MudNumericField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
+                <DecimalField @bind-Value="_subtotal" Label="Items subtotal" Variant="Variant.Outlined"
+                              Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
+                <DecimalField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
+                              Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
+                <DecimalField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
+                              Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
+                <DecimalField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
+                              Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
             </div>
 
             @if (!string.IsNullOrWhiteSpace(_sourceValues))
@@ -107,18 +107,18 @@
                                        aria-label="Remove item" OnClick="@(() => RemoveItem(item))" />
                     </div>
                     <div class="gs-grid-2">
-                        <MudNumericField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
-                                         Format="N3" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
-                        <MudNumericField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
-                                         Adornment="Adornment.Start" AdornmentText="@Currency" Format="N2" HideSpinButtons="true" />
+                        <DecimalField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
+                                      Places="3" HideSpinButtons="true" />
+                        <DecimalField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
+                        <DecimalField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
+                        <DecimalField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                         @if (item.IsTaxable != false)
                         {
-                            <MudNumericField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
-                                             Adornment="Adornment.End" AdornmentText="%" Format="N4" HideSpinButtons="true" />
+                            <DecimalField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
+                                          Adornment="Adornment.End" AdornmentText="%" Places="4" HideSpinButtons="true" />
                         }
                         <MudSelect T="bool?" @bind-Value="item.IsTaxable" Label="Tax status" Variant="Variant.Outlined">
                             <MudSelectItem T="bool?" Value="@((bool?)null)">Not identified</MudSelectItem>

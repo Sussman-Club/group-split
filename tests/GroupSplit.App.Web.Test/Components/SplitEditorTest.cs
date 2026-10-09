@@ -116,6 +116,30 @@ public class SplitEditorTest : ComponentTest
     }
 
     /// <summary>
+    /// A share typed with a comma is that many cents, not a hundred times as many (#313).
+    /// It used to be read as 625, and two of them still "added up" to a 12,50 expense that
+    /// had itself been read as 1250.
+    /// </summary>
+    [Fact]
+    public void A_share_typed_with_a_comma_is_read_as_a_decimal()
+    {
+        var stated = new List<SplitInput>
+        {
+            new() { UserId = Ana, Amount = 60m },
+            new() { UserId = Omar, Amount = 40m }
+        };
+
+        IReadOnlyList<SplitInput>? handed = null;
+
+        var editor = Render(value: stated, preview: Divided("Rent"), onChanged: splits => handed = splits);
+
+        editor.FindAll("input[type=text]")[0].Input("6,25");
+
+        Assert.NotNull(handed);
+        Assert.Equal(6.25m, handed!.Single(split => split.UserId == Ana).Amount);
+    }
+
+    /// <summary>
     /// Stated shares are the person's own arithmetic, so the one thing shown about them is
     /// whether it adds up -- not a rule that had nothing to do with them.
     /// </summary>

@@ -64,16 +64,15 @@
                     </MudText>
                 }
 
-                <MudNumericField @bind-Value="_model.Amount"
-                                 For="@(() => _model.Amount)"
-                                 Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                 AdornmentColor="Color.Primary"
-                                 HideSpinButtons="true"
-                                 Format="N2"
-                                 Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
+                <DecimalField @bind-Value="_model.Amount"
+                              For="@(() => _model.Amount)"
+                              Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              AdornmentColor="Color.Primary"
+                              HideSpinButtons="true"
+                              Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
 
                 <MudText Typo="Typo.caption">
                     Remaining after this: @((Shown.Amount - _model.Amount).ToMoney())

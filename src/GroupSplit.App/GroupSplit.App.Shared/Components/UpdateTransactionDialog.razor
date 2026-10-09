@@ -68,18 +68,17 @@
                    left square, so no new figure can leave their part as it was. Said here,
                    beside the field, rather than after Save -- where it used to arrive as "the
                    shares have to add up", which sent people looking at the wrong thing. *@
-                <MudNumericField @bind-Value="_model.Amount"
-                                 @bind-Value:after="OnMoneyChangedAsync"
-                                 For="@(() => _model.Amount)"
-                                 Label="How much?"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentText="$"
-                                 HideSpinButtons="true"
-                                 Format="N2"
-                                 ReadOnly="@PayerHasLeft"
-                                 HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
-                                 Class="gs-amount"/>
+                <DecimalField @bind-Value="_model.Amount"
+                              @bind-Value:after="OnMoneyChangedAsync"
+                              For="@(() => _model.Amount)"
+                              Label="How much?"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentText="$"
+                              HideSpinButtons="true"
+                              ReadOnly="@PayerHasLeft"
+                              HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
+                              Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
                               For="@(() => _model.Name)"

@@ -404,6 +404,43 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// Typed into the field itself rather than handed to it, because the parse is the
+    /// defect: <c>12,50</c> was recorded as a $1,250 expense (#313).
+    /// </summary>
+    [Fact]
+    public async Task An_amount_typed_with_a_comma_is_recorded_as_that_many_cents()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense",
+                    new DialogParameters<CreateTransactionDialog> { { d => d.SelectedGroupId, GroupId } }));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await amount.Find("input").ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "12,50" });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Cena"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await reference!.GetReturnValueAsync<CreateTransactionRequest>();
+
+        Assert.Equal(12.50m, request!.Amount);
+    }
+
+    /// <summary>
     /// A read that fails does not take the expense down with it.
     /// </summary>
     /// <remarks>

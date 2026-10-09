@@ -73,16 +73,15 @@
                 </div>
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
-                <MudNumericField @bind-Value="_model.Amount"
-                                 @bind-Value:after="OnMoneyChangedAsync"
-                                 For="@(() => _model.Amount)"
-                                 Label="How much?"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentText="$"
-                                 HideSpinButtons="true"
-                                 Format="N2"
-                                 Class="gs-amount"/>
+                <DecimalField @bind-Value="_model.Amount"
+                              @bind-Value:after="OnMoneyChangedAsync"
+                              For="@(() => _model.Amount)"
+                              Label="How much?"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentText="$"
+                              HideSpinButtons="true"
+                              Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
                               @bind-Value:after="OnNameChangedAsync"

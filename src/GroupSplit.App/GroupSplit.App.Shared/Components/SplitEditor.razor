@@ -181,18 +181,17 @@
         <MudStack Spacing="1">
             @foreach (var member in Members)
             {
-                <MudNumericField T="decimal"
-                                 @key="member.Id"
-                                 Value="@ShareOf(member.Id)"
-                                 ValueChanged="@(share => SetShare(member.Id, share))"
-                                 Label="@member.Label()"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                 HideSpinButtons="true"
-                                 Immediate="true"
-                                 Format="N2"/>
+                <DecimalField T="decimal"
+                              @key="member.Id"
+                              Value="@ShareOf(member.Id)"
+                              ValueChanged="@(share => SetShare(member.Id, share))"
+                              Label="@member.Label()"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              HideSpinButtons="true"
+                              Immediate="true"/>
             }
 
             @* Somebody who has left keeps the share they settled up on. Shown, because the
@@ -200,18 +199,17 @@
                the one edit the API refuses. *@
             @foreach (var leaver in Leavers)
             {
-                <MudNumericField T="decimal"
-                                 @key="leaver.UserId"
-                                 Value="@leaver.Amount"
-                                 Label="@ParticipantCopy.Left(leaver.UserName)"
-                                 HelperText="@ParticipantCopy.LeaverShareFixed"
-                                 Disabled="true"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                 HideSpinButtons="true"
-                                 Format="N2"/>
+                <DecimalField T="decimal"
+                              @key="leaver.UserId"
+                              Value="@leaver.Amount"
+                              Label="@ParticipantCopy.Left(leaver.UserName)"
+                              HelperText="@ParticipantCopy.LeaverShareFixed"
+                              Disabled="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              HideSpinButtons="true"/>
             }
         </MudStack>
 

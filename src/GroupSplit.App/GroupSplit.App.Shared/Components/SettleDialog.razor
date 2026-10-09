@@ -31,7 +31,7 @@
 
                 <MudText Typo="Typo.subtitle2">@Standing</MudText>
 
-                <MudNumericField
+                <DecimalField
                     @bind-Value="_model.Amount"
                     For="@(() => _model.Amount)"
                     Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
@@ -40,7 +40,6 @@
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                     AdornmentColor="Color.Primary"
                     HideSpinButtons="true"
-                    Format="N2"
                     Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
 
                 <MudText Typo="Typo.caption">
