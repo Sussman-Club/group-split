@@ -511,6 +511,66 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
+    /// A bill that divided the expense, made incomplete by splitting a line in two and then
+    /// completed by giving the new half its rule. The incomplete save keeps the shares; the
+    /// call that completes it -- the one <c>receipts rule</c> makes -- divides again. It used
+    /// to find the bill "not the source" because it had been incomplete a moment before, and
+    /// the ledger stayed where it was for good.
+    /// </summary>
+    [Fact]
+    public async Task Completing_a_bill_that_divides_the_expense_divides_it_again()
+    {
+        var (expense, group, even) = await AnExpense();
+        var other = await DbContext.Set<GroupMembership>()
+            .Where(membership => membership.GroupId == group && membership.UserId != Self)
+            .Select(membership => membership.UserId)
+            .SingleAsync(Ct);
+        var sole = (await Rules.Create(new CreateSplitRuleRequest
+        {
+            GroupId = group, Name = "Other only", Definition = new SoleSplitRuleDto(other)
+        }, Ct)).Current!.Id;
+
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(
+            Item("Shared", 24m, even), Item("Other", 24m, sole)), Ct);
+        await Receipts.Divide(expense.Id, Ct);
+        var shared = bill.Items.Single(item => item.Name == "Shared").Id;
+        var theirs = bill.Items.Single(item => item.Name == "Other").Id;
+
+        // Their 24 was two things, and only one of them was theirs alone.
+        bill = await Receipts.SaveForExpense(expense.Id, Bill(
+            Item("Shared", 24m, even, shared), Item("Other", 12m, sole, theirs), Item("Dessert", 12m, null)), Ct);
+        var split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
+        Assert.Equal(12m, split.Single(share => share.UserId == Self).Amount);
+        Assert.Equal(36m, split.Single(share => share.UserId == other).Amount);
+
+        await Receipts.SetRule(expense.Id, bill.Items.Single(item => item.Name == "Dessert").Id,
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = even }, Ct);
+
+        split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
+        Assert.Equal(18m, split.Single(share => share.UserId == Self).Amount);
+        Assert.Equal(30m, split.Single(share => share.UserId == other).Amount);
+    }
+
+    /// <summary>
+    /// The other half of the same rule: shares somebody stated never came from the bill, so
+    /// completing the bill leaves them exactly as they were.
+    /// </summary>
+    [Fact]
+    public async Task Completing_a_bill_on_an_expense_split_by_hand_leaves_its_shares()
+    {
+        var (expense, _, even) = await AnExpense();
+        var bill = await Receipts.SaveForExpense(expense.Id, Bill(
+            Item("Shared", 24m, even), Item("Dessert", 24m, null)), Ct);
+
+        await Receipts.SetRule(expense.Id, bill.Items.Single(item => item.Name == "Dessert").Id,
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = even }, Ct);
+
+        var split = Assert.Single((await Transactions.GetDetails(expense.Id, Ct))!.Splits);
+        Assert.Equal(Self, split.UserId);
+        Assert.Equal(48m, split.Amount);
+    }
+
+    /// <summary>
     /// A bill under a category that divides some other way is still divisible by its lines,
     /// and the shares it produces are written as amounts somebody chose -- the expense's own
     /// rule is not itemized, and dividing by that rule again would undo them.

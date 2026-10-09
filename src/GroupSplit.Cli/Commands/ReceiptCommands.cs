@@ -273,8 +273,8 @@ public static class ReceiptCommands
         var subtotal = Amounts.Option("--subtotal",
             "What the lines came to before tax and tip. Defaults to the lines added up.");
 
-        var tax = Amounts.OptionOrZero("--tax", "Tax on the whole bill.");
-        var tip = Amounts.OptionOrZero("--tip", "Tip on the whole bill.");
+        var tax = Amounts.Option("--tax", "Tax on the whole bill. Defaults to the lines' tax added up.");
+        var tip = Amounts.Option("--tip", "Tip on the whole bill. Defaults to the saved bill's tip, or none.");
 
         var total = Amounts.Option("--total",
             "What was paid. Defaults to subtotal plus tax plus tip, and must equal the expense's amount.");
@@ -297,24 +297,36 @@ public static class ReceiptCommands
                     "Try --item \"Wine=18.00\", repeating --item for each line on the bill.");
             }
 
-            var lines = ReceiptItems.Parse("--item", given);
+            var parsed = ReceiptItems.ParseLines("--item", given);
             var client = new Api.ReceiptsClient(context.ApiHttpClient);
 
-            // Both default rather than being required, because on an ordinary bill they are
+            // The bill as it is saved now, for what this command has no flag for. The save
+            // replaces the whole bill, and everything it was not sent it wrote as nothing --
+            // so correcting one price dropped the merchant and the date the bill was read
+            // with, and every line's tax rate, and a taxed bill then refused to add up unless
+            // every line was given its tax again.
+            var saved = await Saved(client, id, ct);
+            var lines = parsed.Select(line => Kept(line, saved)).ToList();
+
+            // All default rather than being required, because on an ordinary bill they are
             // the lines added up and then the tax and tip added on -- and making somebody
             // retype a figure the machine can add is how a transcription error gets in.
             // Stating them is for the bill that disagrees with its own arithmetic, which is
-            // exactly when the server should refuse it.
+            // exactly when the server should refuse it. The tip belongs to no line, so the
+            // one it falls back on is the saved bill's.
             var lineTotal = lines.Sum(line => line.TotalPrice);
             var subtotalValue = parse.GetValue(subtotal) ?? lineTotal;
+            var taxValue = parse.GetValue(tax) ?? lines.Sum(line => line.TaxAmount);
+            var tipValue = parse.GetValue(tip) ?? saved?.Tip ?? 0m;
 
             var request = new SaveReceiptRequest
             {
                 Subtotal = subtotalValue,
-                Tax = parse.GetValue(tax),
-                Tip = parse.GetValue(tip),
-                Total = parse.GetValue(total)
-                        ?? subtotalValue + parse.GetValue(tax) + parse.GetValue(tip),
+                Tax = taxValue,
+                Tip = tipValue,
+                Total = parse.GetValue(total) ?? subtotalValue + taxValue + tipValue,
+                MerchantName = saved?.MerchantName,
+                PurchaseDate = saved?.PurchaseDate,
                 Items = lines
             };
 
@@ -326,6 +338,53 @@ public static class ReceiptCommands
         });
 
         return command;
+    }
+
+    /// <summary>The expense's saved bill, or null when it has none yet.</summary>
+    /// <remarks>
+    /// Only a 404 is read as "none": anything else is the command's problem and is left to
+    /// the handler that reports it. A 404 for the expense itself is let through too -- the
+    /// save that follows gets the same answer and reports it with its own code.
+    /// </remarks>
+    private static async Task<ReceiptResponse?> Saved(Api.ReceiptsClient client, Guid id, CancellationToken ct)
+    {
+        try
+        {
+            return await client.GetReceiptAsync(id, ct);
+        }
+        catch (Api.ApiException api) when (api.StatusCode is (int)System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A line as typed, with what the saved line of that id carries and the command has no
+    /// way to say.
+    /// </summary>
+    /// <remarks>
+    /// Only for a line named by its id: a line with none is new, and has nothing saved to
+    /// keep. The normalized name is kept only while the name is the same -- it is the
+    /// name's reading, and a renamed line's old one would describe a different thing. Tax is
+    /// kept, rate and all, only for a line that says nothing about it; <c>/tax</c> or
+    /// <c>/notax</c> is somebody stating what that line carried, and a rate left behind would
+    /// work its own figure out over the top of theirs.
+    /// </remarks>
+    private static ReceiptItemInput Kept(ReceiptItems.ReceiptLine line, ReceiptResponse? saved)
+    {
+        if (line.Item.Id is not { } id || saved?.Items.FirstOrDefault(item => item.Id == id) is not { } stored)
+            return line.Item;
+
+        var kept = line.Item with
+        {
+            NormalizedName = string.Equals(line.Item.Name, stored.Name, StringComparison.Ordinal)
+                ? stored.NormalizedName
+                : null
+        };
+
+        return line.StatesTax
+            ? kept
+            : kept with { TaxAmount = stored.TaxAmount, TaxRate = stored.TaxRate, IsTaxable = stored.IsTaxable };
     }
 
     private static Command Rule()

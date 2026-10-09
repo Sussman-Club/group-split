@@ -54,7 +54,87 @@ public sealed class ReceiptCommandTests : IDisposable
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         var sent = _api.Requests.Single(request => request.Method == "PUT").Json;
         Assert.Equal(itemId, sent.GetProperty("items")[0].GetProperty("id").GetGuid());
-        Assert.Single(_api.Requests);
+        // The saved bill is read first, for what the command has no flag for, and the line's
+        // source text is still left to the server to keep: it is not sent back.
+        Assert.Equal(["GET", "PUT"], _api.Requests.Select(request => request.Method));
+        Assert.Equal(JsonValueKind.Null, sent.GetProperty("items")[0].GetProperty("description").ValueKind);
+    }
+
+    /// <summary>
+    /// Correcting one price keeps what the command cannot say: where and when the bill was
+    /// read, every line's tax and rate, the reading of a name that did not change, and the
+    /// tip. It used to send none of them, and the save wrote each as nothing.
+    /// </summary>
+    [Fact]
+    public async Task Set_keeps_the_saved_bills_metadata_it_does_not_mention()
+    {
+        var water = Guid.NewGuid();
+        var soap = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{Expense}/receipt", Saved(3m,
+            Line(water, "Water", "kirkland water 40 pk", 8.00m, tax: .48m, rate: 6m, taxable: true),
+            Line(soap, "Soap", "dial soap", 4.00m, tax: 0m, rate: null, taxable: false)), method: "GET");
+        _api.Returns($"/api/transactions/{Expense}/receipt", Bill(), method: "PUT");
+
+        var result = await Cli.RunAsync("receipts", "set", Expense.ToString(),
+            "--item", $"{water}#Water=8.00", "--item", $"{soap}#Hand soap=4.50");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        var sent = _api.Requests.Single(request => request.Method == "PUT").Json;
+        Assert.Equal("Costco", sent.GetProperty("merchantName").GetString());
+        Assert.Equal("2026-09-30", sent.GetProperty("purchaseDate").GetString());
+        Assert.Equal(3m, sent.GetProperty("tip").GetDecimal());
+        Assert.Equal(.48m, sent.GetProperty("tax").GetDecimal());
+        Assert.Equal(15.98m, sent.GetProperty("total").GetDecimal());
+
+        var kept = sent.GetProperty("items")[0];
+        Assert.Equal("kirkland water 40 pk", kept.GetProperty("normalizedName").GetString());
+        Assert.Equal(.48m, kept.GetProperty("taxAmount").GetDecimal());
+        Assert.Equal(6m, kept.GetProperty("taxRate").GetDecimal());
+        Assert.True(kept.GetProperty("isTaxable").GetBoolean());
+
+        // Renamed, so the old reading of its name no longer describes it.
+        var renamed = sent.GetProperty("items")[1];
+        Assert.Equal(JsonValueKind.Null, renamed.GetProperty("normalizedName").ValueKind);
+        Assert.False(renamed.GetProperty("isTaxable").GetBoolean());
+    }
+
+    /// <summary>
+    /// A line that states its tax is taken at its word: the saved rate would otherwise work
+    /// its own figure out over the top of the one typed.
+    /// </summary>
+    [Fact]
+    public async Task Set_takes_a_stated_tax_over_the_saved_rate()
+    {
+        var water = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{Expense}/receipt", Saved(0m,
+            Line(water, "Water", "water", 8.00m, tax: .48m, rate: 6m, taxable: true)), method: "GET");
+        _api.Returns($"/api/transactions/{Expense}/receipt", Bill(), method: "PUT");
+
+        var result = await Cli.RunAsync("receipts", "set", Expense.ToString(),
+            "--item", $"{water}#Water=8.00/tax0.50");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        var line = _api.Requests.Single(request => request.Method == "PUT").Json.GetProperty("items")[0];
+        Assert.Equal(.50m, line.GetProperty("taxAmount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, line.GetProperty("taxRate").ValueKind);
+    }
+
+    /// <summary>A first bill has nothing saved to keep, and is written as typed.</summary>
+    [Fact]
+    public async Task Set_on_an_expense_with_no_bill_writes_it_as_typed()
+    {
+        _api.Problem($"/api/transactions/{Expense}/receipt", 404, "RECEIPT_NOT_FOUND",
+            "This expense has no itemized bill.", method: "GET");
+        _api.Returns($"/api/transactions/{Expense}/receipt", Bill(), method: "PUT");
+
+        var result = await Cli.RunAsync("receipts", "set", Expense.ToString(), "--item", "Food=100/tax6");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        var sent = _api.Requests.Single(request => request.Method == "PUT").Json;
+        Assert.Equal(JsonValueKind.Null, sent.GetProperty("merchantName").ValueKind);
+        Assert.Equal(6m, sent.GetProperty("tax").GetDecimal());
+        Assert.Equal(0m, sent.GetProperty("tip").GetDecimal());
+        Assert.Equal(106m, sent.GetProperty("total").GetDecimal());
     }
     [Fact]
     public async Task Rule_command_updates_one_item()
@@ -241,6 +321,22 @@ public sealed class ReceiptCommandTests : IDisposable
                 }
             }
         }
+    };
+
+    /// <summary>A saved bill read off a Costco receipt, with its tip and its lines.</summary>
+    private static object Saved(decimal tip, params object[] items) => new
+    {
+        id = Guid.NewGuid(), expenseId = Expense, subtotal = 12m, tax = .48m, tip, total = 12.48m + tip,
+        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true, canEdit = true,
+        merchantName = "Costco", purchaseDate = "2026-09-30", items
+    };
+
+    private static object Line(Guid id, string name, string normalizedName, decimal price, decimal tax,
+        decimal? rate, bool? taxable) => new
+    {
+        id, name, normalizedName, description = "AS PRINTED", unitPrice = price, quantity = 1m,
+        totalPrice = price, taxAmount = tax, taxRate = rate, isTaxable = taxable,
+        splitRuleVersionId = (Guid?)null, splitRuleName = (string?)null, splitRule = (object?)null
     };
 
     private static object Bill(params object[] items) => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
