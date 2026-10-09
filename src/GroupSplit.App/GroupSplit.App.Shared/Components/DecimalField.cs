@@ -51,6 +51,54 @@ public class DecimalField<T> : MudNumericField<T>
 
     protected override IConverter<T?, string?> GetDefaultConverter() => new TextConverter(this);
 
+    // ---- a refusal leaves the field as it was typed ----------------------------------------
+    //
+    // MudBlazor writes whatever the converter produced even when it threw, which for a
+    // refused amount is zero, and then rewrites the text from that zero on blur. So "1.234,56"
+    // turned into "0.00" beside a message about separators the person could no longer see,
+    // and the model quietly held an amount of nothing. The value keeps what it had, the text
+    // keeps what was typed, and the error stays until the text is fixed.
+
+    private bool _readingText;
+
+    protected override async Task UpdateValuePropertyAsync(bool updateText)
+    {
+        _readingText = true;
+
+        try
+        {
+            await base.UpdateValuePropertyAsync(updateText);
+        }
+        finally
+        {
+            _readingText = false;
+        }
+    }
+
+    protected override Task SetValueAndUpdateTextAsync(T? value, bool updateText = true, bool force = false)
+        => _readingText && ConversionError
+            ? Task.CompletedTask
+            : base.SetValueAndUpdateTextAsync(value, updateText, force);
+
+    protected override Task UpdateTextPropertyAsync(bool updateValue)
+        => ConversionError ? Task.CompletedTask : base.UpdateTextPropertyAsync(updateValue);
+
+    /// <summary>
+    /// A new value from the owner -- "split evenly", a receipt read -- replaces a refused
+    /// text rather than staying hidden behind it.
+    /// </summary>
+    public override Task SetParametersAsync(ParameterView parameters)
+    {
+        if (ConversionError
+            && parameters.TryGetValue<T>(nameof(Value), out var value)
+            && !EqualityComparer<T>.Default.Equals(value, ReadValue))
+        {
+            ResetConverterErrors();
+        }
+
+        return base.SetParametersAsync(parameters);
+    }
+
     private sealed class TextConverter(DecimalField<T> field) : IReversibleConverter<T?, string?>
     {
         public string? Convert(T? input)

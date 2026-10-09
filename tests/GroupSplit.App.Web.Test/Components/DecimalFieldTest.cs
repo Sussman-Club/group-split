@@ -74,15 +74,53 @@ public class DecimalFieldTest : ComponentTest
             .Add(f => f.ValueChanged, changes.Add));
 
         field.Find("input").Change(typed);
+        field.Find("input").Blur();
 
         Assert.True(field.Instance.ConversionError);
         Assert.False(string.IsNullOrWhiteSpace(field.Instance.ConversionErrorMessage));
 
-        // The model keeps no part of it: not 1250, not 123456, not 12.555.
-        Assert.DoesNotContain(changes, value => value != 0m && value != 5m);
+        // The model keeps no part of it: not 1250, not 123456, not 12.555 -- and not the
+        // zero MudBlazor writes on a failed parse either. It still holds what it had.
+        Assert.Empty(changes);
 
-        // And the person is told, beside the field, not after Save.
+        // And the person is told, beside what they typed, not after Save.
         Assert.Contains(field.Instance.ConversionErrorMessage!, field.Markup);
+        Assert.Equal(typed, field.Find("input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void Correcting_a_refused_amount_reads_it_and_clears_the_error()
+    {
+        var changes = new List<decimal>();
+
+        var field = Render<DecimalField<decimal>>(parameters => parameters
+            .Add(f => f.Value, 5m)
+            .Add(f => f.ValueChanged, changes.Add));
+
+        field.Find("input").Change("1.234,56");
+        field.Find("input").Change("1234,56");
+
+        Assert.Equal([1234.56m], changes);
+        Assert.False(field.Instance.ConversionError);
+    }
+
+    /// <summary>
+    /// A value the owner sets -- "split evenly" over a field somebody mistyped -- is shown,
+    /// rather than left behind the refused text.
+    /// </summary>
+    [Fact]
+    public void A_new_value_from_the_owner_replaces_a_refused_text()
+    {
+        var field = Render<DecimalField<decimal>>(parameters => parameters
+            .Add(f => f.Value, 5m)
+            .Add(f => f.ValueChanged, _ => { }));
+
+        field.Find("input").Change("1.234,56");
+
+        field.Render(parameters => parameters.Add(f => f.Value, 33.33m));
+
+        Assert.False(field.Instance.ConversionError);
+        Assert.Equal("33.33", field.Find("input").GetAttribute("value"));
     }
 
     /// <summary>

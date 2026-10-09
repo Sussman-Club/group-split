@@ -441,6 +441,42 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// And one that could be read two ways is not recorded at all -- not as 1234.56, not as
+    /// 1.23456, and not as the zero a failed parse used to leave in the model.
+    /// </summary>
+    [Fact]
+    public async Task An_amount_with_a_thousands_separator_cannot_be_added()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense",
+                    new DialogParameters<CreateTransactionDialog> { { d => d.SelectedGroupId, GroupId } }));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await amount.Find("input").ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "1.234,56" });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Cena"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.False(reference!.Result.IsCompleted);
+        Assert.Contains("no thousands separators", provider.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A read that fails does not take the expense down with it.
     /// </summary>
     /// <remarks>
