@@ -206,7 +206,8 @@
                                  SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                  Preview="@_preview"
                                  PreviewError="@_previewError"
-                                 Awaiting="@_awaiting"/>
+                                 Awaiting="@_awaiting"
+                                 SaveRefused="@_saveRefused"/>
                 </div>
             }
             else
@@ -291,6 +292,15 @@
     private bool _attachingReceipt;
     private bool _readingReceipt;
     private string? _receiptError;
+
+    /// <summary>Whether Add expense was refused over shares that do not add up.</summary>
+    private bool _saveRefused;
+
+    /// <summary>
+    /// Counts group loads, so the answer about a group somebody has already moved off cannot
+    /// land over the one they moved to (#323).
+    /// </summary>
+    private int _groupLoad;
 
     /// <summary>The rule this row is to be divided by, when the person named one.</summary>
     private Guid? _splitRuleId;
@@ -393,6 +403,8 @@
 
     private async Task OnGroupChangedAsync()
     {
+        var load = ++_groupLoad;
+
         // A stated division names people, and the people just changed. So does a rule,
         // which belongs to the group it came from.
         _splits = null;
@@ -411,21 +423,34 @@
         }
 
         // At once: the dialog is on screen while these are out, and in sequence each answer
-        // lands as its own re-render.
+        // lands as its own re-render. Into locals, so the answers can be dropped whole if
+        // somebody picks another group before they are in.
         var rules = SplitRules.ForGroupAsync(groupId);
+
+        IReadOnlyList<CategoryResponse> categories = [];
+        IReadOnlyList<UserInfo> members = [];
 
         await Errors.TryAsync(async () =>
         {
-            var categories = CategoriesClient.GetCategoriesAsync(groupId);
-            var members = GroupsClient.GetGroupMembersAsync(groupId);
+            var categoriesRead = CategoriesClient.GetCategoriesAsync(groupId);
+            var membersRead = GroupsClient.GetGroupMembersAsync(groupId);
 
-            await Task.WhenAll(categories, members);
+            await Task.WhenAll(categoriesRead, membersRead);
 
-            _categories = [.. await categories];
-            _members = [.. await members];
+            categories = [.. await categoriesRead];
+            members = [.. await membersRead];
         }, "Could not load the group.");
 
-        _memberRules = CreateTransactionDialog.MemberRulesOf(await rules, _members);
+        var listed = await rules;
+
+        // A later pick is loading its own group, and A's categories and members arriving
+        // now would be offered under B's name.
+        if (load != _groupLoad)
+            return;
+
+        _categories = categories;
+        _members = members;
+        _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
 
         // The bank's own category, matched against what this group already uses. Only a
         // suggestion, and only when a name happens to line up: whatever is selected when
@@ -690,6 +715,15 @@
     {
         if (!_chosen || ReceiptBusy)
             return;
+
+        // Refused here, as the expense dialogs refuse it: closed over shares that do not add
+        // up, the API refuses the filing and the name and note typed here go with the
+        // dialog (#323).
+        if (ShareRounding.Unbalanced(Row.Amount, _splits) is not null)
+        {
+            _saveRefused = true;
+            return;
+        }
 
         var request = new FileBankTransactionRequest
         {

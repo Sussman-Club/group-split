@@ -181,7 +181,8 @@
                                      BillChanged="@OnBillChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
-                                     Awaiting="@_awaiting"/>
+                                     Awaiting="@_awaiting"
+                                     SaveRefused="@_saveRefused"/>
                     </div>
                 }
 
@@ -263,6 +264,9 @@
         || (_model.SplitRuleId is null && (bill ?? _receipt)?.DividesItsExpense == true);
 
     private MudForm _form = null!;
+
+    /// <summary>Whether Save was refused over shares that do not add up.</summary>
+    private bool _saveRefused;
 
     /// <summary>Which chip's picker is showing. One at a time; the row stays a row.</summary>
     /// <summary>
@@ -755,9 +759,21 @@
             _attachments = _attachments.Where(existing => existing.Id != attachment.Id).ToList();
     }
 
+    /// <summary>
+    /// Counts group loads, so the answer about a group somebody has already moved the
+    /// expense off cannot land over the one they moved it to (#323).
+    /// </summary>
+    private int _groupLoad;
+
     /// <summary>The categories and members of one group, or none for personal.</summary>
-    private async Task LoadGroupAsync(Guid? groupId)
+    /// <returns>
+    /// Whether what was read is still for the group chosen -- false when a later move has
+    /// started a load of its own, and nothing was written down.
+    /// </returns>
+    private async Task<bool> LoadGroupAsync(Guid? groupId)
     {
+        var load = ++_groupLoad;
+
         if (groupId is { } id)
         {
             // At once rather than one after another: none of the three reads what the others
@@ -772,6 +788,13 @@
             var rules = SplitRules.ForGroupAsync(id);
 
             await Task.WhenAll(categories, members, rules);
+
+            // Two moves in quick succession have two of these in the air, answered in
+            // whatever order the server gets round to them. The older one is dropped whole:
+            // its categories and members offered under the newer group's name would put
+            // the expense in front of the wrong people.
+            if (load != _groupLoad)
+                return false;
 
             _categories = await categories;
             _members = [.. await members];
@@ -800,6 +823,8 @@
             _evenRuleId = null;
             _billRuleId = null;
         }
+
+        return true;
     }
 
     /// <summary>
@@ -814,9 +839,13 @@
     /// </remarks>
     private async Task OnGroupChangedAsync()
     {
-        var loaded = await Errors.TryAsync(() => LoadGroupAsync(_model.GroupId), "Could not load the group.");
+        var current = true;
+        var loaded = await Errors.TryAsync(
+            async () => current = await LoadGroupAsync(_model.GroupId), "Could not load the group.");
 
-        if (!loaded)
+        // A failure has been shown, and a later move is loading its own group and will do
+        // everything below for it.
+        if (!loaded || !current)
             return;
 
         // Whatever was open was about the group this expense is leaving: the categories it
@@ -1050,6 +1079,15 @@
 
         if (!_form.IsValid)
             return;
+
+        // The same failure for the shares. Hand-typed shares that summed to the old amount
+        // do not sum to a new one, and the dialog used to close over them: the API refused
+        // the patch and the name, the note, the date and the category went with it (#323).
+        if (ShareRounding.Unbalanced(_model.Amount, _model.Splits) is not null)
+        {
+            _saveRefused = true;
+            return;
+        }
 
         ApplyDate();
 

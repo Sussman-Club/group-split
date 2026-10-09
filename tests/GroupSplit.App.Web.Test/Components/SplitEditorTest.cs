@@ -472,6 +472,52 @@ public class SplitEditorTest : ComponentTest
         Assert.Equal(300m, sent.Sum(split => split.Amount));
     }
 
+    /// <summary>
+    /// A share with a third decimal is not "every cent assigned", whatever its column sums
+    /// to: the field shows it to the cent and the API refuses it outright (#323).
+    /// </summary>
+    /// <remarks>
+    /// 33.333 and 66.667 add up to exactly 100, and the line used to say so -- under fields
+    /// reading 33.33 and 66.67, over a set the API refuses for having a third decimal place.
+    /// </remarks>
+    [Fact]
+    public void A_share_with_a_third_decimal_is_not_counted_as_assigned()
+    {
+        var editor = Render(value:
+        [
+            new SplitInput { UserId = Ana, Amount = 33.333m },
+            new SplitInput { UserId = Omar, Amount = 66.667m }
+        ]);
+
+        var remaining = editor.Find(".gs-split-remaining");
+
+        Assert.DoesNotContain("Every cent", remaining.TextContent, StringComparison.Ordinal);
+        Assert.Contains("A share can only be whole cents.", remaining.TextContent, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Once Save has been refused over it, the remaining line is the reason, and says so.
+    /// </summary>
+    [Fact]
+    public void A_refused_save_turns_the_remaining_line_into_the_reason()
+    {
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 120m)
+            .Add(e => e.PayerId, Ana)
+            .Add(e => e.Value, [
+                new SplitInput { UserId = Ana, Amount = 70m },
+                new SplitInput { UserId = Omar, Amount = 30m }
+            ])
+            .Add(e => e.SaveRefused, true));
+
+        var remaining = editor.Find(".gs-split-remaining");
+
+        Assert.Contains("mud-alert-text-error", remaining.ClassName, StringComparison.Ordinal);
+        Assert.Contains("Not saved: the shares have to add up to $120.00. $20.00 still to assign.",
+            remaining.TextContent, StringComparison.Ordinal);
+    }
+
     private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
 
     private static Task Automatically(IRenderedComponent<SplitEditor> editor) =>

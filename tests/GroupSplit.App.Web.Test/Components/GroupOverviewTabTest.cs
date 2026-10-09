@@ -152,7 +152,7 @@ public class GroupOverviewTabTest : ComponentTest
 
         await record.ClickAsync(new());
 
-        _state.Verify(state => state.RecordRepaymentAsync(
+        _state.Verify(state => state.RecordRepaymentAsync(Group.Id,
             It.Is<RecordRepaymentRequest>(request =>
                 request.FromUserId == Dani && request.ToUserId == Luz && request.Amount == 15m),
             "Dani", "Luz", It.IsAny<CancellationToken>()), Times.Once);
