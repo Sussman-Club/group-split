@@ -36,6 +36,13 @@ public interface IBankSyncService
     /// Pulls everything the provider has for one connection since its cursor into the
     /// staging rows. Idempotent: running it twice over the same pages changes nothing.
     /// </summary>
+    /// <remarks>
+    /// Only a <see cref="BankSyncException"/> becomes an outcome. Anything else -- the network
+    /// failing under a connector, the database refusing a page -- propagates with the cursor
+    /// where the run began, and the job worker that ran the sync logs it with the connection's
+    /// id. Catching it here would turn a bug into an <see cref="SyncOutcome.Interrupted"/>
+    /// that the nightly sweep retries for ever without anybody hearing about it.
+    /// </remarks>
     Task<SyncOutcome> SyncAsync(Guid connectionId, CancellationToken ct = default);
 }
 

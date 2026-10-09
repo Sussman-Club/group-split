@@ -177,7 +177,7 @@ with.
 | Code | When | Extra members |
 | --- | --- | --- |
 | `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. Not answered by an unlink whose item the provider no longer has -- removed at its end, or by an earlier attempt that failed after telling it -- which succeeds. | |
-| `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` | The receipt transcription provider did not answer, or could not process the attachment. Nothing was saved; retrying is safe. | |
+| `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` | The receipt transcription provider did not answer, did not finish within the reading's budget (two minutes, one attempt -- the file is never sent twice on the caller's behalf), or could not process the attachment. Nothing was saved; retrying is safe. | |
 
 ### Server error (500) with something to say
 

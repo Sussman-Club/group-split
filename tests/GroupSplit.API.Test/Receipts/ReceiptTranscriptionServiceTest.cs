@@ -560,6 +560,48 @@ public class ReceiptTranscriptionServiceTest
     }
 
     [Fact]
+    public async Task Veryfi_nulls_and_a_vendor_name_that_is_not_text_are_read_rather_than_answering_a_500()
+    {
+        var server = new VeryfiServer("""
+            {
+              "vendor": { "name": 42 },
+              "raw_vendor_name": null,
+              "date": null,
+              "tax": null,
+              "tip": null,
+              "total": null,
+              "line_items": [
+                null,
+                { "description": null, "full_description": null, "text": null, "sku": null, "type": null, "quantity": null, "total": 3.333 },
+                { "description": "Soup", "price": 3.3333, "quantity": 3, "total": 9.999 }
+              ]
+            }
+            """);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "smudged.jpg", "image/jpeg", [1]), TestContext.Current.CancellationToken);
+
+        // The row with nothing to call it by and nothing to find it by is not a line; the
+        // soup is, in cents -- and since 3 x 3.33 is not the 10.00 it came to, one of it.
+        var soup = Assert.Single(receipt.Items);
+        Assert.Equal("Soup", soup.Name);
+        Assert.Equal(1m, soup.Quantity);
+        Assert.Equal(10.00m, soup.UnitPrice);
+        Assert.Equal(10.00m, soup.TotalPrice);
+        Assert.Equal(10.00m, receipt.Total);
+        Assert.Null(receipt.MerchantName);
+        Assert.Null(receipt.PurchaseDate);
+    }
+
+    [Fact]
     public async Task A_provider_refusal_is_a_retryable_bad_gateway()
     {
         using var client = new HttpClient(new VeryfiServer("{}", HttpStatusCode.ServiceUnavailable))
