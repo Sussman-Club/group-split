@@ -209,6 +209,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Docker Hub lets an anonymous client pull about ten images an hour per address, and a
+      # hosted runner shares its address with other jobs. The stack pulls six images from
+      # Docker Hub (Postgres, Redis, Mailpit, RustFS, Scalar, dbx), so a run that lands on a
+      # spent address fails every test with "toomanyrequests" before Keycloak can start.
+      # mirror.gcr.io serves cached copies of Docker Hub images without that limit, and the
+      # daemon falls back to Docker Hub for anything the mirror does not have. Merged into
+      # the runner's own daemon.json, which carries settings the job depends on.
+      - name: Pull Docker Hub images through a mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          config=/etc/docker/daemon.json
+          current="$(sudo cat "$config" 2>/dev/null || echo '{}')"
+          jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' <<<"$current" | sudo tee "$config" > /dev/null
+          sudo systemctl restart docker
+          docker info --format '{{json .RegistryConfig.Mirrors}}' | grep -q 'mirror.gcr.io' \
+            || { echo "::error::Docker did not pick up the registry mirror."; exit 1; }
+          echo "Docker Hub pulls go through mirror.gcr.io."
+
       - name: Read the Aspire CLI version from the AppHost
         id: aspire
         shell: bash
