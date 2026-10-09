@@ -385,6 +385,12 @@ the host calls `WithoutDefaults()` to remove the in-process workers and schedule
 Failure has no retry scheme of its own: the transport redelivers by its rules, or the
 sweep catches it tomorrow.
 
+Nobody waits on a sync, so its failure would have nowhere to go but the job's handle, which
+every caller drops. The worker logs it instead: every job that throws is logged at error with
+its type and inputs (the record's `ToString`, which is why jobs carry ids and nothing
+secret), and a job cancelled while the host is still running -- an HTTP timeout, usually --
+is logged as the failure it is, apart from one stopped by shutdown, which is only noted.
+
 ## The API
 
 Two groups, and the anonymous route.
