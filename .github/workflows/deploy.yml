@@ -450,10 +450,14 @@ jobs:
       # Hand the generated compose file and env to Komodo, then deploy the stack.
       # The stack must already exist in Komodo in `file_contents` mode.
       #
-      # A deploy that fails puts the previous stack configuration back and deploys it again.
-      # Compose recreates the api and web containers before it finds out that a one-shot
-      # service they wait for has failed, so a failed deploy is not a no-op: left alone, it
-      # keeps the site down until something else is deployed.
+      # A deploy that fails puts the previous stack configuration back, and what else it does
+      # depends on how far Komodo got (classify-komodo-failure.sh decides). Once Compose Up
+      # has run, the previous configuration is deployed again: Compose recreates the api and
+      # web containers before it finds out that a one-shot service they wait for has failed,
+      # so such a deploy is not a no-op and, left alone, keeps the site down until something
+      # else is deployed. A failure before that -- the registry login, the image pull -- left
+      # every container as it was, so nothing is redeployed. For the registry login that is
+      # also the only option: a redeploy starts with the same login, and fails the same way.
       - name: Deploy to Komodo
         env:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
@@ -467,10 +471,43 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          classify="$GITHUB_WORKSPACE/.github/scripts/classify-komodo-failure.sh"
+          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/development-and-deployment.md"
           cd src/GroupSplit.AppHost/aspire-output
+
+          # What the step is doing and whether production has been touched by then, so a
+          # failure that no branch below expects still gets a summary that says both.
+          doing='preparing the Komodo update'
+          touched='no'
+          update_id=''
+          summarised=''
+
+          # summarise TITLE FAILED TOUCHED OUTCOME [NEXT]: the job summary of a failed deploy.
+          summarise() {
+            {
+              echo "### $1"
+              echo
+              echo "- Release: \`$DEPLOYMENT_VERSION\`"
+              echo "- Commit: \`$DEPLOYMENT_COMMIT\`"
+              [ -z "$update_id" ] || echo "- Komodo update: \`$update_id\`"
+              echo "- Failed at: $2"
+              echo "- Production touched: $3"
+              echo "- Outcome: $4"
+              [ -z "${5:-}" ] || printf '\n%s\n' "$5"
+            } >> "$GITHUB_STEP_SUMMARY"
+            summarised=1
+          }
+
           # The environment file and request payloads contain production secrets. Remove
           # them before action post-steps execute, even if Komodo rejects the update.
-          trap 'rm -f payload.json previous.json rollback.json .env.production' EXIT
+          finish() {
+            local code=$?
+            rm -f payload.json previous.json rollback.json .env.production
+            if [ "$code" -ne 0 ] && [ -z "$summarised" ]; then
+              summarise "Deployment failed" "$doing" "$touched" "the step stopped there; its log says why"
+            fi
+          }
+          trap finish EXIT
 
           # Mask the generated secrets before anything below can print them. GitHub masks
           # only its own secrets; a value Aspire generates for a parameter nobody pinned
@@ -527,7 +564,8 @@ jobs:
           }
 
           # Says why the update in $status failed: the failed stages, and only their stderr,
-          # since the Compose Config stage's stdout is the fully interpolated Compose file. A
+          # since the Compose Config stage's stdout is the fully interpolated Compose file.
+          # Komodo marks its own messages up as HTML for its UI; the tags are dropped here. A
           # one-shot service that exited non-zero -- the realm worker, the migrations -- is
           # named there but not explained, so its own log is fetched as well; so is a service
           # whose healthcheck never passed, which Compose reports by container name as
@@ -535,7 +573,8 @@ jobs:
           # host, and the rollback below recreates the container and discards it.
           report_failure() {
             local service
-            jq -r '(.logs // [])[] | select(.success == false) | "--- \(.stage): \(.command)\n\(.stderr)"' <<<"$status"
+            jq -r '(.logs // [])[] | select(.success == false)
+                   | "--- \(.stage): \(.command)\n\(.stderr // "" | gsub("<[^>]+>"; ""))"' <<<"$status"
             for service in $(jq -r --arg stack "$STACK" '
                 [(.logs // [])[] | select(.success == false) | .stderr
                  | (scan("service \"([^\"]+)\" didn.t complete successfully") | .[0]),
@@ -549,6 +588,12 @@ jobs:
               echo "::endgroup::"
               echo "::error::Service $service did not complete successfully; its log is in the group above."
             done
+          }
+
+          # The failed stages of the update in $status, for a summary.
+          failed_stages() {
+            bash "$classify" <<<"$status" \
+              | jq -r '.failed_stages | if length == 0 then "no stage Komodo recorded" else join(", ") end'
           }
 
           # What production runs now, kept to put back if this deploy fails. Without it there
@@ -582,21 +627,69 @@ jobs:
                                 registry_provider: "ghcr.io",
                                 registry_account: $registry_account } }
           }' > payload.json
+          doing='writing the release into the Komodo stack'
           curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
 
           status=''
+          doing='starting the Komodo deploy'
+          touched="unknown: check the stack's updates in Komodo"
           update_id=$(deploy)
+          doing="waiting for Komodo update $update_id"
+          touched='unknown: the update is probably still running on the host'
           wait_for "$update_id"
 
           if ! jq -e '.success == true' <<<"$status" > /dev/null; then
             echo "::error::Komodo deploy failed for update $update_id."
             report_failure
 
-            [ -f rollback.json ] || exit 1
+            classification="$(bash "$classify" <<<"$status")"
+            kind="$(jq -r '.kind' <<<"$classification")"
+            failed="$(failed_stages)"
+
+            case "$kind" in
+              registry-login|before-containers)
+                # Nothing on the host changed, so nothing is deployed again. Komodo's stack
+                # does hold this release's configuration by now; the previous one goes back,
+                # so that what Komodo shows -- and what a deploy started from its UI would
+                # run -- is what production runs.
+                if [ -f rollback.json ] \
+                   && curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null; then
+                  outcome="not rolled back, because nothing changed; Komodo's stack configuration is the previous one again"
+                else
+                  outcome="not rolled back, because nothing changed; Komodo's stack still holds this release's configuration, which is not what runs"
+                fi
+
+                if [ "$kind" = registry-login ]; then
+                  echo "::error::Komodo could not log in to ghcr.io as its registry account '$KOMODO_REGISTRY_ACCOUNT', so it stopped before pulling or restarting anything. Production was not touched and still runs the previous release. Not rolled back: a redeploy starts with the same login. Renew that account's GHCR token in Komodo, then re-run this job."
+                  summarise "Deployment failed: Komodo could not log in to GHCR" "$failed" \
+                    "no, Komodo stops at the login, before it pulls or restarts anything" "$outcome" \
+                    "**To fix:** the GHCR credential of Komodo's registry account \`$KOMODO_REGISTRY_ACCOUNT\` was refused, most likely because its token expired. Renew it in Komodo (Settings -> Providers -> ghcr.io) with a classic personal access token that has \`read:packages\`, then re-run this job. See [the registry account Komodo pulls with]($docs#the-registry-account-komodo-pulls-with)."
+                else
+                  echo "::error::The deploy failed at $failed, before Komodo changed any container. Production was not touched and still runs the previous release."
+                  summarise "Deployment failed" "$failed" \
+                    "no, the update stopped before Komodo changed any container" "$outcome"
+                fi
+                exit 1
+                ;;
+            esac
+
+            # The update reached a stage that can change containers, or recorded none at all.
+            case "$kind" in
+              containers) touched='yes, the update reached a stage that changes containers' ;;
+              *) touched='unknown, Komodo recorded no stage' ;;
+            esac
+
+            if [ ! -f rollback.json ]; then
+              summarise "Deployment failed" "$failed" "$touched" \
+                "not rolled back: the previous configuration could not be read before the deploy"
+              exit 1
+            fi
 
             echo "Restoring the previous configuration of stack $STACK and deploying it again."
+            doing="rolling back after $failed failed"
             curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null
             rollback_id=$(deploy)
+            doing="waiting for the rollback, Komodo update $rollback_id"
             wait_for "$rollback_id"
 
             if jq -e '.success == true' <<<"$status" > /dev/null; then
@@ -605,17 +698,10 @@ jobs:
             else
               echo "::error::The rollback failed as well (Komodo update $rollback_id), so production is probably down."
               report_failure
-              outcome="failed, and so did the rollback (\`$rollback_id\`)"
+              outcome="failed, and so did the rollback (\`$rollback_id\`, at $(failed_stages)), so production is probably down"
             fi
 
-            {
-              echo "### Deployment failed"
-              echo
-              echo "- Release: \`$DEPLOYMENT_VERSION\`"
-              echo "- Commit: \`$DEPLOYMENT_COMMIT\`"
-              echo "- Komodo update: \`$update_id\`"
-              echo "- Outcome: $outcome"
-            } >> "$GITHUB_STEP_SUMMARY"
+            summarise "Deployment failed" "$failed" "$touched" "$outcome"
             exit 1
           fi
 

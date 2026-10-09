@@ -1,0 +1,15 @@
+{
+  "_id": { "$oid": "000000000000000000000002" },
+  "operation": "DeployStack",
+  "status": "Complete",
+  "success": false,
+  "logs": [
+    {
+      "stage": "Compose Config",
+      "command": "docker compose -p group-split -f compose.yaml --env-file .env config",
+      "stdout": "",
+      "stderr": "service \"api\" refers to undefined network internal: invalid compose project\n",
+      "success": false
+    }
+  ]
+}

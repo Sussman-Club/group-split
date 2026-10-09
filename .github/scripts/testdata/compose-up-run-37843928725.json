@@ -1,0 +1,21 @@
+{
+  "_id": {
+    "$oid": "6ac824d948af303bcd8712a3"
+  },
+  "operation": "DeployStack",
+  "status": "Complete",
+  "success": false,
+  "target": {
+    "type": "Stack",
+    "id": "group-split"
+  },
+  "logs": [
+    {
+      "stage": "Compose Up",
+      "command": "docker compose -p group-split -f compose.yaml --env-file .env up -d",
+      "stdout": "",
+      "stderr": " Container group-split-keycloak-1 Running \n Container group-split-db-server-1 Running \n Container group-split-cache-1 Recreate \n Container group-split-migrations-internal-1 Recreate \n Container group-split-realm-settings-1 Recreate \n Container group-split-compose-dashboard-1 Recreate \n Container group-split-storage-1 Recreate \n Container group-split-realm-settings-1 Recreated \n Container group-split-migrations-internal-1 Recreated \n Container group-split-storage-1 Recreated \n Container group-split-api-1 Recreate \n Container group-split-compose-dashboard-1 Recreated \n Container group-split-api-1 Recreated \n Container group-split-cache-1 Recreated \n Container group-split-web Recreate \n Container group-split-web Recreated \n Container group-split-db-server-1 Waiting \n Container group-split-compose-dashboard-1 Starting \n Container group-split-cache-1 Starting \n Container group-split-db-server-1 Waiting \n Container group-split-storage-1 Starting \n Container group-split-cache-1 Started \n Container group-split-compose-dashboard-1 Started \n Container group-split-storage-1 Started \n Container group-split-db-server-1 Healthy \n Container group-split-migrations-internal-1 Starting \n Container group-split-db-server-1 Healthy \n Container group-split-keycloak-1 Waiting \n Container group-split-migrations-internal-1 Started \n Container group-split-keycloak-1 Healthy \n Container group-split-realm-settings-1 Starting \n Container group-split-realm-settings-1 Started \n Container group-split-db-server-1 Waiting \n Container group-split-storage-1 Waiting \n Container group-split-keycloak-1 Waiting \n Container group-split-migrations-internal-1 Waiting \n Container group-split-realm-settings-1 Waiting \n Container group-split-db-server-1 Healthy \n Container group-split-keycloak-1 Healthy \n Container group-split-realm-settings-1 Exited \n Container group-split-migrations-internal-1 Exited \n Container group-split-storage-1 Error dependency storage failed to start\ndependency failed to start: container group-split-storage-1 is unhealthy\n",
+      "success": false
+    }
+  ]
+}
