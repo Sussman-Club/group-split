@@ -53,6 +53,28 @@ The generic Compose plumbing those methods lean on is in
 shipping files as configs, healthchecks, the external network, and the restart and
 `depends_on` defaults the publisher leaves to the operator.
 
+## Blazor circuit startup and persisted state
+
+Server-first rendering persists tracker data in the HTML, then sends that encrypted state
+back over `/_blazor` when the interactive circuit starts. Home and Activity can exceed
+SignalR's default 32 KiB incoming-message limit even when all their API requests succeed.
+The page then looks loaded but stays inert, and the browser reports
+`Connection closed with an error.` before a circuit is initialized. Groups can still work
+because its initial state is smaller.
+
+[`RenderModeConfig.cs`](../src/GroupSplit.App/GroupSplit.App.Web/RenderModeConfig.cs) sets a
+finite **256 KiB** limit on the Blazor hub, preserving prerendered state with headroom over
+the approximately 44 KiB startup message observed in production. Other hubs keep their
+defaults. This is a per-message ceiling, not an unlimited allowance: if tracker state grows
+past this budget, reduce the persisted data rather than removing the limit.
+
+To diagnose this failure, temporarily set `Logging__LogLevel__Microsoft.AspNetCore.SignalR`
+to `Debug` on the **web** container and inspect its logs in the GroupSplit Aspire dashboard.
+The size rejection is logged as `The maximum message size of ...B was exceeded` and is not
+visible at the usual production logging level. Restore the logging level after diagnosis.
+Do not log the persisted state, authentication cookies, or circuit secrets. See Microsoft's
+[maximum receive message size guidance](https://learn.microsoft.com/aspnet/core/blazor/fundamentals/signalr?view=aspnetcore-10.0#maximum-receive-message-size).
+
 ## Deployment parameters
 
 Anything that differs between deployments is an Aspire parameter. Parameter names are
