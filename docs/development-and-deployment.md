@@ -172,6 +172,11 @@ and gives the API that model reference. Aspire then injects
 deliberately does not receive those values as separate environment variables. The API's
 `AddReceiptTranscription` binds the selector options through the .NET options pattern and resolves
 the selected provider from DI when the request scope is created.
+A reading is one attempt with a two-minute budget (`ReceiptTranscription:Timeout`), whichever
+provider it goes to: Veryfi's HTTP client runs its own resilience pipeline in place of the
+standard handler the service defaults add, which would retry the POST and give up after 30 s,
+and the OpenAI client's own retries are turned off. Running out of time answers the retryable
+`RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` 502.
 The deployment workflow uses the corresponding `AZURE_OPENAI_*` production variables/secrets shown
 in the table above; add them to the `production` environment, and set the switch to `false`
 when the feature is not used.

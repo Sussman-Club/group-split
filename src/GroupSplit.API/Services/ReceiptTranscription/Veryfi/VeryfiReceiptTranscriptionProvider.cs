@@ -8,6 +8,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.Extensions.Options;
+using Polly.Timeout;
 
 namespace GroupSplit.API.Services.ReceiptTranscription.Veryfi;
 
@@ -43,8 +44,8 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         request.Headers.Add("Client-Id", settings.ClientId);
         request.Headers.Authorization = new AuthenticationHeaderValue("apikey", $"{settings.Username}:{settings.ApiKey}");
         // Repeated user-initiated transcriptions must be processed again instead of
-        // replaying a previous (possibly empty) Veryfi result. The HTTP resilience
-        // handler reuses this request and key for transport-level retries.
+        // replaying a previous (possibly empty) Veryfi result. The client never resends
+        // the request itself (see AddReceiptTranscription), so the key is one per reading.
         request.Headers.Add("Idempotency-Key", $"receipt-transcription:{Guid.NewGuid():N}");
 
         try
@@ -85,6 +86,17 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             throw new BadGatewayException(ErrorCodes.ReceiptTranscriptionProviderUnavailable,
                 "The receipt transcription service could not be reached. Please try again shortly.", error);
         }
+        // Out of time: the pipeline's budget, or an HttpClient timeout, which arrives as a
+        // cancellation nobody asked for. Only one the caller asked for -- the person closed
+        // the page -- is left to propagate as one.
+        catch (Exception error) when (error is TimeoutRejectedException
+            || (error is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            logger.LogWarning(error, "Veryfi took too long to transcribe receipt attachment {AttachmentId}.",
+                document.AttachmentId);
+            throw new BadGatewayException(ErrorCodes.ReceiptTranscriptionProviderUnavailable,
+                "The receipt transcription service took too long to answer. Please try again shortly.", error);
+        }
     }
 
     private sealed class VeryfiDocument
@@ -95,11 +107,12 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         [JsonPropertyName("vendor")] public JsonElement Vendor { get; init; }
         [JsonPropertyName("raw_vendor_name")] public string? RawVendorName { get; init; }
         [JsonPropertyName("date")] public string? Date { get; init; }
-        [JsonPropertyName("line_items")] public IReadOnlyList<VeryfiLineItem>? LineItems { get; init; }
+        [JsonPropertyName("line_items")] public IReadOnlyList<VeryfiLineItem?>? LineItems { get; init; }
 
         public TranscribedReceipt ToReceipt(string payload)
         {
-            var candidates = (LineItems ?? []).Select(line => line.ToRow()).OfType<ReceiptItemDraft>().ToList();
+            // A null in the list is a line Veryfi had nothing to say about.
+            var candidates = (LineItems ?? []).Select(line => line?.ToRow()).OfType<ReceiptItemDraft>().ToList();
             // Never change a printed line to force a match with a receipt-level value.
             // A mismatch remains visible during review; the raw provider response retains
             // the original subtotal for comparison.
@@ -134,7 +147,8 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             string? vendor = Vendor.ValueKind switch
             {
                 JsonValueKind.String => Vendor.GetString(),
-                JsonValueKind.Object when Vendor.TryGetProperty("name", out var name) => name.GetString(),
+                JsonValueKind.Object when Vendor.TryGetProperty("name", out var name)
+                    && name.ValueKind == JsonValueKind.String => name.GetString(),
                 _ => null
             };
             return new TranscribedReceipt(subtotal, tax, tip, total, mappedItems)

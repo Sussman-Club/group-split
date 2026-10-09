@@ -1,7 +1,10 @@
 using System.ClientModel;
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Unicode;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
@@ -109,34 +112,16 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
                     },
                     cancellationToken: ct);
 
-            var receipt = response.Result;
+            var receipt = response.Result
+                ?? throw new JsonException("Azure OpenAI returned no receipt.");
+
+            var transcribed = ToReceipt(receipt);
 
             logger.LogInformation(
                 "Azure OpenAI mapped {MappedItemCount} receipt line item(s) for attachment {AttachmentId}.",
-                receipt.Items.Count, document.AttachmentId);
+                transcribed.Items.Count, document.AttachmentId);
 
-            return new TranscribedReceipt(
-                receipt.Subtotal,
-                receipt.Tax,
-                receipt.Tip,
-                receipt.Total,
-                [
-                    .. receipt.Items.Select(item => new TranscribedReceiptItem(
-                        item.Name,
-                        item.UnitPrice,
-                        item.Quantity,
-                        item.TotalPrice,
-                        item.TaxAmount)
-                    {
-                        TaxRate = item.TaxRate,
-                        IsTaxable = item.IsTaxable
-                    })
-                ])
-            {
-                MerchantName = receipt.MerchantName,
-                PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
-                SourceValues = JsonSerializer.Serialize(receipt)
-            };
+            return transcribed;
         }
         catch (BadGatewayException)
         {
@@ -157,7 +142,131 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
                 "The receipt transcription service could not be reached. Please try again shortly.",
                 error);
         }
+        // The SDK's network timeout arrives as a cancellation nobody asked for. Only one the
+        // caller asked for -- the person closed the page -- is left to propagate as one.
+        catch (OperationCanceledException error) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                error,
+                "Azure OpenAI took too long to transcribe receipt attachment {AttachmentId}.",
+                document.AttachmentId);
+            throw new BadGatewayException(
+                ErrorCodes.ReceiptTranscriptionProviderUnavailable,
+                "The receipt transcription service took too long to answer. Please try again shortly.",
+                error);
+        }
     }
+
+    /// <summary>
+    /// The model's reading as a draft the bill will accept.
+    /// </summary>
+    /// <remarks>
+    /// The schema holds the model to numbers, but not to cents: the prompt has it work a unit
+    /// price out from a line total and a quantity, and 10.00 over three is 3.3333. A bill
+    /// refuses more than two places, and the review dialog shows the rounded figure while
+    /// sending the raw one back, so the save would fail over something nobody can see. Money
+    /// is rounded here, the way Veryfi's is, and quantities and rates to what the bill keeps.
+    /// <para>
+    /// Nor does the schema keep a list or a string from being null. A missing list is a
+    /// receipt with no lines; a missing line is no line; a line with money on it but no name
+    /// stays on the bill under one somebody will correct, because the money is real.
+    /// </para>
+    /// </remarks>
+    internal static TranscribedReceipt ToReceipt(AzureReceipt receipt)
+    {
+        TranscribedReceiptItem[] items =
+        [
+            .. (receipt.Items ?? []).OfType<AzureReceiptItem>().Select(ToItem).OfType<TranscribedReceiptItem>()
+        ];
+
+        return new TranscribedReceipt(
+            RoundMoney(receipt.Subtotal),
+            RoundMoney(receipt.Tax),
+            RoundMoney(receipt.Tip),
+            RoundMoney(receipt.Total),
+            items)
+        {
+            MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
+            PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
+            SourceValues = Evidence(receipt)
+        };
+    }
+
+    private static TranscribedReceiptItem? ToItem(AzureReceiptItem item)
+    {
+        var quantity = Math.Round(item.Quantity, 3, MidpointRounding.AwayFromZero);
+        if (quantity <= 0m)
+            quantity = 1m;
+
+        var unitPrice = RoundMoney(item.UnitPrice);
+        var totalPrice = RoundMoney(item.TotalPrice);
+        var name = Clip(item.Name, ReceiptItemInput.NameLength);
+
+        if (name is null)
+        {
+            if (unitPrice == 0m && totalPrice == 0m)
+                return null;
+
+            name = UnnamedItem;
+        }
+
+        return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount))
+        {
+            TaxRate = TaxRateFrom(item.TaxRate),
+            IsTaxable = item.IsTaxable
+        };
+    }
+
+    /// <summary>
+    /// The bill keeps a rate of 0 to 100, to four places. Anything outside that is not a rate
+    /// somebody can correct but a misreading, and an empty field says so better.
+    /// </summary>
+    private static decimal? TaxRateFrom(decimal? rate) =>
+        rate is { } value && Math.Round(value, 4, MidpointRounding.AwayFromZero) is >= 0m and <= 100m and var rounded
+            ? rounded
+            : null;
+
+    /// <summary>
+    /// The reading as the model gave it, for the reviewer to check against the paper. Kept
+    /// under the bill's limit the way Veryfi's is: the free text goes first, because it is
+    /// the bulk of a long receipt and the lines already say what it was read as. Written
+    /// without escaping non-Latin letters, which otherwise turns each one into six characters
+    /// and a receipt in Greek or Japanese into one that is mostly backslashes.
+    /// </summary>
+    private static string? Evidence(AzureReceipt receipt)
+    {
+        if (JsonSerializer.SerializeToNode(receipt, EvidenceJson) is not JsonObject evidence)
+            return null;
+
+        var text = evidence.ToJsonString(EvidenceJson);
+        if (text.Length > SaveReceiptRequest.SourceValuesMaxLength)
+        {
+            evidence.Remove("rawText");
+            text = evidence.ToJsonString(EvidenceJson);
+        }
+
+        return text.Length > SaveReceiptRequest.SourceValuesMaxLength
+            ? text[..SaveReceiptRequest.SourceValuesMaxLength]
+            : text;
+    }
+
+    private static readonly JsonSerializerOptions EvidenceJson = new()
+    {
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+    };
+
+    /// <summary>What a line with money on it but no legible name is called until somebody names it.</summary>
+    private const string UnnamedItem = "Unnamed item";
+
+    /// <summary>What a bill keeps of a merchant's name.</summary>
+    private const int MerchantNameLength = 128;
+
+    private static decimal RoundMoney(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+
+    private static string? Clip(string? value, int length) =>
+        value?.Trim() is { Length: > 0 } text
+            ? text.Length > length ? text[..length].TrimEnd() : text
+            : null;
 
     private static DateOnly? PurchaseDateFrom(string? value) =>
         DateOnly.TryParseExact(value?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
