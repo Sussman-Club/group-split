@@ -673,12 +673,18 @@ never touches the deployed stack.
    rather than a tag that could later be moved.
 8. Runs `docker compose config` over the generated file, so a malformed stack fails on the
    runner instead of on the host.
-9. Hands the Compose file and `.env.production` to Komodo, which owns the stack on the
+9. Reads the existing Komodo stack and preserves its `STORAGE_ACCESSKEY` and
+   `STORAGE_SECRETKEY` assignments in the new environment before updating it. RustFS keeps
+   the account on its persistent volume: newly generated keys are not an account rotation,
+   and bucket provisioning would fail with `403 InvalidAccessKeyId`. A first deployment
+   keeps the generated pair; an unreadable or incomplete existing account stops deployment
+   before the stack changes. Back up the stack environment securely alongside the volume.
+10. Hands the Compose file and `.env.production` to Komodo, which owns the stack on the
    Docker host, and redeploys it. `/execute` is asynchronous, so the job polls the update.
    A deploy that is still running after five minutes is reported as still running, not as
    failed, because the two need different responses. `DeployStack` is deliberately not
    retried: a retry after a lost response would start a second deploy of the same stack.
-10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
+11. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
     completed Komodo update proves the stack operation finished, not that the release is
     being served.
 

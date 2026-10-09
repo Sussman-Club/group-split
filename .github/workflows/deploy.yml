@@ -455,16 +455,19 @@ jobs:
           # Mask the generated secrets before anything below can print them. GitHub masks
           # only its own secrets; values Aspire generates -- the storage keys, say -- would
           # reach the log in the clear through any Compose output that echoes them.
-          while IFS= read -r line || [ -n "$line" ]; do
-            case "$line" in ''|'#'*) continue ;; esac
-            key="${line%%=*}"
-            value="${line#*=}"
-            value="${value#\"}"
-            value="${value%\"}"
-            if [[ "${key^^}" =~ PASSWORD|SECRET|KEY|TOKEN|CERT ]] && [ "${#value}" -ge 4 ]; then
-              echo "::add-mask::$value"
-            fi
-          done < .env.production
+          mask_environment() {
+            while IFS= read -r line || [ -n "$line" ]; do
+              case "$line" in ''|'#'*) continue ;; esac
+              key="${line%%=*}"
+              value="${line#*=}"
+              value="${value#\"}"
+              value="${value%\"}"
+              if [[ "${key^^}" =~ PASSWORD|SECRET|KEY|TOKEN|CERT ]] && [ "${#value}" -ge 4 ]; then
+                echo "::add-mask::$value"
+              fi
+            done < .env.production
+          }
+          mask_environment
 
           auth=(-H "X-Api-Key: $KOMODO_API_KEY" -H "X-Api-Secret: $KOMODO_API_SECRET" -H 'Content-Type: application/json')
           # Safe to retry: UpdateStack is an upsert, and GetStack, GetUpdate and GetStackLog are reads.
@@ -527,11 +530,19 @@ jobs:
             done
           }
 
-          # What production runs now, kept to put back if this deploy fails. Without it there
-          # is nothing to roll back to, and the deploy goes ahead as it always did.
-          if curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
-               -d "{\"type\":\"GetStack\",\"params\":{\"stack\":\"$STACK\"}}" > previous.json \
-             && jq -e '(.config.file_contents // "") != "" and (.config.environment // "") != ""' previous.json > /dev/null; then
+          # Read production's configuration before changing it, both for preserving the
+          # storage account and for restoring the stack if this deployment fails.
+          curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
+            -d "{\"type\":\"GetStack\",\"params\":{\"stack\":\"$STACK\"}}" > previous.json
+
+          # RustFS keeps its account on the data volume. A fresh publish generates a
+          # different pair, which the existing volume rejects with InvalidAccessKeyId.
+          # Preserve the exact env assignments, including quoting, without printing them.
+          # If the current configuration cannot be read, stop before modifying the stack.
+          python3 ../../../.github/scripts/preserve-storage-credentials.py previous.json .env.production
+          mask_environment
+
+          if jq -e '(.config.file_contents // "") != "" and (.config.environment // "") != ""' previous.json > /dev/null; then
             jq --arg stack "$STACK" '{
               type: "UpdateStack",
               params: { id: $stack,

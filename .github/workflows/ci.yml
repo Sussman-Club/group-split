@@ -90,6 +90,9 @@ jobs:
           dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
 
+      - name: Check deployment environment handling
+        run: python3 -m unittest discover -s tests -p test_deployment_environment.py
+
       - name: Check CSS bundle
         run: python3 tests/check-css.py src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css
 
