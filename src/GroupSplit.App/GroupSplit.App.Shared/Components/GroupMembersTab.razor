@@ -298,6 +298,11 @@
     /// whether anybody has sent them a link -- the one fact about a guest that decides
     /// which buttons the row offers, so it is said in words beside them too.
     /// </summary>
+    /// <remarks>
+    /// A link that ran out unclaimed says so, with the day it did. It offers "Send link"
+    /// again, like a guest who never had one, because that is what it is now: the old URL
+    /// answers nobody, and sending one issues a new link in its place.
+    /// </remarks>
     private string GuestMeta(GroupGuestResponse guest)
     {
         var added = $"Guest · added {Clock.Local(guest.AddedAt).ToString("d MMM yyyy")}";
@@ -307,7 +312,11 @@
 
         var link = guest switch
         {
+            { LinkExpired: true, LinkExpiresAt: { } expired } =>
+                $" · link expired {Clock.Local(expired).ToString("d MMM yyyy")}",
             { HasLink: false } => " · no link",
+            { LinkIssuedAt: { } issued, LinkExpiresAt: { } expires } =>
+                $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}, expires {Clock.Local(expires).ToString("d MMM yyyy")}",
             { LinkIssuedAt: { } issued } => $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}",
             _ => " · link sent"
         };

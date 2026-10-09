@@ -22,6 +22,7 @@ namespace GroupSplit.Shared;
 /// </param>
 /// <param name="InvitedByUserName">Who sent the link: whoever issued it, or added the guest.</param>
 /// <param name="InvitedAt">When the link was issued.</param>
+/// <param name="ExpiresAt">When it stops working if nobody claims it.</param>
 /// <param name="AlreadyAMember">
 /// True when the claimer is already in the group. Claiming is still the right thing to do --
 /// it is what makes the position theirs -- so this is a note for the page and not a refusal.
@@ -34,7 +35,8 @@ public record InvitationClaimResponse(
     string Name,
     string? InvitedByUserName,
     DateTimeOffset InvitedAt,
-    bool AlreadyAMember);
+    bool AlreadyAMember,
+    DateTimeOffset ExpiresAt);
 
 /// <summary>
 /// The group somebody has just joined by claiming a personal invitation, and what came with

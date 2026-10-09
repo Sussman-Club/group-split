@@ -98,7 +98,7 @@ ones worth handling by name:
 | `GROUP_MEMBER_NOT_SETTLED`, `ACCOUNT_NOT_SETTLED` | Leaving or deleting is blocked until balances are square. |
 | `TRANSACTION_MOVES_DEPARTED_BALANCE` | The change would move what somebody who has left paid or owed. Rename, re-date or re-file freely; to change the amount, keep their share in `--split`. It cannot be deleted. `userIds` names them. |
 | `GROUP_REJOIN_NEEDS_NEW_INVITATION` | The user left this group after the link was issued. Only a link or invitation issued since will bring them back. |
-| `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined or withdrawn -- possibly a moment ago, by somebody else. |
+| `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined, withdrawn or replaced -- possibly a moment ago, by somebody else -- or it expired (30 days after being issued). A member can issue a new one with `groups guest-link create`. |
 | `CURRENCY_MISMATCH` | The money is not in the group's currency: recording it there (`--currency`), filing a bank row into it, or moving an expense into it with `transactions update --group`. Nothing converts, and an expense keeps its currency for good. It can stay personal, or go to a group in that currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
 | `IDENTITY_EMAIL_IN_USE` | Exit code 2, on every command: the server refuses this sign-in because its email belongs to another account (somebody deleted and recreated in Keycloak). Running `auth login` again as the same person will not fix it. Stop and tell your user to contact support with the `traceId`. |

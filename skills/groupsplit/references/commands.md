@@ -77,8 +77,8 @@ Groups you belong to, their members and their balances.
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
 | `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link issued after you left. |
 | `groups add-guest <group-id> <name>... [--link]` | Add people the group shares costs with as guests. No link unless `--link`. Answers with each guest's user id. |
-| `groups guests <group-id>` | List a group's guests by user id, with whether each has a link out. |
-| `groups guest-link create <group-id> <user-id> [--new]` | Print the guest's link, issuing one if there is none. `--new` replaces it (confirmation required): the old one stops working. |
+| `groups guests <group-id>` | List a group's guests by user id, with whether each has a link out and until when. A link that ran out unclaimed shows as expired (`linkExpired` true, `hasLink` false, no `token`; `linkExpiresAt` says when). |
+| `groups guest-link create <group-id> <user-id> [--new]` | Print the guest's link and when it expires, issuing one if there is none or the one out has expired. `--new` replaces a working one (confirmation required): the old one stops working. Replacing an expired one asks nothing. |
 | `groups guest-link revoke <group-id> <user-id>` | Stop the guest's link. Confirmation required. The guest stays. |
 | `groups invite <group-id> <name>...` | Deprecated: `add-guest --link`. |
 | `groups invitations <group-id>` | Deprecated: lists the guests with a link out, by their old invitation id. |
@@ -322,8 +322,8 @@ Guest links and group join links you were sent.
 
 | Command | |
 | --- | --- |
-| `invitations list` | The guest links you have opened that still work, with their tokens. Not "sent to me" -- there is no address to match. |
-| `invitations show <link>` | Show what a guest's link leads to, without claiming it. Says nothing about the money. |
+| `invitations list` | The guest links you have opened that still work, with their tokens and when each expires. Not "sent to me" -- there is no address to match. |
+| `invitations show <link>` | Show what a guest's link leads to, and until when it works, without claiming it. Says nothing about the money. |
 | `invitations claim <link>` | Claim it: join the group in the guest's place, taking on the shares recorded for them, their places in the group's split rules and their "all for them" rule. Repayments recorded between you and that guest are deleted (they would be self-payments) and counted. If two people claim one link at once, one gets in and the other gets GROUP_INVITATION_NOT_FOUND. Confirmation required. |
 | `invitations decline <link>` | "This isn't me": the link stops working. The group keeps the guest; nothing moves. Confirmation required. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
@@ -628,8 +628,9 @@ whoever follows it in **as themselves**, claiming nothing. On the receiving side
 
 A **guest's link** comes from `groups guest-link create <group-id> <user-id>`, one per
 guest. It hands over a *position in the group's ledger*: the shares recorded for that guest
-become the claimer's. So it works once, it says nothing about the money until claimed, and
-`invitations claim <link>` is gated by the confirmation protocol. Never suggest forwarding
+become the claimer's. So it works once and for 30 days from being issued, it says nothing
+about the money until claimed, and `invitations claim <link>` is gated by the confirmation
+protocol. Never suggest forwarding
 one, and never paste one where the group's join link would do.
 
 ### Guests
@@ -663,6 +664,12 @@ new money, and the group's join link is untouched.
 `groups guest-link create` prints the link (and is safe to repeat -- it returns the one
 already out), `--new` replaces it, `revoke` stops it. Declining a link only stops it; the
 guest stays.
+
+**A link expires 30 days after it was issued**, claimed or not. An expired link answers
+`GROUP_INVITATION_NOT_FOUND`, the same 404 as a claimed or mistyped one, and `groups guests`
+shows it as expired. `groups guest-link create` (no `--new` needed) issues a fresh one, which
+also counts as issued now for the rejoin rule. Tell the user the old URL is dead and the new
+one has to be sent again.
 
 **If the user has lost their own link**, `invitations list` has it -- provided they opened
 it at least once. If they never did, a member can print it again with `groups guest-link
