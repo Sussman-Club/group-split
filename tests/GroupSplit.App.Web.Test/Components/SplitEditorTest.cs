@@ -514,9 +514,8 @@ public class SplitEditorTest : ComponentTest
         var remaining = editor.Find(".gs-split-remaining");
 
         Assert.Contains("mud-alert-text-error", remaining.ClassName, StringComparison.Ordinal);
-        Assert.Contains("Not saved: the shares have to add up to $120.00.", remaining.TextContent,
-            StringComparison.Ordinal);
-        Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Not saved: the shares have to add up to $120.00. $20.00 still to assign.",
+            remaining.TextContent, StringComparison.Ordinal);
     }
 
     private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");

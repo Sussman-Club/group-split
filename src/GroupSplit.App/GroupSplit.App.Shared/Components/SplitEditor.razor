@@ -227,8 +227,9 @@
             {
                 @if (SaveRefused)
                 {
-                    <strong>Not saved: the shares have to add up to @Amount.ToMoney().</strong>
-                    <text> </text>
+                    @* The space as code: Razor drops a literal one that only sits between
+                       two tags, and the sentences ran together. *@
+                    <strong>Not saved: the shares have to add up to @Amount.ToMoney().</strong>@(" ")
                 }
 
                 <text>@ShareRounding.Unbalanced(Amount, _shares)</text>
