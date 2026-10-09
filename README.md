@@ -244,8 +244,11 @@ login switches, password and brute-force policy, token lifetimes, and SSO timeou
 includes the flow bindings: which flow runs a browser sign-in, a registration, a direct grant,
 a password reset, a client's authentication, and a brokered first sign-in. `realms.json`
 names Keycloak's built-in flows for each, so a binding re-pointed at another flow, by hand or
-by a mistaken import, is pointed back. The built-in flows themselves are not managed. A
-second run with no changes makes no API update. If Keycloak never becomes ready, the worker
+by a mistaken import, is pointed back. The built-in flows themselves are not managed. And it
+includes the event settings: user and admin events on, kept for 90 days, admin events without
+the representation that was sent. See
+[Sign-in and admin events](docs/development-and-deployment.md#sign-in-and-admin-events) for
+where to read them. A second run with no changes makes no API update. If Keycloak never becomes ready, the worker
 fails and the deployment does not silently skip reconciliation.
 
 It also manages where the `web-app` client may send a browser back to. The client's

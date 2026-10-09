@@ -643,6 +643,38 @@ OpenTelemetry already redacts query-string values the same way.
 A new route that carries a secret in its path has to be added to the pattern in
 `TokenRedaction`, with a case in `TokenRedactionTest`.
 
+## Sign-in and admin events
+
+The `group-split` realm records user events and admin events, so there is something to read
+after the fact: who signed in or failed to, who linked or unlinked a Google account, who asked
+for or completed a password reset, who changed their email or profile or deleted their account,
+and which admin changed a client, a flow or a user. `realms.json` sets this and the realm worker
+applies it on every start, so a realm imported before it said so records them too:
+
+- **User events** are on and kept for 90 days (`eventsExpiration`, in seconds). They cover the
+  types in `enabledEventTypes`: signing in and out, registering, the Google first sign-in, link
+  and unlink, password and credential changes, password reset, email verification and change,
+  profile change, account deletion, and the CLI's device sign-in, each with its `_ERROR` twin.
+- **Admin events** are on, without their details (`adminEventsDetailsEnabled` is `false`). The
+  details are the representation that was sent, and that can carry a secret: a client or
+  identity provider secret, or a user's initial password. The event still says who did what to
+  which resource, and when.
+
+Where to read them:
+
+- **The admin console**: *Events* in the `group-split` realm, with a tab for user events and
+  one for admin events, filterable by type, user, client and date. Deployed, the console is
+  reached through the SSH tunnel described above.
+- **The container log**, through the realm's `jboss-logging` listener. Failures are logged at
+  `WARN` by default; the AppHost sets `KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL=info`
+  so that successful ones are logged too, as lines starting `type="LOGIN"` and so on. Locally
+  that is the `keycloak` resource's console log in the Aspire dashboard; deployed, it is
+  `docker compose logs keycloak` on the host, which keeps them only as long as Docker keeps the
+  log. Keycloak's OTLP export carries its traces, not its log, so these lines do not reach the
+  deployed dashboard; that would take Keycloak's preview `opentelemetry-logs` feature.
+
+The event store is Keycloak's own database, so the 90 days survive restarts and deploys.
+
 ## Sessions across a deploy
 
 The sign-in ticket and the tokens beside it both live in Redis, added to the stack as

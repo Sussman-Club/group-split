@@ -403,6 +403,48 @@ public sealed class RealmSettingsReconcilerTests
     }
 
     /// <summary>
+    /// The realm every deployment so far was created with: Keycloak's defaults, which record
+    /// nothing. Turned on, with the retention, listener and event types the file names.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_recording_no_events_is_made_to_record_them()
+    {
+        var current = Imported();
+        current["eventsEnabled"] = false;
+        current.Remove("eventsExpiration");
+        current["eventsListeners"] = new JsonArray("jboss-logging");
+        current["enabledEventTypes"] = new JsonArray();
+        current["adminEventsEnabled"] = false;
+        current["adminEventsDetailsEnabled"] = true;
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var realm = admin.RealmData;
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.True(realm["eventsEnabled"]!.GetValue<bool>());
+        Assert.Equal(7776000, realm["eventsExpiration"]!.GetValue<long>());
+        Assert.Contains("LOGIN", Strings(realm["enabledEventTypes"]));
+        Assert.Contains("FEDERATED_IDENTITY_LINK", Strings(realm["enabledEventTypes"]));
+        Assert.True(realm["adminEventsEnabled"]!.GetValue<bool>());
+        Assert.False(realm["adminEventsDetailsEnabled"]!.GetValue<bool>());
+    }
+
+    /// <summary>Keycloak hands the event types back in its own order, which is not a change.</summary>
+    [Fact]
+    public async Task Event_types_in_another_order_are_not_a_change()
+    {
+        var current = Imported();
+        current["enabledEventTypes"] = new JsonArray(Strings(current["enabledEventTypes"])
+            .Reverse().Select(type => (JsonNode?)JsonValue.Create(type)).ToArray());
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
+    /// <summary>
     /// A browser flow re-pointed at a weaker copy, by hand or by an import, decides how every
     /// sign-in runs. The binding is what is managed, not the flow it names.
     /// </summary>
