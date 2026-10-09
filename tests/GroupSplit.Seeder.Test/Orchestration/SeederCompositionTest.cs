@@ -136,6 +136,24 @@ public class SeederCompositionTest
                     < LayerOf<Seeders.CategorySeeder>(layers));
     }
 
+    /// <summary>
+    /// Every group is given its "Even" rule after the groups exist and before a category can
+    /// claim a rule name in it -- the order the API gives them in.
+    /// </summary>
+    [Fact]
+    public void The_even_rule_is_seeded_after_the_groups_and_before_their_categories()
+    {
+        using var host = ComposeSeederHost();
+        using var scope = host.Services.CreateScope();
+
+        var layers = scope.ServiceProvider.GetServices<ISeeder>().TopologicallySort();
+
+        var even = LayerOf<Seeders.EvenSplitRuleSeeder>(layers);
+
+        Assert.True(even > LayerOf<Seeders.GroupSeeder>(layers));
+        Assert.True(even < LayerOf<Seeders.CategorySeeder>(layers));
+    }
+
     private static int LayerOf<TSeeder>(List<List<ISeeder>> layers) =>
         layers.FindIndex(layer => layer.Any(seeder => seeder is TSeeder));
 }
