@@ -82,7 +82,14 @@ public static class RustFsDeploymentExtensions
                     Interval = "5s",
                     Timeout = "5s",
                     Retries = 12,
-                    StartPeriod = "10s"
+                    // Long enough to cover the script's own budget: it gives the server 60s to
+                    // listen and each bucket 10 attempts 2s apart, and a probe that fails inside
+                    // the start period does not count. With the earlier 10s, a slow start on a
+                    // busy host -- every other container recreating at the same time -- was
+                    // declared unhealthy while the script was still legitimately waiting, and
+                    // the whole deploy rolled back. A probe that passes early ends the start
+                    // period at once, so a quick start costs nothing extra.
+                    StartPeriod = "90s"
                 });
         }
 
