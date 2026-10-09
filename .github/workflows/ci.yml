@@ -226,7 +226,34 @@ jobs:
           sudo systemctl restart docker
           docker info --format '{{json .RegistryConfig.Mirrors}}' | grep -q 'mirror.gcr.io' \
             || { echo "::error::Docker did not pick up the registry mirror."; exit 1; }
-          echo "Docker Hub pulls go through mirror.gcr.io."
+
+          # The daemon mirror alone is best effort: one error from it, and the daemon
+          # quietly pulls from Docker Hub instead, which is how a run still failed on
+          # redis:8.6. So the stack's Docker Hub images are pulled from the mirror by name
+          # here, with retries, and tagged as the names the stack asks for; the tests then
+          # find them on the runner and pull nothing. These are the tags the AppHost's
+          # Aspire packages pin. One that changes, or a new image, is still covered by the
+          # daemon mirror above, just not deterministically, and the warning says which.
+          images=(
+            postgres:18.3
+            redis:8.6
+            axllent/mailpit:v1.31.2
+            rustfs/rustfs:1.0.0
+            scalarapi/aspire-api-reference:0.11.29
+            t8y2/dbx:0.6.24
+          )
+          for image in "${images[@]}"; do
+            case "$image" in */*) path="$image" ;; *) path="library/$image" ;; esac
+            for attempt in 1 2 3 4 5; do
+              if docker pull --quiet "mirror.gcr.io/$path" > /dev/null; then
+                docker tag "mirror.gcr.io/$path" "$image"
+                echo "$image: pulled from mirror.gcr.io"
+                continue 2
+              fi
+              sleep $((attempt * 5))
+            done
+            echo "::warning::$image could not be pulled from mirror.gcr.io; the tests will fall back to Docker Hub for it."
+          done
 
       - name: Read the Aspire CLI version from the AppHost
         id: aspire
