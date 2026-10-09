@@ -1,9 +1,0 @@
-{
-  "_id": { "$oid": "000000000000000000000004" },
-  "operation": "DeployStack",
-  "status": "Complete",
-  "success": false,
-  "logs": [
-    { "stage": "Pre Deploy", "command": "./pre-deploy.sh", "stdout": "", "stderr": "exit status 1\n", "success": false }
-  ]
-}

@@ -789,24 +789,25 @@ first.
 ### When a deploy fails
 
 When Komodo's update fails, the job prints the failed stages with their errors, and the
-log of any one-shot service that did not complete. What it does next depends on how far
-Komodo got, which
+log of any service that did not complete or never became healthy. What it does next
+depends on whether the failure was the registry login, which
 [`classify-komodo-failure.sh`](../.github/scripts/classify-komodo-failure.sh) reads from
 the stages the update records:
 
 | Failed at | Production touched | What the job does |
 | --- | --- | --- |
 | "Login to Registry" | No. Komodo stops at the login, before it pulls or restarts anything, so production still runs the previous release. | Puts the previous configuration back into Komodo's stack without deploying it, and says to renew the registry token: see [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). It does not roll back: a redeploy starts with the same login and would fail the same way. |
-| A stage before any container changes -- "Compose Config", "Compose Pull" | No. | Puts the previous configuration back without deploying it. There is nothing to undo. |
-| "Compose Up", or any stage the script does not know | Yes. Compose recreates the api and web containers before it finds out that a service they wait for has failed, so the site may be down. | Puts the previous configuration back and deploys it again. If that fails too, production is probably down. |
+| Any other stage | Possibly. Compose recreates the api and web containers before it finds out that a service they wait for has failed, so the site may be down. | Puts the previous configuration back and deploys it again. If that fails too, production is probably down. |
 
 Putting the configuration back even when nothing was redeployed keeps Komodo honest: what
 its stack shows, and what a deploy started from Komodo's own UI would run, is what
 production runs.
 
-A stage the script has never seen counts as one that changes containers. That direction
-errs towards a rollback that was not needed, which is what every failed deploy got before
-the stages were told apart. The script's samples include the real updates from run
+Only the registry login is singled out, because it is the one failure seen for real and
+known to leave production as it was. Other stages that probably run before any container
+changes, such as pulling the images, are rolled back like everything else: their stage
+names have not been seen in a real update, and guessing them wrong would skip a rollback
+that was needed. The script's samples are the real updates from run
 [37843928725](https://github.com/Sussman-Club/group-split/actions/runs/37843928725), and
 CI runs its test (`bash .github/scripts/classify-komodo-failure.test.sh`, which needs
 `jq`).
@@ -821,8 +822,8 @@ way, with "unknown" when the job cannot tell whether production was touched.
 The images in `ghcr.io/sussman-club/group-split` are private, so Komodo logs in to GHCR
 before it pulls them. It logs in as the account the workflow writes into the stack's
 `registry_account`, which is the `KOMODO_REGISTRY_ACCOUNT` variable on the `production`
-environment; today that is `lorainemg`, a person's own GitHub account. Komodo keeps that
-account's token under Settings -> Providers, next to the account name.
+environment; today that is a person's own GitHub account. Komodo keeps that account's
+token under Settings -> Providers, next to the account name.
 
 The token must be a **classic** personal access token with the **`read:packages`** scope
 and nothing else. GHCR does not accept fine-grained tokens for pulling, and a classic token

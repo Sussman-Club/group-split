@@ -450,14 +450,13 @@ jobs:
       # Hand the generated compose file and env to Komodo, then deploy the stack.
       # The stack must already exist in Komodo in `file_contents` mode.
       #
-      # A deploy that fails puts the previous stack configuration back, and what else it does
-      # depends on how far Komodo got (classify-komodo-failure.sh decides). Once Compose Up
-      # has run, the previous configuration is deployed again: Compose recreates the api and
-      # web containers before it finds out that a one-shot service they wait for has failed,
-      # so such a deploy is not a no-op and, left alone, keeps the site down until something
-      # else is deployed. A failure before that -- the registry login, the image pull -- left
-      # every container as it was, so nothing is redeployed. For the registry login that is
-      # also the only option: a redeploy starts with the same login, and fails the same way.
+      # A deploy that fails puts the previous stack configuration back and deploys it again.
+      # Compose recreates the api and web containers before it finds out that a one-shot
+      # service they wait for has failed, so a failed deploy is not a no-op: left alone, it
+      # keeps the site down until something else is deployed. The one exception is a failed
+      # registry login (classify-komodo-failure.sh tells it apart): Komodo stops there,
+      # before it pulls or restarts anything, and a redeploy would start with the same login
+      # and fail the same way, so the configuration goes back without a redeploy.
       - name: Deploy to Komodo
         env:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
@@ -646,36 +645,29 @@ jobs:
             kind="$(jq -r '.kind' <<<"$classification")"
             failed="$(failed_stages)"
 
-            case "$kind" in
-              registry-login|before-containers)
-                # Nothing on the host changed, so nothing is deployed again. Komodo's stack
-                # does hold this release's configuration by now; the previous one goes back,
-                # so that what Komodo shows -- and what a deploy started from its UI would
-                # run -- is what production runs.
-                if [ -f rollback.json ] \
-                   && curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null; then
-                  outcome="not rolled back, because nothing changed; Komodo's stack configuration is the previous one again"
-                else
-                  outcome="not rolled back, because nothing changed; Komodo's stack still holds this release's configuration, which is not what runs"
-                fi
+            if [ "$kind" = registry-login ]; then
+              # Nothing on the host changed, so nothing is deployed again. Komodo's stack
+              # does hold this release's configuration by now; the previous one goes back,
+              # so that what Komodo shows -- and what a deploy started from its UI would
+              # run -- is what production runs.
+              if [ -f rollback.json ] \
+                 && curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null; then
+                outcome="not rolled back, because nothing changed; Komodo's stack configuration is the previous one again"
+              else
+                outcome="not rolled back, because nothing changed; Komodo's stack still holds this release's configuration, which is not what runs"
+              fi
 
-                if [ "$kind" = registry-login ]; then
-                  echo "::error::Komodo could not log in to ghcr.io as its registry account '$KOMODO_REGISTRY_ACCOUNT', so it stopped before pulling or restarting anything. Production was not touched and still runs the previous release. Not rolled back: a redeploy starts with the same login. Renew that account's GHCR token in Komodo, then re-run this job."
-                  summarise "Deployment failed: Komodo could not log in to GHCR" "$failed" \
-                    "no, Komodo stops at the login, before it pulls or restarts anything" "$outcome" \
-                    "**To fix:** the GHCR credential of Komodo's registry account \`$KOMODO_REGISTRY_ACCOUNT\` was refused, most likely because its token expired. Renew it in Komodo (Settings -> Providers -> ghcr.io) with a classic personal access token that has \`read:packages\`, then re-run this job. See [the registry account Komodo pulls with]($docs#the-registry-account-komodo-pulls-with)."
-                else
-                  echo "::error::The deploy failed at $failed, before Komodo changed any container. Production was not touched and still runs the previous release."
-                  summarise "Deployment failed" "$failed" \
-                    "no, the update stopped before Komodo changed any container" "$outcome"
-                fi
-                exit 1
-                ;;
-            esac
+              echo "::error::Komodo could not log in to ghcr.io as its registry account '$KOMODO_REGISTRY_ACCOUNT', so it stopped before pulling or restarting anything. Production was not touched and still runs the previous release. Not rolled back: a redeploy starts with the same login. Renew that account's GHCR token in Komodo, then re-run this job."
+              summarise "Deployment failed: Komodo could not log in to GHCR" "$failed" \
+                "no, Komodo stops at the login, before it pulls or restarts anything" "$outcome" \
+                "**To fix:** the GHCR credential of Komodo's registry account \`$KOMODO_REGISTRY_ACCOUNT\` was refused, most likely because its token expired. Renew it in Komodo (Settings -> Providers -> ghcr.io) with a classic personal access token that has \`read:packages\`, then re-run this job. See [the registry account Komodo pulls with]($docs#the-registry-account-komodo-pulls-with)."
+              exit 1
+            fi
 
-            # The update reached a stage that can change containers, or recorded none at all.
+            # Past the login, Compose may have recreated containers, so production is rolled
+            # back as before -- unless Komodo recorded no stage at all.
             case "$kind" in
-              containers) touched='yes, the update reached a stage that changes containers' ;;
+              other) touched='possibly: the update got past the registry login, and Compose may have recreated containers' ;;
               *) touched='unknown, Komodo recorded no stage' ;;
             esac
 

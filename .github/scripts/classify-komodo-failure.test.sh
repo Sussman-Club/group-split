@@ -8,8 +8,10 @@ set -euo pipefail
 #
 # The two *-run-37843928725.json samples are rebuilt from that deploy run's log: attempt 1
 # failed on an expired GHCR token, attempt 3 on an unhealthy service after Compose Up. The
-# log shows only the failed stage, so those samples hold only that stage. The others are
-# written by hand around the stage names Komodo uses.
+# log shows only the failed stage, so those samples hold only that stage, and the registry
+# account's name is replaced with a placeholder. compose-pull.json is written by hand: a
+# login that succeeded, then a later stage that failed, which must not read as a failed
+# login.
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 failures=0
@@ -32,11 +34,8 @@ expect() {
 }
 
 expect registry-login-run-37843928725.json registry-login no "Login to Registry"
-expect compose-up-run-37843928725.json containers yes "Compose Up"
-expect compose-pull.json before-containers no "Compose Pull"
-expect compose-config.json before-containers no "Compose Config"
-expect post-deploy.json containers yes "Post Deploy"
-expect unfamiliar-stage.json containers yes "Pre Deploy"
+expect compose-up-run-37843928725.json other possibly "Compose Up"
+expect compose-pull.json other possibly "Compose Pull"
 expect no-logs.json unknown unknown ""
 
 # Not a GetUpdate response at all: the script must fail rather than invent a verdict.
