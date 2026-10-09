@@ -214,18 +214,24 @@
             }
         </MudStack>
 
-        <MudAlert Severity="@(Assigned ? Severity.Success : Severity.Warning)" Dense="true">
+        @* Red, and said as the reason, once Save has been pressed over it: the dialog stays
+           open on the person's edits, and this is the one line that says why. *@
+        <MudAlert Severity="@(Assigned ? Severity.Success : SaveRefused ? Severity.Error : Severity.Warning)"
+                  Dense="true"
+                  Class="gs-split-remaining">
             @if (Assigned)
             {
                 <text>Every cent of @Amount.ToMoney() is assigned.</text>
             }
-            else if (Remaining > 0)
-            {
-                <text>@Remaining.ToMoney() still to assign.</text>
-            }
             else
             {
-                <text>@((-Remaining).ToMoney()) more than the expense comes to.</text>
+                @if (SaveRefused)
+                {
+                    <strong>Not saved: the shares have to add up to @Amount.ToMoney().</strong>
+                    <text> </text>
+                }
+
+                <text>@ShareRounding.Unbalanced(Amount, _shares)</text>
             }
         </MudAlert>
 
@@ -485,6 +491,17 @@
     [Parameter] public string? Awaiting { get; set; }
 
     /// <summary>
+    /// Whether Save was pressed while the stated shares did not add up, so the dialog stayed
+    /// open -- and the remaining line turns from a note into the reason.
+    /// </summary>
+    /// <remarks>
+    /// The dialog refuses rather than closing, because closing handed the request to a page
+    /// that met the API's refusal with the dialog already gone, and every other edit in it
+    /// went too (#323). A disabled Save would have said nothing about why.
+    /// </remarks>
+    [Parameter] public bool SaveRefused { get; set; }
+
+    /// <summary>
     /// The shares as this component currently holds them, seeded from the parameter and
     /// replaced by what the person types.
     /// </summary>
@@ -588,9 +605,12 @@
         _ => string.Empty
     };
 
-    private decimal Remaining => Amount - (_shares?.Sum(split => split.Amount) ?? 0m);
-
-    private bool Assigned => Remaining == 0m;
+    /// <summary>
+    /// Whether the shares are a division the API will take, checked the way the API checks
+    /// it -- see <see cref="ShareRounding"/>. Adding up what the fields held let three shares
+    /// of 33.333, shown as 33.33, read "every cent assigned" over a set the API refuses.
+    /// </summary>
+    private bool Assigned => ShareRounding.Unbalanced(Amount, _shares ?? []) is null;
 
     /// <summary>
     /// When the version that divided it is no longer what the rule says. Only ever set on

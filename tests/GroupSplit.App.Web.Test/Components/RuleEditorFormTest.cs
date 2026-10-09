@@ -120,6 +120,41 @@ public class RuleEditorFormTest : ComponentTest
     }
 
     /// <summary>Members that do divide cleanly get no odd cent to argue about.</summary>
+    /// <summary>
+    /// The total is counted the way the API counts it: each percentage to hundredths first,
+    /// then added (#323).
+    /// </summary>
+    /// <remarks>
+    /// 33.333 / 33.333 / 33.334 sums to exactly 100, and the form rounded that sum and showed
+    /// 100% in green. The API stores each one in whole hundredths -- 33.33 three times -- and
+    /// refused the rule at 99.99%.
+    /// </remarks>
+    [Fact]
+    public async Task A_percent_total_is_counted_the_way_the_api_counts_it()
+    {
+        var form = Render(new PercentSplitRuleDto
+        {
+            Percentages = new Dictionary<Guid, decimal>
+            {
+                [Alice.Id] = 33.333m,
+                [Bob.Id] = 33.333m,
+                [Carol.Id] = 33.334m
+            }
+        });
+
+        await form.InvokeAsync(form.Instance.Validate);
+
+        Assert.Contains("Total: 99.99%", form.Markup, StringComparison.Ordinal);
+        Assert.False(form.Instance.IsValid);
+
+        // And the even split it offers instead is one the API takes.
+        await SplitEvenlyAsync(form);
+        await form.InvokeAsync(form.Instance.Validate);
+
+        Assert.Contains("Total: 100.00%", form.Markup, StringComparison.Ordinal);
+        Assert.True(form.Instance.IsValid);
+    }
+
     [Fact]
     public async Task A_membership_that_divides_cleanly_is_split_flat()
     {

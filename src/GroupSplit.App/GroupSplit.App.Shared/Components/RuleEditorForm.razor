@@ -238,7 +238,14 @@
         StateHasChanged();
     }
 
-    private decimal PercentTotal => Model.Version is PercentSplitRuleDto percentSplitRuleDto ? Math.Round(percentSplitRuleDto.Percentages.Values.Sum(), 2) : 0;
+    /// <summary>
+    /// The total the API will count: each percentage rounded to hundredths, then added. Rounding
+    /// the sum instead showed 33.333 / 33.333 / 33.334 as 100% in green over a rule the API
+    /// counts as 99.99% and refuses (#323). See <see cref="ShareRounding.PercentTotal"/>.
+    /// </summary>
+    private decimal PercentTotal => Model.Version is PercentSplitRuleDto percentSplitRuleDto
+        ? ShareRounding.PercentTotal(percentSplitRuleDto.Percentages.Values)
+        : 0;
     private int SharesTotal => Model.Version is SharesSplitRuleDto sharesSplitRuleDto ? sharesSplitRuleDto.Shares.Values.Sum() : 0;
 
     public bool IsValid

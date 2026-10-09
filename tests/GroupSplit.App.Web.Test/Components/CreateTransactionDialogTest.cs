@@ -601,6 +601,125 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.Contains("Lidl", where.TextContent, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Shares typed by hand that stop adding up when the amount moves are refused at Save,
+    /// in the dialog, with everything else still in it (#323).
+    /// </summary>
+    /// <remarks>
+    /// Save validated the form and nothing else, so the dialog closed, the page sent the
+    /// request, the API refused it, and the name, the note and every pick were gone with the
+    /// dialog. The remaining line was text and nothing more.
+    /// </remarks>
+    [Fact]
+    public async Task Shares_that_no_longer_add_up_are_refused_without_closing_over_the_rest()
+    {
+        var daniel = Guid.NewGuid();
+
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"),
+                new UserInfo(daniel, "Daniel", "Jones", "daniel@example.com")
+            ]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", new DialogParameters<CreateTransactionDialog>
+                {
+                    { dialog => dialog.SelectedGroupId, GroupId }
+                }));
+
+        var amount = provider.FindComponents<DecimalField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(100m));
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner"));
+
+        // 70/30 by hand, and then the amount corrected underneath it.
+        var editor = provider.FindComponent<SplitEditor>();
+
+        await provider.InvokeAsync(() => editor.Instance.ValueChanged.InvokeAsync(
+        [
+            new SplitInput { UserId = MeId, Amount = 70m },
+            new SplitInput { UserId = daniel, Amount = 30m }
+        ]));
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.False(reference!.Result.IsCompleted);
+
+        var remaining = provider.Find(".gs-split-remaining");
+        Assert.Contains("Not saved", remaining.TextContent, StringComparison.Ordinal);
+        Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
+
+        // And the rest of the edit is where it was.
+        Assert.Equal("Dinner", name.Instance.Value);
+        Assert.Equal(120m, amount.Instance.Value);
+    }
+
+    /// <summary>
+    /// A group picked while the last one's people are still on their way is the one whose
+    /// people and categories the dialog offers (#323).
+    /// </summary>
+    /// <remarks>
+    /// The three reads behind a pick wrote what they found as they found it, so an answer
+    /// about the group somebody had already moved off landed over the group they moved to:
+    /// the flat's members offered as the trip's payers and shares.
+    /// </remarks>
+    [Fact]
+    public async Task A_group_picked_while_the_last_one_loads_keeps_its_own_people()
+    {
+        var flat = new GroupResponse(Guid.NewGuid(), "Flat", 2);
+        var trip = new GroupResponse(Guid.NewGuid(), "Trip", 2);
+        var flatmate = new UserInfo(Guid.NewGuid(), "Flat", "Mate", null);
+        var traveller = new UserInfo(Guid.NewGuid(), "Fellow", "Traveller", null);
+        var flatMembers = new TaskCompletionSource<ICollection<UserInfo>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _groups
+            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([flat, trip]);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))
+            .Returns(flatMembers.Task);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(trip.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([traveller]);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(flat.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), flat.Id, "Rent", null, null)]);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(trip.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), trip.Id, "Fuel", null, null)]);
+
+        var provider = await OpenAsync(null);
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+
+        // The flat first, whose people are slow; then the trip, before they arrive.
+        var pickingFlat = provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(flat.Id));
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(trip.Id));
+
+        flatMembers.SetResult([flatmate]);
+        await pickingFlat;
+
+        var editor = provider.FindComponent<SplitEditor>();
+        Assert.Equal([traveller.Id], editor.Instance.Members.Select(member => member.Id));
+        Assert.Equal(["Fuel"], decisions.Instance.Categories.Select(category => category.Name));
+    }
+
     private static IReadOnlyList<AngleSharp.Dom.IElement> Chips(
         IRenderedComponent<MudDialogProvider> provider) =>
         [.. provider.FindAll("button.gs-expense-chip")];
