@@ -1,16 +1,32 @@
 @inject IUserLogin UserLogin
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Layout
 @using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @implements IDisposable
 
-<CascadingValue Value="@User" TValue="UserInfo">
-    @ChildContent
-</CascadingValue>
+@* A person the API refuses outright gets the reason instead of the app. Every page would
+   otherwise ask the API for something, be refused the same way, and say so in a snackbar
+   about whatever it was loading -- which reads as the page being broken rather than the
+   account. *@
+@if (_refusal is not null)
+{
+    <LayoutView Layout="typeof(FullScreenLayout)">
+        <SignInRefused Refusal="_refusal" />
+    </LayoutView>
+}
+else
+{
+    <CascadingValue Value="@User" TValue="UserInfo">
+        @ChildContent
+    </CascadingValue>
+}
 
 @code {
     [Parameter, EditorRequired] public RenderFragment? ChildContent  { get; set; }
     private UserInfo? User { get; set; }
-    
+    private SignInRefusal? _refusal;
+
     protected override async Task OnInitializedAsync()
     {
         if (!UserLogin.LoginAttempted)
@@ -19,6 +35,7 @@
         }
 
         User = UserLogin.User;
+        _refusal = UserLogin.Refusal;
         UserLogin.OnLoginChanged += OnUserChanged;
     }
 
@@ -30,6 +47,7 @@
     private void OnUserChanged(UserInfo? userInfo)
     {
         User = userInfo;
+        _refusal = UserLogin.Refusal;
         InvokeAsync(StateHasChanged);
     }
 }

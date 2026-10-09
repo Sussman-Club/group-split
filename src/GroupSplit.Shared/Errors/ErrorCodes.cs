@@ -204,6 +204,16 @@ public static class ErrorCodes
     /// </summary>
     public const string MerchantInUse = "MERCHANT_IN_USE";
 
+    /// <summary>
+    /// The sign-in is new here and its email is already on another account -- typically
+    /// because the person was deleted and recreated in Keycloak, which gives them a new
+    /// subject. Refused rather than linked: an address is not proof of being the person who
+    /// owns the old row, and linking would hand that row's money to whoever holds the new
+    /// sign-in. Answered on every request until support resolves it; see
+    /// <c>docs/identities.md</c>.
+    /// </summary>
+    public const string IdentityEmailInUse = "IDENTITY_EMAIL_IN_USE";
+
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
     public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";

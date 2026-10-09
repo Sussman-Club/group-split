@@ -1327,6 +1327,13 @@ request was never sent. These three are about whether it was:
 The full list of `CLI_` codes is in the agent skill's
 [protocol reference](../skills/groupsplit/references/protocol.md#codes-the-cli-raises-itself).
 
+The exit code follows the HTTP status (a 409 is `3`), with one exception:
+`IDENTITY_EMAIL_IN_USE` is a 409 that exits `2`. The server refuses the sign-in itself, on
+every command, because its email already belongs to another account -- somebody deleted and
+recreated in Keycloak. Signing in again as the same person brings back the same refusal; the
+remediation says to contact support with the `traceId`, and support resolves it as
+[identities.md](identities.md) describes.
+
 `traceId` is the API's own, and matches its log line.
 
 ## Confirming changes

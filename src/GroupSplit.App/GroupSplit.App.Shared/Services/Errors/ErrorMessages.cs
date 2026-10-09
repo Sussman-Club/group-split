@@ -177,7 +177,13 @@ public static class ErrorMessages
         [ErrorCodes.BankLinkWillBeFinished] = "Your bank approved the connection and we have it safely, but we could not finish setting it up just now. It will appear on its own shortly -- there is nothing you need to do, and no need to link it again.",
         [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead.",
         [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
-        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."
+        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction.",
+
+        // Nothing the person can do here fixes it -- signing in again brings back the same
+        // sign-in -- so it says who can, and what to quote to them.
+        [ErrorCodes.IdentityEmailInUse] =
+            "The email on this sign-in already belongs to another Group Split account, so we cannot open it. "
+            + "Signing in again will not change that: please contact support."
     };
 
     /// <summary>
