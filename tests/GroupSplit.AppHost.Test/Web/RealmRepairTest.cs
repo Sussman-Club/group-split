@@ -30,8 +30,6 @@ public class RealmRepairTest(AppHostFixture appHost)
 
     private const string Flow = "link only first broker login";
 
-    private const string Worker = "realm-settings";
-
     private static readonly string FlowExecutions =
         $"admin/realms/{Realm}/authentication/flows/{Uri.EscapeDataString(Flow)}/executions";
 
@@ -159,43 +157,7 @@ public class RealmRepairTest(AppHostFixture appHost)
         Assert.False((await Admin.GetAsync(Google, Ct)).GetProperty("config").TryGetProperty("filteredByClaim", out _));
     }
 
-    /// <summary>
-    /// Starts the worker again and waits for that run, not the one at start-up, to finish.
-    /// </summary>
-    private async Task RunTheWorkerAsync()
-    {
-        var notifications = appHost.Application.ResourceNotifications;
-
-        // Subscribed before the start, so a run quick enough to finish before the wait began
-        // cannot be mistaken for the one before it.
-        var started = notifications.WaitForResourceAsync(
-            Worker, resource => !IsDone(resource.Snapshot), Ct);
-
-        var start = await appHost.Application.ResourceCommands.ExecuteCommandAsync(
-            Worker, KnownResourceCommands.StartCommand, Ct);
-
-        Assert.True(start.Success, $"Starting {Worker} failed: {start.Message ?? "no error message"}.");
-
-        await started;
-
-        ResourceEvent? finished = null;
-
-        await appHost.WaitForAsync(
-            Worker,
-            async (resources, token) => finished = await resources.WaitForResourceAsync(
-                Worker, resource => IsDone(resource.Snapshot), token),
-            "finish its run");
-
-        Assert.True(
-            finished!.Snapshot.ExitCode == 0,
-            $"{Worker} exited with {finished.Snapshot.ExitCode}:" + Environment.NewLine
-            + await appHost.ReadLogAsync(Worker));
-
-        static bool IsDone(CustomResourceSnapshot snapshot) =>
-            snapshot.State?.Text is { } state
-            && (state == KnownResourceStates.Finished || state == KnownResourceStates.Exited
-                || state == KnownResourceStates.FailedToStart);
-    }
+    private Task RunTheWorkerAsync() => appHost.RunRealmWorkerAsync();
 
     private async Task<string[]> StepsAsync() =>
         (await Admin.GetAsync(FlowExecutions, Ct)).EnumerateArray()

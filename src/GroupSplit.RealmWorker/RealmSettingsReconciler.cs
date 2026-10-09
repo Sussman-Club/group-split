@@ -100,10 +100,22 @@ public sealed class RealmSettingsReconciler(
         foreach (var client in KeycloakRealmDefinition.ManagedClients)
         {
             var source = KeycloakRealmDefinition.Client(definition, client.ClientId)!;
+
+            // A client that may be created is wanted whole, since creating it writes all of it.
+            // Only a client with nothing environment-specific in it is allowed to be.
+            if (client.CreateWhenMissing)
+            {
+                clients.Add(source.DeepClone());
+                continue;
+            }
+
             var picked = Pick(source, client.Properties);
 
             picked["clientId"] = client.ClientId;
             picked["attributes"] = Pick((JsonObject)source["attributes"]!, client.Attributes);
+            picked["protocolMappers"] = new JsonArray(client.ProtocolMappers
+                .Select(name => KeycloakRealmDefinition.ProtocolMapper(source, name)!.DeepClone())
+                .ToArray());
             clients.Add(picked);
         }
 
@@ -154,14 +166,31 @@ public sealed class RealmSettingsReconciler(
     private async Task ReconcileClientAsync(JsonObject desired, ManagedClient managed, CancellationToken ct)
     {
         var wanted = KeycloakRealmDefinition.Client(desired, managed.ClientId)!;
+        var current = await keycloak.GetClientAsync(managed.ClientId, ct);
 
-        // A realm without the client is one the import never finished, or one somebody
-        // edited by hand. Creating it here would make this a second importer, so it is
-        // reported instead and the run fails.
-        var current = await keycloak.GetClientAsync(managed.ClientId, ct)
-            ?? throw new InvalidOperationException(
+        if (current is null && managed.CreateWhenMissing)
+        {
+            // A realm imported before the client existed. Nothing in it depends on where the
+            // app runs, so the file's definition is the client an import would have created.
+            await keycloak.CreateClientAsync((JsonObject)wanted.DeepClone(), ct);
+            logger.LogWarning(
+                "Keycloak realm {Realm} had no client {ClientId}; created it from the repository definition.",
+                keycloak.Realm, managed.ClientId);
+
+            current = await keycloak.GetClientAsync(managed.ClientId, ct)
+                ?? throw new InvalidOperationException(
+                    $"Created client '{managed.ClientId}' on Keycloak realm {keycloak.Realm}, but it cannot be read back.");
+        }
+
+        // Otherwise a realm without the client is one the import never finished, or one
+        // somebody edited by hand. Creating a client that depends on the environment here would
+        // make this a second importer, so it is reported instead and the run fails.
+        if (current is null)
+        {
+            throw new InvalidOperationException(
                 $"Keycloak realm {keycloak.Realm} has no client '{managed.ClientId}'. "
                 + "Reset the realm so it is imported again, or create the client from realms.json.");
+        }
 
         var changed = Apply(current, wanted, managed.Properties);
 
@@ -176,18 +205,79 @@ public sealed class RealmSettingsReconciler(
                 .Select(name => $"attributes.{name}"));
         }
 
-        if (changed.Count == 0)
+        // The client first, written back with the mappers it was read with, and the mappers
+        // after it through their own calls.
+        if (changed.Count > 0)
+        {
+            await keycloak.UpdateClientAsync(current, ct);
+            logger.LogInformation(
+                "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
+                changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+        }
+
+        var mappers = await ReconcileProtocolMappersAsync(current, wanted, managed, ct);
+
+        if (changed.Count == 0 && mappers == 0)
         {
             logger.LogInformation(
                 "Client {ClientId} on Keycloak realm {Realm} already matches the repository settings.",
                 managed.ClientId, keycloak.Realm);
-            return;
+        }
+    }
+
+    /// <summary>
+    /// Gives each managed protocol mapper the file's type and config values, creating it when
+    /// the client has none by that name.
+    /// </summary>
+    /// <remarks>
+    /// Only the config entries the file names are compared. Keycloak adds entries of its own
+    /// to a mapper over time -- a migration gave every mapper <c>introspection.token.claim</c>
+    /// -- and those are kept rather than fought over on every run.
+    /// </remarks>
+    /// <returns>How many mappers were written.</returns>
+    private async Task<int> ReconcileProtocolMappersAsync(
+        JsonObject current, JsonObject wanted, ManagedClient managed, CancellationToken ct)
+    {
+        var clientId = current["id"]!.GetValue<string>();
+        var written = 0;
+
+        foreach (var name in managed.ProtocolMappers)
+        {
+            var desired = KeycloakRealmDefinition.ProtocolMapper(wanted, name)!;
+            var existing = KeycloakRealmDefinition.ProtocolMapper(current, name);
+
+            if (existing is null)
+            {
+                await keycloak.CreateProtocolMapperAsync(clientId, (JsonObject)desired.DeepClone(), ct);
+                logger.LogInformation(
+                    "Added protocol mapper {Mapper} to client {ClientId} of Keycloak realm {Realm}.",
+                    name, managed.ClientId, keycloak.Realm);
+                written++;
+                continue;
+            }
+
+            var changed = Apply(existing, desired, ["protocol", "protocolMapper"]);
+
+            if (existing["config"] is not JsonObject config)
+            {
+                existing["config"] = config = new JsonObject();
+            }
+
+            var desiredConfig = (JsonObject)desired["config"]!;
+
+            changed.AddRange(Apply(config, desiredConfig, desiredConfig.Select(entry => entry.Key).ToList())
+                .Select(key => $"config.{key}"));
+
+            if (changed.Count == 0) continue;
+
+            await keycloak.UpdateProtocolMapperAsync(clientId, existing, ct);
+            logger.LogInformation(
+                "Updated protocol mapper {Mapper} of client {ClientId} on Keycloak realm {Realm}: {Settings}.",
+                name, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+            written++;
         }
 
-        await keycloak.UpdateClientAsync(current, ct);
-        logger.LogInformation(
-            "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
-            changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+        return written;
     }
 
     private async Task ReconcileIdentityProviderAsync(

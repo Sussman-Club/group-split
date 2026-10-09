@@ -1380,20 +1380,12 @@ It lives in `src/GroupSplit.AppHost/Assets/keycloak/realms.json`: public, device
 and carrying the same `api` audience mapper as `web-app` -- without that mapper the API
 rejects its tokens for the wrong audience.
 
-**A realm that already exists will not pick it up.** Keycloak imports a realm on first start
-only, and both the local Keycloak (`WithDataVolume`) and the deployed one keep theirs, so
-adding a client to this file does nothing for an environment that has already run. Either add
-the client through the admin console, or -- locally, where the data is disposable -- drop the
-volume and let the realm be imported again:
+Keycloak imports a realm on first start only, and both the local Keycloak (`WithDataVolume`)
+and the deployed one keep theirs, so a realm imported before the CLI existed has no `cli`
+client. The `realm-settings` worker takes care of that: on every start, locally and on every
+deploy, it creates the client from this file when it is missing, and otherwise puts back its
+grants (device grant on, every other grant off) and its `api` audience mapper. Nothing in the
+client depends on the environment, so creating it writes exactly what an import would have.
+See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
 
-```bash
-aspire stop
-podman volume ls | grep keycloak     # confirm the name before removing anything
-podman volume rm <the keycloak data volume>
-aspire run
-```
-
-That loses locally signed-up accounts; `groupsplit auth login` works afterwards, and the
-seeder's **Reset databases and seed** command puts the demo accounts back.
-
-Until then, `GROUPSPLIT_TOKEN` needs no realm change at all.
+`GROUPSPLIT_TOKEN` needs no realm change at all.

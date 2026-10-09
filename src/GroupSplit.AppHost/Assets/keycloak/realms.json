@@ -28,6 +28,12 @@
   "ssoSessionMaxLifespan": 2592000,
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 900,
+  "browserFlow": "browser",
+  "registrationFlow": "registration",
+  "directGrantFlow": "direct grant",
+  "resetCredentialsFlow": "reset credentials",
+  "clientAuthenticationFlow": "clients",
+  "firstBrokerLoginFlow": "first broker login",
   "smtpServer": {
     "host": "${SMTP_HOST}",
     "port": "${SMTP_PORT}",
@@ -98,7 +104,8 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "attributes": {
-        "oauth2.device.authorization.grant.enabled": "true"
+        "oauth2.device.authorization.grant.enabled": "true",
+        "oidc.ciba.grant.enabled": "false"
       },
       "protocolMappers": [
         {
