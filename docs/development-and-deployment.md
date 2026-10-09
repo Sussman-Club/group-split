@@ -97,7 +97,7 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
 | `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, both apps validate tokens against that issuer, and it is the address bank providers are told to deliver webhooks to. Changing it leaves already-linked items pointing at the old one until each is relinked. |
-| `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
+| `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the Aspire dashboard, which is published on the host's loopback port 18888 and reached through an SSH tunnel. See [Reaching the deployed dashboard](#reaching-the-deployed-dashboard). |
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `storage-accessKey`, `storage-secretKey` | secrets `STORAGE_ACCESSKEY`, `STORAGE_SECRETKEY` | yes | Root credentials of the RustFS receipt store, which the API signs its S3 requests with. Pinned for the same reason as `cache-password`: generated per publish, they recreated the storage container with new root credentials on every deploy, and everything that depends on it waited on its healthcheck each time. Nothing outside the stack ever sees them, so any two random strings will do. |
@@ -590,6 +590,53 @@ Settings that belong to the repository still go in `realms.json`, where the real
 them on the next deploy. The admin console and CLI are for one-off inspection and for what the
 worker deliberately leaves alone.
 
+## Reaching the deployed dashboard
+
+The deployed stack runs the Aspire dashboard as the `compose-dashboard` service, and every service
+sends it traces, logs and metrics. It is reachable the same way as the Keycloak admin console:
+from the host only, through an SSH tunnel. Its port is published on the host's loopback address
+alone (`127.0.0.1:18888`).
+
+```bash
+ssh -L 18888:127.0.0.1:18888 <deploy-host>
+```
+
+With the tunnel open, browse to `http://localhost:18888` and paste the `DASHBOARD_TOKEN` value when
+the dashboard asks for its browser token. Use a different local port on the left of `-L` if 18888
+is taken on your machine. The host port is `DeploymentExtensions.DashboardPort`.
+
+The dashboard is published on loopback only for two reasons:
+
+- **It shows what the services record.** Traces and structured logs carry request details and
+  error text, and anything a service writes to them by mistake. Treat it as able to show secrets.
+- **It speaks plain HTTP.** On a port published on every interface, the browser token and
+  everything the dashboard shows crossed the LAN unencrypted. Docker publishes ports past the
+  host firewall, so ufw would not have stopped it either. Through the tunnel, SSH provides the
+  encryption and the authentication. The token is still required, as a second lock for anyone
+  who already has a shell on the host.
+
+[`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs) writes
+the mapping, and `PublishedDashboardTest` reads it back from a generated Compose file.
+
+### What telemetry leaves out
+
+Some routes are addressed by a secret rather than an id. Whoever has the URL has the access it
+grants:
+
+- the invitation claim link: `/invitations/claims/{token}` on the API, `/claim/{token}` on the web;
+- the join link: `/invitations/links/{token}` on the API, `/join/{token}` on the web.
+
+Instrumentation records paths as they were requested. Without redaction, every one of these
+tokens would reach the dashboard in `url.path` on server spans, in `url.full` on `HttpClient`
+spans (including the web app's forwarders), and in the request URIs that ASP.NET Core and
+`HttpClient` log. [`TokenRedaction`](../src/GroupSplit.ServiceDefaults/TokenRedaction.cs) in
+the service defaults replaces the token segment with `Redacted` before anything is exported, so
+`/join/abc` is recorded as `/join/Redacted`. `http.route` keeps the template, `{token}` included.
+OpenTelemetry already redacts query-string values the same way.
+
+A new route that carries a secret in its path has to be added to the pattern in
+`TokenRedaction`, with a case in `TokenRedactionTest`.
+
 ## Sessions across a deploy
 
 The sign-in ticket and the tokens beside it both live in Redis, added to the stack as
@@ -886,5 +933,6 @@ Nothing on the runner starts a container. `aspire deploy` would, which is why th
 workflow uses `aspire do` instead.
 
 On the host, the web app joins the shared `internal` network as `group-split-web`, where
-Caddy routes the public hostname to it. Nothing else publishes a port except the
-dashboard, on 18888, behind its token.
+Caddy routes the public hostname to it. Nothing else publishes a port beyond the host's
+loopback address: the dashboard is on `127.0.0.1:18888` and the Keycloak admin console on
+`127.0.0.1:8180`, both reached through an SSH tunnel.

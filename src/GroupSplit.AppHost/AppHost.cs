@@ -185,7 +185,7 @@ else
 
     var dashboardToken = builder
         .AddParameter("dashboard-token", secret: true)
-        .WithDescription("Browser token for the published Aspire dashboard on port 18888.");
+        .WithDescription("Browser token for the Aspire dashboard, published on the host's loopback port 18888.");
 
     var compose = builder.AddDockerComposeEnvironment("compose")
         .WithProtectedDashboard(dashboardToken);
