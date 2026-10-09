@@ -13,7 +13,7 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </summary>
 /// <remarks>
 /// Picking a day reads the group's balances through it rather than working the figure out:
-/// through a day the API counts every repayment whatever its date, which is the half a client
+/// through a day the API counts the repayments made for it, which is the half a client
 /// adding up its own expenses would leave out.
 /// </remarks>
 public class SettleDialogTest : ComponentTest
@@ -107,18 +107,71 @@ public class SettleDialogTest : ComponentTest
         Assert.Equal(EndOfAugust, request.Through);
     }
 
+    private static Task TypeAsync(IRenderedComponent<MudDialogProvider> provider, decimal amount)
+    {
+        var field = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(candidate => candidate.Instance.Label == "Amount they paid");
+
+        return provider.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync(amount));
+    }
+
     [Fact]
-    public async Task A_period_with_nothing_left_owing_cannot_be_confirmed()
+    public async Task More_than_the_period_left_owing_is_recorded_as_typed()
+    {
+        // The figure is a suggestion. The money that moved is what gets written.
+        OwedThroughAugust(50m);
+        var (provider, dialog) = await Open();
+
+        await PickAsync(provider, EndOfAugust);
+        provider.WaitForAssertion(() => Assert.Contains("For activity up to 31 Aug", provider.Markup));
+
+        await TypeAsync(provider, 60.80m);
+        provider.WaitForAssertion(() => Assert.Contains("more than that period left owing", provider.Markup));
+
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+
+        Assert.Equal(60.80m, request!.Amount);
+        Assert.Equal(EndOfAugust, request.Through);
+    }
+
+    [Fact]
+    public async Task A_period_with_nothing_left_owing_still_records_what_was_typed()
     {
         OwedThroughAugust(0m);
-        var (provider, _) = await Open();
+        var (provider, dialog) = await Open();
 
         await PickAsync(provider, EndOfAugust);
 
         provider.WaitForAssertion(() =>
             Assert.Contains("Nothing is outstanding between you for activity up to 31 Aug", provider.Markup));
-        Assert.True(provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
-            .HasAttribute("disabled"));
+
+        await TypeAsync(provider, 12.50m);
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+
+        Assert.Equal(12.50m, request!.Amount);
+        Assert.Equal(EndOfAugust, request.Through);
+    }
+
+    [Fact]
+    public async Task Nothing_is_not_an_amount()
+    {
+        OwedThroughAugust(0m);
+        var (provider, dialog) = await Open();
+
+        await PickAsync(provider, EndOfAugust);
+        provider.WaitForAssertion(() => Assert.Contains("Nothing is outstanding", provider.Markup));
+
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
+            .ClickAsync(new MouseEventArgs());
+
+        provider.WaitForAssertion(() => Assert.Contains("Amount must be greater than 0.", provider.Markup));
+        Assert.False(dialog.Result.IsCompleted);
     }
 
     [Fact]

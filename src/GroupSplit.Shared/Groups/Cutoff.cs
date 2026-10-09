@@ -7,12 +7,16 @@ namespace GroupSplit.Shared;
 /// </summary>
 /// <remarks>
 /// What settling up "through 31 August" means. A balance through a day counts every
-/// expense dated on or before it and <em>every settlement, whatever its date</em> -- money
-/// paid goes against the oldest debt first. Cutting settlements off at the day as well
-/// would ask somebody who paid in September to pay August again when August is settled in
-/// October, because their payment falls after the line. The payments that come out are then
-/// capped at what the whole balance says between the same two people, so a payment made for a
-/// later period never reads as being owed back for this one.
+/// expense dated on or before it, and the settlements made for it: those covering through
+/// it or an earlier day, and those claiming no period dated on or before it. Settlements
+/// made for after it count only as far as they pay down what the period left -- money paid
+/// goes against the oldest debt first, so somebody who paid in September is not asked for
+/// August again when August is settled in October, and a payment made for a later period
+/// never reads as being owed back for this one. Nothing else dated after the day moves the
+/// figure -- being ahead in October does not shrink what August left -- until somebody
+/// settles a later period: settling September writes the plan through September, which may
+/// route August's debts through somebody else, so what it leaves is the most August can
+/// still ask for.
 /// <para>
 /// A day and an offset rather than an instant, because a day ends at a different moment
 /// for everybody: the offset is the caller's, the same one the date filters already turn a

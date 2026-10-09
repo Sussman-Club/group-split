@@ -14,15 +14,18 @@ namespace GroupSplit.API.Test.Group;
 /// </summary>
 /// <remarks>
 /// The rule every test here leans on: through a day, a balance counts the expenses dated up
-/// to it and <em>every settlement, whatever its date</em>. Money paid goes against the
-/// oldest debt first. Cutting settlements off at the day as well would make somebody who paid
-/// in September pay August a second time when August is settled in October -- which is the
-/// test called <see cref="A_repayment_made_after_the_day_still_counts_against_it"/>.
+/// to it and the settlements made for it, and settlements made for later only as far as they
+/// pay down what it left. Money paid goes against the oldest debt first. Cutting later
+/// settlements off entirely would make somebody who paid in September pay August a second
+/// time when August is settled in October -- which is the test called
+/// <see cref="A_repayment_made_after_the_day_still_counts_against_it"/>. Counting them in
+/// full would have a payment for September owed back for August.
 /// </remarks>
 public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     private static readonly DateOnly EndOfJuly = new(2026, 7, 31);
     private static readonly DateOnly EndOfAugust = new(2026, 8, 31);
+    private static readonly DateOnly EndOfSeptember = new(2026, 9, 30);
 
     private static DateTimeOffset On(int month, int day) => new(2026, month, day, 12, 0, 0, TimeSpan.Zero);
 
@@ -69,9 +72,9 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     /// <summary>
     /// The other side of counting every repayment. Nothing was owed for August; in September
-    /// they paid 60 split between us and I paid them my 30. Through August, my payment reads
-    /// as a credit -- and without the cap at the whole balance, settling August had them pay
-    /// me 30 back, leaving me owing September all over again.
+    /// they paid 60 split between us and I paid them my 30. Counted in full, my payment reads
+    /// as a credit through August, and settling August had them pay me 30 back, leaving me
+    /// owing September all over again.
     /// </summary>
     [Fact]
     public async Task A_repayment_for_a_later_period_is_never_owed_back_for_an_earlier_one()
@@ -86,6 +89,172 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal(ErrorCodes.SettlementNothingToSettle, refused.Code);
         Assert.Empty((await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct)).OwedToYou);
+    }
+
+    /// <summary>
+    /// The Home group's September. They owed me 50 for August; in September they paid for
+    /// something we split, so they are 20 ahead since. Settling August still asks for August's
+    /// 50 -- when the period was capped at the whole balance, it offered 30.
+    /// </summary>
+    [Fact]
+    public async Task Being_ahead_after_the_day_does_not_shrink_what_the_period_left()
+    {
+        var (group, other) = await GroupOfTwo();
+
+        await Expense(group, 100, On(8, 20));
+        await Expense(group, 40, On(9, 10), paidBy: other);
+
+        var plan = await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct);
+        Assert.Equal(50, Assert.Single(plan.OwedToYou, person => person.UserId == other.Id).Amount);
+
+        var settled = await Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfAugust }, Ct);
+        Assert.Equal(50, Assert.Single(settled.Payments).Amount);
+    }
+
+    /// <summary>
+    /// August was paid short, and September's settlement -- made through the end of it,
+    /// with August's leftover in it -- cleared the rest. Looking back, August is square.
+    /// </summary>
+    [Fact]
+    public async Task A_later_period_settled_whole_clears_what_an_earlier_one_left()
+    {
+        var (group, other) = await GroupOfTwo();
+
+        await Expense(group, 100, On(8, 20));
+        await GetService<IGroupService>().Settle(group, new SettleRequest
+        {
+            UserId = other.Id, Amount = 40, Direction = SettlementDirection.TheyPaidYou,
+            Date = On(9, 2), Through = EndOfAugust
+        }, Ct);
+        var august = Assert.Single(await Transfers(group));
+
+        Assert.Equal(10, (await Settlements().GetCoverage(august.Id, 0, Ct))!.StillOwed);
+
+        await Expense(group, 40, On(9, 10));
+        await Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfSeptember }, Ct);
+
+        Assert.Equal(30, (await Transfers(group)).Single(transfer => transfer.CoversThrough == EndOfSeptember).Amount);
+        Assert.Equal(0, (await Settlements().GetCoverage(august.Id, 0, Ct))!.StillOwed);
+    }
+
+    /// <summary>
+    /// Money moves through people. The third member owed me 30 for August; in September they
+    /// paid the other member, who paid me. Nobody owes anything for August.
+    /// </summary>
+    [Fact]
+    public async Task A_debt_paid_on_through_somebody_else_is_paid()
+    {
+        var (group, other, third) = await GroupOfThree();
+
+        await Expense(group, 60, On(8, 10), between: [Me, third]);
+
+        await Settlements().RecordRepayment(group, new RecordRepaymentRequest
+        {
+            FromUserId = third.Id, ToUserId = other.Id, Amount = 30, Date = On(9, 5)
+        }, Ct);
+        await TheyPaidMe(group, other, 30, On(9, 6));
+
+        Assert.Empty((await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct)).OwedToYou);
+    }
+
+    /// <summary>
+    /// A later payment back the other way does not undo a repayment. I owed 100 for August
+    /// and paid it on 2 September; then I paid for something we split and they paid me their
+    /// 30. August is square.
+    /// </summary>
+    [Fact]
+    public async Task A_later_payment_back_the_other_way_does_not_undo_a_repayment()
+    {
+        var (group, other) = await GroupOfTwo();
+
+        await Expense(group, 200, On(8, 20), paidBy: other);
+        await IPaidThem(group, other, 100, On(9, 2));
+        await Expense(group, 60, On(9, 10));
+        await TheyPaidMe(group, other, 30, On(9, 15));
+
+        var plan = await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct);
+
+        Assert.Empty(plan.YouPay);
+        Assert.Empty(plan.OwedToYou);
+    }
+
+    /// <summary>
+    /// One person's later payment is theirs. Two members owed me 100 and 80 for August; in
+    /// September the second paid me 50, and the first paid somebody else for something
+    /// else. The first still owes 100, the second 30.
+    /// </summary>
+    [Fact]
+    public async Task One_persons_later_payment_is_never_credited_to_another()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
+        var first = await CreateNewUser();
+        var second = await CreateNewUser();
+        var bystander = await CreateNewUser();
+        await JoinGroup(group.Id, first, second, bystander);
+
+        await Expense(group.Id, 200, On(8, 5), between: [Me, first]);
+        await Expense(group.Id, 160, On(8, 6), between: [Me, second]);
+
+        await TheyPaidMe(group.Id, second, 50, On(9, 2));
+        await Settlements().RecordRepayment(group.Id, new RecordRepaymentRequest
+        {
+            FromUserId = first.Id, ToUserId = bystander.Id, Amount = 50, Date = On(9, 3)
+        }, Ct);
+
+        var owedToMe = (await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct)).OwedToYou;
+
+        Assert.Equal(100, Assert.Single(owedToMe, person => person.UserId == first.Id).Amount);
+        Assert.Equal(30, Assert.Single(owedToMe, person => person.UserId == second.Id).Amount);
+    }
+
+    /// <summary>
+    /// Settling a later period can route an earlier debt through somebody else. For August I
+    /// owe the other member 50 and the third 50; in September the third owes the other 50.
+    /// Settling up through September is one payment, me to the other, 100 -- and the group is
+    /// square. Looking back, August has nothing left to ask either.
+    /// </summary>
+    [Fact]
+    public async Task A_later_period_settled_through_somebody_else_leaves_the_earlier_one_square()
+    {
+        var (group, other, third) = await GroupOfThree();
+
+        await Expense(group, 100, On(8, 10), paidBy: third, between: [Me, third]);
+        await Expense(group, 100, On(8, 12), paidBy: other, between: [Me, other]);
+        await Expense(group, 100, On(9, 5), paidBy: other, between: [other, third]);
+
+        var september = await Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfSeptember }, Ct);
+        var payment = Assert.Single(september.Payments);
+        Assert.Equal(other.Id, payment.ToUserId);
+        Assert.Equal(100, payment.Amount);
+
+        var plan = await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct);
+        Assert.Empty(plan.YouPay);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfAugust }, Ct));
+        Assert.Equal(ErrorCodes.SettlementNothingToSettle, refused.Code);
+    }
+
+    /// <summary>
+    /// A payment covering through a day counts toward that day whenever it was made: the
+    /// Home group pays September on 9 October.
+    /// </summary>
+    [Fact]
+    public async Task A_settlement_counts_toward_the_day_it_covers_whatever_day_it_was_paid()
+    {
+        var (group, other) = await GroupOfTwo();
+
+        await Expense(group, 100, On(9, 20));
+        await GetService<IGroupService>().Settle(group, new SettleRequest
+        {
+            UserId = other.Id, Amount = 50, Direction = SettlementDirection.TheyPaidYou,
+            Date = On(10, 9), Through = EndOfSeptember
+        }, Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            Settlements().SettleUp(group, new SettleUpRequest { Through = EndOfSeptember }, Ct));
+
+        Assert.Equal(ErrorCodes.SettlementNothingToSettle, refused.Code);
     }
 
     [Fact]
