@@ -168,12 +168,12 @@ public static class SettleCommands
                 changes: lines,
                 // The figure the prompt named, not "whatever is outstanding": confirming
                 // after another repayment landed must not pay the new remainder instead.
-                // Written in the culture the parser reads --amount in, which is this
-                // machine's, so it comes back as the same number. If #313 makes that the
-                // invariant culture, this follows it; ConfirmCommandTests checks under es-ES.
+                // Written the one way --amount is read on every machine -- a '.' decimal
+                // and two places -- so it comes back as the same number whatever the
+                // culture; ConfirmCommandTests checks under es-ES.
                 pinned: new Dictionary<Option, string>
                 {
-                    [amount] = paying.ToString(CultureInfo.CurrentCulture)
+                    [amount] = paying.ToString("0.00", CultureInfo.InvariantCulture)
                 });
 
             var recorded = await context.Users.SettleWithPersonAsync(

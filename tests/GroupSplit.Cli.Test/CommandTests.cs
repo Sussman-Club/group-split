@@ -165,7 +165,8 @@ public sealed class CommandTests : IDisposable
     {
         var id = Guid.NewGuid();
         _api.Returns($"/api/transactions/{id}", Transaction("Dinner"), method: "GET");
-        _api.Drops($"/api/transactions/{id}", method: "DELETE");
+        using var cutter = new ConnectionCutter(_api, "DELETE", $"/api/transactions/{id}");
+        _environment.Set(EnvironmentVariables.ApiUrl, cutter.BaseAddress);
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
 

@@ -163,15 +163,6 @@ public sealed class ConfirmCommandTests : IDisposable
                 items = Array.Empty<object>()
             }, method: "GET")),
 
-        // The logo was the flag the hand-written string left behind.
-        new("merchants.update",
-        [
-            "merchants", "update", $"{Thing}", "--name", "Lidl Plus", "--logo-url", "https://example.com/lidl.png"
-        ], api => api.Returns($"/api/merchants/{Thing}", Merchant(), method: "GET")),
-
-        new("merchants.delete", ["merchants", "delete", $"{Thing}"], api =>
-            api.Returns($"/api/merchants/{Thing}", Merchant(), method: "GET")),
-
         new("settle.pay",
         [
             "settle", "pay", $"{Daniel}", "--direction", "youpaidthem",

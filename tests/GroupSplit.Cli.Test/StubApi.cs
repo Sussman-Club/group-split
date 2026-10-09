@@ -21,7 +21,6 @@ public sealed class StubApi : IDisposable
     private readonly Dictionary<string, (int Status, string Body)> _routes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (int Status, byte[] Body, string ContentType)> _binaryRoutes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _html = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _dropped = new(StringComparer.OrdinalIgnoreCase);
 
     public StubApi()
     {
@@ -137,17 +136,6 @@ public sealed class StubApi : IDisposable
         return this;
     }
 
-    /// <summary>
-    /// Reads the request and then cuts the connection without answering: what a reset or a
-    /// crashing proxy looks like from the client, after the request has already arrived.
-    /// </summary>
-    public StubApi Drops(string path, string? method = null)
-    {
-        _dropped.Add(Key(path, method));
-
-        return this;
-    }
-
     private static string Key(string path, string? method)
         => method is null ? path : $"{method} {path}";
 
@@ -175,12 +163,6 @@ public sealed class StubApi : IDisposable
                 context.Request.Url!.Query,
                 context.Request.Headers["Authorization"],
                 await reader.ReadToEndAsync()));
-
-            if (_dropped.Contains(Key(path, context.Request.HttpMethod)) || _dropped.Contains(path))
-            {
-                context.Response.Abort();
-                continue;
-            }
 
             // A method-specific route wins over the path-only one, so a test can make GET
             // and DELETE on the same route answer differently without every other test
