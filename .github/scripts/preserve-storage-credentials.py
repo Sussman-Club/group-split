@@ -25,11 +25,11 @@ def credential_lines(environment):
 
 def preserve(environment, previous):
     credentials = credential_lines(previous)
-    if not credentials:
-        return environment
     generated = credential_lines(environment)
     if len(generated) != len(STORAGE_KEYS):
         raise ValueError("The generated environment is missing the storage account")
+    if not credentials:
+        return environment
     return "\n".join(
         credentials.get(line.partition("=")[0], line)
         for line in environment.splitlines()
