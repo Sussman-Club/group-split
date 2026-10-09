@@ -231,6 +231,66 @@ public sealed class RealmDefinitionTests
         Assert.Equal("KEYCLOAK_ACCOUNT_DELETION_SECRET", service.SecretVariable);
     }
 
+    /// <summary>
+    /// Who signed in or failed to, who linked or unlinked a Google account, who reset a
+    /// password, and which admin changed what -- kept for ninety days and reconciled, so a
+    /// realm imported before the file said so records them too.
+    /// </summary>
+    [Fact]
+    public void The_realm_records_sign_in_and_admin_events()
+    {
+        var realm = KeycloakRealmDefinition.Load();
+
+        Assert.True(realm["eventsEnabled"]!.GetValue<bool>());
+        Assert.Equal(TimeSpan.FromDays(90).TotalSeconds, realm["eventsExpiration"]!.GetValue<long>());
+        Assert.Equal(["jboss-logging"], Strings(realm["eventsListeners"]));
+        Assert.True(realm["adminEventsEnabled"]!.GetValue<bool>());
+
+        var types = Strings(realm["enabledEventTypes"]);
+
+        foreach (var type in new[]
+                 {
+                     "LOGIN", "LOGIN_ERROR", "IDENTITY_PROVIDER_FIRST_LOGIN", "IDENTITY_PROVIDER_LINK_ACCOUNT",
+                     "FEDERATED_IDENTITY_LINK", "REMOVE_FEDERATED_IDENTITY", "UPDATE_PASSWORD", "RESET_PASSWORD",
+                     "UPDATE_EMAIL", "SEND_RESET_PASSWORD", "UPDATE_PROFILE", "DELETE_ACCOUNT"
+                 })
+        {
+            Assert.Contains(type, types);
+        }
+
+        foreach (var name in new[]
+                 {
+                     "eventsEnabled", "eventsExpiration", "eventsListeners", "enabledEventTypes",
+                     "adminEventsEnabled", "adminEventsDetailsEnabled"
+                 })
+        {
+            Assert.Contains(name, KeycloakRealmDefinition.ManagedSettings);
+        }
+    }
+
+    /// <summary>
+    /// An admin event's details are the representation that was sent, which can carry a client
+    /// secret or a user's initial password, and the event store keeps it for ninety days.
+    /// </summary>
+    [Fact]
+    public void Admin_events_leave_out_the_representation_sent()
+    {
+        Assert.False(KeycloakRealmDefinition.Load()["adminEventsDetailsEnabled"]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// "Forgot your password?" sends a mail, so it is offered exactly where Keycloak can send
+    /// one: the same switch that turns the relay on, in the import and through the worker.
+    /// </summary>
+    [Fact]
+    public void The_password_reset_follows_the_mail_switch()
+    {
+        var realm = KeycloakRealmDefinition.Load();
+
+        Assert.Equal("${SMTP_ENABLED}", realm["resetPasswordAllowed"]!.GetValue<string>());
+        Assert.Contains("resetPasswordAllowed", KeycloakRealmDefinition.ManagedSettings);
+    }
+
     private static IEnumerable<JsonObject> Providers() =>
         KeycloakRealmDefinition.Load()["identityProviders"]!.AsArray().OfType<JsonObject>();
 

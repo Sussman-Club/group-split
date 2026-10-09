@@ -106,7 +106,7 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `keycloak-account-deletion-secret` | secret `KEYCLOAK_ACCOUNT_DELETION_SECRET` | yes | Secret of `account-deletion`, the `group-split` client whose service account holds only `manage-users`, which the API deletes a deleted account's login through. Any long random string (`openssl rand -hex 32`). The `realm-settings` worker creates the client on a realm that lacks it and sets its secret to this value on every deploy, so there is no step to take in Keycloak, and rotating it is changing this secret and deploying. Missing, the publish fails; see [Deleting an account](account-deletion.md). |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
 | `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
-| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
+| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail, and so whether the sign-in page offers a password reset. See [Email](../README.md#email). |
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
@@ -642,6 +642,38 @@ OpenTelemetry already redacts query-string values the same way.
 
 A new route that carries a secret in its path has to be added to the pattern in
 `TokenRedaction`, with a case in `TokenRedactionTest`.
+
+## Sign-in and admin events
+
+The `group-split` realm records user events and admin events, so there is something to read
+after the fact: who signed in or failed to, who linked or unlinked a Google account, who asked
+for or completed a password reset, who changed their email or profile or deleted their account,
+and which admin changed a client, a flow or a user. `realms.json` sets this and the realm worker
+applies it on every start, so a realm imported before it said so records them too:
+
+- **User events** are on and kept for 90 days (`eventsExpiration`, in seconds). They cover the
+  types in `enabledEventTypes`: signing in and out, registering, the Google first sign-in, link
+  and unlink, password and credential changes, password reset, email verification and change,
+  profile change, account deletion, and the CLI's device sign-in, each with its `_ERROR` twin.
+- **Admin events** are on, without their details (`adminEventsDetailsEnabled` is `false`). The
+  details are the representation that was sent, and that can carry a secret: a client or
+  identity provider secret, or a user's initial password. The event still says who did what to
+  which resource, and when.
+
+Where to read them:
+
+- **The admin console**: *Events* in the `group-split` realm, with a tab for user events and
+  one for admin events, filterable by type, user, client and date. Deployed, the console is
+  reached through the SSH tunnel described above.
+- **The container log**, through the realm's `jboss-logging` listener. Failures are logged at
+  `WARN` by default; the AppHost sets `KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL=info`
+  so that successful ones are logged too, as lines starting `type="LOGIN"` and so on. Locally
+  that is the `keycloak` resource's console log in the Aspire dashboard; deployed, it is
+  `docker compose logs keycloak` on the host, which keeps them only as long as Docker keeps the
+  log. Keycloak's OTLP export carries its traces, not its log, so these lines do not reach the
+  deployed dashboard; that would take Keycloak's preview `opentelemetry-logs` feature.
+
+The event store is Keycloak's own database, so the 90 days survive restarts and deploys.
 
 ## Sessions across a deploy
 

@@ -62,7 +62,11 @@ var keycloak = builder.AddKeycloak("keycloak")
     .WithAccountDeletionSecret(accountDeletionSecret)
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
-    .WithOtlpExporter();
+    .WithOtlpExporter()
+    // The realm records sign-in and admin events (realms.json), and its jboss-logging listener
+    // writes each one to the container log as well. It logs a successful one at debug unless
+    // told otherwise, which would leave only the failures there.
+    .WithEnvironment("KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL", "info");
 
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
@@ -71,6 +75,9 @@ var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.Re
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithAccountDeletionSecret(accountDeletionSecret)
     .WithReference(keycloak)
+    // The switches realms.json's managed settings follow, e.g. SMTP_ENABLED for the password
+    // reset link, with the values Keycloak's own import was given.
+    .WithRealmVariablesOf(keycloak)
     .WaitFor(keycloak);
 
 var migrations = db

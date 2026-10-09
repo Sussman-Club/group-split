@@ -207,6 +207,18 @@ configuration fail before anything is built. The AppHost's `validate-smtp` pipel
 still checks the cross-field rule once the parameters are resolved, so a publish from a
 laptop gets the same validation.
 
+`SMTP_ENABLED` also decides whether the sign-in page offers **Forgot your password?**
+(`resetPasswordAllowed` in `realms.json` is `${SMTP_ENABLED}`). A reset is a mail, so
+without a relay the form would accept an address and nothing would ever arrive: a way back
+into the account that cannot work. With mail off the link is not shown, and somebody who
+has forgotten their password signs in with Google, if it is on, or asks an operator to set
+a new one in the admin console. The alternative, refusing to deploy password accounts
+without mail, would block a deployment that otherwise works for the sake of one link, so
+the link follows the mail instead. The realm worker is given the same switch and applies it
+to the existing realm on every deploy, so turning mail on or off takes effect without a
+realm reset. Locally the relay is Mailpit, so the link is there and the mail lands in its
+inbox.
+
 The realm does not require registrations to verify their address. Having a relay is not
 the same as trusting it: a sender domain part way through verification at the provider
 has every send rejected, and a verification requirement then strands users at their next
@@ -240,12 +252,16 @@ even when mail is disabled.
 The `realm-settings` worker starts after Keycloak is ready, in development and in a
 deployment. It reads `realms.json`, compares the managed realm-level settings, and updates
 only the values that differ. That includes the realm's display and theme, registration and
-login switches, password and brute-force policy, token lifetimes, and SSO timeouts. It also
+login switches (the password reset link among them, following `SMTP_ENABLED`, which the
+worker is given as well), password and brute-force policy, token lifetimes, and SSO timeouts. It also
 includes the flow bindings: which flow runs a browser sign-in, a registration, a direct grant,
 a password reset, a client's authentication, and a brokered first sign-in. `realms.json`
 names Keycloak's built-in flows for each, so a binding re-pointed at another flow, by hand or
-by a mistaken import, is pointed back. The built-in flows themselves are not managed. A
-second run with no changes makes no API update. If Keycloak never becomes ready, the worker
+by a mistaken import, is pointed back. The built-in flows themselves are not managed. And it
+includes the event settings: user and admin events on, kept for 90 days, admin events without
+the representation that was sent. See
+[Sign-in and admin events](docs/development-and-deployment.md#sign-in-and-admin-events) for
+where to read them. A second run with no changes makes no API update. If Keycloak never becomes ready, the worker
 fails and the deployment does not silently skip reconciliation.
 
 It also manages where the `web-app` client may send a browser back to. The client's

@@ -17,16 +17,34 @@ public sealed class RealmSettingsReconcilerTests
     {
         "WEB_HOSTNAME" => Origin,
         SecretVariable => DeletionSecret,
+        "SMTP_ENABLED" => "true",
         _ => null
     };
 
+    /// <summary>The worker's environment on a deployment that sends no mail.</summary>
+    private static string? WithoutMail(string name) => name == "SMTP_ENABLED" ? "false" : Environment(name);
+
     /// <summary>
     /// The realm as a first-boot import with <see cref="Origin"/> would have written it. The
-    /// container gets the SMTP and Google values as well, which the worker does not.
+    /// container gets the SMTP relay and Google values as well, which the worker does not.
     /// </summary>
-    private static JsonObject Imported() =>
-        (JsonObject)KeycloakPlaceholders.Expand(KeycloakRealmDefinition.Load(),
-            name => Environment(name) ?? "set-for-the-container")!;
+    private static JsonObject Imported(Func<string, string?>? environment = null)
+    {
+        var definition = KeycloakRealmDefinition.Load();
+        var imported = (JsonObject)KeycloakPlaceholders.Expand(definition,
+            name => (environment ?? Environment)(name) ?? "set-for-the-container")!;
+
+        // A boolean setting written as a placeholder is stored as the boolean it resolves to.
+        foreach (var name in KeycloakRealmDefinition.ManagedSettings)
+        {
+            if (KeycloakPlaceholders.IsPlaceholder(definition[name]))
+            {
+                imported[name] = bool.Parse(imported[name]!.GetValue<string>());
+            }
+        }
+
+        return imported;
+    }
 
     private static Task Reconcile(StubRealmAdmin admin, Func<string, string?>? environment = null) =>
         new RealmSettingsReconciler(admin, NullLogger.Instance, environment ?? Environment)
@@ -400,6 +418,109 @@ public sealed class RealmSettingsReconcilerTests
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => Reconcile(admin));
 
         Assert.Contains("web-app", failure.Message);
+    }
+
+    /// <summary>
+    /// Every realm so far offered "Forgot your password?", whether or not Keycloak could send
+    /// the mail. Without a relay it is taken away.
+    /// </summary>
+    [Fact]
+    public async Task Without_mail_the_password_reset_is_no_longer_offered()
+    {
+        var current = Imported();
+        Assert.True(current["resetPasswordAllowed"]!.GetValue<bool>());
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin, WithoutMail);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.False(admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task With_mail_the_password_reset_is_offered_again()
+    {
+        var admin = new StubRealmAdmin(Imported(WithoutMail));
+
+        await Reconcile(admin);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.True(admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// The switch resolves to the string "false", and Keycloak hands back the boolean. Compared
+    /// as written, every run would rewrite the realm.
+    /// </summary>
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("False")]
+    public async Task The_mail_switch_is_compared_as_the_boolean_keycloak_stores(string smtpEnabled)
+    {
+        string? Mail(string name) => name == "SMTP_ENABLED" ? smtpEnabled : Environment(name);
+        var admin = new StubRealmAdmin(Imported(Mail));
+
+        await Reconcile(admin, Mail);
+
+        Assert.Equal(0, admin.RealmUpdates);
+        Assert.Equal(bool.Parse(smtpEnabled), admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task A_worker_not_told_whether_there_is_mail_fails_before_anything_is_written()
+    {
+        var current = Imported();
+        current["displayName"] = "Old name";
+        var admin = new StubRealmAdmin(current);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Reconcile(admin, name => name == "SMTP_ENABLED" ? null : Environment(name)));
+
+        Assert.Contains("SMTP_ENABLED", failure.Message);
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
+    /// <summary>
+    /// The realm every deployment so far was created with: Keycloak's defaults, which record
+    /// nothing. Turned on, with the retention, listener and event types the file names.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_recording_no_events_is_made_to_record_them()
+    {
+        var current = Imported();
+        current["eventsEnabled"] = false;
+        current.Remove("eventsExpiration");
+        current["eventsListeners"] = new JsonArray("jboss-logging");
+        current["enabledEventTypes"] = new JsonArray();
+        current["adminEventsEnabled"] = false;
+        current["adminEventsDetailsEnabled"] = true;
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var realm = admin.RealmData;
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.True(realm["eventsEnabled"]!.GetValue<bool>());
+        Assert.Equal(7776000, realm["eventsExpiration"]!.GetValue<long>());
+        Assert.Contains("LOGIN", Strings(realm["enabledEventTypes"]));
+        Assert.Contains("FEDERATED_IDENTITY_LINK", Strings(realm["enabledEventTypes"]));
+        Assert.True(realm["adminEventsEnabled"]!.GetValue<bool>());
+        Assert.False(realm["adminEventsDetailsEnabled"]!.GetValue<bool>());
+    }
+
+    /// <summary>Keycloak hands the event types back in its own order, which is not a change.</summary>
+    [Fact]
+    public async Task Event_types_in_another_order_are_not_a_change()
+    {
+        var current = Imported();
+        current["enabledEventTypes"] = new JsonArray(Strings(current["enabledEventTypes"])
+            .Reverse().Select(type => (JsonNode?)JsonValue.Create(type)).ToArray());
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(0, admin.RealmUpdates);
     }
 
     /// <summary>

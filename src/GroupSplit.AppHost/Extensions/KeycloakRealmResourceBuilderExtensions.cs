@@ -2,6 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.AppHost.Extensions;
 
+/// <summary>A variable both Keycloak's first-boot import and the realm worker resolve.</summary>
+internal sealed record RealmVariableAnnotation(string Name, ReferenceExpression Value) : IResourceAnnotation;
+
 public static class KeycloakRealmResourceBuilderExtensions
 {
     /// <summary>
@@ -37,6 +40,39 @@ public static class KeycloakRealmResourceBuilderExtensions
         /// <inheritdoc cref="WithWebAppOrigin(IResourceBuilder{T}, EndpointReference)"/>
         public IResourceBuilder<T> WithWebAppOrigin(IResourceBuilder<ParameterResource> origin)
             => builder.WithEnvironment(WebHostnameVariable, origin);
+
+        /// <summary>
+        /// Sets a variable a managed setting in <c>realms.json</c> interpolates, and marks it so
+        /// that <see cref="WithRealmVariablesOf"/> hands the realm worker the same value.
+        /// </summary>
+        /// <remarks>
+        /// For the switches that decide a managed realm setting -- <c>SMTP_ENABLED</c>
+        /// deciding <c>resetPasswordAllowed</c>, say. Keycloak resolves them on a first-boot
+        /// import and the worker on every start after, and the two must never disagree.
+        /// </remarks>
+        public IResourceBuilder<T> WithRealmVariable(string name, ReferenceExpression value)
+            => builder
+                .WithAnnotation(new RealmVariableAnnotation(name, value))
+                .WithEnvironment(name, value);
+
+        /// <summary>
+        /// Gives the realm worker every variable <paramref name="keycloak"/> was given through
+        /// <see cref="WithRealmVariable"/>, and nothing else of its environment: the worker has
+        /// no use for the mail relay's password.
+        /// </summary>
+        /// <remarks>
+        /// Read when the worker's environment is built rather than now, so a variable Keycloak
+        /// is given after this call -- by the run- or publish-mode branch of the AppHost -- is
+        /// still passed on.
+        /// </remarks>
+        public IResourceBuilder<T> WithRealmVariablesOf(IResourceBuilder<KeycloakResource> keycloak)
+            => builder.WithEnvironment(context =>
+            {
+                foreach (var variable in keycloak.Resource.Annotations.OfType<RealmVariableAnnotation>())
+                {
+                    context.EnvironmentVariables[variable.Name] = variable.Value;
+                }
+            });
     }
 
     extension<TProject>(IResourceBuilder<TProject> builder) where TProject : IResourceWithEnvironment

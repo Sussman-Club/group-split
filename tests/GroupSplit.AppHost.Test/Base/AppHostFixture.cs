@@ -370,14 +370,21 @@ public class AppHostFixture : IAsyncLifetime
         var logs = Application.Services.GetRequiredService<ResourceLoggerService>();
         var tail = new Queue<string>(lineBudget);
 
+        // A container's log is kept under its instance name (keycloak-abcdefgh), not the
+        // name in the app model, so asking by name alone finds nothing for one. The resource
+        // overload resolves the instance names; a name the model does not have is asked for
+        // as it is.
+        var resource = Application.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.FirstOrDefault(candidate => candidate.Name == resourceName);
+        var source = resource is null ? logs.GetAllAsync(resourceName) : logs.GetAllAsync(resource);
+
         using var timeout = new CancellationTokenSource(LogCollectionTimeout);
 
         try
         {
             // GetAllAsync replays what was buffered and then keeps watching, so it never
             // completes on its own -- the timeout above is what ends the enumeration.
-            await foreach (var batch in logs.GetAllAsync(resourceName)
-                               .WithCancellation(timeout.Token))
+            await foreach (var batch in source.WithCancellation(timeout.Token))
             {
                 foreach (var line in batch)
                 {
