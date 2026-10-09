@@ -67,9 +67,11 @@ else if (_declined is { } declined)
 }
 else if (_error is not null)
 {
-    @* Most often: somebody has already claimed it, or a member stopped it. A guest's link
-       works once, so a forwarded copy of one lands here, and the message says so rather
-       than implying the URL was mistyped. *@
+    @* Most often: somebody has already claimed it, a member stopped it, or it ran out. A
+       guest's link works once and for a month, so a forwarded copy of one, or one found in
+       an old chat, lands here -- and the message names each of those rather than implying
+       the URL was mistyped. The API cannot say which: all of them are the same 404, so as
+       not to tell whoever holds a link that it used to be good. *@
     <LinkLanding Title="This link no longer works" Subtitle="@_error">
         <MudButton Variant="Variant.Text" Href="/"
                    StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>

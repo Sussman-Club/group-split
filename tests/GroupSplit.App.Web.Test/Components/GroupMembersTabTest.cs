@@ -117,7 +117,17 @@ public class GroupMembersTabTest : ComponentTest
         new(guest.Id, Group.Id, Group.Name, guest.FirstName!, "Anabel", Added,
             HasLink: token is not null, Token: token,
             LinkIssuedByUserName: token is null ? null : "Anabel",
-            LinkIssuedAt: token is null ? null : Sent);
+            LinkIssuedAt: token is null ? null : Sent,
+            LinkExpiresAt: token is null ? null : Sent.AddDays(30));
+
+    /// <summary>A guest whose link went out and ran out, unclaimed.</summary>
+    private static GroupGuestResponse ExpiredRow(UserInfo guest) =>
+        new(guest.Id, Group.Id, Group.Name, guest.FirstName!, "Anabel", Added,
+            HasLink: false, Token: null,
+            LinkIssuedByUserName: "Anabel",
+            LinkIssuedAt: Sent,
+            LinkExpiresAt: Sent.AddDays(30),
+            LinkExpired: true);
 
     private IRenderedComponent<GroupMembersTab> Render() =>
         base.Render<GroupMembersTab>(parameters => parameters
@@ -207,11 +217,36 @@ public class GroupMembersTabTest : ComponentTest
 
         var added = Added.ToLocalTime().ToString("d MMM yyyy");
         var sent = Sent.ToLocalTime().ToString("d MMM yyyy");
+        var expires = Sent.AddDays(30).ToLocalTime().ToString("d MMM yyyy");
 
         Assert.Equal($"Guest · added {added} by Anabel · no link",
             Row(tab, "Daniel").QuerySelector(".meta")!.TextContent.Trim());
-        Assert.Equal($"Guest · added {added} by Anabel · link sent {sent}",
+        Assert.Equal($"Guest · added {added} by Anabel · link sent {sent}, expires {expires}",
             Row(tab, "Luz").QuerySelector(".meta")!.TextContent.Trim());
+    }
+
+    /// <summary>
+    /// A link that ran out says so, with the day, and the row offers "Send link" again --
+    /// not "Copy link", which would read as though the old URL still worked.
+    /// </summary>
+    [Fact]
+    public void A_guest_whose_link_expired_says_so_and_is_offered_a_new_one()
+    {
+        _state
+            .Setup(state => state.GetGroupGuestsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([GuestRow(Daniel, token: null), ExpiredRow(Luz)]);
+
+        var tab = Render();
+
+        var added = Added.ToLocalTime().ToString("d MMM yyyy");
+        var expired = Sent.AddDays(30).ToLocalTime().ToString("d MMM yyyy");
+        var row = Row(tab, "Luz");
+
+        Assert.Equal($"Guest · added {added} by Anabel · link expired {expired}",
+            row.QuerySelector(".meta")!.TextContent.Trim());
+
+        Assert.NotNull(row.QuerySelector("button[aria-label='Send Luz a link']"));
+        Assert.Null(row.QuerySelector("button[aria-label='Copy the link for Luz']"));
     }
 
     /// <summary>

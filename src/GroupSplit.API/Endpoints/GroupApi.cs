@@ -296,7 +296,8 @@ public static class GroupApi
         /// </summary>
         /// <remarks>
         /// Asking again without <c>replace</c> returns the link already out, so "send link"
-        /// can always just copy. Whoever opens it and claims it takes the guest's place.
+        /// can always just copy -- unless it has expired, when a new one is issued in its
+        /// place. Whoever opens it and claims it takes the guest's place.
         /// </remarks>
         private RouteHandlerBuilder MapIssueGuestLink()
         {

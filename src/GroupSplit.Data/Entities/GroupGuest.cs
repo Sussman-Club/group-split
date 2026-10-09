@@ -35,6 +35,22 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class GroupGuest : Entity
 {
+    /// <summary>How long a link is good for, counted from <see cref="LinkIssuedAt"/>.</summary>
+    /// <remarks>
+    /// Fixed rather than chosen, like <see cref="GroupJoinLink.Lifetime"/>, and longer than
+    /// that one: the person a guest's link is for has usually never heard of the app, and
+    /// a month is how long "I'll sign up when I get home" takes. An unclaimed link sitting
+    /// in an old chat, a screenshot or a browser history is what this closes -- a link that
+    /// has run out is one press to issue again.
+    /// <para>
+    /// Not stored. The end of a link is always this long after it was issued, so it is
+    /// worked out from <see cref="LinkIssuedAt"/> rather than kept in a column of its own
+    /// that could disagree with it -- and shortening this shortens every link already out,
+    /// which is what a change made for safety should do.
+    /// </para>
+    /// </remarks>
+    public static readonly TimeSpan LinkLifetime = TimeSpan.FromDays(30);
+
     public virtual Group Group { get; set; } = null!;
 
     public Guid GroupId { get; set; }
@@ -88,16 +104,40 @@ public class GroupGuest : Entity
     /// one lets somebody in as themselves, claiming nothing; this one hands over a position
     /// in the group's ledger, so forwarding it gives away somebody else's debts. Single use:
     /// claiming clears it, and so do replacing it, stopping it, turning it down and removing
-    /// the guest.
+    /// the guest. And it runs out <see cref="LinkLifetime"/> after it was issued, unclaimed
+    /// or not: an expired link stays in this column until a member issues another, but
+    /// nothing answers to it.
     /// </remarks>
     public string? Token { get; set; }
 
     /// <summary>When the current link was issued. Set exactly when <see cref="Token"/> is.</summary>
     /// <remarks>
     /// What the rejoin rule reads: a link issued before somebody left the group cannot bring
-    /// them back, whenever the guest it belongs to was added.
+    /// them back, whenever the guest it belongs to was added. And what the link's expiry is
+    /// counted from (<see cref="LinkLifetime"/>), so issuing a link again restarts both.
     /// </remarks>
     public DateTimeOffset? LinkIssuedAt { get; set; }
+
+    /// <summary>
+    /// The moment the current link stops working, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Not mapped: a read-only property, worked out from <see cref="LinkIssuedAt"/>. Queries
+    /// compare <see cref="LinkIssuedAt"/> with a cutoff instead (<see cref="IssuedSince"/>),
+    /// which every provider can translate.
+    /// </remarks>
+    public DateTimeOffset? LinkExpiresAt => LinkIssuedAt + LinkLifetime;
+
+    /// <summary>
+    /// The earliest a link can have been issued and still work at <paramref name="now"/>:
+    /// a link works while <c>LinkIssuedAt &gt; IssuedSince(now)</c>, and from the instant it
+    /// reaches its expiry it does not.
+    /// </summary>
+    public static DateTimeOffset IssuedSince(DateTimeOffset now) => now - LinkLifetime;
+
+    /// <summary>Whether there is a link, and it has not run out at <paramref name="now"/>.</summary>
+    public bool HasWorkingLink(DateTimeOffset now) =>
+        Token is not null && LinkIssuedAt > IssuedSince(now);
 
     /// <summary>Who issued the current link, while it stands.</summary>
     public virtual User? LinkIssuedBy { get; set; }

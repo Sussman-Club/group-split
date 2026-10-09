@@ -234,7 +234,13 @@ groupsplit groups add-guest <group-id> Carlos --link              # add and issu
 ```
 
 `create` without `--new` is idempotent: asking again prints the link already out, so it is
-safe to run whenever somebody needs it re-sent. The link is `<web-app>/claim/<token>`; the
+safe to run whenever somebody needs it re-sent.
+
+A guest's link **expires 30 days after it was issued**. `groups guests` says until when each
+link works, and marks one that ran out unclaimed as expired (in JSON: `linkExpired` true,
+`hasLink` false, no `token`, and `linkExpiresAt` the moment it lapsed). `create` on an expired
+link issues a new one, with or without `--new`, and does not ask first -- nothing that works
+is lost. The new link counts as issued now, for its own expiry and for the rejoin rule. The link is `<web-app>/claim/<token>`; the
 text output prints that URL when the CLI knows the server origin, and the JSON carries the
 token. Nobody is notified: sending the link is the group's job. Replacing a link kills the
 old one *and* forgets who had opened it, so a link that leaked is not handed on.
@@ -249,7 +255,7 @@ groupsplit invitations decline <link>  # "this isn't me": the link stops working
 ```
 
 `list` is every guest link this account has **opened** and that still works, which the API
-writes down as it happens, and it carries the tokens. That makes it the way back to a link
+writes down as it happens, and it carries the tokens and when each expires. That makes it the way back to a link
 when the message it arrived in is gone. The same list is the "Waiting on you" row on the web
 app's home page.
 
@@ -264,7 +270,8 @@ they were down as having paid for and their places in the rules become the claim
 amount changes, and the claimer's balance does. If the claimer is already a member and had
 recorded repayments with that guest -- the same person, twice -- those repayments are
 deleted, because they would read as paying yourself; the answer counts them. Afterwards the
-link is spent, so a forwarded copy gets the same 404 a mistyped URL does.
+link is spent, so a forwarded copy gets the same 404 a mistyped URL does -- and so does a
+link that has expired.
 
 `decline` only stops the link. The group keeps the guest and everything recorded for them,
 and a member can send a new link. Nothing moves, so there is no money to report:

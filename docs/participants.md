@@ -104,7 +104,9 @@ A way back in is only as good as its date. A join link is dated by when it was m
 guest's link by when it was issued (`LinkIssuedAt`, not when the guest was added); `IGroupJoiner` refuses either to a person whose membership
 ended at or after that moment, on the landing page's read as well as on the join. One issued
 afterwards is how a group says it wants them back, and they return as an ordinary member on
-the same row, with `JoinedAt` reset.
+the same row, with `JoinedAt` reset. A guest's link that has expired is a 404 before this
+rule is asked, and issuing it again dates the new one now -- see
+[guests.md](guests.md#expiry).
 
 ## What the database holds it to
 

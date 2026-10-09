@@ -33,6 +33,9 @@ public sealed class GuestCommandTests : IDisposable
         _environment.Dispose();
     }
 
+    /// <summary>When a stubbed link runs out: a date the output can be searched for.</summary>
+    private static readonly DateTimeOffset Expiry = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+
     private static object AGuest(string? token = null) => new
     {
         userId = Pat,
@@ -44,7 +47,26 @@ public sealed class GuestCommandTests : IDisposable
         hasLink = token is not null,
         token,
         linkIssuedByUserName = token is null ? null : "Daniel Rivero",
-        linkIssuedAt = token is null ? (DateTimeOffset?)null : DateTimeOffset.UtcNow
+        linkIssuedAt = token is null ? (DateTimeOffset?)null : Expiry.AddDays(-30),
+        linkExpiresAt = token is null ? (DateTimeOffset?)null : Expiry,
+        linkExpired = false
+    };
+
+    /// <summary>A guest whose link went out and ran out unclaimed: no token, and saying so.</summary>
+    private static object AGuestWhoseLinkExpired() => new
+    {
+        userId = Pat,
+        groupId = Trip,
+        groupName = "Ski trip",
+        name = "Pat",
+        addedByUserName = "Daniel Rivero",
+        addedAt = DateTimeOffset.UtcNow,
+        hasLink = false,
+        token = (string?)null,
+        linkIssuedByUserName = "Daniel Rivero",
+        linkIssuedAt = Expiry.AddDays(-30),
+        linkExpiresAt = Expiry,
+        linkExpired = true
     };
 
     [Fact]
@@ -104,6 +126,64 @@ public sealed class GuestCommandTests : IDisposable
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.DoesNotContain("tok-secret", result.Stdout);
         Assert.Contains("yes", result.Stdout);
+    }
+
+    [Fact]
+    public async Task Guests_says_until_when_a_link_works()
+    {
+        _api.Returns($"/api/groups/{Trip}/guests", new[] { AGuest("tok-pat") });
+
+        var result = await Cli.RunAsync("groups", "guests", Trip.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains($"until {Expiry.ToLocalTime():yyyy-MM-dd}", result.Stdout);
+        Assert.DoesNotContain("expired", result.Stdout);
+    }
+
+    /// <summary>
+    /// A link that ran out unclaimed is shown as expired, with the day, and points at the
+    /// command that issues another -- not as "none", which would hide that one went out.
+    /// </summary>
+    [Fact]
+    public async Task Guests_shows_a_link_that_ran_out_as_expired()
+    {
+        _api.Returns($"/api/groups/{Trip}/guests", new[] { AGuestWhoseLinkExpired() });
+
+        var result = await Cli.RunAsync("groups", "guests", Trip.ToString(), "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains(Pat.ToString(), result.Stdout);
+        Assert.Contains($"Pat's link expired on {Expiry.ToLocalTime():yyyy-MM-dd}.", result.Stdout);
+        Assert.Contains("groupsplit groups guest-link create <group-id> <user-id>", result.Stdout);
+
+        // And the JSON says it in fields an agent can test.
+        var json = await Cli.RunAsync("groups", "guests", Trip.ToString());
+
+        Assert.True(json.Json[0].GetProperty("linkExpired").GetBoolean());
+        Assert.False(json.Json[0].GetProperty("hasLink").GetBoolean());
+    }
+
+    /// <summary>
+    /// Replacing a link that already ran out loses nothing -- the old URL answers nobody --
+    /// so <c>--new</c> does not stop to ask, and plain <c>create</c> issues a new one too.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Guest_link_create_issues_a_new_link_for_an_expired_one_without_asking(bool replace)
+    {
+        _api.Returns($"/api/groups/{Trip}/guests", new[] { AGuestWhoseLinkExpired() });
+        _api.Returns($"/api/groups/{Trip}/guests/{Pat}/link", AGuest("tok-new"), method: "POST");
+
+        string[] args = ["groups", "guest-link", "create", Trip.ToString(), Pat.ToString()];
+
+        var result = await Cli.RunAsync(replace ? [.. args, "--new"] : args);
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal("tok-new", result.Json.GetProperty("token").GetString());
+        Assert.Equal(Expiry, result.Json.GetProperty("expiresAt").GetDateTimeOffset());
+        Assert.Equal(replace,
+            _api.Requests.Single(request => request.Method == "POST").Json.GetProperty("replace").GetBoolean());
     }
 
     /// <summary>

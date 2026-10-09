@@ -33,7 +33,8 @@ public record IssueGuestLinkRequest
 {
     /// <summary>
     /// Replace the link if there is one, so the old one stops working. Without it, asking
-    /// again returns the link already out, so "send link" can always just copy.
+    /// again returns the link already out, so "send link" can always just copy -- unless
+    /// that link has expired, when a new one is issued in its place either way.
     /// </summary>
     public bool Replace { get; set; }
 }

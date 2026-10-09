@@ -105,7 +105,7 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.withdraw-invitation`, `groups.settle`, `groups.settle-between`, `groups.settle-up`,
 `settle.pay`, `groups.link.create` (when a link already exists), `groups.link.revoke`,
-`groups.guest-link.create` (only with `--new` on a guest who has a link),
+`groups.guest-link.create` (only with `--new` on a guest whose link still works),
 `groups.guest-link.revoke`,
 `invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
 `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
@@ -196,6 +196,10 @@ looking for it -- list or show what it would have changed -- or it may be record
   guest links this account has opened -- there is no address to match, so nothing knows
   about one that was never followed. If the user never opened theirs, a member can print it
   again with `groups guest-link create`.
+- **A guest's link expires 30 days after it is issued.** Expired, it is the same 404
+  (`GROUP_INVITATION_NOT_FOUND`) as a claimed one, and `groups guests` marks it expired.
+  `groups guest-link create` issues a new one -- the old URL stays dead, so it has to be sent
+  again.
 - **A guest's link is a credential, not an id.** Whoever opens one takes on the shares
   recorded for that guest, so it belongs to the person the user is sending it to and
   nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript

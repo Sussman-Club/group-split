@@ -91,7 +91,8 @@ public sealed class InvitationService(
     AppDbContext context,
     IGroupJoiner joiner,
     IGroupParticipants participants,
-    IGuestService guests)
+    IGuestService guests,
+    TimeProvider clock)
     : IInvitationService
 {
     public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId,
@@ -108,15 +109,20 @@ public sealed class InvitationService(
         CancellationToken ct = default)
     {
         var userId = userContext.User.Id;
+        var issuedSince = GroupGuest.IssuedSince(clock.GetUtcNow());
 
         // Scoped to the caller's own groups, and that scoping is load-bearing: the rows carry
         // the links, and a link is a claim on a position in this group's ledger.
+        //
+        // Only links that still work. A client built before links expired reads every row
+        // here as a link to copy; the guest routes are where an expired one is shown.
         //
         // Ordered before the projection, not after -- see the note on Project.
         return await Project(
                 from guest in context.Set<GroupGuest>()
                 where guest.GroupId == groupId &&
                       guest.Token != null &&
+                      guest.LinkIssuedAt > issuedSince &&
                       guest.Group.Users.Any(user => user.Id == userId)
                 orderby guest.Name, guest.AddedAt
                 select guest)
@@ -126,16 +132,21 @@ public sealed class InvitationService(
     public async Task<IReadOnlyList<GroupInvitationResponse>> Mine(CancellationToken ct = default)
     {
         var userId = userContext.User.Id;
+        var issuedSince = GroupGuest.IssuedSince(clock.GetUtcNow());
 
         // A link that has ended is absent because ending it forgets who opened it
         // (GuestLinkExtensions.EndLink), and a guest that has ended is filtered out besides.
         // The token test is the belt to those braces: a row written in the moment between a
         // link being read and being ended must not offer a link that no longer works.
+        //
+        // A link that has expired has not ended -- nothing runs at the moment it lapses -- so
+        // it is the date that keeps it out, until a member issues another and the rows go.
         return await Project(
                 from opened in context.Set<InvitationOpened>()
                 join guest in context.Set<GroupGuest>()
                     on opened.GuestId equals guest.Id
-                where opened.UserId == userId && guest.Token != null
+                where opened.UserId == userId && guest.Token != null &&
+                      guest.LinkIssuedAt > issuedSince
                 orderby guest.LinkIssuedAt descending
                 select guest)
             .ToListAsync(ct);
@@ -143,7 +154,7 @@ public sealed class InvitationService(
 
     public async Task<InvitationClaimResponse> Describe(string token, CancellationToken ct = default)
     {
-        var guest = await Held(token, ct);
+        var guest = await Held(token, clock.GetUtcNow(), ct);
 
         var userId = userContext.User.Id;
 
@@ -163,7 +174,7 @@ public sealed class InvitationService(
         // Read again rather than projected from what Held found, and so able to come back
         // empty: somebody may have claimed the link in the moments since.
         return await context.Set<GroupGuest>()
-                   .Where(candidate => candidate.Id == guest.Id && candidate.Token != null)
+                   .Where(candidate => candidate.Id == guest.Id && candidate.Token == guest.Token)
                    .Select(candidate => new InvitationClaimResponse(
                        candidate.Id,
                        candidate.GroupId,
@@ -176,7 +187,8 @@ public sealed class InvitationService(
                                ? candidate.AddedBy.FirstName + " " + candidate.AddedBy.LastName
                                : null,
                        candidate.LinkIssuedAt!.Value,
-                       alreadyAMember))
+                       alreadyAMember,
+                       candidate.LinkIssuedAt!.Value + GroupGuest.LinkLifetime))
                    .FirstOrDefaultAsync(ct)
                ?? throw AlreadyClaimed();
     }
@@ -187,7 +199,15 @@ public sealed class InvitationService(
     private async Task<InvitationClaimedResponse> ClaimOnce(string token, CancellationToken ct)
     {
         var user = userContext.User;
-        var held = await Held(token, ct);
+
+        // The claim is judged at the moment it arrives, once. Somebody who pressed the button
+        // while the link worked gets the whole of the claim even if the transaction below
+        // finishes a moment after the link's expiry -- and a claim that arrives at or after
+        // it gets the 404, before anything is written. Reading the clock again part way
+        // through would let a claim pass the first check and fail the second: a refusal
+        // after the work had begun, and on a provider without transactions a half-claim.
+        var now = clock.GetUtcNow();
+        var held = await Held(token, now, ct);
 
         var standIn = held.ParticipantUserId;
         var name = held.Name;
@@ -212,7 +232,7 @@ public sealed class InvitationService(
 
             retrying = true;
 
-            var guest = await Held(token, ct);
+            var guest = await Held(token, now, ct);
 
             group = await context.Set<Group>()
                 .Include(candidate => candidate.Users)
@@ -228,7 +248,7 @@ public sealed class InvitationService(
             // and at that point the loser has written nothing, so there is nothing to undo and
             // no membership to take back. The same holds against a member replacing or
             // stopping the link, or removing the guest, at that moment.
-            guest.EndedAt = DateTimeOffset.UtcNow;
+            guest.EndedAt = now;
             guest.EndReason = GuestEndReason.Claimed;
             guest.EndedByUserId = user.Id;
 
@@ -285,7 +305,7 @@ public sealed class InvitationService(
     }
 
     public async Task<InvitationClosedResponse> Decline(string token, CancellationToken ct = default) =>
-        await StopLink(await Held(token, ct), InvitationOutcome.Declined, ct);
+        await StopLink(await Held(token, clock.GetUtcNow(), ct), InvitationOutcome.Declined, ct);
 
     public async Task<InvitationClosedResponse> Withdraw(Guid groupId, Guid invitationId,
         CancellationToken ct = default)
@@ -413,10 +433,17 @@ public sealed class InvitationService(
     /// Holding the token is the whole authorisation, which is what makes it worth guarding:
     /// there is no second check, because there is no account for the link to be addressed
     /// to. A token that names nothing is a 404 -- and so is one that has been claimed,
-    /// replaced or stopped. That is the same answer a mistyped link gets, and deliberately:
-    /// the alternative is telling whoever holds a forwarded link that it used to be good.
+    /// replaced or stopped, or that has expired. That is the same answer a mistyped link
+    /// gets, and deliberately: the alternative is telling whoever holds a forwarded link
+    /// that it used to be good. A join link says it expired, because it hands over nothing;
+    /// this one would be confirming to a stranger that a position was once on offer.
+    /// <para>
+    /// Expiry is checked before anything else about the caller, the rejoin rule included,
+    /// so an expired link answers the same 404 to everybody rather than telling somebody
+    /// who left the group that it was issued before they went.
+    /// </para>
     /// </remarks>
-    private async Task<GroupGuest> Held(string token, CancellationToken ct)
+    private async Task<GroupGuest> Held(string token, DateTimeOffset now, CancellationToken ct)
     {
         var normalized = (token ?? string.Empty).Trim();
 
@@ -424,9 +451,11 @@ public sealed class InvitationService(
             throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
                 "That invitation link was not found.");
 
-        return await context.Set<GroupGuest>()
-                   .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)
-               ?? throw AlreadyClaimed();
+        var guest = await context.Set<GroupGuest>()
+                        .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)
+                    ?? throw AlreadyClaimed();
+
+        return guest.HasWorkingLink(now) ? guest : throw AlreadyClaimed();
     }
 
     /// <summary>
@@ -435,7 +464,7 @@ public sealed class InvitationService(
     /// </summary>
     private static NotFoundException AlreadyClaimed() =>
         new(ErrorCodes.GroupInvitationNotFound,
-            "That invitation link was not found. It may already have been claimed or replaced.");
+            "That invitation link was not found. It may already have been claimed, been replaced, or expired.");
 
     /// <summary>
     /// The wire shape from before guests, projected from whatever query is handed in. Only
@@ -461,5 +490,6 @@ public sealed class InvitationService(
                     ? guest.AddedBy.FirstName + " " + guest.AddedBy.LastName
                     : null,
             guest.LinkIssuedAt!.Value,
-            guest.ParticipantUserId);
+            guest.ParticipantUserId,
+            guest.LinkIssuedAt!.Value + GroupGuest.LinkLifetime);
 }

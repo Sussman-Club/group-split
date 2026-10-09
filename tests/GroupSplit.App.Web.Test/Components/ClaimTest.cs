@@ -2,7 +2,9 @@ using Bunit;
 using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Web.Test.Errors;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -48,7 +50,8 @@ public class ClaimTest : ComponentTest
         _invitations
             .Setup(client => client.GetInvitationClaimAsync(Token, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new InvitationClaimResponse(
-                Guid.NewGuid(), Flat, "The flat", 2, "Luz", "Ana", DateTimeOffset.UtcNow, alreadyAMember));
+                Guid.NewGuid(), Flat, "The flat", 2, "Luz", "Ana", DateTimeOffset.UtcNow, alreadyAMember,
+                DateTimeOffset.UtcNow.AddDays(30)));
 
     /// <summary>The page, and the provider its confirmation renders into.</summary>
     private async Task<(IRenderedComponent<Claim> Page, IRenderedComponent<MudDialogProvider> Dialogs)> Open()
@@ -215,5 +218,29 @@ public class ClaimTest : ComponentTest
         Assert.DoesNotContain(page.FindAll("button, a"),
             element => element.TextContent.Trim() == "This isn't me");
         Assert.Contains(page.FindAll("a"), element => element.TextContent.Trim() == "Back to The flat");
+    }
+
+    /// <summary>
+    /// A link that no longer works -- claimed, replaced, stopped or run out, which the API
+    /// answers alike -- is explained the way the join page explains an expired join link:
+    /// what may have happened, and who to ask for a new one.
+    /// </summary>
+    [Fact]
+    public async Task A_link_that_no_longer_works_says_it_may_have_expired_and_who_to_ask()
+    {
+        _invitations
+            .Setup(client => client.GetInvitationClaimAsync(Token, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Refusals.Of(404, ErrorCodes.GroupInvitationNotFound));
+
+        var (page, _) = await Open();
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.Contains("This link no longer works", page.Markup, StringComparison.Ordinal);
+            Assert.Contains("it has expired", page.Markup, StringComparison.Ordinal);
+            Assert.Contains("Ask someone in the group for a new one.", page.Markup, StringComparison.Ordinal);
+        });
+
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Trim().StartsWith("Join as", StringComparison.Ordinal));
     }
 }

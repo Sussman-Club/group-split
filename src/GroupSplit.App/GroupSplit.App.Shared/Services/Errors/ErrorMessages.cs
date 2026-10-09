@@ -63,7 +63,7 @@ public static class ErrorMessages
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
         // A guest's link is what reaches this now, and it most often means somebody already
         // used it or a member stopped it -- not that the URL was mistyped.
-        [ErrorCodes.GroupInvitationNotFound] = "That link no longer works. Ask someone in the group for a new one.",
+        [ErrorCodes.GroupInvitationNotFound] = "That link no longer works: it has been used or replaced, or it has expired. Ask someone in the group for a new one.",
         // Somebody else on the People tab got there first: removed the guest, or the guest's
         // link was claimed and they are a member now. Either way the row is out of date.
         [ErrorCodes.GroupGuestNotFound] =
