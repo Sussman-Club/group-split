@@ -43,9 +43,7 @@
                     Format="N2"
                     Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
 
-                <MudText Typo="Typo.caption">
-                    Remaining @(_through is null ? "balance" : "for that period"): @((Owed - _model.Amount).ToMoney())
-                </MudText>
+                <MudText Typo="Typo.caption">@Remaining</MudText>
 
                 @* A month at a time, for groups that settle that way: what activity dated up
                    to the day left owing, after every repayment already made -- so a payment
@@ -93,7 +91,7 @@
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit"
-                   Disabled="@(_readingPeriod || Owed <= 0)">
+                   Disabled="@_readingPeriod">
             Confirm
         </MudButton>
     </DialogActions>
@@ -225,12 +223,25 @@
         }
     }
 
+    /// <summary>
+    /// What is left after this payment, or how far past the figure it goes.
+    /// </summary>
+    /// <remarks>
+    /// Past it is allowed. The figure is a suggestion, and through a day it is capped at
+    /// what the whole balance says, so it can be less than the period's own expenses come
+    /// to; a repayment is whatever money actually moved, and the difference simply stays in
+    /// the balance.
+    /// </remarks>
+    private string Remaining => (Owed - _model.Amount) switch
+    {
+        >= 0 and var left => $"Remaining {(_through is null ? "balance" : "for that period")}: {left.ToMoney()}",
+        var over => $"{(-over).ToMoney()} more than {(_through is null ? "is owed" : "that period left owing")}. It stays in the balance between you."
+    };
+
     IEnumerable<string> ValidateAmount(decimal amount)
     {
-        if (amount > Owed)
-            yield return _through is null
-                ? $"Amount cannot exceed the total debt ({TotalDebt.ToMoney()})"
-                : $"Amount cannot exceed what that period left owing ({Owed.ToMoney()})";
+        if (amount <= 0)
+            yield return "Amount must be greater than 0.";
     }
 
     private async Task Submit()
