@@ -16,6 +16,7 @@ a nicety for the second kind is load-bearing.
 - [Signing in](#signing-in)
 - [Bank sync](#bank-sync)
 - [Editing an expense](#editing-an-expense)
+- [Amounts](#amounts)
 - [Output](#output)
 - [Exit codes](#exit-codes)
 - [Errors](#errors)
@@ -1219,6 +1220,38 @@ one by income got three years of Groceries expenses pointed at versions of a rul
 never divided them. Nothing records which rule a category named in 2023, so the pass could
 not tell the two cases apart, and the expenses it was most useful on were the ones it was
 most likely to be wrong about.
+
+## Amounts
+
+Every amount on the command line is written one way, on every machine: digits, a `.` for the
+decimal point, **no thousands separators**, at most two decimal places. That covers the
+arguments (`transactions create <name> <amount>`, `groups settle ... <amount>`), the options
+(`--amount`, `--subtotal`, `--tax`, `--tip`, `--total`), the `--split` and `--percent` pairs,
+and the numbers inside a receipt `--item` -- where a quantity may have three places.
+
+| Typed | Read as |
+| --- | --- |
+| `12.50`, `12.5`, `12` | 12.50 |
+| `12,50` | Refused, exit code 3 |
+| `1,234.56` | Refused, exit code 3 |
+| `1.234,56` | Refused, exit code 3 |
+| `12.555` | Refused, exit code 3 -- not rounded |
+
+A refusal comes before any request, says which value it could not read, and says what to
+type instead:
+
+```text
+Could not read amount '12,50'. Use '.' for the decimal point and no thousands separators, as in 1234.56.
+```
+
+The format does not follow the machine's language settings, and that is the point. The
+parser used to: on an en-US machine `12,50` was read as 1250, and on an es-ES one `12.50`
+was -- and shares misread the same way still added up to the misread total, so a $12.50
+dinner could be recorded as a $1,250 one with nothing refusing it (#313). A script now means
+the same amount wherever it runs.
+
+The web app reads either a `.` or a `,` as the decimal point, because a phone keypad in many
+languages offers only the comma; it refuses grouping and a third decimal place the same way.
 
 ## Output
 

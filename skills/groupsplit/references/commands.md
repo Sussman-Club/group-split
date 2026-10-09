@@ -35,6 +35,14 @@ list` and `groupsplit groups list --json` both work.
 | `--no-color` | Disable colour. `NO_COLOR` set to anything does the same. |
 | `--yes`, `-y` | Skip the confirmation gate. Read the rule in SKILL.md before you reach for it. |
 
+## Amounts
+
+Every amount -- an `<amount>` argument, `--amount`, `--subtotal`, `--tax`, `--tip`, `--total`,
+the value in a `--split` or `--percent` pair, and the numbers in a receipt `--item` -- is
+`12.50`: a `.` decimal point, no thousands separators, at most two decimal places (a receipt
+quantity may have three). The same on every machine. Anything else is exit code 3 before any
+request: `12,50`, `1,234.56`, `1.234,56` and `12.555` are all refused, never rounded.
+
 
 ### auth
 

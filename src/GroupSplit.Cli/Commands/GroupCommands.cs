@@ -371,10 +371,7 @@ public static class GroupCommands
     private static Command Settle()
     {
         var userId = new Argument<Guid>("user-id") { Description = "The other member, or a guest." };
-        var amount = new Argument<decimal>("amount")
-        {
-            Description = "How much changed hands, to two decimal places."
-        };
+        var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
 
         var direction = new Option<SettlementDirection>("--direction")
         {
@@ -474,10 +471,7 @@ public static class GroupCommands
         var fromUserId = new Argument<Guid>("from-user-id") { Description = "Who paid: a member or a guest." };
         var toUserId = new Argument<Guid>("to-user-id") { Description = "Who was paid: a member or a guest." };
 
-        var amount = new Argument<decimal>("amount")
-        {
-            Description = "How much changed hands, to two decimal places."
-        };
+        var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
 
         var date = new Option<DateTimeOffset?>("--date")
         {

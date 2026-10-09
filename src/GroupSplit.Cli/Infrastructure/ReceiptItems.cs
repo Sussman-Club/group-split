@@ -1,4 +1,3 @@
-using System.Globalization;
 using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;
@@ -115,7 +114,7 @@ public static class ReceiptItems
         // line has to fit in it.
         if (rest.IndexOf('x', StringComparison.OrdinalIgnoreCase) is var times and >= 0)
         {
-            quantity = Number(option, value, rest[(times + 1)..], "a quantity");
+            quantity = Number(option, value, rest[(times + 1)..], "a quantity", places: 3);
             rest = rest[..times].Trim();
         }
 
@@ -139,10 +138,15 @@ public static class ReceiptItems
         };
     }
 
-    private static decimal Number(string option, string value, string text, string what)
-        => decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+    /// <summary>
+    /// In the CLI's one amount format, as every other amount is (#313): <c>Wine=18,00</c>
+    /// was read as 1800 when a comma was taken for grouping. A quantity may hold three
+    /// decimal places, as the bill stores it; everything else here is money.
+    /// </summary>
+    private static decimal Number(string option, string value, string text, string what, int places = DecimalText.MoneyPlaces)
+        => Amounts.TryRead(text, places, out var parsed, out var problem)
             ? parsed
-            : throw Invalid(option, value, $"'{text.Trim()}' is not {what}");
+            : throw Invalid(option, value, $"'{text.Trim()}' is not {what}. {problem.TrimEnd('.')}");
 
     private static CliException Invalid(string option, string value, string why)
         => CliException.Input(
