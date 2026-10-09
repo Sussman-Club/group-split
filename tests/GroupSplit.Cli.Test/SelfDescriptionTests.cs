@@ -291,7 +291,7 @@ public sealed class SelfDescriptionTests
     {
         var lines = await SuggestLinesAsync("groupsplit transactions create dinner ");
 
-        Assert.Equal("\t<amount>  Total amount, to two decimal places.", lines[0]);
+        Assert.Equal("\t<amount>  Total amount, e.g. 42.50: a '.' decimal point and no thousands separators.", lines[0]);
     }
 
     [Theory]

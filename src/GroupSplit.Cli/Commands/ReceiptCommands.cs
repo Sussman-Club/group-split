@@ -271,20 +271,14 @@ public static class ReceiptCommands
             AllowMultipleArgumentsPerToken = false
         };
 
-        var subtotal = new Option<decimal?>("--subtotal")
-        {
-            Description = "What the lines came to before tax and tip. "
-                          + "Defaults to the lines added up."
-        };
+        var subtotal = Amounts.Option("--subtotal",
+            "What the lines came to before tax and tip. Defaults to the lines added up.");
 
-        var tax = new Option<decimal>("--tax") { Description = "Tax on the whole bill." };
-        var tip = new Option<decimal>("--tip") { Description = "Tip on the whole bill." };
+        var tax = Amounts.OptionOrZero("--tax", "Tax on the whole bill.");
+        var tip = Amounts.OptionOrZero("--tip", "Tip on the whole bill.");
 
-        var total = new Option<decimal?>("--total")
-        {
-            Description = "What was paid. Defaults to subtotal plus tax plus tip, and must "
-                          + "equal the expense's amount."
-        };
+        var total = Amounts.Option("--total",
+            "What was paid. Defaults to subtotal plus tax plus tip, and must equal the expense's amount.");
 
         var command = new Command("set",
             "Transcribe a bill, replacing whatever was there. Does not divide anything.")

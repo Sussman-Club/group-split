@@ -158,6 +158,11 @@ along when reporting a problem.
   first, then act on what you were given.
 - **Amounts have two decimal places** and the currency is the group's. Do not round a
   user's figure to make a split come out even -- `--preview` instead, below.
+- **Write every amount as `12.50`**: a `.` decimal point, no thousands separators, whatever
+  the machine's language. `12,50`, `1,234.56`, `1.234,56` and `12.555` are refused with exit
+  code 3 (`CLI_USAGE` for an argument or option, `CLI_INVALID_INPUT` inside `--split`,
+  `--percent` or `--item`). When a user says "12,50 euros", convert it to `12.50` yourself;
+  when they write "1.234,56", that is `1234.56`. Ask if it could be read two ways.
 - **Preview a split before creating it** when the division matters:
   `groupsplit transactions create "Dinner" 84.20 --group <id> --preview` shows the split the
   server would apply and creates nothing.

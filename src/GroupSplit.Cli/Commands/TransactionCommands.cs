@@ -270,7 +270,8 @@ public static class TransactionCommands
     private static Command Create()
     {
         var name = new Argument<string>("name") { Description = "What the expense was for." };
-        var amount = new Argument<decimal>("amount") { Description = "Total amount, to two decimal places." };
+        var amount = Amounts.Argument("amount",
+            "Total amount, e.g. 42.50: a '.' decimal point and no thousands separators.");
 
         var group = new Option<Guid?>("--group") { Description = "Group to book the expense in." };
         var date = new Option<DateTimeOffset?>("--date")
@@ -388,7 +389,7 @@ public static class TransactionCommands
     private static Command Update()
     {
         var name = new Option<string?>("--name") { Description = "Rename the expense." };
-        var amount = new Option<decimal?>("--amount") { Description = "Change the total." };
+        var amount = Amounts.Option("--amount", "Change the total, e.g. 42.50.");
         var date = new Option<DateTimeOffset?>("--date") { Description = "Change when it happened." };
         var description = new Option<string?>("--description") { Description = "Change the note." };
         var group = new Option<Guid?>("--group")

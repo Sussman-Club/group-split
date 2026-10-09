@@ -71,7 +71,7 @@ was never sent.
 | `CLI_AUTH_EXPIRED` | 2 | Credentials existed but could not be refreshed. |
 | `CLI_AUTH_FAILED` | 2 | The identity server refused to issue a token. |
 | `CLI_INVALID_INPUT` | 3 | Arguments rejected before any request. |
-| `CLI_USAGE` | 3 | The command line did not parse. |
+| `CLI_USAGE` | 3 | The command line did not parse -- including an amount not written as `12.50` (a `.` decimal point, no thousands separators). |
 | `CLI_SERVER_NOT_CONFIGURED` | 3 | No server URL by flag, environment or config file. |
 | `CLI_SERVER_UNREACHABLE` | 1 | DNS, TLS or connection failure. Nothing was sent. |
 | `CLI_SERVER_ERROR` | 1 | The server answered with nothing interpretable. |

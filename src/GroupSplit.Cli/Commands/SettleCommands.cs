@@ -81,10 +81,8 @@ public static class SettleCommands
             Description = "The person on the other end of the payment."
         };
 
-        var amount = new Option<decimal?>("--amount")
-        {
-            Description = "How much moved. Defaults to the whole of what is outstanding between you."
-        };
+        var amount = Amounts.Option("--amount",
+            "How much moved, e.g. 40.00. Defaults to the whole of what is outstanding between you.");
 
         var direction = new Option<SettlementDirection>("--direction")
         {
