@@ -128,14 +128,18 @@ groupsplit groups balances <group-id> --through 2026-08-31
 groupsplit groups settle-up <group-id> --through 2026-08-31 --dry-run
 ```
 
-Through a day, what is owed counts the expenses dated up to the end of it and **every
-repayment, whatever its date**. Money paid goes against the oldest debt first, so somebody
-who paid August's share in mid-September is not asked for it again when August is settled in
-October, and settling the same period twice finds nothing the second time. Each payment is
-also capped at what the two people owe each other on the whole balance, so a period never asks
-for money that is not owed overall -- paying a September expense in September does not turn
-into being owed it back for August. The day ends at midnight on this machine's calendar: the
-CLI sends its current UTC offset beside the day, as the web app does.
+Through a day, what is owed counts the expenses dated up to the end of it and the
+repayments made for it -- covering through that day or an earlier one, or claiming no period
+and dated by then. **Repayments made for later count only as far as they pay down what the
+period left.** Money paid goes against the oldest debt first, so somebody who paid August's
+share in mid-September is not asked for it again when August is settled in October, and
+settling the same period twice finds nothing the second time; but paying a September expense
+in September never turns into being owed it back for August. Nothing else after the day
+moves the figure: being ahead in October does not shrink what September left. Once a later
+period has been settled, though, a period never asks for more than that one leaves owing --
+settling September can route August's debts through somebody else. The day ends
+at midnight on this machine's calendar: the CLI sends its current UTC offset beside the day,
+as the web app does.
 
 The repayments it records remember the day. `settle history` shows it on the row, and
 `transactions show <settlement-id>` says what period the settlement covered and whether that

@@ -538,8 +538,9 @@ public static class GroupApi
         private RouteHandlerBuilder MapGetGroupUserBalance()
         {
             // ?through=&utcOffset= gives the balances, and the plan that clears them, for
-            // everything dated up to that day after every settlement already made: what a
-            // settle dialog previews before it settles a period.
+            // everything dated up to that day after the settlements made for it, and later
+            // ones as far as they pay it down: what a settle dialog previews before it
+            // settles a period.
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
                     [AsParameters] CutoffQuery cutoff,

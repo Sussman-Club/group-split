@@ -13,7 +13,7 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </summary>
 /// <remarks>
 /// Picking a day reads the group's balances through it rather than working the figure out:
-/// through a day the API counts every repayment whatever its date, which is the half a client
+/// through a day the API counts the repayments made for it, which is the half a client
 /// adding up its own expenses would leave out.
 /// </remarks>
 public class SettleDialogTest : ComponentTest
@@ -118,8 +118,7 @@ public class SettleDialogTest : ComponentTest
     [Fact]
     public async Task More_than_the_period_left_owing_is_recorded_as_typed()
     {
-        // The figure through a day is capped at the whole balance, so it can be less than the
-        // period's own expenses come to. The money that moved is what gets written.
+        // The figure is a suggestion. The money that moved is what gets written.
         OwedThroughAugust(50m);
         var (provider, dialog) = await Open();
 

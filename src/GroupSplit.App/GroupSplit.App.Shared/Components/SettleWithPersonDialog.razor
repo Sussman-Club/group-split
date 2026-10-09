@@ -78,7 +78,7 @@
                 <MudText Typo="Typo.caption">@Remaining</MudText>
 
                 @* A month at a time, as in SettleDialog: what activity dated up to the day
-                   left owing between the two of them, after every repayment already made.
+                   left owing between the two of them, after the repayments made for it.
                    It changes the figure and the groups it lands in, so both are read again. *@
                 @if (_choosingPeriod)
                 {
@@ -163,7 +163,7 @@
 
     private string PeriodHelp => _through is { } day && Shown.Amount <= 0
         ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
-        : "Repayments already made count, whatever their date. Clear it to settle everything.";
+        : "Repayments for later count only as far as they pay it down. Clear it to settle everything.";
 
     protected override void OnInitialized()
     {

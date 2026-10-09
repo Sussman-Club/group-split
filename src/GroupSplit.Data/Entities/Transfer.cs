@@ -22,13 +22,15 @@ public class Transfer : Transaction
     /// claim a period at all.
     /// </summary>
     /// <remarks>
-    /// Intent, and nothing the arithmetic reads. Balances stay cumulative: a repayment counts
-    /// against everything owed whatever its date and whatever this says, which is what keeps
-    /// one made in September from being owed a second time by somebody settling August in
-    /// October. What this adds is the answer to "what was that payment for", and the day a
-    /// group's balance through can be recomputed from to say whether that period is still
-    /// square -- an expense dated inside it and added later shows up as owed again, because
-    /// nothing remembers which expenses were "covered".
+    /// What the payment was for, which the balance through a day reads and the whole balance
+    /// does not. The whole balance stays cumulative: a repayment counts against everything
+    /// owed whatever this says. Through a day, a payment for that day or an earlier one
+    /// counts in full and one for a later day counts only as far as it pays down what the
+    /// period left -- so one made in September is not owed a second time by somebody settling
+    /// August in October, and one made for September never reads as owed back for August.
+    /// It is also the day a group's balance through can be recomputed from to say whether
+    /// that period is still square -- an expense dated inside it and added later shows up
+    /// as owed again, because nothing remembers which expenses were "covered".
     /// <para>
     /// A day, not an instant: "through 31 August" is a date on a calendar, and the moment it
     /// ends depends on whose calendar. Null is a real state rather than a missing value -- a
