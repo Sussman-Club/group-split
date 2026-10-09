@@ -287,7 +287,15 @@
 
     private DateFilter _range = OpensOn;
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
-    private bool _reloading;
+
+    /// <summary>The reload under way, which a reload asked for meanwhile waits on and follows.</summary>
+    private Task? _reloading;
+
+    /// <summary>
+    /// Whether something asked for the rows again while a reload was out, so it runs once
+    /// more when that one lands.
+    /// </summary>
+    private bool _reloadAgain;
 
     private TransactionSummaryResponse? _spending;
     private ExpenseShareSummaryResponse? _shares;
@@ -453,20 +461,40 @@
         return ReloadAsync();
     }
 
-    private async Task ReloadAsync()
+    /// <summary>
+    /// Reads the rows again -- and, when a reload is already out, once more after it.
+    /// </summary>
+    /// <remarks>
+    /// A write raises two events, and two reloads at once would race over the rows, so only
+    /// one runs at a time. A request that arrives during it used to be dropped, though, and
+    /// what it was asking for went with it: a kind, a search or a span chosen while the rows
+    /// were loading left the old rows under the new chip, and a second delete left the row
+    /// it deleted on screen, because the read under way had started before it (#323). Now it
+    /// is remembered, and however many arrive, the rows are read once more with whatever is
+    /// in force when the read in flight lands.
+    /// </remarks>
+    private Task ReloadAsync()
     {
-        // A write raises two events, and two reloads at once would race over the rows.
-        if (_grid is null || _reloading) return;
+        if (_grid is null)
+            return Task.CompletedTask;
 
-        _reloading = true;
-        try
+        if (_reloading is { IsCompleted: false } running)
         {
-            await InvokeAsync(() => _grid.ReloadServerData());
+            _reloadAgain = true;
+            return running;
         }
-        finally
+
+        return _reloading = ReloadUntilCurrentAsync(_grid);
+    }
+
+    private async Task ReloadUntilCurrentAsync(MudDataGrid<GroupLedgerEntryResponse> grid)
+    {
+        do
         {
-            _reloading = false;
+            _reloadAgain = false;
+            await InvokeAsync(() => grid.ReloadServerData());
         }
+        while (_reloadAgain);
     }
 
     /// <summary>
