@@ -235,7 +235,11 @@ even when mail is disabled.
 The `realm-settings` worker starts after Keycloak is ready, in development and in a
 deployment. It reads `realms.json`, compares the managed realm-level settings, and updates
 only the values that differ. That includes the realm's display and theme, registration and
-login switches, password and brute-force policy, token lifetimes, and SSO timeouts. A
+login switches, password and brute-force policy, token lifetimes, and SSO timeouts. It also
+includes the flow bindings: which flow runs a browser sign-in, a registration, a direct grant,
+a password reset, a client's authentication, and a brokered first sign-in. `realms.json`
+names Keycloak's built-in flows for each, so a binding re-pointed at another flow, by hand or
+by a mistaken import, is pointed back. The built-in flows themselves are not managed. A
 second run with no changes makes no API update. If Keycloak never becomes ready, the worker
 fails and the deployment does not silently skip reconciliation.
 
@@ -251,6 +255,15 @@ endpoint. Keycloak refuses a sign-in from any other origin, including the web ap
 endpoint locally. If the variable is missing, the worker fails rather than store the
 placeholder.
 
+It also manages the `cli` client that `groupsplit auth login` signs in through: the device
+authorization grant on and every other grant off (authorization code, implicit, password,
+service account and CIBA), public, and an audience mapper that puts `api` in its tokens.
+Unlike `web-app`, a missing `cli` client is created, from its definition in `realms.json`.
+A realm imported before the CLI existed has none, and nothing in the client depends on the
+environment, so creating it writes exactly what an import would have. A missing `web-app`
+client still fails the run and points at the realm reset, because its redirect URIs are the
+environment's.
+
 It also manages which account a first Google sign-in may land in. The `google` provider's
 `trustEmail`, its first broker login flow, and its essential-claim filter are reconciled,
 and so is that flow. The flow is rebuilt whole if it differs at all. It runs exactly two
@@ -262,7 +275,8 @@ checked cannot match an account either. The provider's switch, client ID and sec
 with the container. A realm without a `google` provider is not given one.
 
 The worker deliberately does not manage SMTP settings, the rest of each client and provider,
-protocol mappers, other authentication flows, roles, or users. Those remain governed by
+protocol mappers other than the `cli` audience, the built-in authentication flows, roles, or
+users. Those remain governed by
 realm import and their existing seeders. This boundary is explicit in
 [`KeycloakRealmDefinition`](src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs).
 

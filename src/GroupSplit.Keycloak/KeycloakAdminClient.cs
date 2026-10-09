@@ -80,6 +80,23 @@ public sealed class KeycloakAdminClient(
         await ThrowOnFailure(response, $"update client {client["clientId"]} on realm {Realm}", ct);
     }
 
+    public Task CreateClientAsync(JsonObject client, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/clients", client,
+            $"create client {client["clientId"]} on realm {Realm}", ct);
+
+    public Task CreateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/clients/{clientId}/protocol-mappers/models", mapper,
+            $"add protocol mapper {mapper["name"]} to client {clientId} on realm {Realm}", ct);
+
+    public Task UpdateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+    {
+        var id = mapper["id"]?.GetValue<string>()
+                 ?? throw new ArgumentException("The protocol mapper representation carries no id.", nameof(mapper));
+
+        return SendAsync(HttpMethod.Put, $"admin/realms/{Realm}/clients/{clientId}/protocol-mappers/models/{id}", mapper,
+            $"update protocol mapper {mapper["name"]} of client {clientId} on realm {Realm}", ct);
+    }
+
     public async Task<JsonObject?> GetIdentityProviderAsync(string alias, CancellationToken ct = default)
     {
         using var request = await AuthorizedAsync(

@@ -19,7 +19,17 @@ public interface IKeycloakRealmAdminClient
     Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default);
 
     /// <summary>Replaces the client whose internal <c>id</c> the representation carries.</summary>
+    /// <remarks>Its protocol mappers are left as they are; they have calls of their own.</remarks>
     Task UpdateClientAsync(JsonObject client, CancellationToken ct = default);
+
+    /// <summary>Creates a client, protocol mappers included, from a realm-export representation.</summary>
+    Task CreateClientAsync(JsonObject client, CancellationToken ct = default);
+
+    /// <summary>Adds a protocol mapper to the client with this internal <c>id</c>.</summary>
+    Task CreateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default);
+
+    /// <summary>Replaces the protocol mapper whose <c>id</c> the representation carries.</summary>
+    Task UpdateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default);
 
     /// <summary>The identity provider with this alias in the app's realm, or null when there is none.</summary>
     /// <remarks>Its client secret comes back masked, and Keycloak keeps the stored one when the mask is sent back.</remarks>

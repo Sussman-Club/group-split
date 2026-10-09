@@ -520,13 +520,15 @@ rows in the session table for longer than they are worth.
 
 Realm import only creates a realm that does not exist yet. The `realm-settings` worker
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
-in both run and publish modes. It does the same for the `web-app` client's redirect URIs, web
-origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
+in both run and publish modes, the flow bindings among them. It does the same for the
+`web-app` client's redirect URIs, web origins and post-logout redirect URIs, resolving
+`${WEB_HOSTNAME}` from its environment, and for the `cli` client's grants and `api` audience
+mapper, creating the `cli` client when the realm has none.
 It also reconciles the `google` provider's `trustEmail`, its essential-claim filter on
 `email_verified`, and the first broker login flow it names, which is rebuilt whole when it
 differs. See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
-It leaves SMTP configuration, the rest of each client and provider, protocol mappers, other
-authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
+It leaves SMTP configuration, the rest of each client and provider, other protocol mappers,
+the built-in authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
 restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
 retroactive either:
 sessions created while it was on keep their extended lifetime until they expire

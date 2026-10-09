@@ -4,12 +4,12 @@ namespace GroupSplit.Keycloak;
 
 /// <summary>
 /// Reads the same realm export Keycloak imports on first boot. The allowlists define what
-/// the application owns: realm-level properties, the handful of client properties that
-/// decide where a sign-in may be sent back to, and the identity provider settings and first
-/// broker login flow that decide which account a brokered sign-in may land in.
-/// Everything else -- the rest of each client and provider, protocol mappers, other flows,
-/// roles, users, and the environment-substituted SMTP settings -- is intentionally outside
-/// reconciliation.
+/// the application owns: realm-level properties, including which flow runs each kind of
+/// sign-in; the handful of client properties that decide where a sign-in may be sent back
+/// to and which grants a client accepts; and the identity provider settings and first broker
+/// login flow that decide which account a brokered sign-in may land in. Everything else --
+/// the rest of each client and provider, the built-in flows themselves, roles, users, and the
+/// environment-substituted SMTP settings -- is intentionally outside reconciliation.
 /// </summary>
 public static class KeycloakRealmDefinition
 {
@@ -21,16 +21,41 @@ public static class KeycloakRealmDefinition
     /// Client properties reconciled onto an existing realm, by <c>clientId</c>.
     /// </summary>
     /// <remarks>
-    /// Only where a client may redirect to. That is the part of a client whose drift is a
-    /// vulnerability rather than an inconvenience -- a realm created while <c>web-app</c>
-    /// accepted any redirect URI kept accepting them long after the file stopped saying so
-    /// -- and it is also the part that differs by environment, so it is the part a first-boot
-    /// import gets wrong the moment the web app moves. Everything else about a client stays
-    /// with the import.
+    /// <para>
+    /// For <c>web-app</c>, only where it may redirect to. That is the part of a client whose
+    /// drift is a vulnerability rather than an inconvenience -- a realm created while
+    /// <c>web-app</c> accepted any redirect URI kept accepting them long after the file stopped
+    /// saying so -- and it is also the part that differs by environment, so it is the part a
+    /// first-boot import gets wrong the moment the web app moves.
+    /// </para>
+    /// <para>
+    /// For <c>cli</c>, which grants it accepts and the audience its tokens carry: the device
+    /// grant and nothing else, and <c>api</c>, without which the API refuses every token the
+    /// CLI brings. Unlike <c>web-app</c> it is created when missing. A realm imported before
+    /// the CLI existed has no <c>cli</c> client, and nothing in the client depends on the
+    /// environment, so the file's definition is all there is to it.
+    /// </para>
+    /// <para>
+    /// Everything else about a client stays with the import.
+    /// </para>
     /// </remarks>
     public static readonly ManagedClient[] ManagedClients =
     [
-        new("web-app", Properties: ["redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"])
+        new("web-app", Properties: ["redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"]),
+        new("cli",
+            Properties:
+            [
+                "publicClient",
+                "standardFlowEnabled",
+                "implicitFlowEnabled",
+                "directAccessGrantsEnabled",
+                "serviceAccountsEnabled"
+            ],
+            Attributes: ["oauth2.device.authorization.grant.enabled", "oidc.ciba.grant.enabled"])
+        {
+            ProtocolMappers = ["audience-mapper"],
+            CreateWhenMissing = true
+        }
     ];
 
 
@@ -58,6 +83,12 @@ public static class KeycloakRealmDefinition
             .OfType<JsonObject>()
             .FirstOrDefault(client => client["clientId"]?.GetValue<string>() == clientId);
 
+    /// <summary>The protocol mapper of <paramref name="client"/> with this name, or null.</summary>
+    public static JsonObject? ProtocolMapper(JsonObject client, string name) =>
+        client["protocolMappers"]?.AsArray()
+            .OfType<JsonObject>()
+            .FirstOrDefault(mapper => mapper["name"]?.GetValue<string>() == name);
+
     /// <summary>The identity provider in <paramref name="definition"/> with this alias, or null.</summary>
     public static JsonObject? IdentityProvider(JsonObject definition, string alias) =>
         definition["identityProviders"]?.AsArray()
@@ -82,6 +113,14 @@ public static class KeycloakRealmDefinition
                 execution["requirement"]!.GetValue<string>()))
             .ToList();
 
+    /// <summary>Realm-level properties reconciled onto an existing realm.</summary>
+    /// <remarks>
+    /// The flow bindings name Keycloak's built-in flows, which the file leaves to Keycloak to
+    /// create. They are stated anyway, because a binding is what decides which flow a sign-in
+    /// runs: a browser flow re-pointed at a weaker copy, by hand or by a mistaken import,
+    /// would otherwise go unnoticed. Only which flow each binding names is reconciled, not
+    /// the built-in flows themselves.
+    /// </remarks>
     public static readonly string[] ManagedSettings =
     [
         "displayName",
@@ -111,7 +150,13 @@ public static class KeycloakRealmDefinition
         "ssoSessionIdleTimeout",
         "ssoSessionMaxLifespan",
         "accessCodeLifespan",
-        "actionTokenGeneratedByUserLifespan"
+        "actionTokenGeneratedByUserLifespan",
+        "browserFlow",
+        "registrationFlow",
+        "directGrantFlow",
+        "resetCredentialsFlow",
+        "clientAuthenticationFlow",
+        "firstBrokerLoginFlow"
     ];
 
     public static JsonObject Load()
@@ -155,6 +200,12 @@ public static class KeycloakRealmDefinition
             {
                 throw new InvalidOperationException(
                     $"Client '{managed.ClientId}' in the Keycloak realm definition is missing managed attribute '{name}'.");
+            }
+
+            foreach (var name in managed.ProtocolMappers.Where(name => ProtocolMapper(client, name) is null))
+            {
+                throw new InvalidOperationException(
+                    $"Client '{managed.ClientId}' in the Keycloak realm definition is missing managed protocol mapper '{name}'.");
             }
         }
 
@@ -214,7 +265,21 @@ public static class KeycloakRealmDefinition
 }
 
 /// <summary>A client whose listed properties and attributes are reconciled onto an existing realm.</summary>
-public sealed record ManagedClient(string ClientId, string[] Properties, string[] Attributes);
+public sealed record ManagedClient(string ClientId, string[] Properties, string[] Attributes)
+{
+    /// <summary>
+    /// Protocol mappers reconciled by name: created when missing, and given the file's mapper
+    /// type and config values when they differ. Config entries the file does not name are kept.
+    /// </summary>
+    public string[] ProtocolMappers { get; init; } = [];
+
+    /// <summary>
+    /// Whether a realm without the client is given it, from the file's whole definition,
+    /// rather than reported. Only for a client none of whose definition depends on the
+    /// environment, so that creating it cannot get anything wrong that an import would not.
+    /// </summary>
+    public bool CreateWhenMissing { get; init; }
+}
 
 /// <summary>
 /// An identity provider whose listed properties and config entries are reconciled onto an

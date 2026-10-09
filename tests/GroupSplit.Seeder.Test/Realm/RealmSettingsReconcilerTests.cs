@@ -394,6 +394,126 @@ public sealed class RealmSettingsReconcilerTests
         Assert.Contains("web-app", failure.Message);
     }
 
+    /// <summary>
+    /// A browser flow re-pointed at a weaker copy, by hand or by an import, decides how every
+    /// sign-in runs. The binding is what is managed, not the flow it names.
+    /// </summary>
+    [Fact]
+    public async Task A_flow_binding_pointed_elsewhere_is_pointed_back()
+    {
+        var current = Imported();
+        current["browserFlow"] = "browser without the password";
+        current["firstBrokerLoginFlow"] = "creates accounts";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.Equal("browser", admin.RealmData["browserFlow"]!.GetValue<string>());
+        Assert.Equal("first broker login", admin.RealmData["firstBrokerLoginFlow"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The realm one developer's machine has: imported before the CLI existed, so
+    /// <c>groupsplit auth login</c> has no client to ask for a token.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_imported_before_the_cli_existed_is_given_the_cli_client()
+    {
+        var current = Imported();
+        current["clients"]!.AsArray().Remove(KeycloakRealmDefinition.Client(current, "cli"));
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var cli = admin.Clients["cli"];
+        Assert.Equal(["create client cli"], admin.Writes);
+        Assert.True(cli["publicClient"]!.GetValue<bool>());
+        Assert.Equal("true", cli["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
+        AssertOnlyTheDeviceGrant(cli);
+        AssertAudienceIsApi(cli);
+    }
+
+    [Fact]
+    public async Task A_cli_client_given_other_grants_is_left_with_the_device_grant_alone()
+    {
+        var current = Imported();
+        var cli = KeycloakRealmDefinition.Client(current, "cli")!;
+        cli["standardFlowEnabled"] = true;
+        cli["implicitFlowEnabled"] = true;
+        cli["directAccessGrantsEnabled"] = true;
+        cli["serviceAccountsEnabled"] = true;
+        cli["publicClient"] = false;
+        cli["attributes"]!["oauth2.device.authorization.grant.enabled"] = "false";
+        cli["attributes"]!["oidc.ciba.grant.enabled"] = "true";
+        cli["description"] = "Edited by hand";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var updated = admin.Clients["cli"];
+        Assert.Equal(1, admin.ClientUpdates);
+        Assert.True(updated["publicClient"]!.GetValue<bool>());
+        Assert.Equal("true", updated["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
+        AssertOnlyTheDeviceGrant(updated);
+        Assert.Equal("Edited by hand", updated["description"]!.GetValue<string>());
+    }
+
+    /// <summary>Without the audience the API refuses every token the CLI brings.</summary>
+    [Fact]
+    public async Task A_cli_client_without_its_audience_mapper_is_given_it_back()
+    {
+        var current = Imported();
+        KeycloakRealmDefinition.Client(current, "cli")!["protocolMappers"] = new JsonArray();
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+        await Reconcile(admin);
+
+        Assert.Equal(["create mapper audience-mapper"], admin.Writes);
+        AssertAudienceIsApi(admin.Clients["cli"]);
+    }
+
+    /// <summary>
+    /// The audience pointed at another client is put back; config Keycloak added on its own,
+    /// such as the introspection claim a migration gave every mapper, is not a difference.
+    /// </summary>
+    [Fact]
+    public async Task An_audience_mapper_pointed_elsewhere_is_put_back_and_keycloaks_own_entries_kept()
+    {
+        var current = Imported();
+        var config = KeycloakRealmDefinition.ProtocolMapper(
+            KeycloakRealmDefinition.Client(current, "cli")!, "audience-mapper")!["config"]!;
+        config["included.client.audience"] = "web-app";
+        config["introspection.token.claim"] = "true";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+        await Reconcile(admin);
+
+        Assert.Equal(["update mapper audience-mapper"], admin.Writes);
+        AssertAudienceIsApi(admin.Clients["cli"]);
+        Assert.Equal("true", KeycloakRealmDefinition.ProtocolMapper(admin.Clients["cli"], "audience-mapper")!
+            ["config"]!["introspection.token.claim"]!.GetValue<string>());
+    }
+
+    private static void AssertOnlyTheDeviceGrant(JsonNode cli)
+    {
+        Assert.False(cli["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(cli["implicitFlowEnabled"]!.GetValue<bool>());
+        Assert.False(cli["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(cli["serviceAccountsEnabled"]!.GetValue<bool>());
+        Assert.Equal("false", cli["attributes"]!["oidc.ciba.grant.enabled"]!.GetValue<string>());
+    }
+
+    private static void AssertAudienceIsApi(JsonObject cli)
+    {
+        var mapper = KeycloakRealmDefinition.ProtocolMapper(cli, "audience-mapper")!;
+        Assert.Equal("oidc-audience-mapper", mapper["protocolMapper"]!.GetValue<string>());
+        Assert.Equal("api", mapper["config"]!["included.client.audience"]!.GetValue<string>());
+        Assert.Equal("true", mapper["config"]!["access.token.claim"]!.GetValue<string>());
+    }
+
     private static string[] Strings(JsonNode? node) =>
         node!.AsArray().Select(item => item!.GetValue<string>()).ToArray();
 
@@ -405,9 +525,7 @@ public sealed class RealmSettingsReconcilerTests
 
             foreach (var client in realm["clients"]?.AsArray().OfType<JsonObject>() ?? [])
             {
-                var copy = (JsonObject)client.DeepClone();
-                copy["id"] = Guid.NewGuid().ToString();
-                Clients[copy["clientId"]!.GetValue<string>()] = copy;
+                Store(client);
             }
 
             foreach (var provider in realm["identityProviders"]?.AsArray().OfType<JsonObject>() ?? [])
@@ -589,14 +707,72 @@ public sealed class RealmSettingsReconcilerTests
                 ? (JsonObject?)client.DeepClone()
                 : null);
 
+        /// <summary>Keeps the stored protocol mappers whatever the body says, as Keycloak does.</summary>
         public Task UpdateClientAsync(JsonObject client, CancellationToken ct = default)
         {
             var clientId = client["clientId"]!.GetValue<string>();
             Assert.Equal(Clients[clientId]["id"]!.GetValue<string>(), client["id"]!.GetValue<string>());
 
-            Clients[clientId] = (JsonObject)client.DeepClone();
+            var copy = (JsonObject)client.DeepClone();
+            copy["protocolMappers"] = Clients[clientId]["protocolMappers"]?.DeepClone();
+            Clients[clientId] = copy;
             ClientUpdates++;
+            Writes.Add($"client {clientId}");
             return Task.CompletedTask;
+        }
+
+        public Task CreateClientAsync(JsonObject client, CancellationToken ct = default)
+        {
+            var clientId = client["clientId"]!.GetValue<string>();
+            Assert.False(Clients.ContainsKey(clientId), $"Client '{clientId}' already exists.");
+
+            Store(client);
+            Writes.Add($"create client {clientId}");
+            return Task.CompletedTask;
+        }
+
+        public Task CreateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+        {
+            var client = Clients.Values.Single(candidate => candidate["id"]!.GetValue<string>() == clientId);
+            var name = mapper["name"]!.GetValue<string>();
+            Assert.Null(KeycloakRealmDefinition.ProtocolMapper(client, name));
+
+            if (client["protocolMappers"] is not JsonArray mappers)
+            {
+                client["protocolMappers"] = mappers = new JsonArray();
+            }
+
+            var copy = (JsonObject)mapper.DeepClone();
+            copy["id"] = Guid.NewGuid().ToString();
+            mappers.Add(copy);
+            Writes.Add($"create mapper {name}");
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+        {
+            var client = Clients.Values.Single(candidate => candidate["id"]!.GetValue<string>() == clientId);
+            var mappers = client["protocolMappers"]!.AsArray();
+            var index = mappers.Select((existing, i) => (existing, i))
+                .Single(pair => pair.existing!["id"]!.GetValue<string>() == mapper["id"]!.GetValue<string>()).i;
+
+            mappers[index] = mapper.DeepClone();
+            Writes.Add($"update mapper {mapper["name"]}");
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Stores a client the way Keycloak does: with internal ids on it and its mappers.</summary>
+        private void Store(JsonObject client)
+        {
+            var copy = (JsonObject)client.DeepClone();
+            copy["id"] = Guid.NewGuid().ToString();
+
+            foreach (var mapper in copy["protocolMappers"]?.AsArray().OfType<JsonObject>() ?? [])
+            {
+                mapper["id"] = Guid.NewGuid().ToString();
+            }
+
+            Clients[copy["clientId"]!.GetValue<string>()] = copy;
         }
 
         public string AdminRealm => "master";
