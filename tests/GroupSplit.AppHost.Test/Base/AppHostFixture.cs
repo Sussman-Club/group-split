@@ -47,6 +47,60 @@ public class AppHostFixture : IAsyncLifetime
         Environment.GetEnvironmentVariable(DashboardVariable) is { } value
         && (value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The value every provider parameter has under test, keyed by parameter name. Each one
+    /// switches a provider off or points it nowhere: the tests exercise the disabled-provider
+    /// paths, and the AppHost deliberately has no in-code defaults to fall back on.
+    /// </summary>
+    /// <remarks>
+    /// These have to beat whatever the machine has configured, because what a developer
+    /// keeps in the AppHost's user secrets for running the app is real: a real Azure OpenAI
+    /// endpoint and key, real Plaid and Veryfi credentials, providers switched on. Filled in
+    /// only where nothing else had a value, which is how they were first written, every one
+    /// of them lost to those secrets -- and a local test run sent receipts to the
+    /// developer's own Azure OpenAI deployment, on their key (issue 331). CI never noticed,
+    /// because a runner has no user secrets.
+    /// <para>
+    /// So they go in on the AppHost's command line (<see cref="Arguments"/>), which is the
+    /// last configuration source the host loads and so the one that wins: over
+    /// appsettings, over user secrets, over <c>Parameters__…</c> environment variables.
+    /// Not loading user secrets at all would also have kept them out, but it would take the
+    /// Keycloak admin and the generated database, cache and storage passwords with them, and
+    /// those have to match the data volumes a normal run of the app has already initialised.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> Parameters { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["receipt-transcription-provider"] = "Veryfi",
+            ["azure-openai-enabled"] = "false",
+            ["azure-openai-endpoint"] = "https://azure-openai.test/openai/v1/",
+            ["azure-openai-model"] = "test-receipt-model",
+            ["azure-openai-api-key"] = "test-azure-openai-key",
+            ["veryfi-enabled"] = "false",
+            ["veryfi-client-id"] = "test-veryfi-client-id",
+            ["veryfi-username"] = "test-veryfi-username",
+            ["veryfi-api-key"] = "test-veryfi-api-key",
+            ["veryfi-log-raw-responses"] = "false",
+            ["google-sign-in-enabled"] = "false",
+            ["google-client-id"] = "test-google-client-id",
+            ["google-client-secret"] = "test-google-client-secret",
+            ["plaid-enabled"] = "false",
+            ["plaid-client-id"] = "test-plaid-client-id",
+            ["plaid-secret"] = "test-plaid-secret",
+            ["plaid-env"] = "Sandbox",
+        };
+
+    /// <summary>
+    /// The AppHost's command line under test: no webhook tunnel, and every one of
+    /// <see cref="Parameters"/>.
+    /// </summary>
+    public static string[] Arguments =>
+    [
+        $"--{WebhookTunnelExtensions.EnabledKey}=false",
+        .. Parameters.Select(parameter => $"--Parameters:{parameter.Key}={parameter.Value}")
+    ];
+
     public DistributedApplication Application { get; private set; } = null!;
 
     /// <summary>Sets the realm up for the tests that need an account or a short-lived token.</summary>
@@ -91,20 +145,19 @@ public class AppHostFixture : IAsyncLifetime
         // origin from the tunnel's endpoint, so a tunnel that cannot start leaves the API
         // waiting on it, the web app waiting on the API, and the whole stack short of the
         // start-up budget.
+        //
+        // The provider parameters travel the same way, for a different reason: see
+        // Parameters.
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<GroupSplit_AppHost>(
                 new DistributedApplicationTestingBuilderOptions { EnableDashboard = DashboardEnabled },
-                [
-                    $"--{WebhookTunnelExtensions.EnabledKey}=false"
-                ]);
+                Arguments);
 
         builder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
         });
 
-        // Aspire generates the Keycloak admin password and gives a test no way to read it.
-        // Supplied, so these tests can create an account and shorten the realm's token.
         // Aspire generates the Keycloak admin password and gives a test no way to read it,
         // so these fill it in -- but only when nothing else has.
         //
@@ -116,35 +169,12 @@ public class AppHostFixture : IAsyncLifetime
         // and leaves this fixture signing in with a password no admin has. Every test in
         // the assembly then failed with `invalid_grant`, on any machine that had ever run
         // the app -- and passed in CI, where the volume does not exist yet.
+        //
+        // That is why these two, and only these two, are not in Parameters: they describe
+        // state the machine already holds, where everything in Parameters describes a
+        // provider the tests must not reach.
         builder.Configuration["Parameters:keycloak-username"] ??= KeycloakAdmin.DefaultUsername;
         builder.Configuration["Parameters:keycloak-password"] ??= KeycloakAdmin.DefaultPassword;
-
-        // The AppHost deliberately has no in-code parameter defaults. The integration
-        // tests exercise the disabled-provider paths, so give every shared parameter an
-        // explicit harmless value before building the application model.
-        var testParameters = new Dictionary<string, string?>
-        {
-            ["Parameters:receipt-transcription-provider"] = "Veryfi",
-            ["Parameters:azure-openai-enabled"] = "false",
-            ["Parameters:azure-openai-endpoint"] = "https://azure-openai.test/openai/v1/",
-            ["Parameters:azure-openai-model"] = "test-receipt-model",
-            ["Parameters:azure-openai-api-key"] = "test-azure-openai-key",
-            ["Parameters:veryfi-enabled"] = "false",
-            ["Parameters:veryfi-client-id"] = "test-veryfi-client-id",
-            ["Parameters:veryfi-username"] = "test-veryfi-username",
-            ["Parameters:veryfi-api-key"] = "test-veryfi-api-key",
-            ["Parameters:veryfi-log-raw-responses"] = "false",
-            ["Parameters:google-sign-in-enabled"] = "false",
-            ["Parameters:google-client-id"] = "test-google-client-id",
-            ["Parameters:google-client-secret"] = "test-google-client-secret",
-            ["Parameters:plaid-enabled"] = "false",
-            ["Parameters:plaid-client-id"] = "test-plaid-client-id",
-            ["Parameters:plaid-secret"] = "test-plaid-secret",
-            ["Parameters:plaid-env"] = "Sandbox",
-        };
-
-        foreach (var (key, value) in testParameters)
-            builder.Configuration[key] ??= value;
 
         _adminUsername = builder.Configuration["Parameters:keycloak-username"]!;
         _adminPassword = builder.Configuration["Parameters:keycloak-password"]!;
