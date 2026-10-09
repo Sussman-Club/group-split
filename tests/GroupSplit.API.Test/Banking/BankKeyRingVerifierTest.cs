@@ -1,4 +1,6 @@
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.Banking.Plaid;
 using Microsoft.AspNetCore.DataProtection;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -18,8 +20,9 @@ namespace GroupSplit.API.Test.Banking;
 /// It is the last thing between a wrong certificate and a set of items stranded at the
 /// provider: a token that cannot be read can be neither synced, nor repaired in update
 /// mode, nor removed -- every one of those hands the token back to the provider. So the
-/// interesting cases are not the happy one. They are the four ways it declines to stop the
-/// deployment, and the one way it does.
+/// interesting cases are not the happy one. They are the ways it declines to stop the
+/// deployment, and the two ways it does: a ring that cannot read what is stored, and,
+/// outside Development, a deployment that links banks with nothing wrapping the ring.
 /// </remarks>
 public class BankKeyRingVerifierTest
 {
@@ -88,6 +91,61 @@ public class BankKeyRingVerifierTest
     }
 
     /// <summary>
+    /// The one that is not about tokens already stored but about the ones to come. A
+    /// deployment that links banks with nothing wrapping the ring would write live access
+    /// tokens beside the keys that open them, so one database dump would be bank access --
+    /// and a warning in a log nobody reads is how that went unnoticed before.
+    /// </summary>
+    [Fact]
+    public async Task A_deployment_that_links_banks_with_an_unwrapped_ring_refuses_to_start()
+    {
+        using var host = Host(wrapped: false, plaid: true, environment: Environments.Production);
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => host.VerifyBankKeyRing(Ct));
+
+        Assert.Contains("KeyRingCertificate", e.Message);
+        Assert.Contains("BANK_KEY_CERTIFICATE", e.Message);
+    }
+
+    /// <summary>
+    /// Locally the sandbox is linked against an unwrapped ring all the time, and that has to
+    /// keep working: said out loud, not refused.
+    /// </summary>
+    [Fact]
+    public async Task Development_links_banks_with_an_unwrapped_ring_and_says_so()
+    {
+        using var host = Host(wrapped: false, plaid: true, environment: Environments.Development);
+
+        await host.VerifyBankKeyRing(Ct);
+
+        Assert.Contains(Logs(host), line => line.Contains("stored unwrapped"));
+    }
+
+    [Fact]
+    public async Task A_deployment_that_links_banks_with_a_wrapped_ring_starts()
+    {
+        using var host = Host(wrapped: true, plaid: true, environment: Environments.Production);
+
+        await host.VerifyBankKeyRing(Ct);
+
+        Assert.DoesNotContain(Logs(host), line => line.Contains("stored unwrapped"));
+    }
+
+    /// <summary>
+    /// Nothing is linked, so nothing is stored that a dump could open: a deployment with no
+    /// Plaid credentials starts without a certificate, and says the ring is unwrapped.
+    /// </summary>
+    [Fact]
+    public async Task A_deployment_that_does_not_link_banks_starts_without_a_certificate()
+    {
+        using var host = Host(wrapped: false, environment: Environments.Production);
+
+        await host.VerifyBankKeyRing(Ct);
+
+        Assert.Contains(Logs(host), line => line.Contains("stored unwrapped"));
+    }
+
+    /// <summary>
     /// A deployment with no connections has nothing to verify, and absence of tokens is not
     /// evidence of a bad key.
     /// </summary>
@@ -147,9 +205,9 @@ public class BankKeyRingVerifierTest
     /// certificate's presence from, a protector, and a database it can query -- or, for the
     /// last case, one that throws when queried.
     /// </summary>
-    private static IHost Host(bool wrapped, bool database = true)
+    private static IHost Host(bool wrapped, bool database = true, bool plaid = false, string environment = "Test")
     {
-        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = "Test" });
+        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = environment });
 
         if (wrapped)
         {
@@ -157,6 +215,19 @@ public class BankKeyRingVerifierTest
             {
                 [$"{BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)}"] = "a-certificate"
             });
+        }
+
+        if (plaid)
+        {
+            // Registered the way the API registers it, because whether Plaid registers is
+            // what the check asks -- not whether some configuration key happens to be set.
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{PlaidConnectorOptions.SectionName}:ClientId"] = "client-id",
+                [$"{PlaidConnectorOptions.SectionName}:Secret"] = "secret"
+            });
+
+            builder.Services.AddPlaidConnector(builder.Configuration);
         }
 
         var captured = new CapturedLogs();

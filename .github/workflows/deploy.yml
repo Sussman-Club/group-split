@@ -160,8 +160,21 @@ jobs:
             || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
           require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
             || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
-          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET \
+          # Bank sync stores live bank access tokens, and BANK_KEY_CERTIFICATE is what keeps
+          # the key ring that opens them from sitting unwrapped beside them in the database,
+          # where one dump would carry both. The API refuses to start without it, so this
+          # refuses first, before anything is built. The AppHost's validate-plaid agrees.
+          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET BANK_KEY_CERTIFICATE \
             || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
+
+          # The API links banks whenever it has both credentials, whatever PLAID_ENABLED
+          # says, so credentials left in place behind a switch that is off need the
+          # certificate just the same -- or the API would refuse to start after the deploy.
+          if [ "$(value PLAID_ENABLED)" != "true" ] && [ -n "$(value PLAID_CLIENT_ID)" ] \
+             && [ -n "$(value PLAID_SECRET)" ] && [ -z "$(value BANK_KEY_CERTIFICATE)" ]; then
+            echo "PLAID_CLIENT_ID and PLAID_SECRET are set, so the API links banks whatever PLAID_ENABLED says, but BANK_KEY_CERTIFICATE is not set on the production environment. Set it, or remove the Plaid credentials." >&2
+            missing=1
+          fi
           require_when VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY \
             || echo "::notice::VERYFI_ENABLED is not true. Receipt transcription through Veryfi is off."
 
