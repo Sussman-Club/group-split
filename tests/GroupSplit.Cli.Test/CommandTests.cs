@@ -155,6 +155,45 @@ public sealed class CommandTests : IDisposable
         Assert.Equal(ErrorCodes.ServerUnreachable, result.Error.GetProperty("code").GetString());
     }
 
+    /// <summary>
+    /// The request arrived and no answer came back, so nobody can say it was not carried
+    /// out. Reported as "unreachable" -- documented as "nothing was sent" -- an agent would
+    /// retry a create that had landed.
+    /// </summary>
+    [Fact]
+    public async Task A_connection_cut_after_the_request_arrived_is_an_unknown_outcome()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"), method: "GET");
+        _api.Drops($"/api/transactions/{id}", method: "DELETE");
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.Error, result.ExitCode);
+        Assert.Equal(ErrorCodes.OutcomeUnknown, result.Error.GetProperty("code").GetString());
+        Assert.Contains("may have been carried out", result.Error.GetProperty("remediation").GetString());
+        Assert.Contains(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.NameResolutionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ConnectionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.SecureConnectionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ProxyTunnelError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ResponseEnded, ErrorCodes.OutcomeUnknown)]
+    [InlineData(HttpRequestError.InvalidResponse, ErrorCodes.OutcomeUnknown)]
+    [InlineData(HttpRequestError.Unknown, ErrorCodes.OutcomeUnknown)]
+    public void Only_a_failure_before_sending_is_called_unreachable(HttpRequestError error, string code)
+    {
+        Assert.Equal(code, TransportFailure.From(new HttpRequestException(error, "failed")).Code);
+    }
+
+    [Fact]
+    public void A_timeout_is_an_unknown_outcome()
+    {
+        Assert.Equal(ErrorCodes.OutcomeUnknown, TransportFailure.TimedOut().Code);
+    }
+
     // ---- auth ------------------------------------------------------------------------
 
     [Fact]

@@ -53,11 +53,14 @@ public static class CommandExtensions
             }
             catch (HttpRequestException http)
             {
-                output.WriteError(new CliError(
-                    $"Could not reach the server: {http.Message}",
-                    ErrorCodes.ServerUnreachable,
-                    "Check the server URL with: groupsplit config list"));
-
+                output.WriteError(TransportFailure.From(http));
+                return ExitCodes.Error;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Nobody interrupted this, so it is HttpClient's own timeout -- which fires
+                // after the request went out as readily as before.
+                output.WriteError(TransportFailure.TimedOut());
                 return ExitCodes.Error;
             }
             catch (OperationCanceledException)

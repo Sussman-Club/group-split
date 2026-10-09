@@ -288,8 +288,7 @@ public static class GroupCommands
                 context,
                 action: "groups.remove-member",
                 summary: $"Remove {name} from the group?",
-                changes: changes,
-                confirmCommand: $"groupsplit groups remove-member {id} {member} --yes");
+                changes: changes);
 
             var group = await context.Groups.RemoveGroupMemberAsync(id, member, ct);
 
@@ -420,9 +419,7 @@ public static class GroupCommands
                 summary: side == SettlementDirection.TheyPaidYou
                     ? $"Record that {name} paid you {paid:N2}?"
                     : $"Record that you paid {name} {paid:N2}?",
-                changes: [$"A transfer of {paid:N2} is written, and both balances move by it."],
-                confirmCommand: $"groupsplit groups settle {id} {other} {paid} "
-                                + $"--direction {side.ToString().ToLowerInvariant()}{ThroughOption.Flag(day)} --yes");
+                changes: [$"A transfer of {paid:N2} is written, and both balances move by it."]);
 
             await context.Groups.SettleGroupDebtsAsync(
                 id,
@@ -513,8 +510,7 @@ public static class GroupCommands
                 [
                     $"A transfer of {paid:N2} is written from {payerName} to {payeeName}.",
                     "Both of their balances move by it, and neither of them recorded it."
-                ],
-                confirmCommand: $"groupsplit groups settle-between {id} {payer} {payee} {paid} --yes");
+                ]);
 
             var recorded = await context.Groups.RecordRepaymentAsync(
                 id,
@@ -629,8 +625,7 @@ public static class GroupCommands
                 action: "groups.settle-up",
                 summary: $"Record {payments.Count} "
                          + $"{(payments.Count == 1 ? "repayment" : "repayments")} and square up?",
-                changes: [.. payments.Select(payment => payment.Line)],
-                confirmCommand: $"groupsplit groups settle-up {id}{ThroughOption.Flag(day)} --yes");
+                changes: [.. payments.Select(payment => payment.Line)]);
 
             var settled = await context.Groups.SettleUpAsync(
                 id,
@@ -821,8 +816,7 @@ public static class GroupCommands
                 context,
                 action: "groups.leave",
                 summary: $"Leave the group '{group.Name}'?",
-                changes: [$"You are removed from '{group.Name}' ({group.MemberCount} members)."],
-                confirmCommand: $"groupsplit groups leave {id} --yes");
+                changes: [$"You are removed from '{group.Name}' ({group.MemberCount} members)."]);
 
             await context.Groups.LeaveGroupAsync(id, ct);
 
@@ -984,8 +978,7 @@ public static class GroupCommands
                         "The link already sent stops working.",
                         "Whoever opened it is no longer offered it.",
                         $"{guest.Name} stays a guest, with everything recorded for them."
-                    ],
-                    confirmCommand: $"groupsplit groups guest-link create {id} {userId} --new --yes");
+                    ]);
             }
 
             var linked = await context.Groups.IssueGuestLinkAsync(id, userId,
@@ -1037,8 +1030,7 @@ public static class GroupCommands
                     "The link stops working for whoever has it.",
                     $"{guest.Name} stays a guest, with everything recorded for them.",
                     "A new link can be issued at any time."
-                ],
-                confirmCommand: $"groupsplit groups guest-link revoke {id} {userId} --yes");
+                ]);
 
             await context.Groups.RevokeGuestLinkAsync(id, userId, ct);
 
@@ -1196,8 +1188,7 @@ public static class GroupCommands
                     "The link stops working for whoever has it.",
                     $"{name} stays a guest, with everything recorded for them. Nothing moves.",
                     "To take them out of the group, settle with them and use remove-member."
-                ],
-                confirmCommand: $"groupsplit groups withdraw-invitation {id} {invitation} --yes");
+                ]);
 
             var closed = await context.Groups.WithdrawGroupInvitationAsync(id, invitation, ct);
 

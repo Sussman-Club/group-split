@@ -184,8 +184,7 @@ public static class InboxCommands
                 context,
                 action: "inbox.attachments.delete",
                 summary: $"Delete receipt file '{attachment.FileName}'?",
-                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this bank row."],
-                confirmCommand: $"groupsplit inbox attachments delete {rowId} {attachmentId} --yes");
+                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this bank row."]);
 
             await new Api.InboxClient(context.ApiHttpClient)
                 .DeleteBankReceiptAttachmentAsync(rowId, attachmentId, ct);

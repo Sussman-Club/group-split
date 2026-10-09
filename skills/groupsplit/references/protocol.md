@@ -24,7 +24,8 @@ running the command: you are not always holding the pipe, and a table parsed as 
 in a confusing way.
 
 `--fields id,name` narrows JSON output to the named top-level fields, of an object or of
-every element of an array.
+every element of an array. It never narrows the confirmation envelope: an exit 4 always
+carries the whole of it.
 
 ## Exit codes
 
@@ -62,8 +63,9 @@ On stderr, whenever a command fails:
 
 ### Codes the CLI raises itself
 
-Prefixed `CLI_`, which is how you tell them apart: a code with the prefix means the request
-was never sent.
+Prefixed `CLI_`, which is how you tell them apart from the server's. Most of them mean the
+request was never sent. Two do not: `CLI_OUTCOME_UNKNOWN` says outright that it may have
+been carried out, and `CLI_CANCELLED` can interrupt a request already on its way.
 
 | Code | Exit | Meaning |
 | --- | --- | --- |
@@ -74,9 +76,10 @@ was never sent.
 | `CLI_USAGE` | 3 | The command line did not parse -- including an amount not written as `12.50` (a `.` decimal point, no thousands separators). |
 | `CLI_SERVER_NOT_CONFIGURED` | 3 | No server URL by flag, environment or config file. |
 | `CLI_SERVER_UNREACHABLE` | 1 | DNS, TLS or connection failure. Nothing was sent. |
+| `CLI_OUTCOME_UNKNOWN` | 1 | The request may have reached the server and no answer came back: the connection broke after it was sent, or the server took too long. **It may have been carried out.** A read is safe to repeat; before repeating a change, look for it (list or show what it would have changed), or it may be recorded twice. |
 | `CLI_SERVER_ERROR` | 1 | The server answered with nothing interpretable. |
 | `CLI_CONFIG_ERROR` | 1 | The config file is unreadable. |
-| `CLI_CANCELLED` | 1 | Interrupted, or a confirmation declined. |
+| `CLI_CANCELLED` | 1 | Interrupted, or a confirmation declined. An interrupt during a change may not have stopped it: check before repeating. |
 | `CLI_INTERNAL_ERROR` | 1 | **Always a defect in the CLI**, not a usage mistake. |
 
 ### Codes from the server
@@ -122,6 +125,21 @@ Written to stdout with exit code 4, in place of the result:
 `action` is a stable slug you can branch on. `confirmCommand` is the exact string that
 performs the action, so a caller with no terminal does not have to reconstruct the
 invocation from its own history.
+
+It is written back out of the invocation that was refused, not by hand, so it carries
+every option that was given -- `--profile` and `--server` included, so it acts on the same
+account -- and adds only `--yes`. On the way:
+
+- A file is named by its absolute path, so it reads the same file from any directory.
+- Each word is quoted for a POSIX shell (single quotes) when it needs to be. Run it in
+  bash, zsh or `sh -c`. PowerShell reads it the same way unless a value contains a `'`.
+- A figure the command worked out rather than was given is stated: `settle pay` without
+  `--amount` comes back with the amount the prompt named, so confirming after the balance
+  moved still pays that amount.
+
+What the server holds can still change between the prompt and the confirmation -- a member
+pays, somebody edits the expense -- and the confirmed run acts on what is there then.
+`settle-up` and `receipts divide` work their figures out again when confirmed.
 
 Nothing ever blocks on a prompt that nobody can answer. That is the reason exit code 4
 exists, and the reason `--yes` should be something a user asked for rather than something

@@ -126,7 +126,9 @@ With no terminal you get exit code 4 and this on stdout:
 
 **Show `summary` and every line of `changes` to the user, and wait for them to agree.** Then
 run `confirmCommand` verbatim -- it is the exact invocation, so you never have to
-reconstruct one from your own history.
+reconstruct one from your own history. It carries every option you gave, `--profile` and
+`--server` included, names files by absolute path, and is quoted for a POSIX shell.
+`--fields` never narrows this envelope.
 
 Do not put `--yes` on a command yourself. The flag exists for a caller who has already been
 told what it does; reaching for it to avoid a round trip performs a deletion nobody asked
@@ -147,9 +149,12 @@ Failures print an envelope on stderr:
 ```
 
 Branch on `code`, never on `error` -- the prose may be reworded. A `CLI_` prefix means the
-CLI refused before any request was sent; anything else came from the server and means the
-request was understood and refused. `remediation` is written to be acted on. Pass `traceId`
-along when reporting a problem.
+CLI raised it rather than the server; anything else came from the server and means the
+request was understood and refused. Most `CLI_` codes mean nothing was sent, but
+**`CLI_OUTCOME_UNKNOWN` means the request may have been carried out**: the connection broke
+after it left, or the server took too long. Never repeat a change on that code without first
+looking for it -- list or show what it would have changed -- or it may be recorded twice.
+`remediation` is written to be acted on. Pass `traceId` along when reporting a problem.
 
 ## Rules
 

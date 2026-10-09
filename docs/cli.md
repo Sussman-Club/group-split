@@ -1281,6 +1281,9 @@ of an array:
 groupsplit groups list --json --fields id,name
 ```
 
+It narrows results, and the [confirmation envelope](#confirming-changes) is not one: an exit 4
+always carries all of it, whatever `--fields` named.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -1312,8 +1315,17 @@ Failures print an envelope on stderr. In JSON:
 `code` is stable and is what a caller should branch on; `error` is prose and may be reworded.
 When the failure came from the API, `code` is that response's code verbatim, from the catalog
 in [errors.md](errors.md) -- the CLI does not invent a second vocabulary for conditions the
-API already names. Codes the CLI raises before any request was made are prefixed `CLI_`, so
-the prefix tells you whether the server ever saw the request.
+API already names. Codes the CLI raises itself are prefixed `CLI_`. Most of them mean the
+request was never sent. These three are about whether it was:
+
+| Code | Meaning |
+| --- | --- |
+| `CLI_SERVER_UNREACHABLE` | The name did not resolve, the connection was refused, or TLS failed. Nothing was sent. |
+| `CLI_OUTCOME_UNKNOWN` | The request may have reached the server and no answer came back: the connection broke after it was sent, or the server took longer than the client waits. **It may have been carried out.** A read is safe to repeat; before repeating a change, look for it, or it may be recorded twice. |
+| `CLI_CANCELLED` | Interrupted (Ctrl+C), or a confirmation declined. An interrupt during a change may not have stopped it. |
+
+The full list of `CLI_` codes is in the agent skill's
+[protocol reference](../skills/groupsplit/references/protocol.md#codes-the-cli-raises-itself).
 
 `traceId` is the API's own, and matches its log line.
 
@@ -1337,6 +1349,18 @@ code 4 and a description of what would have happened on stdout:
 `confirmCommand` is the exact string that performs the action, so a caller with no terminal
 does not have to reconstruct the invocation -- it re-runs that, or shows it to a human first.
 `--yes` skips the gate.
+
+It is read back out of the parsed invocation rather than written per command, so it carries
+every option that was given -- `--profile` and `--server` too, so it acts on the same account
+-- and adds only `--yes`. On the way, a file is named by its absolute path, each word is
+quoted for a POSIX shell when it needs to be, and a value beginning with `-` or `@` is joined
+to its option with `=`. A figure the command worked out rather than was given is stated:
+`settle pay` without `--amount` comes back with `--amount` set to what the prompt named.
+`ConfirmCommandTests` runs every gated command both ways -- with `--yes`, and by re-running
+its `confirmCommand` from another directory -- and requires the same writes from each.
+
+The server can still change between the prompt and the confirmation, and the confirmed run
+acts on what is there then: `settle-up` and `receipts divide` work their figures out again.
 
 Nothing ever blocks on a prompt that nobody can answer.
 

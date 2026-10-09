@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -165,8 +166,15 @@ public static class SettleCommands
                     ? $"Record {paying:N2} paid to {person.UserName}?"
                     : $"Record {paying:N2} received from {person.UserName}?",
                 changes: lines,
-                confirmCommand: $"groupsplit settle pay {userId} --amount {paying:0.##} "
-                                + $"--direction {chosen}{ThroughOption.Flag(day)} --yes");
+                // The figure the prompt named, not "whatever is outstanding": confirming
+                // after another repayment landed must not pay the new remainder instead.
+                // Written in the culture the parser reads --amount in, which is this
+                // machine's, so it comes back as the same number. If #313 makes that the
+                // invariant culture, this follows it; ConfirmCommandTests checks under es-ES.
+                pinned: new Dictionary<Option, string>
+                {
+                    [amount] = paying.ToString(CultureInfo.CurrentCulture)
+                });
 
             var recorded = await context.Users.SettleWithPersonAsync(
                 new SettleWithPersonRequest
