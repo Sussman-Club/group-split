@@ -179,9 +179,7 @@ public static class SplitRuleCommands
                     "No expense's shares are touched, and no expense is re-pointed: each "
                     + "keeps the version it already records. Correcting one is: "
                     + "groupsplit transactions update <id> --divided-by <version-id>"
-                ],
-                confirmCommand:
-                $"groupsplit split-rules versions set {id} --file {parse.GetValue(file)!.Name} --yes");
+                ]);
 
             var history = await new Api.SplitRulesClient(context.ApiHttpClient)
                 .SetSplitRuleVersionsAsync(id, entries, ct);
@@ -473,8 +471,7 @@ public static class SplitRuleCommands
                     $"'{rule.Name}' stops being available to the group's categories.",
                     "Every version of it is deleted with it.",
                     "Refused outright if any expense was divided by one of those versions."
-                ],
-                confirmCommand: $"groupsplit split-rules delete {id} --yes");
+                ]);
 
             await client.DeleteSplitRuleAsync(id, ct);
 

@@ -256,8 +256,7 @@ public static class CategoryCommands
                     $"'{name}' stops being offered when an expense is recorded.",
                     "Refused if any expense is still filed under it -- a category cannot take "
                     + "the group's spending history with it."
-                ],
-                confirmCommand: $"groupsplit categories delete {id} --yes");
+                ]);
 
             await client.DeleteCategoryAsync(id, ct);
 

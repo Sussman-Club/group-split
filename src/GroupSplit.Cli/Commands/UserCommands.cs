@@ -92,8 +92,7 @@ public static class UserCommands
                     $"{user.FullName} is removed from every group.",
                     "Your own expenses and their history go with it. This cannot be undone.",
                     "Refused while you still owe money or are owed it in any group."
-                ],
-                confirmCommand: "groupsplit users delete --yes");
+                ]);
 
             await context.Users.DeleteCurrentUserAsync(ct);
 

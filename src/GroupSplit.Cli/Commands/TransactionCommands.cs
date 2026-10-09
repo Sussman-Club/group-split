@@ -1257,8 +1257,7 @@ public static class TransactionCommands
                         : $"'{transaction.Name}' for {transaction.Amount:N2} is removed.",
                     "Every member's balance in the group is recalculated.",
                     "Refused if somebody who has left the group paid for it or had a share of it."
-                ],
-                confirmCommand: $"groupsplit transactions delete {id} --yes");
+                ]);
 
             await context.Transactions.DeleteTransactionAsync(id, ct);
 

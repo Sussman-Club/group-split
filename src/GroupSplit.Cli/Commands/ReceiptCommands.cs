@@ -222,8 +222,7 @@ public static class ReceiptCommands
                 context,
                 action: "receipts.attachments.delete",
                 summary: $"Delete receipt file '{attachment.FileName}'?",
-                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this expense."],
-                confirmCommand: $"groupsplit receipts attachments delete {transactionId} {attachmentId} --yes");
+                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this expense."]);
 
             await new Api.ReceiptsClient(context.ApiHttpClient)
                 .DeleteReceiptAttachmentAsync(transactionId, attachmentId, ct);
@@ -389,8 +388,7 @@ public static class ReceiptCommands
                         + $"({share.Subtotal} of items, the rest tax and tip)."),
                     "Replaces whatever shares the expense holds now, and every balance in "
                     + "the group moves with them."
-                ],
-                confirmCommand: $"groupsplit receipts divide {id} --yes");
+                ]);
 
             var applied = await client.DivideByReceiptAsync(id, ct);
 
@@ -431,8 +429,7 @@ public static class ReceiptCommands
                     // A filed bill has no row to fall back to -- filing hands it over, and
                     // the ledger keeps the record of where the expense came from.
                     "It is gone for good."
-                ],
-                confirmCommand: $"groupsplit receipts delete {id} --yes");
+                ]);
 
             await client.DeleteReceiptAsync(id, ct);
 

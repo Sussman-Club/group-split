@@ -176,8 +176,7 @@ public static class InvitationCommands
                     $"Any repayment recorded between you and {invitation.Name} is deleted: " +
                     "it would read as you paying yourself.",
                     "The link stops working afterwards."
-                ],
-                confirmCommand: $"groupsplit invitations claim {token} --yes");
+                ]);
 
             var claimed = await client.ClaimInvitationAsync(token, ct);
 
@@ -255,8 +254,7 @@ public static class InvitationCommands
                     $"{invitation.GroupName} keeps {invitation.Name} as a guest, with everything " +
                     "recorded for them. Nothing moves.",
                     "A member can send a new link."
-                ],
-                confirmCommand: $"groupsplit invitations decline {token} --yes");
+                ]);
 
             var closed = await client.DeclineInvitationAsync(token, ct);
 

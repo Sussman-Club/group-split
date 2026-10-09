@@ -29,8 +29,4 @@ internal static class ThroughOption
     /// <summary>This machine's offset from UTC now, in minutes.</summary>
     public static int LocalOffsetMinutes =>
         (int)TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes;
-
-    /// <summary><c> --through 2026-08-31</c>, or nothing, for a command line that has to say it again.</summary>
-    public static string Flag(DateOnly? through) =>
-        through is { } day ? $" --through {day:yyyy-MM-dd}" : string.Empty;
 }
