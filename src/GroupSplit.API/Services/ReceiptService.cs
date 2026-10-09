@@ -82,7 +82,7 @@ public class ReceiptService(
             }
         }
 
-        return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct))
+        return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct), expense.GroupId)
             with
             {
                 CanEdit = canEdit
@@ -156,7 +156,8 @@ public class ReceiptService(
 
         // Keep an incomplete receipt editable without making the receipt endpoint refuse it
         // merely because the expense was already divided. The existing ledger remains the
-        // last valid answer until every line has a rule and the next edit can recalculate it.
+        // last valid answer until every line has a rule, and whichever call gives the last
+        // line its rule recalculates it -- see ReceiptCurrentlyDrivesLedger.
         var canRedivide = redivide && await CanDivide(draft, expense, members, ct);
 
         if (existing is null)
@@ -411,10 +412,34 @@ public class ReceiptService(
     /// shares. A receipt on an expense with hand-stated shares is intentionally not allowed
     /// to take over the ledger just because somebody corrected its wording.
     /// </summary>
+    /// <remarks>
+    /// Two ways to be the source. The shares are what the bill divides into now; or they are
+    /// not, and the expense still records the itemised version as what divided it. The
+    /// second is the bill that was the source a moment ago and was made incomplete by an
+    /// edit -- a line split in two, the new half with no rule yet -- which keeps the shares
+    /// it last gave. Re-running the division cannot recognise it, because there is no
+    /// division to re-run, and without this the call that completed the bill again found it
+    /// "not the source" and left the ledger behind the bill for good. A bill already left
+    /// behind that way, complete but never re-divided, is caught by the same test and
+    /// catches up on its next edit.
+    /// <para>
+    /// The version is a sound witness here and not a guess: stating shares that differ from
+    /// the stored ones is exactly what clears it (see <see cref="IExpenseSplitter"/>), and so
+    /// does dividing by the bill under a rule that is not itemised. An expense somebody split
+    /// by hand never holds it.
+    /// </para>
+    /// </remarks>
     private async Task<bool> ReceiptCurrentlyDrivesLedger(Expense expense, CancellationToken ct)
     {
-        return await splitter.DividesByItsBill(expense, ct)
-               && await splitter.DivisionCameFromItsRule(expense, ct);
+        if (!await splitter.DividesByItsBill(expense, ct))
+            return false;
+
+        if (await splitter.DivisionCameFromItsRule(expense, ct))
+            return true;
+
+        return expense.SplitRuleVersionId is { } held
+               && await dbContext.Set<SplitRuleVersion>().OfType<ItemizedSplitRuleVersion>()
+                   .AnyAsync(version => version.Id == held, ct);
     }
 
     /// <summary>

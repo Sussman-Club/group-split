@@ -70,6 +70,19 @@ shared it would hand their share to the rest; it is refused instead
 (`TRANSACTION_MOVES_DEPARTED_BALANCE`). An amount edit with the shares set by hand, leaving
 the leaver's as it is, is the way to correct such an expense.
 
+An expense divided by its **bill** follows its amount the same way, and the bill follows with
+it: an amount edit that divides again re-totals the bill first, the difference on its tip --
+the one figure that belongs to no line and is spread over all of them by price -- and then
+divides by it. The tip cannot go below nothing, so lowering the amount by more than the tip
+is refused (`RECEIPT_DOES_NOT_ADD_UP`): which line was wrong is for the person holding the
+paper to say, by correcting the bill. Shares somebody stated are left out of this exactly as
+above, and so is their bill. The bill is the source of the shares while the expense records
+the itemised version, including while an edit has left a line without a rule: whichever call
+gives that line its rule -- a whole-bill save or a single line's -- divides the expense again.
+Moving the expense to another group clears every line's rule, since a line may only divide by
+a rule of its expense's own group, and a line still holding another group's rule reads as a
+line with none.
+
 ### Writing a past the app did not live through
 
 A rule imported from somewhere else arrives holding one version, dated whenever the import

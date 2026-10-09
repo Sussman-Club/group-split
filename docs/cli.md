@@ -851,15 +851,14 @@ a rule naming Ana, a rule naming Ana and Omar, a payer rule for the thing the pa
 standing. `groupsplit split-rules list --group <id>` prints the rules and their current
 version ids, which is what a line names after its `@`.
 
-Transcribe the bill first. The subtotal and the total default to the lines added up and the
-extras added on, so on an ordinary receipt you type the lines and the two figures at the
-bottom:
+Transcribe the bill first. The subtotal, the tax and the total default to the lines added up
+and the extras added on, so on an ordinary receipt you type the lines and the tip:
 
 ```bash
-groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
-  --item "Steak=22.00@3f25c1a8-...-444455556666" \
-  --item "Risotto=16.50@9ab77d10-...-111122223333" \
-  --item "Wine=18.00@5c0ffee0-...-777788889999"
+groupsplit receipts set 7c1e... --tip 6.00 \
+  --item "Steak=22.00/tax1.80@3f25c1a8-...-444455556666" \
+  --item "Risotto=16.50/tax1.35@9ab77d10-...-111122223333" \
+  --item "Wine=18.00/tax1.05@5c0ffee0-...-777788889999"
 ```
 
 A line reads `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`. The number
@@ -901,6 +900,14 @@ still a line called `Table #4`. A line with no id is a new line, which is what w
 out for the first time looks like. An id that names a line of some other bill, or the same
 line twice, is refused rather than guessed at.
 
+What the command has no flag for is **kept**. `receipts set` reads the saved bill first and
+sends back the merchant and purchase date it was read with, and the tip unless `--tip` says
+otherwise. A line named by its id keeps its tax amount, rate and taxable flag unless the line
+states `/tax` or `/notax`, and keeps the normalized reading of its name while the name is
+unchanged. So correcting one price on a taxed supermarket bill is the price and nothing else;
+it used to drop the merchant, the date and every line's rate, and the bill then refused to
+add up until every line was given its tax again.
+
 `/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount rather than a
 rate, because an amount is what the till prints -- and rather than a flag, which is what this
 used to be: one tax total was then weighed over the flagged lines by price, which is exact
@@ -918,8 +925,10 @@ checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<version>` an
 For a new bill, or one on an expense whose stored shares were not produced by the bill,
 `preview` says what the division would be and `divide` is what stores it. If the bill already
 drives the expense's stored ledger, a valid `set` or `rule` correction automatically
-recalculates those shares. If a correction makes the bill incomplete, the bill remains
-editable and the last valid shares remain in place until the bill is valid again:
+recalculates those shares. If a correction makes the bill incomplete -- a line split in two,
+the new half with no rule yet -- the bill remains editable and the last valid shares remain in
+place until the bill is valid again, and whichever call completes it, `set` or `rule`,
+recalculates them:
 
 ```bash
 groupsplit receipts preview 7c1e...
@@ -1089,6 +1098,17 @@ rule. It is the only way to ask for that on an expense somebody split by hand: s
 about those shares keeps them, which is what stops a rename or a merchant fix from quietly
 restating a division somebody made. The two contradict each other and passing both is
 refused.
+
+On an expense divided by its bill the bill follows too: `--amount` alone re-totals the bill,
+the difference on its tip, and divides by it again -- the tip added on the card after the
+bill was typed in is one command. The tip cannot go below nothing, so lowering the amount by
+more than the bill's tip is refused with `RECEIPT_DOES_NOT_ADD_UP`; correct the bill's lines
+with `receipts set` instead. Moving such an expense with `--group` clears every line's rule,
+since they are the old group's rules; give the lines the new group's with `receipts rule`.
+
+```bash
+groupsplit tx update <id> --amount 58.00 --preview   # a 48.00 bill plus 10.00 of tip
+```
 
 On an expense a rule divided, `--amount` alone is accepted and the shares follow it, so
 `--redivide` is not needed for that -- what it is still for there is discarding a division

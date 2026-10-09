@@ -197,7 +197,7 @@ remain in place until the bill is valid again.
 | `receipts attachments transcribe <transaction-id> <attachment-id>` | Read an attached source file into an editable draft. Saves no itemised bill. |
 | `receipts attachments delete <transaction-id> <attachment-id>` | Delete an expense's source file. Confirmation required. |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. |
 | `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
@@ -207,10 +207,10 @@ A line is `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`
 the `@` comes exactly one split rule version id:
 
 ```bash
-groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
-  --item "Steak=22.00@<ana-only-version>" \
-  --item "Wine=18.00@<ana-and-omar-version>" \
-  --item "Beers=9.00x3@<omar-twice-as-much-version>"
+groupsplit receipts set 7c1e... --tip 6.00 \
+  --item "Steak=22.00/tax1.80@<ana-only-version>" \
+  --item "Wine=18.00/tax1.35@<ana-and-omar-version>" \
+  --item "Beers=27.00x3/tax1.05@<omar-twice-as-much-version>"
 ```
 
 The number before `x` is the total printed for the whole line, not a unit price. For
@@ -241,6 +241,13 @@ groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<version>" --it
 
 Only text before a `#` that parses as an id is read as one, so `Table #4` is still a name. A
 line with no id is a new line. An id from another bill, or the same id twice, is refused.
+
+What `set` has no flag for is kept: it reads the saved bill first and sends back the merchant,
+the purchase date and the tip (unless `--tip`), and each line named by its id keeps its tax
+amount, rate and taxable flag unless that line states `/tax` or `/notax`. So a corrected price
+on a taxed bill needs only the price. If a correction leaves a line without a rule, the
+stored shares stay as they were, and the `set` or `rule` call that gives it one divides the
+expense again.
 
 **Tax is per line and the tip is spread over the lines by price**, so each line is divided by
 its own rule as one amount -- price, plus its tax, plus its share of the tip. It is one
@@ -509,6 +516,8 @@ expenses. What it does with a division *nobody* typed depends on what the edit t
 | typed by somebody | the amount | **refused** (`SPLITS_DO_NOT_SUM_TO_AMOUNT`): those shares no longer add up |
 | worked out by a rule (or evenly, under none) | the name, note, date or merchant | kept exactly as they are |
 | worked out by a rule (or evenly, under none) | the amount, payer, category or group | worked out again at the new values |
+| worked out by its itemised bill | the amount | the bill is re-totalled, the difference on its tip, and the expense divided by it again; lowering it by more than the tip is **refused** (`RECEIPT_DOES_NOT_ADD_UP`) |
+| worked out by its itemised bill | the group | every bill line's rule is cleared (they are the old group's); give them the new group's with `receipts rule` |
 
 Two consequences worth holding on to:
 
@@ -516,7 +525,7 @@ Two consequences worth holding on to:
   somebody split by hand, because the old shares do not add up to the new total. Either pass
   `--split` for every member alongside `--amount` (read the current shares from
   `transactions show` first), or pass `--redivide`. On an expense a rule divided it simply
-  works.
+  works -- including one divided by its bill, whose tip takes the difference.
 - Changing the category re-divides an expense a rule divided, by the new category's rule, and
   leaves a hand-typed division alone.
 

@@ -8,16 +8,31 @@ public static class ReceiptItems
     private const string Sample = "Wine=18.00";
 
     public static IReadOnlyList<ReceiptItemInput> Parse(string option, IEnumerable<string> values)
+        => [.. ParseLines(option, values).Select(line => line.Item)];
+
+    /// <summary>
+    /// The lines, each with whether it said anything about its tax.
+    /// </summary>
+    /// <remarks>
+    /// The difference between "this line carried no tax" and "this line's tax is whatever it
+    /// was": a bare line reads as no tax, which is right for a bill being written out for the
+    /// first time and wrong for a stored line being corrected, whose rate and tax nobody asked
+    /// to change. The command needs to know which it was told.
+    /// </remarks>
+    public static IReadOnlyList<ReceiptLine> ParseLines(string option, IEnumerable<string> values)
     {
-        var items = new List<ReceiptItemInput>();
+        var lines = new List<ReceiptLine>();
 
         foreach (var value in values)
-            items.Add(One(option, value));
+            lines.Add(One(option, value));
 
-        return items;
+        return lines;
     }
 
-    private static ReceiptItemInput One(string option, string value)
+    /// <summary>One parsed line, and whether it carried <c>/tax</c> or <c>/notax</c>.</summary>
+    public sealed record ReceiptLine(ReceiptItemInput Item, bool StatesTax);
+
+    private static ReceiptLine One(string option, string value)
     {
         var separator = value.IndexOf('=');
 
@@ -52,6 +67,7 @@ public static class ReceiptItems
         var rest = value[(separator + 1)..].Trim();
         Guid? ruleVersionId = null;
         var tax = 0m;
+        var statesTax = false;
 
         // Lifted out before anything else is read, and spliced rather than truncated, so it
         // can be written on either side of the rule -- "1.99/notax@<id>" and
@@ -92,6 +108,7 @@ public static class ReceiptItems
                     $"'{written}' is not a flag; the only ones are 'notax' and 'tax<amount>'");
             }
 
+            statesTax = true;
             rest = (rest[..slash] + (ends >= 0 ? after[ends..] : string.Empty)).Trim();
         }
 
@@ -123,7 +140,7 @@ public static class ReceiptItems
         // number here. This is important for a discounted or otherwise adjusted line.
         var totalPrice = Number(option, value, rest, "a line total");
 
-        return new ReceiptItemInput
+        return new ReceiptLine(new ReceiptItemInput
         {
             Id = id,
             Name = name,
@@ -135,7 +152,7 @@ public static class ReceiptItems
             // and never divided by: the division reads TotalPrice, exactly as the bill does.
             UnitPrice = quantity == 0 ? totalPrice : decimal.Round(totalPrice / quantity, 2),
             SplitRuleVersionId = ruleVersionId
-        };
+        }, statesTax);
     }
 
     /// <summary>

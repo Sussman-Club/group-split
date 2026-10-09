@@ -44,7 +44,9 @@ way the app does:
   assign each line's split rule. `receipts divide` explicitly stores the division when the
   bill is not already the source of the expense's shares. If an itemised receipt already
   drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync;
-  an incomplete correction remains editable and leaves the last valid shares in place.
+  an incomplete correction remains editable and leaves the last valid shares in place, and
+  the call that completes it divides again. A forgotten tip is `transactions update --amount`:
+  the bill is re-totalled, the difference on its tip.
   Never imply that OCR has already made those decisions.
 
 `attachments delete` is destructive and uses the normal exit-4 confirmation envelope. A

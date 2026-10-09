@@ -169,6 +169,7 @@
                           GroupId="GroupId"
                           Members="Members"
                           Amount="Amount"
+                          SavedAmount="SavedAmount"
                           ReceiptChanged="OnBillChanged" />
         }
 
@@ -375,6 +376,12 @@
 
     /// <summary>The expense's itemised bill, when it has one.</summary>
     [Parameter] public ReceiptResponse? Bill { get; set; }
+
+    /// <summary>
+    /// The amount the expense is saved with, when it is being edited -- see
+    /// <c>BillDivision.SavedAmount</c>.
+    /// </summary>
+    [Parameter] public decimal? SavedAmount { get; set; }
 
     /// <summary>
     /// The group's "divide it by the bill" rule, which is what that option names.
