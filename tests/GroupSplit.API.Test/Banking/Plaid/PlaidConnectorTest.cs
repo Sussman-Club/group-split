@@ -222,6 +222,76 @@ public class PlaidConnectorTest
         Assert.Equal(expected, e.Kind);
     }
 
+    /// <summary>
+    /// Every item error that needs the person. Left transient, each was retried every night
+    /// and failed every night, with the connection reporting itself healthy and nobody told.
+    /// </summary>
+    [Theory]
+    [InlineData("ITEM_LOCKED")]
+    [InlineData("USER_SETUP_REQUIRED")]
+    [InlineData("INSUFFICIENT_CREDENTIALS")]
+    [InlineData("NO_ACCOUNTS")]
+    [InlineData("PASSWORD_RESET_REQUIRED")]
+    [InlineData("INVALID_CREDENTIALS")]
+    [InlineData("INVALID_MFA")]
+    [InlineData("MFA_NOT_SUPPORTED")]
+    [InlineData("ACCESS_NOT_GRANTED")]
+    [InlineData("INVALID_UPDATED_USERNAME")]
+    public async Task An_item_error_only_the_person_can_fix_marks_the_connection_rather_than_retrying(string code)
+    {
+        _plaid.Answer(SyncPath, ItemError(code), HttpStatusCode.BadRequest);
+
+        var e = await Assert.ThrowsAsync<BankSyncException>(() =>
+            Connector().SyncAsync("access-token", cursor: null, Ct));
+
+        Assert.Equal(BankSyncFailure.LoginRequired, e.Kind);
+        Assert.False(e.ItemUnknown);
+
+        // And arriving by webhook it means the same.
+        Assert.IsType<LoginRequired>(Connector().ParseWebhook(
+            $$$"""{"webhook_type":"ITEM","webhook_code":"ERROR","item_id":"item-1","error":{"error_code":"{{{code}}}"}}"""));
+    }
+
+    [Fact]
+    public async Task Waiting_on_plaid_to_prepare_the_data_is_still_only_a_retry()
+    {
+        _plaid.Answer(SyncPath, ItemError("PRODUCT_NOT_READY"), HttpStatusCode.BadRequest);
+
+        var e = await Assert.ThrowsAsync<BankSyncException>(() =>
+            Connector().SyncAsync("access-token", cursor: null, Ct));
+
+        Assert.Equal(BankSyncFailure.Transient, e.Kind);
+    }
+
+    /// <summary>
+    /// What an unlink needs to tell apart from a refusal: Plaid has no item for that token,
+    /// so there is nothing left to hand back.
+    /// </summary>
+    [Theory]
+    [InlineData("ITEM_NOT_FOUND", "ITEM_ERROR", true)]
+    [InlineData("INVALID_ACCESS_TOKEN", "INVALID_INPUT", true)]
+    [InlineData("ITEM_LOGIN_REQUIRED", "ITEM_ERROR", false)]
+    public async Task Removing_an_item_plaid_no_longer_knows_says_so(string code, string type, bool unknown)
+    {
+        _plaid.Answer(RemovePath, ItemError(code, type), HttpStatusCode.BadRequest);
+
+        var e = await Assert.ThrowsAsync<BankSyncException>(() => Connector().RemoveAsync("access-token", Ct));
+
+        Assert.Equal(unknown, e.ItemUnknown);
+    }
+
+    private static string ItemError(string code, string type = "ITEM_ERROR") =>
+        $$"""
+        {
+          "error_type": "{{type}}",
+          "error_code": "{{code}}",
+          "error_message": "scripted",
+          "display_message": null,
+          "request_id": "req-error",
+          "status": 400
+        }
+        """;
+
     [Fact]
     public async Task Exchanging_a_public_token_reads_the_institution_and_its_accounts()
     {

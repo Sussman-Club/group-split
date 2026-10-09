@@ -1,5 +1,9 @@
+using Amazon.S3;
+using Amazon.S3.Model;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.Shared;
+using Moq;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -19,8 +23,187 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    protected override void ConfigureTestServices(IServiceCollection services) =>
+    private readonly Mock<IAmazonS3> _storage = new();
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
         services.AddKeyedSingleton<IBankConnector>(Name, _bank);
+
+        _storage.Setup(storage => storage.DeleteObjectAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeleteObjectResponse());
+
+        services.AddSingleton(_storage.Object);
+    }
+
+    // ---- receipt files and the rows they were attached to (issue 319) -----------------------
+
+    /// <summary>
+    /// Somebody photographs the receipt at the till, against the pending row. The charge
+    /// posts overnight. The photograph used to stay on the pending row, which nothing lists
+    /// any more, and filing the posted row found nothing to carry onto the expense.
+    /// </summary>
+    [Fact]
+    public async Task Receipt_files_on_a_pending_row_follow_it_to_the_posted_row()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("pending-1", 12.50m, pending: true)]);
+        await Sync(connection);
+
+        var pending = (await Rows(connection)).Single();
+        var receipt = await AttachAsync(pending.Id);
+
+        _bank.Answer("cursor-2",
+            added: [Row("posted-1", 12.50m, replaces: "pending-1")],
+            removed: [Removed("pending-1")]);
+        await Sync(connection);
+
+        var posted = (await Rows(connection)).Single(row => row.ProviderTransactionId == "posted-1");
+
+        Assert.Equal(posted.Id, (await AttachmentAsync(receipt))!.BankTransactionId);
+        Assert.Equal(receipt, Assert.Single(await GetService<IReceiptAttachmentService>().ListBank(posted.Id, Ct)).Id);
+
+        // And filing the posted row carries it on, which is the whole point of having it.
+        var expense = await GetService<IInboxService>().File(posted.Id, new FileBankTransactionRequest(), Ct);
+        Assert.Equal(expense.Id, (await AttachmentAsync(receipt))!.ExpenseId);
+    }
+
+    /// <summary>
+    /// The chain the issue asks for: the posted row arrives on a later page of a run than
+    /// the one that started it, and the removal of the pending row on the page after that.
+    /// Each page is saved on its own, so nothing here can lean on the pending row still
+    /// being in memory from an earlier page.
+    /// </summary>
+    [Theory]
+    [InlineData(BankTransactionStatus.New)]
+    [InlineData(BankTransactionStatus.Filed)]
+    public async Task A_supersede_chain_split_across_pages_keeps_the_status_the_link_and_the_files(
+        BankTransactionStatus status)
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("pending-1", 12.50m, pending: true)]);
+        await Sync(connection);
+
+        var pending = (await Rows(connection)).Single();
+        var receipt = await AttachAsync(pending.Id);
+        Expense? expense = null;
+
+        if (status is BankTransactionStatus.Filed)
+        {
+            expense = await FileAsync(pending);
+            await AttachToExpenseAsync(receipt, expense.Id);
+        }
+
+        _bank.Answer("cursor-2", added: [Row("other", 3m)], hasMore: true);
+        _bank.Answer("cursor-3", added: [Row("posted-1", 12.50m, replaces: "pending-1")], hasMore: true);
+        _bank.Answer("cursor-4", removed: [Removed("pending-1")]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        var rows = await Rows(connection);
+        var posted = rows.Single(row => row.ProviderTransactionId == "posted-1");
+
+        Assert.Equal(BankTransactionStatus.Superseded, rows.Single(row => row.Id == pending.Id).Status);
+        Assert.Equal(status, posted.Status);
+        Assert.Equal(pending.Id, posted.ReplacesId);
+        Assert.Equal(posted.Id, (await AttachmentAsync(receipt))!.BankTransactionId);
+
+        if (expense is not null)
+        {
+            var linked = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+            Assert.Equal(posted.Id, linked.BankTransactionId);
+            Assert.Equal(expense.Id, (await AttachmentAsync(receipt))!.ExpenseId);
+        }
+
+        Assert.Equal("cursor-4", (await Reload(connection)).Cursor);
+    }
+
+    /// <summary>
+    /// The same chain inside one run: the pending row arrives on one page and the posted row
+    /// that settles it on the next, so the second page finds the first's row in the store.
+    /// </summary>
+    [Fact]
+    public async Task A_pending_row_and_its_posted_row_on_consecutive_pages_of_one_run_still_chain()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("pending-1", 12.50m, pending: true)], hasMore: true);
+        _bank.Answer("cursor-2", added: [Row("posted-1", 12.50m, replaces: "pending-1")]);
+
+        await Sync(connection);
+
+        var rows = await Rows(connection);
+        var pending = rows.Single(row => row.ProviderTransactionId == "pending-1");
+        var posted = rows.Single(row => row.ProviderTransactionId == "posted-1");
+
+        Assert.Equal(BankTransactionStatus.Superseded, pending.Status);
+        Assert.Equal(BankTransactionStatus.New, posted.Status);
+        Assert.Equal(pending.Id, posted.ReplacesId);
+        Assert.Equal(1, await DbContext.Set<BankTransaction>().CountAsync(row => row.Status == BankTransactionStatus.New, Ct));
+    }
+
+    [Theory]
+    [InlineData(BankTransactionStatus.New)]
+    [InlineData(BankTransactionStatus.Ignored)]
+    public async Task A_withdrawn_row_takes_its_inbox_receipt_files_with_it(BankTransactionStatus status)
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m)]);
+        await Sync(connection);
+
+        var row = (await Rows(connection)).Single();
+        var receipt = await AttachAsync(row.Id);
+        await SetStatus(connection, "t1", status);
+
+        _bank.Answer("cursor-2", removed: [Removed("t1")]);
+        await Sync(connection);
+
+        Assert.Empty(await Rows(connection));
+        Assert.Null(await AttachmentAsync(receipt));
+        _storage.Verify(storage => storage.DeleteObjectAsync(
+            "receipts-test", $"key-{receipt:N}", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The provider restarts a run because its data moved underneath, and the restarted
+    /// walk no longer has a row the first one stored. Rows are saved per page, so it used to
+    /// stay, in the inbox, as money nobody spent -- with the cursor moved past anything that
+    /// could have withdrawn it.
+    /// </summary>
+    [Fact]
+    public async Task A_row_a_restarted_run_does_not_report_again_is_dropped()
+    {
+        var connection = await LinkAsync();
+        await SetCursor(connection, "cursor-0");
+
+        _bank.Answer("cursor-1", added: [Row("t1", 1m), Row("vanished", 9m)], hasMore: true);
+        _bank.Throw(BankSyncFailure.RestartFromCursor);
+        _bank.Answer("cursor-1", added: [Row("t1", 1m)], hasMore: true);
+        _bank.Answer("cursor-2", added: [Row("t2", 2m)]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        Assert.Equal(["t1", "t2"], (await Rows(connection)).Select(row => row.ProviderTransactionId).Order());
+    }
+
+    /// <summary>
+    /// Only rows the abandoned walk inserted are suspects. One stored before the run is not
+    /// gone because a restarted page left it out -- pages only carry what changed.
+    /// </summary>
+    [Fact]
+    public async Task A_restarted_run_leaves_rows_it_did_not_insert_alone()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-0", added: [Row("older", 5m)]);
+        await Sync(connection);
+
+        _bank.Answer("cursor-1", modified: [Row("older", 6m)], hasMore: true);
+        _bank.Throw(BankSyncFailure.RestartFromCursor);
+        _bank.Answer("cursor-2", added: [Row("t2", 2m)]);
+
+        Assert.Equal(SyncOutcome.Completed, await Sync(connection));
+
+        Assert.Equal(["older", "t2"], (await Rows(connection)).Select(row => row.ProviderTransactionId).Order());
+    }
 
     [Fact]
     public async Task A_first_sync_lands_every_added_row_as_new_and_moves_the_cursor()
@@ -641,6 +824,39 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     // ---- setup ---------------------------------------------------------------------------
+
+    /// <summary>A receipt file as an inbox upload leaves it, with a key the test can name.</summary>
+    private async Task<Guid> AttachAsync(Guid bankTransactionId)
+    {
+        var id = Guid.NewGuid();
+
+        DbContext.Add(new ReceiptAttachment
+        {
+            Id = id,
+            BankTransactionId = bankTransactionId,
+            ObjectKey = $"key-{id:N}",
+            FileName = "receipt.jpg",
+            ContentType = "image/jpeg",
+            Length = 10,
+            UploadedByUserId = GetService<ICurrentUser>().User.Id,
+            UploadedAt = DateTimeOffset.UtcNow
+        });
+
+        await DbContext.SaveChangesAsync(Ct);
+
+        return id;
+    }
+
+    /// <summary>What filing does to a file the row carried: the expense takes it.</summary>
+    private async Task AttachToExpenseAsync(Guid attachmentId, Guid expenseId)
+    {
+        var tracked = await DbContext.Set<ReceiptAttachment>().SingleAsync(a => a.Id == attachmentId, Ct);
+        tracked.ExpenseId = expenseId;
+        await DbContext.SaveChangesAsync(Ct);
+    }
+
+    private Task<ReceiptAttachment?> AttachmentAsync(Guid id) =>
+        DbContext.Set<ReceiptAttachment>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, Ct);
 
     private Task<BankConnection> ReloadWithAccounts(BankConnection connection) =>
         DbContext.Set<BankConnection>()

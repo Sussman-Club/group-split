@@ -145,7 +145,12 @@
         return connection.Status switch
         {
             BankConnectionState.Revoked => $"{accounts} · access was withdrawn at the bank",
-            BankConnectionState.LoginRequired => $"{accounts} · your bank wants you to sign in again",
+            // Not only a changed password: a locked account, an agreement waiting on the
+            // bank's own site, an account nobody shared. Each ends in signing in again, so
+            // the line says that and leaves the bank to say what it wants first.
+            BankConnectionState.LoginRequired =>
+                $"{accounts} · your bank needs you before it will share anything new. "
+                + "Sign in again to see what it is asking for.",
 
             // Nothing is broken in either of these, so they read as something to do rather
             // than something that has gone wrong -- and each says what pressing "Sign in

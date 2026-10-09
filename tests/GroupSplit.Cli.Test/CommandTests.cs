@@ -277,6 +277,34 @@ public sealed class CommandTests : IDisposable
         Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
     }
 
+    /// <summary>
+    /// Deleting an expense filed from a bank row puts the row back in the inbox (issue 319).
+    /// Somebody deciding whether to delete is told, because it is the difference between
+    /// undoing a filing and losing the bank's record of the payment.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Deleting_an_expense_from_a_bank_row_says_the_row_goes_back_to_the_inbox(bool fromBank)
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id, name = "Lidl", description = (string?)null, amount = 12.50m,
+            dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
+            paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
+            categoryId = (Guid?)null, category = (string?)null, splits = Array.Empty<object>(),
+            hasBankTransaction = fromBank
+        });
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString());
+
+        var changes = result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString() ?? "").ToList();
+
+        Assert.Equal(fromBank, changes.Any(change => change.Contains("goes back to the inbox", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public async Task The_same_mutation_with_yes_goes_through()
     {

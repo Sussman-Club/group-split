@@ -102,7 +102,7 @@ Expenses and settlements.
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
-| `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. |
+| `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. An expense filed from a bank row puts the row back in the inbox, with the receipt files it had there; the confirmation says so. |
 
 ### users
 
@@ -338,7 +338,9 @@ accept the whole URL as readily as the token inside it.
 
 Linked banks: what is connected, syncing it, and unlinking.
 
-A connection's status is `active`, `login required`, `revoked`, or one of two that still
+A connection's status is `active`, `login required` (the bank needs the person: a new
+sign-in, a locked account, a password reset, something to finish on the bank's own site, no
+account shared -- each ends in signing in again through update mode), `revoked`, or one of two that still
 sync: `account not shared` (the bank has an account this connection is not importing --
 sign in again with it ticked, then `bank refresh`) and `sign-in expiring` (it works, but
 not for much longer). An account's `Access` reads `withdrawn` when that one account was
@@ -351,7 +353,7 @@ revoked at the bank and the rest of the connection is fine.
 | `bank link <public-token>` | Finish linking a bank with the token its UI returned. |
 | `bank refresh <connection-id>` | Re-read the bank's accounts and queue a sync. Run after an update-mode sign-in that shared another account: nothing else tells the app about it. |
 | `bank sync <connection-id>` | Ask for a fresh pull of transactions from a bank. |
-| `bank unlink <connection-id>` | Unlink a bank and stop syncing it. |
+| `bank unlink <connection-id>` | Unlink a bank and stop syncing it. Receipt files still waiting on its inbox rows are deleted; expenses keep theirs. Succeeds when the provider has already let go of the item. |
 
 ### inbox
 

@@ -102,6 +102,11 @@ public interface ITransactionService
     /// reads <c>Set&lt;Expense&gt;()</c> on purpose, so a transfer is invisible to it; a
     /// settlement entered wrongly still has to be retractable, and there is no second
     /// delete path for it to use.
+    /// <para>
+    /// Deleting an expense filed from a bank row undoes the filing, not the import: the row
+    /// goes back to the inbox as waiting, with the receipt files it carried there. A row the
+    /// bank has since withdrawn has no inbox to go back to, and goes with the expense.
+    /// </para>
     /// </remarks>
     /// <exception cref="NotFoundException">
     /// No transaction of any kind with that id is the caller's to remove.
@@ -950,12 +955,48 @@ public class TransactionService(
         if (moved.Count > 0)
             throw DepartedPositions.Refusal(moved);
 
+        var row = transaction is Expense ? await FiledFrom(transaction, ct) : null;
+
+        // Returning only while the bank still stands behind the row. One it has withdrawn
+        // would come back as a payment that no longer exists.
+        var returning = row is { RemovedAt: null } ? row : null;
+
         if (transaction is Expense)
-            await receiptAttachments.DeleteForExpense(id, ct);
+            await receiptAttachments.DeleteForExpense(id, returning?.Id, ct);
+
+        // Saved with the delete rather than before it, so a delete that fails leaves the row
+        // filed against the expense that is still there.
+        if (returning is not null)
+            returning.Status = BankTransactionStatus.New;
+        else if (row is not null)
+            dbContext.Remove(row);
 
         dbContext.Remove(transaction);
 
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// The bank row this expense was filed from, while it is still the row's filing.
+    /// </summary>
+    /// <remarks>
+    /// The foreign key is SetNull, which used to be the whole of what deleting an expense
+    /// did to its row: the expense went, and the row stayed <c>Filed</c> with nothing filed
+    /// from it. Filing and linking then refused it as already an expense, and ignoring it
+    /// said to delete the expense -- the step that had just trapped it.
+    /// <para>
+    /// Only a row whose status is still <see cref="BankTransactionStatus.Filed"/>. One a
+    /// posted row has superseded keeps that status, because the posted row holds the story
+    /// now; the expense still pointing at it is the one a supersede could not move.
+    /// </para>
+    /// </remarks>
+    private async Task<BankTransaction?> FiledFrom(Transaction transaction, CancellationToken ct)
+    {
+        if (transaction.BankTransactionId is not { } rowId)
+            return null;
+
+        return await dbContext.Set<BankTransaction>()
+            .FirstOrDefaultAsync(row => row.Id == rowId && row.Status == BankTransactionStatus.Filed, ct);
     }
 
     /// <summary>

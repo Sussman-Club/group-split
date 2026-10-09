@@ -17,10 +17,15 @@ public enum BankConnectionStatus
     Active,
 
     /// <summary>
-    /// The bank wants the person to sign in again -- a changed password, a new MFA step,
-    /// an expired consent. The token no longer works and a sync would only be told so;
-    /// the way out is Link in update mode, from the linked-banks card.
+    /// The bank needs the person before it will share anything -- a changed password, a new
+    /// MFA step, an expired consent, a locked account, an agreement waiting on the bank's
+    /// own site, no account shared. A sync would only be told so; the way out is Link in
+    /// update mode, from the linked-banks card, after whatever the bank asks for there.
     /// </summary>
+    /// <remarks>
+    /// One state for all of them rather than one each, because the person's way out is the
+    /// same button. The provider's own code is in the log for whoever needs the detail.
+    /// </remarks>
     LoginRequired,
 
     /// <summary>

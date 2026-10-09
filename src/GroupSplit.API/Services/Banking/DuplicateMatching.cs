@@ -285,7 +285,7 @@ public sealed class DuplicateMatcher(
     {
         // An expense somebody else paid cannot be one of the caller's card charges, and the
         // caller only ever sees their own bank rows.
-        if (expense.UserId != userContext.User.Id || expense.BankTransactionId is not null)
+        if (expense.UserId != userContext.User.Id || await HeldByARow(expense, ct))
             return [];
 
         var facts = Facts(expense);
@@ -432,14 +432,22 @@ public sealed class DuplicateMatcher(
 
     /// <summary>
     /// The expenses that could be in play for days between <paramref name="from"/> and
-    /// <paramref name="to"/>: the caller's own, not already filed from a bank row, in the
+    /// <paramref name="to"/>: the caller's own, not already held by a bank row, in the
     /// window either side.
     /// </summary>
     /// <remarks>
+    /// Held means held by a row the bank still stands behind. An expense whose row was
+    /// withdrawn, or superseded without the link moving, is waiting for its money again --
+    /// and is the likeliest duplicate there is. A pending row the bank withdrew and then
+    /// re-posted under a new id, rather than naming the pending one, used to file its posted
+    /// row as a second expense with nothing said, because the first expense still pointed
+    /// at a row the bank had taken back.
+    /// <para>
     /// Deliberately wider than the rule and asked of the database in the plainest terms a
     /// date range can be put in; <see cref="Grade"/> decides. A person spends
     /// a handful of times a day, so this is a small list however it is filtered, and the
     /// arithmetic that matters stays somewhere it can be read.
+    /// </para>
     /// </remarks>
     private Task<List<Expense>> Candidates(DateOnly from, DateOnly to, CancellationToken ct)
     {
@@ -448,7 +456,9 @@ public sealed class DuplicateMatcher(
 
         return dbContext.Set<Expense>()
             .Where(expense => expense.UserId == me
-                              && expense.BankTransactionId == null
+                              && (expense.BankTransactionId == null
+                                  || expense.BankTransaction!.RemovedAt != null
+                                  || expense.BankTransaction.Status == BankTransactionStatus.Superseded)
                               && expense.DateTime >= after
                               && expense.DateTime < before)
             .Include(expense => expense.Group)
@@ -456,6 +466,26 @@ public sealed class DuplicateMatcher(
             .AsNoTracking()
             .ToListAsync(ct);
     }
+
+    /// <summary>
+    /// The row behind <paramref name="bankTransactionId"/>, if the bank still stands behind
+    /// it: not withdrawn, and not superseded by another. An expense pointing at one is
+    /// spoken for; an expense pointing at anything else is a candidate again.
+    /// </summary>
+    /// <remarks>
+    /// Public because linking asks it too, and the two must not disagree: an expense offered
+    /// here as a match has to be one <c>Link</c> accepts.
+    /// </remarks>
+    public static IQueryable<BankTransaction> Holding(AppDbContext dbContext, Guid? bankTransactionId) =>
+        dbContext.Set<BankTransaction>()
+            .Where(row => row.Id == bankTransactionId
+                          && row.RemovedAt == null
+                          && row.Status != BankTransactionStatus.Superseded);
+
+    /// <summary>The same question <see cref="Candidates"/> asks, for one expense.</summary>
+    private async Task<bool> HeldByARow(Expense expense, CancellationToken ct) =>
+        expense.BankTransactionId is not null
+        && await Holding(dbContext, expense.BankTransactionId).AnyAsync(ct);
 
     /// <summary>
     /// The rows still waiting in the caller's inbox over the same window. Ignored and filed

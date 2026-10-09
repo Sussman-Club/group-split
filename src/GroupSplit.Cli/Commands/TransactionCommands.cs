@@ -1287,7 +1287,15 @@ public static class TransactionCommands
                           + "recorded is undone and the debt it cleared comes back."
                         : $"'{transaction.Name}' for {transaction.Amount:N2} is removed.",
                     "Every member's balance in the group is recalculated.",
-                    "Refused if somebody who has left the group paid for it or had a share of it."
+                    "Refused if somebody who has left the group paid for it or had a share of it.",
+                    .. transaction is { HasBankTransaction: true }
+                        ? (string[])
+                        [
+                            "The bank row it was filed from goes back to the inbox it came from, with "
+                            + "any receipt files attached there before filing -- unless the bank has "
+                            + "since withdrawn it."
+                        ]
+                        : []
                 ]);
 
             await context.Transactions.DeleteTransactionAsync(id, ct);
