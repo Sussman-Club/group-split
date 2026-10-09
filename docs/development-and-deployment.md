@@ -109,10 +109,10 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
-| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
+| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. They reach the API whatever `plaid-enabled` says, and the API links banks whenever it has both, so leave them empty to switch bank sync off. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
-| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | no | Optional. PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Empty leaves the development ring unwrapped. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
+| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled, or whenever both Plaid credentials are set | PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Missing then fails the publish, and outside Development the API refuses to start with Plaid configured and no certificate. Empty is only for local development. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
 | `receipt-transcription-provider` | secret `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
@@ -248,9 +248,98 @@ stored token unreadable — and an item whose token is gone can be neither synce
 repaired in update mode, nor removed at the provider, because all three need the token.
 
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
-ordinary development posture. A deployment should provide one for protection at rest, but
-it remains optional so the AppHost does not block when bank sync or certificate wrapping is
-not being used.
+ordinary development posture and is logged as a warning at startup. Anywhere else it fails
+closed, three times over:
+
+- The deploy workflow refuses `PLAID_ENABLED=true` without `BANK_KEY_CERTIFICATE`, before
+  anything is built.
+- The AppHost's `validate-plaid` step refuses the same publish, for anyone publishing
+  without the workflow.
+- The API refuses to start outside Development when Plaid is configured and the ring is not
+  wrapped (`BankKeyRingVerifier`).
+
+The API links banks whenever it has both Plaid credentials, whatever `plaid-enabled` says,
+so all three also refuse credentials left in place behind a switch that is off. A
+deployment with no Plaid credentials at all starts without a certificate: nothing it stores
+is worth one.
+
+### A ring that was stored unwrapped
+
+For a while this did not fail closed (#328): a deployment could link banks with no
+certificate, and the ring was then written unwrapped beside the tokens. Setting the
+certificate afterwards does **not** fix that by itself. `ProtectKeysWithCertificate` only
+wraps keys created from then on; Data Protection never rewrites a key it has already
+stored, and never deletes one. The old key stays in the table in the clear, stays the
+default key until it expires (90 days after it was made), and keeps opening every token it
+protected. And every database backup taken while it was there holds the key and the tokens
+together -- that is, live read access to those banks -- however the live database is fixed
+later.
+
+So "rewrapping" here means making the exposed tokens worthless, not re-encrypting the key.
+
+**1. Find out whether it happened.** On the database server, in the `groupsplit` database:
+
+```sql
+-- One row per Data Protection key. Only the bank ring lives in this table; the web
+-- app's sign-in ring is in a volume.
+SELECT "Id",
+       "FriendlyName",
+       "Xml" LIKE '%<encryptedSecret%'                     AS wrapped,
+       "Xml" LIKE '%the key below is in an unencrypted form%' AS unwrapped,
+       substring("Xml" FROM '<creationDate>([^<]+)</creationDate>')     AS created,
+       substring("Xml" FROM '<expirationDate>([^<]+)</expirationDate>') AS expires
+FROM "DataProtectionKeys"
+ORDER BY "Id";
+
+SELECT "Id", "UserId", "InstitutionName", "LinkedAt", "Status"
+FROM "BankConnection"
+ORDER BY "LinkedAt";
+```
+
+Every key `wrapped` and none `unwrapped`: the ring was never stored in the clear, and there
+is nothing to do. Any key `unwrapped`: it was, from that key's `created` date on. If there
+are no `BankConnection` rows either, nothing the key opens is stored any more (unlinking
+removes the item at Plaid, which kills its token); go straight to step 4.
+
+**2. Deploy with a certificate.** Generate one as above, set `BANK_KEY_CERTIFICATE` on the
+`production` environment, and deploy. Keys made from now on are wrapped; the old one is
+still there and still readable, which the next step needs.
+
+**3. Retire every token the unwrapped key protected.** Each person unlinks each of their
+banks -- **Unlink** on the linked-banks card, or `groupsplit bank unlink <connection-id>`.
+Unlinking hands the token to Plaid's `/item/remove` first, so the token a backup holds stops
+working at Plaid. File or skip anything still in the inbox first: unlinking deletes the
+connection's imported rows, though expenses already filed from them keep everything but the
+link. A connection the API cannot read the token of is unlinked locally only and logged as
+an error naming the item; remove that item in the Plaid dashboard by hand.
+
+(Keeping the connections instead means rotating each token in place -- Plaid's
+`/item/access_token/invalidate` returns a new token and kills the old one -- and protecting
+the new one with a wrapped key. Nothing in the repository does that yet; at this size,
+relinking is cheaper than writing it.)
+
+**4. Delete the unwrapped keys, then restart the API.**
+
+```sql
+DELETE FROM "DataProtectionKeys"
+WHERE "Xml" NOT LIKE '%<encryptedSecret%';
+```
+
+Only once `BankConnection` is empty: a token protected with a deleted key can never be
+read again, and until the unwrapped key is gone it is still the default, so anything linked
+in the meantime is protected with it too. Nobody links a bank between steps 2 and 5. The
+API caches the ring, so restart it (redeploy, or restart the `api` container); the first
+link after that mints a key wrapped with the certificate. Re-run step 1: no row should
+read `unwrapped`.
+
+**5. People link their banks again.** Then re-run step 1 once more: the new key is
+`wrapped`.
+
+**6. Treat the old backups as bank credentials.** Any backup of the app database taken
+while an unwrapped key and a token sat in it held both. Once step 3 is done, the tokens in
+it are dead at Plaid -- but until then, and for any connection that could not be removed at
+Plaid, keep those backups as tightly held as the Plaid secret itself, and delete the ones
+nobody needs.
 
 Webhooks need an address the provider can reach: a deployment is served on one, and locally a
 dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs

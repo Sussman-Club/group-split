@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Banking.Plaid;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +7,8 @@ namespace GroupSplit.API.Services.Banking;
 
 /// <summary>
 /// Says at startup what is protecting the bank access tokens, and refuses to start when the
-/// key ring cannot read the ones already stored.
+/// key ring cannot read the ones already stored -- or, outside Development, when Plaid is
+/// configured and nothing wraps the ring at all.
 /// </summary>
 /// <remarks>
 /// Two things that are really one: whether the ring is wrapped, and whether it still opens.
@@ -34,6 +36,13 @@ namespace GroupSplit.API.Services.Banking;
 /// protected -- as anything worth stopping for: <c>Unprotect</c> reports a wrong key and a
 /// value that was never a payload as the same failure, so there is nothing here that could
 /// tell them apart. Both are logged instead.
+/// </para>
+/// <para>
+/// No certificate at all is refused separately, and before any of that, outside Development
+/// on a host that links banks: there the ring would sit unwrapped beside the tokens, and one
+/// database dump would be live bank access. That used to be a warning, and a warning is how
+/// it went unnoticed (#328). The deploy workflow and the AppHost's <c>validate-plaid</c>
+/// refuse the same deployment earlier; this is what holds when they are bypassed.
 /// </para>
 /// <para>
 /// One token is enough to answer the question: they were all written by the same ring. A
@@ -71,6 +80,28 @@ public static class BankKeyRingVerifier
 
             if (!wrapped)
             {
+                // Refused outright where it matters: a deployment that can link a bank would
+                // write live access tokens into the same database as the keys that open them,
+                // and one dump would carry both. Asked of the registration rather than of the
+                // configuration, because whether Plaid registers is the switch -- the two
+                // cannot then disagree about whether this host links banks.
+                // Development is exempt, because an unwrapped ring against the sandbox is the
+                // ordinary local posture and the deployment checks never see it.
+                var linksBanks = host.Services.GetService<IServiceProviderIsKeyedService>()
+                    ?.IsKeyedService(typeof(IBankConnector), PlaidConnector.Name) ?? false;
+
+                if (linksBanks && !host.Services.GetRequiredService<IHostEnvironment>().IsDevelopment())
+                {
+                    throw new InvalidOperationException(
+                        "Plaid is configured but "
+                        + $"{BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not, so the "
+                        + "bank access-token key ring would be stored unwrapped beside the tokens it opens, and "
+                        + "whoever holds a copy of the database would hold live bank access. Set the certificate "
+                        + "(BANK_KEY_CERTIFICATE in a deployment; docs/development-and-deployment.md has the "
+                        + "command that makes one), or remove the Plaid credentials. Only Development may run "
+                        + "without one.");
+                }
+
                 // Stated out loud, because the failure this guards against is silence: a
                 // deployment that forgot the certificate looks exactly like one that has it.
                 // Expected in development, where an unwrapped ring is the ordinary posture.

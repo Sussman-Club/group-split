@@ -92,8 +92,10 @@ is worth a one-time certificate.
 
 Locally there is usually no certificate and the ring is unwrapped, which is the ordinary
 development posture; the publish refuses a deployment that has bank sync on and no
+certificate, and outside Development the API refuses to start with Plaid configured and no
 certificate, because that deployment looks exactly like a correct one until somebody reads
-the database.
+the database. For a while it did not (#328); undoing a ring that was stored unwrapped is in
+[A ring that was stored unwrapped](development-and-deployment.md#a-ring-that-was-stored-unwrapped).
 
 **Statuses are strings in the database.** The first enums in the data layer, and the
 precedent that gets set. `BankTransactionStatus` and `BankConnectionStatus` are stored
@@ -158,8 +160,10 @@ enqueues a sync; `ERROR` with `ITEM_LOGIN_REQUIRED` marks the connection
 marks it `Revoked`. Everything else is acknowledged and logged at debug.
 
 **Sandbox locally, a switch in production.** The deployment configuration explicitly
-supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, and the redirect
-URI. When the switch is `true`, the credentials must be valid; when it is `false`, the
+supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, the redirect
+URI and `bank-key-certificate`. When the switch is `true`, the credentials must be valid
+and the certificate present -- the `validate-plaid` step and the deploy workflow's
+`require_when` line both refuse it otherwise; when it is `false`, the
 API still starts and `GET /bank-connections` answers an empty list with `enabled: false`
 in the envelope, so the client hides the Link button. Locally the credentials come from
 user secrets, and Link runs against the sandbox where
