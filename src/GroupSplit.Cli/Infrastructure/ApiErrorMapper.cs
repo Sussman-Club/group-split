@@ -68,13 +68,24 @@ public static class ApiErrorMapper
         // pointing at auth status sends the caller looking for a problem they do not have.
         HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.GroupCannotRemoveSelf
             => "To leave the group yourself: groupsplit groups leave <group-id>",
-        HttpStatusCode.Forbidden => "The account you are signed in as is not allowed to do this. "
+        // Not about who is signed in either: no account may do it, so signing in again as
+        // somebody else is the one thing guaranteed not to help.
+        HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.MerchantEditForbidden
+            => "No account can rename, relogo or delete a merchant: it is shared by every group "
+               + "that has spent there. To change where one expense was spent: "
+               + "groupsplit transactions update <transaction-id> --merchant-id <merchant-id>",
+        HttpStatusCode.Forbidden =>"The account you are signed in as is not allowed to do this. "
                                     + "Check with: groupsplit auth status",
         // Guest routes take the guest's user id, which is not the old invitation id -- the
         // one mix-up worth naming.
         HttpStatusCode.NotFound when code == Shared.Errors.ErrorCodes.GroupGuestNotFound
             => "Guest routes take the guest's user id. List them with: groupsplit groups guests <group-id>",
         HttpStatusCode.NotFound => "Check the id. List what you can see with: groupsplit groups list",
+        HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.MerchantSearchTooShort
+            => "Search for at least 2 characters, or leave --search out to list your merchants.",
+        HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.MerchantLogoNotAllowed
+            => "Leave --logo-url out: the place renders as initials, and a bank sync fills the "
+               + "provider's logo in later.",
         HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.ValidationFailed
             => "Fix the values listed above and try again.",
         // The one refusal with two answers rather than a fix. Both are named, because

@@ -134,22 +134,31 @@ Expense categories and their default split rules.
 ### merchants
 
 Places money gets spent, shared across every group, and their logos. A bank sync fills this
-table on its own; these are the by-hand way in -- cash at the same shop every week, a group
-with no bank linked, or a provider that named a place badly.
+table on its own; these are the by-hand way in -- cash at the same shop every week, or a
+group with no bank linked.
 
-A merchant belongs to no group, so none of these take `--group`, and a rename is felt by
-every group that has spent there. `merchants update --name` therefore asks first and its
-confirmation carries the count of transactions behind the row; `--logo-url` alone does not
-ask. `merchants delete` is refused while anything still points at the row, including a bank
-row still waiting in an inbox.
+A merchant belongs to no group, so none of these take `--group`. What you can read is your
+own places only: the ones an expense you can see, or a row your own bank imported, already
+names. A listing returns at most 20, alphabetically, and `--search` needs at least 2
+characters (`MERCHANT_SEARCH_TOO_SHORT`) -- narrow the search rather than paging.
+`transactionCount` is how many of *your* transactions point at the place.
+
+**Renaming, relogoing and deleting a merchant is refused for every account**
+(`MERCHANT_EDIT_FORBIDDEN`, exit code 2). A rename would change what every group that has
+spent there sees, so do not retry it, and do not sign in again over it. To fix where one
+expense was spent, point that expense at another merchant: `transactions update
+<transaction-id> --merchant-id <merchant-id>`, after `merchants create` if the place is new.
+`merchants create` with a name that already exists hands back that merchant as it is.
+`--logo-url` is accepted only on the bank provider's logo hosts
+(`MERCHANT_LOGO_NOT_ALLOWED`); leave it out and the place renders as initials.
 
 | Command | |
 | --- | --- |
-| `merchants list` | List merchants, alphabetically. `--search` narrows on the name. |
-| `merchants show <merchant-id>` | Show one merchant, with how many transactions point at it. |
-| `merchants create <name>` | Add a place. `--logo-url` gives it a mark; without one it renders as initials. |
-| `merchants update <merchant-id>` | Rename it, or change its logo. `--no-logo` clears the logo. |
-| `merchants delete <merchant-id>` | Delete a merchant. |
+| `merchants list` | Your merchants, alphabetically, at most 20. `--search` (2+ characters) narrows on the name. |
+| `merchants show <merchant-id>` | Show one of your merchants, with how many of your transactions point at it. |
+| `merchants create <name>` | Add a place, or get back the one already called that. `--logo-url` must be a provider logo URL; without one it renders as initials. |
+| `merchants update <merchant-id>` | Refused for every account (`MERCHANT_EDIT_FORBIDDEN`). |
+| `merchants delete <merchant-id>` | Refused for every account (`MERCHANT_EDIT_FORBIDDEN`). |
 
 ### receipts
 

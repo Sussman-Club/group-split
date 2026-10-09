@@ -109,9 +109,8 @@ These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.guest-link.revoke`,
 `invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
 `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
-`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `merchants.update`
-(only when it renames -- a merchant is shared by every group that has spent there, so the
-prompt carries the count), `merchants.delete`, `bank.unlink` and `users.delete`.
+`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `bank.unlink` and
+`users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 

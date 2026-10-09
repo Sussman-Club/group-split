@@ -154,7 +154,7 @@ public class TransactionDetailsDialogTest : ComponentTest
                 Id = _expense,
                 Name = "Glovo",
                 MerchantName = "Glovo",
-                MerchantLogoUrl = "https://logos/glovo.png",
+                MerchantLogoUrl = "https://plaid-merchant-logos.plaid.com/glovo.png",
                 Amount = 37.15m,
                 DateTime = DateTimeOffset.UtcNow,
                 PaidByUserName = "Loraine Monteagudo",

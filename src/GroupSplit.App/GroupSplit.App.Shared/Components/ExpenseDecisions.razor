@@ -60,9 +60,9 @@
                above it showed the logo made the person check they had picked the place
                they thought they had. *@
             <Mark>
-                @if (!string.IsNullOrWhiteSpace(MerchantLogoUrl))
+                @if (MerchantLogos.Usable(MerchantLogoUrl) is { } logo)
                 {
-                    <img class="gs-mark-inline" src="@MerchantLogoUrl" alt=""
+                    <img class="gs-mark-inline" src="@logo" alt=""
                          width="20" height="20" loading="lazy"/>
                 }
             </Mark>

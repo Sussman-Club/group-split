@@ -78,6 +78,7 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
+| `MERCHANT_NOT_FOUND` | The merchant does not exist, or is not one of the caller's: they have no expense they can read and no imported bank row at it. Which places other people have spent at is not theirs to learn, so the two answer alike. |
 | `RECEIPT_NOT_FOUND` | The expense, or the imported row, has no itemised bill on it. Also raised when dividing an expense whose category names an itemised rule and which nobody has attached a bill to -- the division says so by name rather than falling back to an even split. |
 | `RECEIPT_ATTACHMENT_NOT_FOUND` | The source file does not exist on this expense, or is not visible to the caller. |
 | `TRANSACTION_NOT_FOUND` (on a receipt route) | The id names a repayment rather than an expense. A transfer is one member paying another back and has no items to divide, so the receipt routes read it as no expense of that id -- there is no separate code for it. |
@@ -88,6 +89,7 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When |
 | --- | --- |
 | `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. Leaving is `DELETE /groups/{id}/members/me`. |
+| `MERCHANT_EDIT_FORBIDDEN` | A rename, a new logo or a deletion of a merchant, by anybody. A merchant is shared by every group that has spent there, so any of the three changes what other people see on their own expenses, and the app has no role entitled to decide that for them. Answered before the merchant is looked up, so it is the same whether the id exists or not. To change where one expense was spent, point the expense at a different merchant. |
 
 ### Conflict (409)
 
@@ -126,6 +128,8 @@ routing, authentication, model binding, an unhandled exception.
 | `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another -- or, when attaching an imported row to an expense already recorded, in a different one from that expense. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. | `transactionCurrency`, and `groupCurrency` or `expenseCurrency` depending on what it was compared against. |
 | `POSSIBLE_DUPLICATE_EXPENSE` | The imported row looks like an expense already recorded: same payer, close enough in amount, within a few days. Nothing is refused permanently -- the caller either files it anyway, because they really did pay twice, or points the row at the expense that is already there with `POST /inbox/{id}/link`. Raised before the second expense exists, because a duplicate found afterwards is a wrong balance somebody has to notice. | `matches`: an array of `{ transactionId, name, amount, currency, dateTime, groupId, groupName, paidByUserName, amountDifference, daysApart }`, closest first. |
 | `TRANSACTION_ALREADY_IMPORTED` | The expense an imported row is being attached to already came from one. An expense carries at most one bank row, which is what the unique index says. | |
+| `MERCHANT_NAME_TAKEN` | **Retired; never sent.** Adding a merchant that already exists now hands back the one there is, and renaming one is `MERCHANT_EDIT_FORBIDDEN`. | |
+| `MERCHANT_IN_USE` | **Retired; never sent.** Deleting a merchant is `MERCHANT_EDIT_FORBIDDEN`. | |
 
 ### Validation (400)
 
@@ -138,6 +142,8 @@ no `errors` member; the code is the whole message.
 | `SPLITS_INVALID` | The stated shares name nobody, name somebody twice, include a share that goes the other way from the amount (a negative share on an expense, a positive one on a refund), or arrive alongside a `splitRuleId` -- which is two answers to one question, and not resolved by precedence. Leaving them out entirely is how you ask for the category's division, or for the division of the rule the expense names. On a settlement, more than one share: a repayment has exactly one recipient. |
 | `PATCH_INVALID` | A JSON Patch could not be applied to what it was sent to: a path the model does not have, a value of the wrong type for the member it replaces (`"/amount": "abc"`), or a `test` operation that did not hold. Nothing was written. A patch that applies cleanly and leaves a model that does not hold up is `VALIDATION_FAILED` instead. |
 | `SETTLEMENT_AMOUNT_NOT_POSITIVE` | A settlement's amount was edited below zero. Zero is refused earlier, as on any transaction, with `VALIDATION_FAILED` and an `errors` member; a negative amount is checked here because the edit model is shared with expenses, whose amount may be negative. |
+| `MERCHANT_LOGO_NOT_ALLOWED` | A merchant's `logoUrl` names somewhere other than the bank provider's image hosts (`https://plaid-merchant-logos.plaid.com/...`, `https://plaid-category-icons.plaid.com/...`) or one of the marks the app ships (`/_content/GroupSplit.App.Shared/merchants/<name>.svg`). Every viewer of every ledger showing the place loads its logo, so an address anybody can type would be a tracking pixel on other people's screens. The list is `MerchantLogos` in the shared project. |
+| `MERCHANT_SEARCH_TOO_SHORT` | `GET /merchants?search=` with fewer than two characters once trimmed. Leave `search` out to list the caller's places instead. |
 | `NOT_A_SETTLEMENT` | An edit set something only a settlement has on an expense: `coversThrough`, the day a settlement covers through. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is neither a member of the group nor invited to it. |
 | `SPLIT_RULE_HISTORY_INVALID` | A written history does not describe a chain: no entries at all, dates that do not strictly increase, or a last entry starting after now. Each entry's window runs until the next one starts, so two entries sharing a date leave a version that was never what the rule said -- and one dated ahead leaves the open version starting in the future, which a new expense is still divided by while the history says it has not begun. Carries `index` and `from`, plus `previousFrom` when it is the ordering that is wrong. |

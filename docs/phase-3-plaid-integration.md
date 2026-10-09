@@ -232,6 +232,16 @@ provider's `merchant_name` to one, filing copies the link onto the expense the w
 the amount, and a logo the provider only supplies later arrives on every expense at that
 place at once.
 
+Shared is not the same as everybody's (#329). A caller reads only the merchants they already
+have something at -- an expense they can see, or a row their own bank imported -- at most 20
+to a listing and only for a search of two characters or more, because the table also holds
+places only one person's card has paid. Nobody renames, relogos or deletes a merchant
+(`MERCHANT_EDIT_FORBIDDEN`): it would change what every group that has spent there sees, and
+there is no role entitled to decide that. And `LogoUrl` only ever holds an address on
+Plaid's image hosts or one of the marks the app ships (`MerchantLogos`): a hand-typed one
+is refused, a provider's from anywhere else is dropped by the sync, and the app renders
+initials for any stored one that slipped through, since every viewer's browser loads it.
+
 ```csharp
 public class Merchant : Entity
 {

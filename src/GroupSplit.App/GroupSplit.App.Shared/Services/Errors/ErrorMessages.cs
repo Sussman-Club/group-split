@@ -141,9 +141,16 @@ public static class ErrorMessages
         [ErrorCodes.SplitRuleNotInGroup] =
             "That split rule belongs to another group, so it cannot divide this expense.",
         // "Already" and not "this group already": a merchant is shared, so the one it
-        // collides with may well be a place somebody else's bank reported.
+        // collides with may well be a place somebody else's bank reported. Both retired --
+        // the API no longer sends them -- and kept for a client talking to an older one.
         [ErrorCodes.MerchantNameTaken] = "There is already a merchant with that name.",
         [ErrorCodes.MerchantInUse] = "This merchant still has transactions pointing at it. Move them first.",
+        // The app offers none of these edits, so this reaches somebody only through a
+        // client that did. Says why, since "not allowed" alone reads like a permissions bug.
+        [ErrorCodes.MerchantEditForbidden] =
+            "Places are shared with everyone who has spent there, so they cannot be renamed or deleted.",
+        [ErrorCodes.MerchantLogoNotAllowed] = "A logo can only come from your bank's provider.",
+        [ErrorCodes.MerchantSearchTooShort] = "Type at least two letters to search.",
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
         [ErrorCodes.SplitsInvalid] =

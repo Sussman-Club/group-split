@@ -12,13 +12,16 @@ namespace GroupSplit.Cli.Commands;
 /// <remarks>
 /// A sync fills this table on its own from what a bank says, so most of the time there is
 /// nothing to do here. These commands are the other way in: cash at the same shop every
-/// week, a group with no bank linked, or a provider that named a place badly and wants
-/// correcting.
+/// week, or a group with no bank linked.
 /// <para>
 /// Unlike categories, a merchant belongs to no group -- two groups that both shop at Lidl
-/// share the row -- so nothing here takes a <c>--group</c>. That also means a rename is
-/// felt everywhere, which is why the listing carries a count and why the destructive
-/// commands say so before they run.
+/// share the row -- so nothing here takes a <c>--group</c>. That is also why the listing
+/// is the caller's own places only, and why <c>update</c> and <c>delete</c> are refused by
+/// the server for every account (<c>MERCHANT_EDIT_FORBIDDEN</c>): renaming, relogoing or
+/// deleting a shared row changes what other people see on their own expenses. The two
+/// commands stay, so the refusal arrives with its code and its reason rather than as an
+/// unknown command, and they ask for no confirmation, since nothing they send is carried
+/// out.
 /// </para>
 /// </remarks>
 public static class MerchantCommands
@@ -46,10 +49,12 @@ public static class MerchantCommands
     {
         var search = new Option<string?>("--search")
         {
-            Description = "Only merchants whose name contains this."
+            Description = "Only merchants whose name contains this. At least 2 characters."
         };
 
-        var list = new Command("list", "List merchants, alphabetically.") { search };
+        var list = new Command("list",
+            "List the places you have an expense or an imported bank row at, alphabetically, "
+            + "at most 20.") { search };
 
         list.SetHandler(async (context, ct) =>
         {
@@ -63,7 +68,7 @@ public static class MerchantCommands
                     return new Markup(Tables.Empty("merchants") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Name", "Logo", "Used by");
+                var table = Tables.Grid("Id", "Name", "Logo", "Your transactions");
 
                 foreach (var merchant in value)
                 {
@@ -87,7 +92,7 @@ public static class MerchantCommands
 
     private static Command Show()
     {
-        var command = new Command("show", "Show one merchant.") { MerchantId };
+        var command = new Command("show", "Show one of your merchants.") { MerchantId };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -101,7 +106,7 @@ public static class MerchantCommands
                 table.AddRow("Name", Markup.Escape(value.Name));
                 table.AddRow("Logo", Markup.Escape(value.LogoUrl ?? "-"));
                 table.AddRow("First seen", value.FirstSeenAt.ToLocalTime().ToString("yyyy-MM-dd"));
-                table.AddRow("Used by", $"{value.TransactionCount} transaction(s)");
+                table.AddRow("Your transactions", value.TransactionCount.ToString());
 
                 return table;
             });
@@ -118,10 +123,12 @@ public static class MerchantCommands
 
         var logo = new Option<string?>("--logo-url")
         {
-            Description = "Image to show for it. Omit for a place that renders as initials."
+            Description = "Image to show for it, from the bank provider's logo hosts. "
+                          + "Omit for a place that renders as initials."
         };
 
-        var command = new Command("create", "Add a place money gets spent.") { name, logo };
+        var command = new Command("create",
+            "Add a place money gets spent. One that already exists is handed back as it is.") { name, logo };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -149,6 +156,10 @@ public static class MerchantCommands
     /// So anything not given is read back off the merchant first rather than being sent
     /// blank -- an update that says nothing about the logo should not clear it.
     /// </summary>
+    /// <remarks>
+    /// Refused by the server for every account today; see the class remarks. Nothing here
+    /// asks first for that reason.
+    /// </remarks>
     private static Command Update()
     {
         var name = new Option<string?>("--name") { Description = "Rename it." };
@@ -158,7 +169,8 @@ public static class MerchantCommands
             Description = "Clear the logo, so it renders as initials."
         };
 
-        var command = new Command("update", "Change a merchant's name or its logo.")
+        var command = new Command("update",
+            "Change a merchant's name or its logo. Refused for every account: merchants are shared.")
         {
             MerchantId, name, logo, noLogo
         };
@@ -180,23 +192,6 @@ public static class MerchantCommands
             var client = new Api.MerchantsClient(context.ApiHttpClient);
             var current = await client.GetMerchantAsync(id, ct);
 
-            // A rename is felt in every group that shops here, so the count is the thing
-            // worth saying out loud before it happens.
-            if (parse.GetValue(name) is { Length: > 0 } renamed && renamed != current.Name)
-            {
-                Confirmation.Require(
-                    context,
-                    action: "merchants.update",
-                    summary: $"Rename '{current.Name}' to '{renamed}'?",
-                    changes:
-                    [
-                        $"{current.TransactionCount} transaction(s) point at this merchant, "
-                        + "in every group that has spent here -- all of them will show the new name.",
-                        "Nothing about how those expenses divide changes."
-                    ],
-                    confirmCommand: $"groupsplit merchants update {id} --name \"{renamed}\" --yes");
-            }
-
             var updated = await client.UpdateMerchantAsync(
                 id,
                 new UpdateMerchantRequest
@@ -215,34 +210,24 @@ public static class MerchantCommands
         return command;
     }
 
+    /// <summary>
+    /// Sent as asked, with no read and no confirmation first: the server refuses it for
+    /// every account today, so there is nothing to agree to.
+    /// </summary>
     private static Command Delete()
     {
-        var command = new Command("delete", "Delete a merchant.") { MerchantId };
+        var command = new Command("delete",
+            "Delete a merchant. Refused for every account: merchants are shared.") { MerchantId };
 
         command.SetHandler(async (context, ct) =>
         {
             var id = context.ParseResult.GetValue(MerchantId);
-            var client = new Api.MerchantsClient(context.ApiHttpClient);
-            var current = await client.GetMerchantAsync(id, ct);
 
-            Confirmation.Require(
-                context,
-                action: "merchants.delete",
-                summary: $"Delete the merchant '{current.Name}'?",
-                changes:
-                [
-                    $"'{current.Name}' stops being offered when an expense is recorded.",
-                    "Refused if any transaction still points at it -- including a bank row "
-                    + "still waiting in an inbox -- because a merchant cannot take somebody's "
-                    + "spending history with it."
-                ],
-                confirmCommand: $"groupsplit merchants delete {id} --yes");
-
-            await client.DeleteMerchantAsync(id, ct);
+            await new Api.MerchantsClient(context.ApiHttpClient).DeleteMerchantAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", merchantId = id, name = current.Name },
-                value => new Markup($"[green]Deleted[/] {Markup.Escape(value.name)}.\n"));
+                new { status = "deleted", merchantId = id },
+                value => new Markup($"[green]Deleted[/] {value.merchantId}.\n"));
 
             return ExitCodes.Success;
         });

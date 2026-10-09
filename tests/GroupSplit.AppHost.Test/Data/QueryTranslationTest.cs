@@ -323,6 +323,24 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// The merchant reads, scoped to the caller: a place is theirs through an expense they
+    /// can read or a row their bank imported, and the count beside it is of their own
+    /// transactions there -- two correlated subqueries over the group-membership one.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_callers_merchants_translate()
+    {
+        var merchants = Service<IMerchantService>();
+
+        var everything = await (await merchants.List(null, Ct)).ToListAsync(Ct);
+        await (await merchants.List("li", Ct)).ToListAsync(Ct);
+
+        // The seeded user has spent at seeded shops, so the single read has a row to find.
+        Assert.NotEmpty(everything);
+        Assert.Equal(everything[0].Id, (await merchants.Get(everything[0].Id, Ct)).Id);
+    }
+
     [Fact(Timeout = 120_000)]
     public async Task The_inbox_summary_translates()
     {

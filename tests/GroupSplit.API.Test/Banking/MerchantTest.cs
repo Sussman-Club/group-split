@@ -80,19 +80,19 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Null(Assert.Single(await Merchants()).LogoUrl);
 
-        _bank.Answer("cursor-2", added: [Row("t2", 4m, merchant: "Lidl", logo: "https://logos/lidl.png")]);
+        _bank.Answer("cursor-2", added: [Row("t2", 4m, merchant: "Lidl", logo: "https://plaid-merchant-logos.plaid.com/lidl.png")]);
         await Sync(connection);
 
         // One row still, now with the logo -- which is the whole reason the ledger holds a
         // link and not a copy: the expense filed from t1 shows this too.
-        Assert.Equal("https://logos/lidl.png", Assert.Single(await Merchants()).LogoUrl);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", Assert.Single(await Merchants()).LogoUrl);
     }
 
     [Fact]
     public async Task A_provider_that_stops_sending_a_logo_does_not_take_it_away()
     {
         var connection = await LinkAsync();
-        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://logos/lidl.png")]);
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://plaid-merchant-logos.plaid.com/lidl.png")]);
         await Sync(connection);
 
         _bank.Answer("cursor-2", added: [Row("t2", 4m, merchant: "Lidl")]);
@@ -100,7 +100,43 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // A bad afternoon at the provider is not the shop losing its sign, and blanking the
         // column would take the logo off every row at that shop at once.
-        Assert.Equal("https://logos/lidl.png", Assert.Single(await Merchants()).LogoUrl);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", Assert.Single(await Merchants()).LogoUrl);
+    }
+
+    /// <summary>
+    /// The provider is trusted for the name and not for where every viewer's browser is
+    /// sent: a logo off its own image hosts is dropped, and the place is kept without one.
+    /// </summary>
+    [Fact]
+    public async Task A_logo_from_a_host_that_is_not_the_providers_is_dropped_and_the_place_kept()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added:
+        [
+            Row("t1", 12.50m, merchant: "Lidl",
+                logo: "https://tracker.example.com/pixel.png",
+                categoryIcon: "https://tracker.example.com/icon.png")
+        ]);
+
+        await Sync(connection);
+
+        var merchant = Assert.Single(await Merchants());
+        Assert.Equal("Lidl", merchant.Name);
+        Assert.Null(merchant.LogoUrl);
+        Assert.Null(Assert.Single(await Rows(connection)).CategoryIconUrl);
+    }
+
+    [Fact]
+    public async Task A_disallowed_logo_does_not_fill_in_a_merchant_that_had_none()
+    {
+        var connection = await LinkAsync();
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl")]);
+        await Sync(connection);
+
+        _bank.Answer("cursor-2", added: [Row("t2", 4m, merchant: "Lidl", logo: "http://plaid-merchant-logos.plaid.com/lidl.png")]);
+        await Sync(connection);
+
+        Assert.Null(Assert.Single(await Merchants()).LogoUrl);
     }
 
     [Fact]
@@ -119,7 +155,7 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Filing_carries_the_merchant_onto_the_expense()
     {
         var connection = await LinkAsync();
-        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://logos/lidl.png")]);
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://plaid-merchant-logos.plaid.com/lidl.png")]);
         await Sync(connection);
 
         var row = Assert.Single(await Rows(connection));
@@ -153,7 +189,7 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task An_expense_filed_from_a_bank_row_carries_the_shop_and_its_logo_into_the_feed()
     {
         var connection = await LinkAsync();
-        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://logos/lidl.png")]);
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://plaid-merchant-logos.plaid.com/lidl.png")]);
         await Sync(connection);
 
         var row = Assert.Single(await Rows(connection));
@@ -165,7 +201,7 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .ToListAsync(Ct));
 
         Assert.Equal("Lidl", entry.MerchantName);
-        Assert.Equal("https://logos/lidl.png", entry.MerchantLogoUrl);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", entry.MerchantLogoUrl);
     }
 
     [Fact]
@@ -188,14 +224,14 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task The_inbox_reads_a_rows_logo_back_through_its_merchant()
     {
         var connection = await LinkAsync();
-        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://logos/lidl.png")]);
+        _bank.Answer("cursor-1", added: [Row("t1", 12.50m, merchant: "Lidl", logo: "https://plaid-merchant-logos.plaid.com/lidl.png")]);
         await Sync(connection);
 
         var listed = Assert.Single(await (await Inbox.List(new InboxFilter(), Ct))
             .SelectDto()
             .ToListAsync(Ct));
         Assert.Equal("Lidl", listed.MerchantName);
-        Assert.Equal("https://logos/lidl.png", listed.LogoUrl);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", listed.LogoUrl);
     }
 
     [Fact]
@@ -257,7 +293,7 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         _bank.Answer("cursor-1", added:
         [
             Row("t1", 12.50m, merchant: "Lidl",
-                logo: "https://logos/lidl.png",
+                logo: "https://plaid-merchant-logos.plaid.com/lidl.png",
                 categoryIcon: "https://plaid-category-icons.plaid.com/PFC_FOOD_AND_DRINK.png")
         ]);
 
@@ -268,7 +304,7 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .ToListAsync(Ct));
 
         // The place beats the kind of place: one says where, the other only what sort.
-        Assert.Equal("https://logos/lidl.png", listed.Mark);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", listed.Mark);
     }
 
     [Fact]

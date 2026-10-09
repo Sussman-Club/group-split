@@ -56,6 +56,13 @@ public static class ErrorCodes
 
     public const string GroupCannotRemoveSelf = "GROUP_CANNOT_REMOVE_SELF";
 
+    /// <summary>
+    /// A rename, a new logo or a deletion asked for on a merchant. A merchant is shared by
+    /// every group that has spent there, so any of the three changes what other people see
+    /// on their own expenses, and no account is allowed to do that today.
+    /// </summary>
+    public const string MerchantEditForbidden = "MERCHANT_EDIT_FORBIDDEN";
+
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";
@@ -185,12 +192,33 @@ public static class ErrorCodes
     public const string CurrencyMismatch = "CURRENCY_MISMATCH";
     public const string PossibleDuplicateExpense = "POSSIBLE_DUPLICATE_EXPENSE";
     public const string TransactionAlreadyImported = "TRANSACTION_ALREADY_IMPORTED";
+
+    /// <summary>
+    /// Retired; never sent. Adding a place that already exists now hands back the one there
+    /// is, and renaming one is <see cref="MerchantEditForbidden"/>.
+    /// </summary>
     public const string MerchantNameTaken = "MERCHANT_NAME_TAKEN";
+
+    /// <summary>
+    /// Retired; never sent. Deleting a merchant is <see cref="MerchantEditForbidden"/>.
+    /// </summary>
     public const string MerchantInUse = "MERCHANT_IN_USE";
 
     // ---- Validation (400): the request itself is wrong ----------------------------------
 
     public const string SplitRuleInvalid = "SPLIT_RULE_INVALID";
+
+    /// <summary>
+    /// A merchant's logo named somewhere other than the bank provider's image hosts or the
+    /// marks the app ships. See <c>MerchantLogos</c>.
+    /// </summary>
+    public const string MerchantLogoNotAllowed = "MERCHANT_LOGO_NOT_ALLOWED";
+
+    /// <summary>
+    /// A merchant search shorter than two characters. Leave the search out to list the
+    /// caller's own places instead.
+    /// </summary>
+    public const string MerchantSearchTooShort = "MERCHANT_SEARCH_TOO_SHORT";
 
     /// <summary>
     /// An invitation was asked for with nothing to make it out to. A name is the whole of
