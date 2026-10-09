@@ -120,6 +120,13 @@ public static class KeycloakRealmDefinition
     /// runs: a browser flow re-pointed at a weaker copy, by hand or by a mistaken import,
     /// would otherwise go unnoticed. Only which flow each binding names is reconciled, not
     /// the built-in flows themselves.
+    /// <para>
+    /// The event settings are here so that the record of who signed in, linked a Google
+    /// account or changed a client exists on a realm imported before they were. Admin events
+    /// leave out the representation that was sent (<c>adminEventsDetailsEnabled</c>), because
+    /// a representation can carry a secret -- a client secret, an identity provider's, a
+    /// user's initial password -- and the event store keeps it for the whole retention period.
+    /// </para>
     /// </remarks>
     public static readonly string[] ManagedSettings =
     [
@@ -156,7 +163,13 @@ public static class KeycloakRealmDefinition
         "directGrantFlow",
         "resetCredentialsFlow",
         "clientAuthenticationFlow",
-        "firstBrokerLoginFlow"
+        "firstBrokerLoginFlow",
+        "eventsEnabled",
+        "eventsExpiration",
+        "eventsListeners",
+        "enabledEventTypes",
+        "adminEventsEnabled",
+        "adminEventsDetailsEnabled"
     ];
 
     public static JsonObject Load()
