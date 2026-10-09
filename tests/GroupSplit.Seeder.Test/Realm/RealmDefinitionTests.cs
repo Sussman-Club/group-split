@@ -278,6 +278,19 @@ public sealed class RealmDefinitionTests
         Assert.False(KeycloakRealmDefinition.Load()["adminEventsDetailsEnabled"]!.GetValue<bool>());
     }
 
+    /// <summary>
+    /// "Forgot your password?" sends a mail, so it is offered exactly where Keycloak can send
+    /// one: the same switch that turns the relay on, in the import and through the worker.
+    /// </summary>
+    [Fact]
+    public void The_password_reset_follows_the_mail_switch()
+    {
+        var realm = KeycloakRealmDefinition.Load();
+
+        Assert.Equal("${SMTP_ENABLED}", realm["resetPasswordAllowed"]!.GetValue<string>());
+        Assert.Contains("resetPasswordAllowed", KeycloakRealmDefinition.ManagedSettings);
+    }
+
     private static IEnumerable<JsonObject> Providers() =>
         KeycloakRealmDefinition.Load()["identityProviders"]!.AsArray().OfType<JsonObject>();
 

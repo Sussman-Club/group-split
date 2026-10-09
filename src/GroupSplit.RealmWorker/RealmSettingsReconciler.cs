@@ -93,9 +93,10 @@ public sealed class RealmSettingsReconciler(
     /// written, and names every variable that is missing rather than the first.
     /// </summary>
     /// <remarks>
-    /// Only what is managed is resolved. The export also carries placeholders for SMTP and
-    /// Google sign-in, which the Keycloak container is given and this worker is not; resolving
-    /// the whole file would demand those secrets for no reason.
+    /// Only what is managed is resolved. The export also carries placeholders for the SMTP
+    /// relay and Google sign-in, which the Keycloak container is given and this worker is not;
+    /// resolving the whole file would demand those secrets for no reason. The worker is given
+    /// only the switches a managed setting follows, such as <c>SMTP_ENABLED</c>.
     /// </remarks>
     private JsonObject Desired()
     {
@@ -164,7 +165,24 @@ public sealed class RealmSettingsReconciler(
         managed["identityProviders"] = providers;
         managed["authenticationFlows"] = flows;
 
-        return (JsonObject)KeycloakPlaceholders.Expand(managed, environment)!;
+        var expanded = (JsonObject)KeycloakPlaceholders.Expand(managed, environment)!;
+
+        // A switch written as a placeholder -- "resetPasswordAllowed": "${SMTP_ENABLED}" --
+        // resolves to the string "true", while Keycloak stores a boolean and hands one back.
+        // Compared as written it would differ on every run, and the realm would be rewritten
+        // every time; it is compared, and written, as the boolean Keycloak's import makes of it.
+        foreach (var name in KeycloakRealmDefinition.ManagedSettings)
+        {
+            if (KeycloakPlaceholders.IsPlaceholder(definition[name])
+                && expanded[name] is JsonValue resolved
+                && resolved.TryGetValue<string>(out var text)
+                && bool.TryParse(text, out var value))
+            {
+                expanded[name] = value;
+            }
+        }
+
+        return expanded;
 
         static JsonObject Pick(JsonObject source, IEnumerable<string> names) =>
             new(names.Select(name => KeyValuePair.Create(name, source[name]?.DeepClone())));

@@ -38,6 +38,11 @@ internal static class SmtpConfigurationExtensions
     /// <c>starttls</c>: a relay this stack talks to authenticates over STARTTLS, and a
     /// disabled one has neither.
     /// </para>
+    /// <para>
+    /// It also drives <c>resetPasswordAllowed</c>, a managed realm setting, so it is a realm
+    /// variable: the realm worker is given the same value and keeps an existing realm in step.
+    /// "Forgot your password?" is offered only where Keycloak can send the mail it promises.
+    /// </para>
     /// </summary>
     public static IResourceBuilder<T> WithSmtpEnvironment<T>(
         this IResourceBuilder<T> resource,
@@ -45,7 +50,7 @@ internal static class SmtpConfigurationExtensions
         where T : IResourceWithEnvironment
     {
         return resource
-            .WithEnvironment("SMTP_ENABLED", smtp.Enabled)
+            .WithRealmVariable("SMTP_ENABLED", smtp.Enabled)
             .WithEnvironment("SMTP_HOST", smtp.Host)
             .WithEnvironment("SMTP_PORT", smtp.Port)
             .WithEnvironment("SMTP_FROM", smtp.From)

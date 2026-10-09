@@ -166,7 +166,7 @@ jobs:
                   STORAGE_ACCESSKEY STORAGE_SECRETKEY
 
           require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
-            || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
+            || echo "::notice::SMTP_ENABLED is not true. Keycloak sends no mail, and the sign-in page offers no password reset."
           require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
             || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
           # Bank sync stores live bank access tokens, and BANK_KEY_CERTIFICATE is what keeps

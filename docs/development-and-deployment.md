@@ -106,7 +106,7 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `keycloak-account-deletion-secret` | secret `KEYCLOAK_ACCOUNT_DELETION_SECRET` | yes | Secret of `account-deletion`, the `group-split` client whose service account holds only `manage-users`, which the API deletes a deleted account's login through. Any long random string (`openssl rand -hex 32`). The `realm-settings` worker creates the client on a realm that lacks it and sets its secret to this value on every deploy, so there is no step to take in Keycloak, and rotating it is changing this secret and deploying. Missing, the publish fails; see [Deleting an account](account-deletion.md). |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
 | `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
-| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
+| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail, and so whether the sign-in page offers a password reset. See [Email](../README.md#email). |
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |

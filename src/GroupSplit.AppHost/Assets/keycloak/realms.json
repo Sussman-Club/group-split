@@ -10,7 +10,7 @@
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "resetPasswordAllowed": true,
+  "resetPasswordAllowed": "${SMTP_ENABLED}",
   "rememberMe": false,
   "editUsernameAllowed": false,
   "verifyEmail": false,

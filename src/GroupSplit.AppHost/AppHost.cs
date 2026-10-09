@@ -75,6 +75,9 @@ var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.Re
     .WithEnvironment("Realm__Operation", "reconcile")
     .WithAccountDeletionSecret(accountDeletionSecret)
     .WithReference(keycloak)
+    // The switches realms.json's managed settings follow, e.g. SMTP_ENABLED for the password
+    // reset link, with the values Keycloak's own import was given.
+    .WithRealmVariablesOf(keycloak)
     .WaitFor(keycloak);
 
 var migrations = db
