@@ -19,6 +19,25 @@ public static class DeploymentExtensions
     /// </summary>
     private const string ContainerHomeDirectory = "/home/app";
 
+    /// <summary>
+    /// The host port the deployed dashboard answers on, on loopback only. See
+    /// <c>WithProtectedDashboard</c>.
+    /// </summary>
+    public const int DashboardPort = 18888;
+
+    /// <summary>
+    /// Pins a Compose port mapping to the host's loopback address, unless it already names
+    /// an address. <c>"18888:18888"</c> becomes <c>"127.0.0.1:18888:18888"</c>, and a bare
+    /// container port, which Docker would publish on a random port on every interface,
+    /// becomes <c>"127.0.0.1::18888"</c>.
+    /// </summary>
+    public static string BindToLoopback(string mapping) => mapping.Split(':').Length switch
+    {
+        1 => $"127.0.0.1::{mapping}",
+        2 => $"127.0.0.1:{mapping}",
+        _ => mapping
+    };
+
     extension<T>(IResourceBuilder<T> resource) where T : ContainerResource
     {
         /// <summary>
@@ -104,28 +123,45 @@ public static class DeploymentExtensions
     extension(IResourceBuilder<DockerComposeEnvironmentResource> compose)
     {
         /// <summary>
-        /// Publishes the Aspire dashboard alongside the stack, behind a browser token.
+        /// Publishes the Aspire dashboard alongside the stack, on the host's loopback address
+        /// and behind a browser token.
         /// <para>
         /// The dashboard shows every environment variable of every service, secrets among
-        /// them, and it is published on a host port so the operator can reach it from the
-        /// LAN without a Caddy route. That is why the token is not optional here: left to
-        /// itself the standalone dashboard image generates a random token and prints it to
-        /// its own log, and a token nobody can read without shell access to the host is a
-        /// dashboard nobody uses.
+        /// them, and it speaks plain HTTP. Published on every interface, as it used to be, its
+        /// token crossed the LAN in clear text, and a port Docker publishes walks past the
+        /// host firewall. So it is bound to <c>127.0.0.1</c> and reached the way the Keycloak
+        /// admin console is, through an SSH tunnel:
+        /// <c>ssh -L 18888:127.0.0.1:18888 &lt;host&gt;</c>, then <c>http://localhost:18888</c>.
+        /// The tunnel is the encryption and SSH is the authentication; the token stays as a
+        /// second lock for anyone who already has a shell on the host.
         /// </para>
         /// <para>
-        /// TLS is terminated upstream when the dashboard is fronted by the proxy, so it has
-        /// to learn the original scheme and host from the forwarded headers the same way
-        /// Keycloak does, or its redirects point back at plain HTTP.
+        /// The token is still not optional: left to itself the standalone dashboard image
+        /// generates a random token and prints it to its own log, and a token nobody can read
+        /// without shell access to the host is a dashboard nobody uses.
+        /// </para>
+        /// <para>
+        /// Forwarded headers stay on so that, should the dashboard ever be fronted by the
+        /// proxy instead, it learns the original scheme and host the same way Keycloak does
+        /// and its redirects do not point back at plain HTTP.
         /// </para>
         /// </summary>
         public IResourceBuilder<DockerComposeEnvironmentResource> WithProtectedDashboard(
             IResourceBuilder<ParameterResource> token)
             => compose.WithDashboard(dashboard => dashboard
-                .WithHostPort(18888)
+                .WithHostPort(DashboardPort)
                 .WithForwardedHeaders(enabled: true)
                 .WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
-                .WithEnvironment("Dashboard__Frontend__BrowserToken", token));
+                .WithEnvironment("Dashboard__Frontend__BrowserToken", token)
+                // WithHostPort has no way to name an interface, so the mapping it writes is
+                // rewritten here, where the service is final. Every mapping, not just this
+                // one, so a port a later Aspire version adds cannot land on 0.0.0.0 either.
+                .PublishAsDockerComposeService((_, service) =>
+                {
+                    var ports = service.Ports.Select(BindToLoopback).ToList();
+                    service.Ports.Clear();
+                    service.Ports.AddRange(ports);
+                }));
 
         /// <summary>
         /// Makes <c>aspire do push</c> also generate the Compose file and env file, so the
