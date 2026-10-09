@@ -591,7 +591,10 @@ groupsplit bank link <public-token>        # exchange what it gave back
 
 `--connection <id>` on `link-token` asks for an *update* token, which reopens an existing
 connection rather than adding a second copy of the same bank. That is what a connection
-showing `login required` needs; `groupsplit bank list` says which ones do.
+showing `login required` needs; `groupsplit bank list` says which ones do. The state covers
+everything the bank needs the person for, not only a changed password: a locked account, a
+password it wants reset, an agreement waiting on its own site, no account shared. Whatever
+it is, the person deals with it at the bank and then signs in again here.
 
 Update mode is also how somebody shares an account they did not share when they linked. It
 mints no new item and hands back no usable public token, so nothing on the linking path
@@ -617,6 +620,15 @@ groupsplit inbox list                      # what arrived
 groupsplit inbox file <row-id> --group <group-id> --category-id <category-id>
 groupsplit inbox ignore <row-id>           # undone by: inbox restore
 ```
+
+Filing is undone by deleting the expense: `groupsplit transactions delete <transaction-id>`
+puts the row back in the inbox as waiting, with the receipt files it had there, and its
+confirmation says so. A row the bank has withdrawn since goes with the expense instead.
+
+`bank unlink` deletes the receipt files still waiting on that bank's inbox rows, stored
+objects included; files already on an expense stay with it. It succeeds when the provider no
+longer knows the item -- removed at its end, or by an earlier unlink that failed after
+telling it.
 
 `bank sync` answers as soon as the pull is queued, because nothing waits on a bank inside a
 request. `groupsplit inbox summary` is the cheap way to poll for it -- it is one count, not a

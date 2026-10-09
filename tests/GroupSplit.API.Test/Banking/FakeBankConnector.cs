@@ -53,6 +53,14 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     /// </summary>
     public bool RefuseRemoval { get; set; }
 
+    /// <summary>
+    /// When set, the provider has no item for any token: removed at its end. An item removed
+    /// once through <see cref="RemoveAsync"/> is unknown from then on whatever this says.
+    /// </summary>
+    public bool ItemUnknown { get; set; }
+
+    private readonly HashSet<string> _removedItems = [];
+
     /// <summary>The cursor each <see cref="SyncAsync"/> call was made with, in order.</summary>
     public IReadOnlyList<string?> CursorsSeen => Snapshot(_cursorsSeen);
 
@@ -225,6 +233,19 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
 
         if (RefuseRemoval)
             throw new BankSyncException(BankSyncFailure.Transient, "Scripted refusal to remove.");
+
+        // What the provider answers for an item it no longer has -- one already removed, by
+        // us on an earlier attempt or at its own end.
+        lock (_gate)
+        {
+            if (!_removedItems.Add(accessToken) || ItemUnknown)
+            {
+                throw new BankSyncException(BankSyncFailure.LoginRequired, "Scripted ITEM_NOT_FOUND.")
+                {
+                    ItemUnknown = true
+                };
+            }
+        }
 
         return Task.CompletedTask;
     }

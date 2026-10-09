@@ -14,7 +14,7 @@ description: >-
 license: MIT
 metadata:
   author: Sussman Club
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Filing bank rows
@@ -51,6 +51,11 @@ change shares. The transcription is a draft for review. Once the row is filed or
 the pending attachments move to the resulting expense; use `groupsplit receipts attachments`
 and `groupsplit receipts set` there to continue. `inbox attachments delete` is confirmation
 gated, and `inbox attachments download` writes a copy to a new local path.
+
+A file attached to a *pending* row is not lost when the charge posts: it moves to the
+posted row that takes over, so list the attachments on the row the inbox shows now. A file
+on a row the bank withdraws, or on a row whose bank is unlinked, is deleted with the row --
+say so before somebody unlinks a bank with receipts still waiting in its inbox.
 
 ## The loop
 
@@ -198,6 +203,18 @@ purchase, a bank fee -- not for a row you could not work out.
 
 `groupsplit inbox list --status filed|ignored|new` reads back each pile.
 
+## Undoing a filing
+
+Filed into the wrong group, or filed when it should have been linked? Delete the expense
+(`groupsplit transactions delete <transaction-id>`, confirmation-gated). The row goes back
+to the inbox as waiting, carrying the receipt files it had there before filing, and can be
+filed, linked or ignored again. Files added to the expense afterwards go with the expense.
+A row the bank has withdrawn since it was filed has nothing to go back to and is deleted
+with the expense.
+
+`inbox ignore` on a row that is still an expense refuses with
+`BANK_TRANSACTION_ALREADY_FILED`; deleting the expense is the way, not a workaround.
+
 ## When the matcher fires
 
 Worth knowing so you can explain a suggestion, or explain its absence. Two conditions have
@@ -205,7 +222,10 @@ to hold before anything is compared:
 
 - **The payer is the same person.** A bank row is one person's card charge, so the only
   expenses it can be are ones they are down as having paid.
-- **The expense has no bank row already.**
+- **The expense has no bank row already** -- or only one the bank withdrew, or that a
+  posted row superseded. A pending row filed as an expense and then re-posted under a new id
+  without naming it arrives as a fresh row; it is matched against that expense, and
+  `inbox link` moves the expense onto it.
 
 Then: within **5 days**, and within **25%** or **1.00** of the amount, whichever is more
 generous -- a card charge posts days after the meal, and a tip added after the receipt was
@@ -228,9 +248,12 @@ groupsplit bank sync <connection-id>        # pull new rows
 groupsplit bank refresh <connection-id>     # re-read the accounts, then pull
 ```
 
-`BANK_CONNECTION_NEEDS_ATTENTION` means the user has to re-authorise with their bank; there
-is nothing to retry. `bank link` and `bank unlink` are the user's to run --
-`bank unlink` is confirmation-gated.
+`BANK_CONNECTION_NEEDS_ATTENTION`, and a connection reading `login required`, mean the bank
+needs the user -- a new sign-in, a locked account, a password reset, an agreement waiting on
+the bank's own site, no account shared. There is nothing to retry: they deal with whatever
+the bank asks, then sign in again through update mode (`bank link-token --connection <id>`,
+then `bank refresh`). `bank link` and `bank unlink` are the user's to run -- `bank unlink`
+is confirmation-gated, and succeeds even when the provider has already let go of the item.
 
 A connection reading `account not shared` has money the app is not importing: the bank has
 an account the user never shared. Only they can fix it, in the linking UI in update mode

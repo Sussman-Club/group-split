@@ -95,6 +95,7 @@ public sealed class BankConnectionService(
     IServiceProvider services,
     IAccessTokenProtector protector,
     IJobDispatcher jobs,
+    IReceiptFiles receiptFiles,
     TimeProvider clock,
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
@@ -757,6 +758,26 @@ public sealed class BankConnectionService(
             transaction.BankTransactionId = null;
         }
 
+        // The receipt files go the same two ways. One that went on to an expense is the
+        // expense's, and keeps everything but the row it came from. One still waiting in the
+        // inbox belongs to a row that is about to stop existing, and goes with it -- stored
+        // object and all, because it is a picture of somebody's receipt and nothing else
+        // would ever delete it.
+        var attachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.BankTransactionId != null
+                                 && importedIds.Contains(attachment.BankTransactionId.Value))
+            .ToListAsync(ct);
+
+        var discarded = attachments.Where(attachment => attachment.ExpenseId is null).ToList();
+
+        foreach (var attachment in attachments.Except(discarded))
+        {
+            attachment.BankTransaction = null;
+            attachment.BankTransactionId = null;
+        }
+
+        dbContext.RemoveRange(discarded);
+
         // Told first, deleted second. A provider that refuses leaves the connection here,
         // which the person can try again; deleting first and failing to tell them would
         // leave an item nobody owns still being billed for and still sending webhooks.
@@ -768,7 +789,7 @@ public sealed class BankConnectionService(
         }
         else if (Readable(connection) is { } accessToken)
         {
-            await Call(connection.Provider, "remove the item", () => connector.RemoveAsync(accessToken, ct));
+            await Call(connection.Provider, "remove the item", () => RemoveItemAsync(connection, connector, accessToken, ct));
         }
         else
         {
@@ -789,6 +810,34 @@ public sealed class BankConnectionService(
         // relationship is SetNull, so they are spending history rather than an import.
         dbContext.Remove(connection);
         await dbContext.SaveChangesAsync(ct);
+
+        await receiptFiles.DeleteAsync(discarded.Select(attachment => attachment.ObjectKey),
+            "Could not remove the receipt object of a bank row whose bank was unlinked.", ct);
+    }
+
+    /// <summary>
+    /// Hands the item back, counting an item the provider no longer knows as handed back.
+    /// </summary>
+    /// <remarks>
+    /// That answer is what every retry got after an unlink that told the provider and then
+    /// failed to save -- and what an item removed at the provider's end always gets. Passed
+    /// through as a refusal, it was a 502 saying the bank service could not be reached, on
+    /// every attempt, for a connection nothing could then remove. The item is gone either
+    /// way, which is what unlinking was asking for.
+    /// </remarks>
+    private async Task RemoveItemAsync(
+        BankConnection connection, IBankConnector connector, string accessToken, CancellationToken ct)
+    {
+        try
+        {
+            await connector.RemoveAsync(accessToken, ct);
+        }
+        catch (BankSyncException e) when (e.ItemUnknown)
+        {
+            logger.LogInformation(e,
+                "Unlinking connection {ConnectionId}: {Provider} no longer knows item {ProviderItemId}, so there is "
+                + "nothing left to hand back there.", connection.Id, connection.Provider, connection.ProviderItemId);
+        }
     }
 
     public async Task<BankConnection> Refresh(Guid id, CancellationToken ct = default)

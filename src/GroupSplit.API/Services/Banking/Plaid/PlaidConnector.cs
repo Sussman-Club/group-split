@@ -308,12 +308,47 @@ public sealed class PlaidConnector(
     /// two places that meet them -- a failed call and an <c>ITEM: ERROR</c> webhook -- which
     /// had drifted to one code on the webhook side and four on the other.
     /// </summary>
+    /// <remarks>
+    /// Every item error Plaid documents as the user's to fix that can arrive on an item
+    /// already linked, rather than only inside the linking UI. The four it started with left
+    /// the rest transient, and a locked account, a password the bank wants reset or an
+    /// agreement waiting on the bank's own site was then retried every night, failing every
+    /// time, with the connection reporting itself healthy. Each is resolved the same way from
+    /// here -- the person deals with whatever the bank wants, then signs in again through
+    /// update mode -- so each marks the connection the same way.
+    /// <para>
+    /// The ones that only ever happen inside Link -- a wrong one-time code, a timed-out
+    /// form -- are not here: Link shows them to the person itself, and no stored item is in
+    /// that state. Nor is <c>PRODUCT_NOT_READY</c>, which is Plaid still preparing the data
+    /// and is transient.
+    /// </para>
+    /// </remarks>
     private static readonly HashSet<string> SignInCodes = new(StringComparer.Ordinal)
     {
         "ITEM_LOGIN_REQUIRED",
         "ITEM_NOT_FOUND",
         "INVALID_ACCESS_TOKEN",
-        "ITEM_NOT_SUPPORTED"
+        "ITEM_NOT_SUPPORTED",
+        "ITEM_LOCKED",
+        "USER_SETUP_REQUIRED",
+        "PASSWORD_RESET_REQUIRED",
+        "INSUFFICIENT_CREDENTIALS",
+        "INVALID_CREDENTIALS",
+        "INVALID_MFA",
+        "INVALID_UPDATED_USERNAME",
+        "MFA_NOT_SUPPORTED",
+        "NO_ACCOUNTS",
+        "ACCESS_NOT_GRANTED"
+    };
+
+    /// <summary>
+    /// The codes that say Plaid has no item for the token: it was removed at Plaid's end, or
+    /// by us on an earlier attempt. See <see cref="BankSyncException.ItemUnknown"/>.
+    /// </summary>
+    private static readonly HashSet<string> UnknownItemCodes = new(StringComparer.Ordinal)
+    {
+        "ITEM_NOT_FOUND",
+        "INVALID_ACCESS_TOKEN"
     };
 
     private static bool NeedsSignIn(string? code) => code is not null && SignInCodes.Contains(code);
@@ -359,6 +394,9 @@ public sealed class PlaidConnector(
             _ => BankSyncFailure.Transient
         };
 
-        throw new BankSyncException(kind, $"Plaid could not {what}: {code}.");
+        throw new BankSyncException(kind, $"Plaid could not {what}: {code}.")
+        {
+            ItemUnknown = UnknownItemCodes.Contains(code)
+        };
     }
 }

@@ -27,4 +27,16 @@ public sealed class BankSyncException(BankSyncFailure kind, string message, Exce
     : Exception(message, inner)
 {
     public BankSyncFailure Kind { get; } = kind;
+
+    /// <summary>
+    /// The provider has no item for the token it was handed: removed at the provider's end,
+    /// or already removed by us on an earlier attempt.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="Kind"/> rather than a kind of its own, because for everything but
+    /// one caller it means what <see cref="BankSyncFailure.LoginRequired"/> means -- the
+    /// connection needs the person. The exception is unlinking, where it is the outcome
+    /// being asked for: an item the provider does not know is an item already handed back.
+    /// </remarks>
+    public bool ItemUnknown { get; init; }
 }

@@ -113,14 +113,18 @@ pending -> posted as a new row in `added` whose `pending_transaction_id` names t
 one, and then a `removed` entry for the old one. The posted row takes `ReplacesId`, and
 takes over the pending row's status: `New` stays `New` under the new row, `Ignored`
 stays ignored, and `Filed` moves the ledger link -- the `Transaction` now points at the
-posted row. The pending row becomes `Superseded`, which no listing shows and no sync
-touches again. That keeps the history the roadmap wanted `ReplacesId` for, and keeps the
-inbox from showing the same coffee twice.
+posted row. Receipt files attached to the pending row move with it. The pending row
+becomes `Superseded`, which no listing shows and no sync touches again. That keeps the
+history the roadmap wanted `ReplacesId` for, and keeps the inbox from showing the same
+coffee twice.
 
 **A `removed` entry deletes a row nobody has acted on.** `New` and `Ignored` rows are
-deleted; a `Filed` row is kept and stamped `RemovedAt`, because the expense it became is
-somebody's spending history and the inbox needs to be able to say "the bank withdrew
-this". `Superseded` rows are left alone -- the replacement holds the story.
+deleted, with any receipt file attached to them in the inbox and its stored object; a
+`Filed` row is kept and stamped `RemovedAt`, because the expense it became is somebody's
+spending history and the inbox needs to be able to say "the bank withdrew this".
+`Superseded` rows are left alone -- the replacement holds the story. Deleting the expense
+of a stamped row deletes the row too; deleting the expense of any other filed row puts the
+row back in the inbox.
 
 **Rows are saved per page; the cursor only when the page run is complete.** Plaid's
 guidance is to persist `next_cursor` only once `has_more` is false, and on any error
@@ -128,7 +132,10 @@ during pagination to restart the loop from the cursor the run began with. So eac
 rows are written as they arrive -- every write is an upsert keyed on the provider's id,
 so a replay changes nothing -- and `Cursor` moves only at the end. A crash mid-run
 leaves the rows and the old cursor, and the next run walks the same pages over the
-same rows and lands in the same place.
+same rows and lands in the same place. A restart from the starting cursor
+(`TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION`) remembers the rows the abandoned walk
+inserted; one the walk that finishes never reports again, and nobody has filed, is deleted
+before the cursor moves -- otherwise it would sit in the inbox as money nobody spent.
 
 **One sync per connection at a time, in process.** A `SemaphoreSlim` per connection id,
 held by a singleton. That is correct for one API instance, which is what runs today and
@@ -388,7 +395,7 @@ Two groups, and the anonymous route.
 | `POST /bank-connections/link-token` | `CreateLinkToken` | `LinkTokenResponse { token, expiresAt }`; body may name a connection for update mode |
 | `POST /bank-connections` | `LinkBankConnection` | `BankConnectionResponse`, 201; exchanges the public token, stores the item and its accounts, enqueues a sync |
 | `POST /bank-connections/{id}/sync` | `SyncBankConnection` | 202 |
-| `DELETE /bank-connections/{id}` | `UnlinkBankConnection` | 204; removes the item at the provider, deletes the connection; filed expenses lose their link and keep everything else |
+| `DELETE /bank-connections/{id}` | `UnlinkBankConnection` | 204; removes the item at the provider (one it no longer knows counts as removed), deletes the connection; filed expenses lose their link and keep everything else; receipt files still waiting in the inbox are deleted with their stored objects |
 | `GET /inbox` | `GetInbox` | `PagedResponse<BankTransactionResponse>`, `status` filter defaulting to `New`, sorted by date descending |
 | `GET /inbox/summary` | `GetInboxSummary` | `{ newCount }` for the badge |
 | `POST /inbox/{id}/file` | `FileBankTransaction` | `TransactionResponse`, 201 |
