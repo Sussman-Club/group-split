@@ -1,3 +1,4 @@
+using GroupSplit.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -60,7 +62,11 @@ public static class Extensions
                 logging.IncludeScopes = true;
             });
 
+            // Registered here, ahead of the exporters AddOpenTelemetryExporters adds, because a
+            // processor sees a span or a log record only in the order it was added: one added
+            // after the exporter would redact what had already been handed over.
             builder.Services.AddOpenTelemetry()
+                .WithLogging(logging => logging.AddProcessor(new TokenRedaction.LogProcessor()))
                 .WithMetrics(metrics =>
                 {
                     metrics.AddAspNetCoreInstrumentation()
@@ -83,7 +89,10 @@ public static class Extensions
                         //.AddGrpcClientInstrumentation()
                         .AddHttpClientInstrumentation()
                         .AddEntityFrameworkCoreInstrumentation()
-                        .AddAWSInstrumentation();
+                        .AddAWSInstrumentation()
+                        // Invitation and join-link tokens out of url.path and url.full, on
+                        // server and client spans alike. See TokenRedaction.
+                        .AddProcessor(new TokenRedaction.SpanProcessor());
                 });
 
             builder.AddOpenTelemetryExporters();
