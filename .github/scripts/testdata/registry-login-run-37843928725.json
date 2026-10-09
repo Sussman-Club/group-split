@@ -1,0 +1,21 @@
+{
+  "_id": {
+    "$oid": "6ac807e04217c9d0b4018da8"
+  },
+  "operation": "DeployStack",
+  "status": "Complete",
+  "success": false,
+  "target": {
+    "type": "Stack",
+    "id": "group-split"
+  },
+  "logs": [
+    {
+      "stage": "Login to Registry",
+      "command": "",
+      "stdout": "",
+      "stderr": "<span style=\"color: var(--mantine-color-red-6)\">ERROR</span>: Failed to login to image registry\n\n<span style=\"color: var(--mantine-color-dimmed)\">TRACE</span>:\n\t<span style=\"color: var(--mantine-color-dimmed)\">1</span>: Domain: 'ghcr.io' | Account: 'registry-account'\n\t<span style=\"color: var(--mantine-color-dimmed)\">2</span>: Registry ghcr.io login error\n\t<span style=\"color: var(--mantine-color-dimmed)\">3</span>: Error response from daemon: Get \"https://ghcr.io/v2/\": denied: denied\n\t<span style=\"color: var(--mantine-color-dimmed)\">4</span>: End of trace\n",
+      "success": false
+    }
+  ]
+}

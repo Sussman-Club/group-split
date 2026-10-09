@@ -132,7 +132,7 @@ every image build waits on.
 | GitHub entry | Required | Purpose |
 | --- | --- | --- |
 | secrets `KOMODO_URL`, `KOMODO_API_KEY`, `KOMODO_API_SECRET` | yes | Where Komodo's API is and the key the workflow calls it with. |
-| variable `KOMODO_REGISTRY_ACCOUNT` | yes | The name of the `ghcr.io` account in Komodo's registry providers (Settings -> Providers) that Komodo logs in with before it pulls the images. Its token is a classic personal access token with `read:packages` on an account that can read the organisation's packages. When that token expires, every deploy fails at Komodo's "Login to Registry" stage; renewing it is a change in Komodo, and moving to somebody else's account is that plus this variable. |
+| variable `KOMODO_REGISTRY_ACCOUNT` | yes | The name of the `ghcr.io` account in Komodo's registry providers (Settings -> Providers) that Komodo logs in with before it pulls the images. Its token is a classic personal access token with `read:packages` on an account that can read the organisation's packages. When that token expires, every deploy fails at Komodo's "Login to Registry" stage; renewing it is a change in Komodo, and moving to somebody else's account is that plus this variable. See [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). |
 | variable `KOMODO_STACK` | no, defaults to `group-split` | The Komodo stack the Compose file is written into. |
 
 Run mode uses AppHost parameters from user secrets or environment variables. The passwords
@@ -735,7 +735,7 @@ never touches the deployed stack.
 | The `production` environment allows `main` | The job runs `environment: production`, and the run happens at `refs/heads/main`, so the environment needs a deployment **branch** policy for `main`. |
 | Every required secret and variable on that environment | See [Deployment parameters](#deployment-parameters). Checked before anything is built. |
 | A Komodo stack named `group-split` (or `KOMODO_STACK`) in `file_contents` mode | The workflow writes the generated Compose file into it. It does not create the stack. |
-| The `KOMODO_REGISTRY_ACCOUNT` account in Komodo's registry providers | Komodo logs in to `ghcr.io` with it before pulling, and the images are private. |
+| The `KOMODO_REGISTRY_ACCOUNT` account in Komodo's registry providers, with a token that has not expired | Komodo logs in to `ghcr.io` with it before pulling, and the images are private. See [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). |
 
 ### What the workflow does
 
@@ -771,7 +771,8 @@ never touches the deployed stack.
    When the deploy fails, the job prints the failed Compose stages and fetches the log of
    every service Compose names, whether it exited non-zero or its healthcheck never
    passed, before it rolls the stack back -- the rollback recreates the container, and
-   with it the only copy of that log.
+   with it the only copy of that log. What else it does is in
+   [When a deploy fails](#when-a-deploy-fails).
 10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
     completed Komodo update proves the stack operation finished, not that the release is
     being served.
@@ -785,9 +786,92 @@ Only one deploy runs at a time. Two concurrent runs would push different image t
 same Komodo stack and race each other, so a second merge waits rather than cancelling the
 first.
 
+### When a deploy fails
+
+When Komodo's update fails, the job prints the failed stages with their errors, and the
+log of any service that did not complete or never became healthy. What it does next
+depends on whether the failure was the registry login, which
+[`classify-komodo-failure.sh`](../.github/scripts/classify-komodo-failure.sh) reads from
+the stages the update records:
+
+| Failed at | Production touched | What the job does |
+| --- | --- | --- |
+| "Login to Registry" | No. Komodo stops at the login, before it pulls or restarts anything, so production still runs the previous release. | Puts the previous configuration back into Komodo's stack without deploying it, and says to renew the registry token: see [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). It does not roll back: a redeploy starts with the same login and would fail the same way. |
+| Any other stage | Possibly. Compose recreates the api and web containers before it finds out that a service they wait for has failed, so the site may be down. | Puts the previous configuration back and deploys it again. If that fails too, production is probably down. |
+
+Putting the configuration back even when nothing was redeployed keeps Komodo honest: what
+its stack shows, and what a deploy started from Komodo's own UI would run, is what
+production runs.
+
+Only the registry login is singled out, because it is the one failure seen for real and
+known to leave production as it was. Other stages that probably run before any container
+changes, such as pulling the images, are rolled back like everything else: their stage
+names have not been seen in a real update, and guessing them wrong would skip a rollback
+that was needed. The script's samples are the real updates from run
+[37843928725](https://github.com/Sussman-Club/group-split/actions/runs/37843928725), and
+CI runs its test (`bash .github/scripts/classify-komodo-failure.test.sh`, which needs
+`jq`).
+
+Every failed deploy writes a job summary naming the release, the Komodo update, the stage
+it failed at, whether production was touched, and the outcome. A deploy still running
+after five minutes, or a request to Komodo that failed outright, is summarised the same
+way, with "unknown" when the job cannot tell whether production was touched.
+
+### The registry account Komodo pulls with
+
+The images in `ghcr.io/sussman-club/group-split` are private, so Komodo logs in to GHCR
+before it pulls them. It logs in as the account the workflow writes into the stack's
+`registry_account`, which is the `KOMODO_REGISTRY_ACCOUNT` variable on the `production`
+environment; today that is a person's own GitHub account. Komodo keeps that account's
+token under Settings -> Providers, next to the account name.
+
+The token must be a **classic** personal access token with the **`read:packages`** scope
+and nothing else. GHCR does not accept fine-grained tokens for pulling, and a classic token
+cannot be narrowed to one organisation, so `read:packages` lets it read every package its
+account can see -- one more reason to keep it to that scope. The account itself needs read
+access to the organisation's `group-split` packages.
+
+When the token expires or is revoked, every deploy fails at "Login to Registry" with
+`Error response from daemon: Get "https://ghcr.io/v2/": denied`, and the job summary says
+so. Production is unaffected; only deploys stop. To rotate it:
+
+1. Signed in as the registry account, open GitHub's Settings -> Developer settings ->
+   Personal access tokens -> Tokens (classic) -> Generate new token (classic). Tick only
+   `read:packages`, and choose an expiry (see below).
+2. Optionally check it before Komodo does:
+   `docker login ghcr.io -u <account> --password-stdin` with the token on standard input
+   should print `Login Succeeded`.
+3. In Komodo, Settings -> Providers, edit the `ghcr.io` account of that name and replace
+   its token. Nothing in the repository or in GitHub's environment changes.
+4. Re-run the failed deploy job (the run's "Re-run failed jobs"). The release tag is already
+   on `HEAD`, so it deploys the same version again rather than claiming a new one.
+5. Delete the old token if it has not simply expired.
+
+Moving to a different account is the same, plus adding that account under Komodo's
+providers and changing `KOMODO_REGISTRY_ACCOUNT`; the next deploy writes the new name into
+the stack.
+
+**One person's token is a weak dependency.** It expires on that person's schedule, GitHub
+mails its expiry warning to that person only, and it stops working if they leave the
+organisation. Two ways out, not exclusive:
+
+- **A dedicated machine account** (GitHub's terms allow one free machine account per
+  person or organisation), a member of the organisation with read access to the
+  `group-split` packages and nothing else. Its token then reads only those packages, its
+  expiry reminders can go to a shared inbox, and nobody's personal account is in the deploy
+  path. It takes a seat on a paid plan and is one more account to look after. This is the
+  recommended option, with a one-year expiry and the renewal date on the team's calendar.
+- **A much longer expiry**, up to no expiry at all. It removes the routine failure, but the
+  token then lives for as long as nobody revokes it, and a classic token reads every
+  package its account can see. If it is chosen, put the expiry date somewhere the team will
+  see it before then.
+
+Making the packages public would remove the login altogether, but it publishes the images
+of a private repository; that is not done.
+
 ### What this does not do
 
-There is no rollback. The smoke test runs after Komodo has deployed, so a release that
+The smoke test does not roll back. It runs after Komodo has deployed, so a release that
 fails it is already the one being served; recovering means deploying a known-good version,
 and the digest-pinned manifest from an earlier run is what names one. Nothing backs the
 database up before the migration container runs either, and migrations are forward-only --

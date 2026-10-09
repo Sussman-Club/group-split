@@ -1,0 +1,16 @@
+{
+  "_id": { "$oid": "000000000000000000000001" },
+  "operation": "DeployStack",
+  "status": "Complete",
+  "success": false,
+  "logs": [
+    { "stage": "Login to Registry", "command": "", "stdout": "Login Succeeded", "stderr": "", "success": true },
+    {
+      "stage": "Compose Pull",
+      "command": "docker compose -p group-split -f compose.yaml --env-file .env pull",
+      "stdout": "",
+      "stderr": " api Error manifest unknown\nError response from daemon: manifest unknown\n",
+      "success": false
+    }
+  ]
+}
