@@ -113,6 +113,24 @@ public sealed class ApiErrorMapperTests
     }
 
     /// <summary>
+    /// A deleted account's session is refused for good. Signing in again cannot help -- the
+    /// login is deleted too -- so the hint is to throw the stored session away.
+    /// </summary>
+    [Fact]
+    public void A_deleted_account_is_told_to_clear_its_session_rather_than_sign_in_again()
+    {
+        var error = ApiErrorMapper.Map(Exception(403, new
+        {
+            title = "Forbidden",
+            code = SharedErrorCodes.AccountDeleted
+        }));
+
+        Assert.Equal(ExitCodes.AuthRequired, error.ExitCode);
+        Assert.Contains("auth logout", error.Error.Remediation);
+        Assert.DoesNotContain("auth status", error.Error.Remediation);
+    }
+
+    /// <summary>
     /// One code answers a stale join link and a stale invitation alike, so the way back
     /// names the command for each rather than assuming the join link.
     /// </summary>

@@ -1,5 +1,8 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Services;
+using GroupSplit.Jobs;
+using GroupSplit.Jobs.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GroupSplit.API.Extensions;
 
@@ -26,6 +29,17 @@ public static class DomainServiceExtensions
             services.AddCurrentUser();
             services.AddScoped<IDebtCalculationService, DebtCalculationService>();
             services.AddScoped<IAccountService, AccountService>();
+
+            // The Keycloak half of deleting an account. Keycloak itself is the host's to
+            // provide -- IKeycloakUserRemoval, from AddKeycloakAdminClient in Program.cs, or a
+            // fake in a test host -- like any other system outside this one.
+            services.TryAddSingleton(TimeProvider.System);
+            services.AddScoped<ILoginDeletion, LoginDeletion>();
+            services.AddJobs()
+                .Handlers
+                    .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
+                .JobsBuilder
+                    .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule);
             services.AddScoped<IGroupService, GroupService>();
             services.AddScoped<IGroupJoiner, GroupJoiner>();
             services.AddScoped<IGroupParticipants, GroupParticipants>();

@@ -180,6 +180,30 @@ public class EndpointTest : IAsyncLifetime
     }
 
     /// <summary>
+    /// #360 where a client meets it: once the account is deleted, the same login is refused
+    /// with a code of its own, on every route, rather than provisioned a fresh account.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_account_is_refused_rather_than_provisioned_again()
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        (await Client.GetAsync("/users/me", ct)).EnsureSuccessStatusCode();
+
+        var deleted = await Client.DeleteAsync("/users/me", ct);
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        var removal = (FakeKeycloakUserRemoval)_host.Services.GetService(typeof(FakeKeycloakUserRemoval))!;
+        Assert.Equal([_host.Subject], removal.Removed);
+
+        var again = await Client.GetAsync("/users/me", ct);
+        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
+
+        var problem = await again.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+        Assert.Equal("ACCOUNT_DELETED", problem.GetProperty("code").GetString());
+    }
+
+    /// <summary>
     /// The defect this branch fixed, now checked where a client would meet it: the details
     /// route used to hand back any transaction to any signed-in caller who knew its id.
     /// </summary>

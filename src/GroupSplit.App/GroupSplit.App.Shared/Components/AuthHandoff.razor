@@ -37,7 +37,7 @@
             }
             else if (Error is not null)
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense Class="w-100">
+                <MudAlert Severity="@(_notice ? Severity.Info : Severity.Error)" Variant="Variant.Outlined" Dense Class="w-100">
                     @Error
                 </MudAlert>
             }
@@ -72,6 +72,7 @@
 
     private bool _redirecting;
     private bool _remember;
+    private bool _notice;
     private string? Error { get; set; }
 
     protected override void OnInitialized()
@@ -79,7 +80,10 @@
         // A code, resolved here. The query string is whatever the address bar says, and
         // rendering its text verbatim would let anybody put their own sentence in a red
         // box on the app's own sign-in page. See HandoffReason.
-        Error = HandoffReason.Message(ReadQueryValue("reason"));
+        var reason = ReadQueryValue("reason");
+
+        Error = HandoffReason.Message(reason);
+        _notice = HandoffReason.IsNotice(reason);
     }
 
     private async Task GoAsync()

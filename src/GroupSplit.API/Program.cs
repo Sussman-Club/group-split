@@ -4,6 +4,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Middleware;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Data.PostgreSQL;
+using GroupSplit.Keycloak;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,6 +42,10 @@ builder.Services.AddAuthentication()
         });
 
 builder.Services.AddAuthorizationBuilder();
+
+// Keycloak's admin API, signed in to as the account-deletion client: deleting an account
+// deletes its login there. The client holds manage-users in the app's realm and nothing else.
+builder.AddKeycloakAdminClient();
 
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddReceiptStorage(builder.Configuration);

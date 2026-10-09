@@ -112,7 +112,7 @@ The signed-in account and what it is owed.
 | --- | --- |
 | `users me` | Show the account this CLI is acting as. |
 | `users position` | Show your overall balance across every group. |
-| `users delete` | Delete the account you are signed in as. Permanent. |
+| `users delete` | Delete the account you are signed in as, and its sign-in with it: the Keycloak login, any linked Google account and every session. Permanent; nobody can sign in as it again, from the CLI or the web app. Refused with `ACCOUNT_NOT_SETTLED` while any group balance is not zero. Clears the stored credentials on success. |
 
 ### settle
 

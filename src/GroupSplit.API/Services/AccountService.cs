@@ -27,15 +27,25 @@ public interface IAccountService
 
 public sealed class AccountService(
     IGroupService groups,
-    AppDbContext context) : IAccountService
+    ILoginDeletion logins,
+    TimeProvider clock,
+    AppDbContext context,
+    ILogger<AccountService> logger) : IAccountService
 {
+    /// <summary>
+    /// How long the request waits for Keycloak before leaving the login to the sweep. Short,
+    /// because somebody is watching a button, and because nothing is lost by giving up: the
+    /// account is already deleted and the login deletion is written down.
+    /// </summary>
+    internal static readonly TimeSpan LoginDeletionWait = TimeSpan.FromSeconds(10);
+
     /// <summary>
     /// The account is anonymised rather than erased. Its transactions and settlements are
     /// half of somebody else's history -- one member's expense is what every other
     /// member's share was calculated from -- so deleting the rows would silently rewrite
     /// the ledger for people who did not ask for it. What goes is everything that
-    /// identifies the person: their name, their address, and the mapping to their
-    /// Keycloak subject.
+    /// identifies the person: their name, their address, and their login, which is deleted
+    /// from Keycloak along with every session it holds. See <c>docs/account-deletion.md</c>.
     /// </summary>
     public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
@@ -43,6 +53,14 @@ public sealed class AccountService(
         var user = await context.Set<User>()
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
+
+        // Already done, login deletion included: that was written down the first time and is
+        // the sweep's to finish. Only reachable now that a caller can name an account rather
+        // than be one -- a deleted account cannot sign in to ask twice.
+        if (user.Kind == UserKind.Deleted)
+        {
+            return [];
+        }
 
         await context.Entry(user).Collection(entity => entity.Groups)
             .LoadAsync(cancellationToken);
@@ -92,18 +110,21 @@ public sealed class AccountService(
         // *sent* keep pointing at them until the reference is cleared, which is the FK's own
         // doing.
 
-        // Keycloak keeps the login -- deleting it there is a separate decision -- so
-        // dropping the mapping is what stops a later sign-in resurrecting this account.
-        // Without it the next request would find the row by subject and hand back the
-        // profile that was just cleared.
+        // The login is deleted from Keycloak, and that is another system: it cannot be part of
+        // the save below, so what is owed to it is. The identity row stays, as a tombstone --
+        // UserProvisioner refuses a sign-in that finds it on a deleted account, which covers
+        // the moments before Keycloak catches up and any token issued before it did.
         await context.Entry(user).Reference(entity => entity.Identity)
             .LoadAsync(cancellationToken);
 
-        // Absent when the account has already been anonymised. Reaching that state twice
-        // is only possible now that a caller can name an account instead of being one.
-        if (user.Identity is not null)
+        // Absent for a stand-in a group named, which has no login to delete.
+        var pending = user.Identity is { } identity
+            ? new PendingLoginDeletion { IdentityId = identity.IdentityId, RequestedAt = clock.GetUtcNow() }
+            : null;
+
+        if (pending is not null)
         {
-            context.Remove(user.Identity);
+            context.Add(pending);
         }
 
         user.FirstName = null;
@@ -112,9 +133,39 @@ public sealed class AccountService(
         user.Kind = UserKind.Deleted;
 
         // One save for the whole thing, so a failure part way through leaves the account
-        // as it was rather than stranded between states.
+        // as it was rather than stranded between states -- and the login deletion is never
+        // owed without the account having gone, or the other way round.
         await context.SaveChangesAsync(cancellationToken);
 
+        if (pending is not null)
+        {
+            await DeleteLoginNow(pending, cancellationToken);
+        }
+
         return outstanding;
+    }
+
+    /// <summary>
+    /// The first attempt, inside the request, so that in the ordinary case the login is gone
+    /// -- and its sessions with it -- by the time the person is told their account is.
+    /// Bounded, and never a failure of the request: the account is deleted whatever happens
+    /// here, and anything left over is the sweep's.
+    /// </summary>
+    private async Task DeleteLoginNow(PendingLoginDeletion pending, CancellationToken cancellationToken)
+    {
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        wait.CancelAfter(LoginDeletionWait);
+
+        try
+        {
+            await logins.TryDeleteAsync(pending.Id, wait.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Keycloak did not answer within {Wait} when deleting the login {IdentityId}. The account is "
+                + "deleted and its sign-in is refused; deleting the login will be retried.",
+                LoginDeletionWait, pending.IdentityId);
+        }
     }
 }

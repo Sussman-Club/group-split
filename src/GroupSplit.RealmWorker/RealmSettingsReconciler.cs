@@ -5,8 +5,9 @@ namespace GroupSplit.RealmWorker;
 
 /// <summary>
 /// Brings the allowlisted realm, client and identity provider settings, and the first broker
-/// login flow, back to the checked-in realm export, and, when an admin console address is
-/// configured, points the admin realm at it.
+/// login flow, back to the checked-in realm export; makes the confidential clients the
+/// application signs in as exist with the secret it was given; and, when an admin console
+/// address is configured, points the admin realm at it.
 /// </summary>
 /// <param name="environment">
 /// Resolves the <c>${...}</c> placeholders the export carries, from the same variables the
@@ -34,6 +35,11 @@ public sealed class RealmSettingsReconciler(
         foreach (var managed in KeycloakRealmDefinition.ManagedClients)
         {
             await ReconcileClientAsync(desired, managed, ct);
+        }
+
+        foreach (var service in KeycloakRealmDefinition.ServiceClients)
+        {
+            await ReconcileServiceClientAsync(desired, service, ct);
         }
 
         foreach (var managed in KeycloakRealmDefinition.ManagedIdentityProviders)
@@ -120,6 +126,24 @@ public sealed class RealmSettingsReconciler(
         }
 
         managed["clients"] = clients;
+
+        // Whole clients rather than a few properties of one, because these may have to be
+        // created -- and with their secret, which is a placeholder the deployment fills.
+        var serviceClients = new JsonArray();
+
+        foreach (var service in KeycloakRealmDefinition.ServiceClients)
+        {
+            var source = KeycloakRealmDefinition.Client(definition, service.ClientId)!;
+            var picked = Pick(source,
+                [.. KeycloakRealmDefinition.ServiceClientProperties, "name", "description", "protocol", "secret"]);
+
+            picked["clientId"] = service.ClientId;
+            picked["roles"] = new JsonArray(KeycloakRealmDefinition.ServiceAccountRoles(definition, service.ClientId)
+                .Select(role => (JsonNode?)JsonValue.Create(role)).ToArray());
+            serviceClients.Add(picked);
+        }
+
+        managed["serviceClients"] = serviceClients;
 
         var providers = new JsonArray();
         var flows = new JsonArray();
@@ -278,6 +302,97 @@ public sealed class RealmSettingsReconciler(
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// Makes a client the application signs in as exist, and hold exactly what the file says:
+    /// its flows, the secret the deployment gives it, and its service account's roles.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Created when missing, unlike <c>web-app</c>. The realm every deployment so far runs on
+    /// was imported before this client existed, and import never runs again on a realm that
+    /// has data -- so without this the client would be a manual step on every existing realm,
+    /// production's and every developer's, and a forgotten one would leave every deleted
+    /// account's login standing.
+    /// </para>
+    /// <para>
+    /// The secret is compared rather than written blind, so a second run changes nothing; it
+    /// is never logged. Rotating it is changing the deploy secret: the next run writes it here,
+    /// and the API, given the same value, signs in with it.
+    /// </para>
+    /// </remarks>
+    private async Task ReconcileServiceClientAsync(JsonObject desired, ServiceClient service, CancellationToken ct)
+    {
+        var wanted = desired["serviceClients"]!.AsArray().OfType<JsonObject>()
+            .Single(client => client["clientId"]!.GetValue<string>() == service.ClientId);
+        var secret = wanted["secret"]!.GetValue<string>();
+        var roles = wanted["roles"]!.AsArray().Select(role => role!.GetValue<string>()).ToList();
+
+        var current = await keycloak.GetClientAsync(service.ClientId, ct);
+
+        if (current is null)
+        {
+            var created = (JsonObject)wanted.DeepClone();
+            created.Remove("roles");
+
+            await keycloak.CreateClientAsync(created, ct);
+            logger.LogInformation("Created client {ClientId} on Keycloak realm {Realm}.", service.ClientId, keycloak.Realm);
+
+            current = await keycloak.GetClientAsync(service.ClientId, ct)
+                ?? throw new InvalidOperationException(
+                    $"Created client '{service.ClientId}' on Keycloak realm {keycloak.Realm}, but it does not read back.");
+        }
+        else
+        {
+            var changed = Apply(current, wanted, KeycloakRealmDefinition.ServiceClientProperties);
+
+            if (await keycloak.GetClientSecretAsync(Id(current), ct) != secret)
+            {
+                current["secret"] = secret;
+                changed.Add("secret");
+            }
+
+            if (changed.Count > 0)
+            {
+                await keycloak.UpdateClientAsync(current, ct);
+                logger.LogInformation(
+                    "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
+                    changed.Count, service.ClientId, keycloak.Realm, string.Join(", ", changed));
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Client {ClientId} on Keycloak realm {Realm} already matches the repository settings.",
+                    service.ClientId, keycloak.Realm);
+            }
+        }
+
+        var held = await keycloak.GetServiceAccountRolesAsync(
+            Id(current), KeycloakRealmDefinition.RealmManagementClientId, ct);
+        var missing = roles.Except(held, StringComparer.Ordinal).ToList();
+        var extra = held.Except(roles, StringComparer.Ordinal).ToList();
+
+        if (missing.Count > 0)
+        {
+            await keycloak.GrantServiceAccountRolesAsync(
+                Id(current), KeycloakRealmDefinition.RealmManagementClientId, missing, ct);
+        }
+
+        if (extra.Count > 0)
+        {
+            await keycloak.RevokeServiceAccountRolesAsync(
+                Id(current), KeycloakRealmDefinition.RealmManagementClientId, extra, ct);
+        }
+
+        if (missing.Count > 0 || extra.Count > 0)
+        {
+            logger.LogInformation(
+                "Service account of client {ClientId} on Keycloak realm {Realm}: granted [{Granted}], revoked [{Revoked}].",
+                service.ClientId, keycloak.Realm, string.Join(", ", missing), string.Join(", ", extra));
+        }
+
+        static string Id(JsonObject client) => client["id"]!.GetValue<string>();
     }
 
     private async Task ReconcileIdentityProviderAsync(

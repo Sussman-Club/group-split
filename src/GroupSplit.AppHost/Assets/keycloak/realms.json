@@ -120,6 +120,35 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "account-deletion",
+      "name": "Account Deletion",
+      "description": "The API, deleting the login of somebody who deleted their account. Client credentials only, and its service account holds realm-management's manage-users and nothing else.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_ACCOUNT_DELETION_SECRET}",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "false"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-account-deletion",
+      "enabled": true,
+      "serviceAccountClientId": "account-deletion",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
     }
   ],
   "identityProviders": [

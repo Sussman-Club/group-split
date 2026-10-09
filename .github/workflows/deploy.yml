@@ -94,6 +94,9 @@ jobs:
           KEYCLOAK_PASSWORD: ${{ secrets.KEYCLOAK_PASSWORD }}
           KEYCLOAK_ADMIN_USER: ${{ vars.KEYCLOAK_ADMIN_USER }}
           KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+          # The account-deletion client's secret. The realm worker creates the client and
+          # holds it to this value on every deploy, so rotating it is changing this secret.
+          KEYCLOAK_ACCOUNT_DELETION_SECRET: ${{ secrets.KEYCLOAK_ACCOUNT_DELETION_SECRET }}
           CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
           # Pinned for the same reason as the two passwords above: left to Aspire, the
           # RustFS keys are regenerated on every publish, so the storage container is
@@ -159,7 +162,7 @@ jobs:
           }
 
           require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD CACHE_PASSWORD \
+                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET CACHE_PASSWORD \
                   STORAGE_ACCESSKEY STORAGE_SECRETKEY
 
           require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
@@ -334,7 +337,7 @@ jobs:
           # environment.
           parameters="
             WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
-            KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD
+            KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET
             STORAGE_ACCESSKEY STORAGE_SECRETKEY
             SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
             GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET

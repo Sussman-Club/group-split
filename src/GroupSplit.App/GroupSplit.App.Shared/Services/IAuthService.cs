@@ -10,4 +10,10 @@ public interface IAuthService
     Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default);
 
     Task Logout(CancellationToken ct = default);
+
+    /// <summary>
+    /// Signs out of this app only, once the account has been deleted. The login and its
+    /// Keycloak sessions were deleted with the account, so there is nothing to end there.
+    /// </summary>
+    Task SignOutDeletedAccount(CancellationToken ct = default);
 }

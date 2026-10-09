@@ -13,4 +13,9 @@ public class AuthService : IAuthService
     {
         throw new NotImplementedException();
     }
+
+    public Task SignOutDeletedAccount(CancellationToken ct = default)
+    {
+        throw new NotImplementedException();
+    }
 }

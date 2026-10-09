@@ -70,14 +70,15 @@ public static class UserCommands
     }
 
     /// <summary>
-    /// Deletes the signed-in account. The one command here that cannot be undone, so the
-    /// confirmation names the account rather than describing it in the abstract, and the
-    /// stored credentials go with it -- leaving them would make the next command fail
-    /// against an identity that no longer exists.
+    /// Deletes the signed-in account, and with it the login this CLI signed in with. The one
+    /// command here that cannot be undone, so the confirmation names the account rather than
+    /// describing it in the abstract, and the stored credentials go with it -- the login they
+    /// belong to no longer exists, so they could only produce refusals.
     /// </summary>
     private static Command Delete()
     {
-        var command = new Command("delete", "Delete the account you are signed in as. Permanent.");
+        var command = new Command("delete",
+            "Delete the account you are signed in as, and its sign-in. Permanent.");
 
         command.SetHandler(async (context, ct) =>
         {
@@ -89,14 +90,17 @@ public static class UserCommands
                 summary: $"Permanently delete the account {user.Email ?? user.FullName}?",
                 changes:
                 [
-                    $"{user.FullName} is removed from every group.",
-                    "Your own expenses and their history go with it. This cannot be undone.",
+                    $"{user.FullName} is removed from every group, and your name and email address are erased.",
+                    "Your sign-in is deleted too -- password, linked Google account and every session -- "
+                    + "so you cannot sign in again, here or in the web app.",
+                    "Expenses you recorded stay in their groups under a deleted account. This cannot be undone.",
                     "Refused while you still owe money or are owed it in any group."
                 ]);
 
             await context.Users.DeleteCurrentUserAsync(ct);
 
-            // The account is gone, so credentials for it can only produce failures. Cleared
+            // The account is gone and so is its login, so credentials for it can only produce
+            // failures: the refresh token's session ended with the login. Cleared
             // after the call, never before: a refusal -- an unsettled balance is one -- has
             // to leave the session it arrived on intact. AuthorityOrNull rather than
             // Authority, because GROUPSPLIT_TOKEN is a complete configuration with no
@@ -108,7 +112,7 @@ public static class UserCommands
 
             context.Output.Write(
                 new { status = "deleted", userId = user.Id },
-                _ => new Markup("[green]Account deleted.[/] Signed out.\n"));
+                _ => new Markup("[green]Account deleted[/], and its sign-in with it. Signed out.\n"));
 
             return ExitCodes.Success;
         });

@@ -90,7 +90,11 @@ public static class ApiErrorMapper
             => "No account can rename, relogo or delete a merchant: it is shared by every group "
                + "that has spent there. To change where one expense was spent: "
                + "groupsplit transactions update <transaction-id> --merchant-id <merchant-id>",
-        HttpStatusCode.Forbidden =>"The account you are signed in as is not allowed to do this. "
+        // Not fixable by signing in again: the account is gone, and its login is going or
+        // gone. What is left is the stored session, which can only keep being refused.
+        HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.AccountDeleted
+            => "This account was deleted. Clear the stored session with: groupsplit auth logout",
+        HttpStatusCode.Forbidden => "The account you are signed in as is not allowed to do this. "
                                     + "Check with: groupsplit auth status",
         // Guest routes take the guest's user id, which is not the old invitation id -- the
         // one mix-up worth naming.

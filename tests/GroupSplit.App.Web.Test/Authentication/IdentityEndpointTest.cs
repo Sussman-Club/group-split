@@ -31,6 +31,32 @@ public class IdentityEndpointTest
         Assert.Equal("S256", SignInHost.AuthorizeParameter(response, "code_challenge_method"));
     }
 
+    /// <summary>
+    /// After the account is deleted, signing out is the app's alone. Keycloak deleted the
+    /// login and its sessions with it, so a round trip through its end-session endpoint has
+    /// nothing to end -- and goes to the one system that may not be answering.
+    /// </summary>
+    [Fact]
+    public async Task Signing_out_a_deleted_account_stays_in_the_app_and_says_why()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+
+        var response = await host.Client.GetAsync("/auth/account-deleted", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        var location = Assert.IsType<Uri>(response.Headers.Location).ToString();
+
+        Assert.Equal("/login?reason=account-deleted", location);
+        Assert.DoesNotContain("openid-connect/logout", location, StringComparison.Ordinal);
+
+        // The ticket cookie is expired, which is what being signed out of the app is.
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith("GroupSplit.Auth=;", StringComparison.Ordinal)
+                      && cookie.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public void A_missing_authority_fails_the_start_up_rather_than_the_first_sign_in()
     {

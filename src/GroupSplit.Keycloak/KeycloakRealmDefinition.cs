@@ -6,10 +6,12 @@ namespace GroupSplit.Keycloak;
 /// Reads the same realm export Keycloak imports on first boot. The allowlists define what
 /// the application owns: realm-level properties, including which flow runs each kind of
 /// sign-in; the handful of client properties that decide where a sign-in may be sent back
-/// to and which grants a client accepts; and the identity provider settings and first broker
-/// login flow that decide which account a brokered sign-in may land in. Everything else --
-/// the rest of each client and provider, the built-in flows themselves, roles, users, and the
-/// environment-substituted SMTP settings -- is intentionally outside reconciliation.
+/// to and which grants a client accepts; the identity provider settings and first broker
+/// login flow that decide which account a brokered sign-in may land in; and, whole, the
+/// confidential clients the application itself signs in as (<see cref="ServiceClients"/>).
+/// Everything else -- the rest of each client and provider, the built-in flows themselves,
+/// roles, users, and the environment-substituted SMTP settings -- is intentionally outside
+/// reconciliation.
 /// </summary>
 public static class KeycloakRealmDefinition
 {
@@ -57,6 +59,60 @@ public static class KeycloakRealmDefinition
             CreateWhenMissing = true
         }
     ];
+
+    /// <summary>The confidential client the API deletes a deleted account's login through.</summary>
+    public const string AccountDeletionClientId = "account-deletion";
+
+    /// <summary>
+    /// The client role container a service account's admin permissions come from.
+    /// </summary>
+    public const string RealmManagementClientId = "realm-management";
+
+    /// <summary>
+    /// Confidential clients the application signs in as, owned whole by the realm worker: created
+    /// on a realm that lacks them, held to the file's flows, held to the secret the deployment
+    /// gives them, and held to exactly the file's roles.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ManagedClients"/>, which the worker refuses to create. A client whose
+    /// secret is a deploy secret has to be written by something that runs on every deploy --
+    /// an import that ran once, years ago, knows neither the secret it is rotated to nor that
+    /// the client was ever added -- and creating one needs nothing the worker is not already
+    /// given. The roles are held exactly rather than at least, because the whole point of a
+    /// narrow client is that it stays narrow: a role somebody added by hand is revoked.
+    /// </remarks>
+    public static readonly ServiceClient[] ServiceClients =
+    [
+        new(AccountDeletionClientId, SecretVariable: "KEYCLOAK_ACCOUNT_DELETION_SECRET")
+    ];
+
+    /// <summary>
+    /// The client properties a <see cref="ServiceClient"/> is held to. Together they say: a
+    /// confidential client that can only sign in as itself.
+    /// </summary>
+    public static readonly string[] ServiceClientProperties =
+    [
+        "enabled",
+        "publicClient",
+        "clientAuthenticatorType",
+        "standardFlowEnabled",
+        "implicitFlowEnabled",
+        "directAccessGrantsEnabled",
+        "serviceAccountsEnabled"
+    ];
+
+    /// <summary>
+    /// The <see cref="RealmManagementClientId"/> roles the file grants the service account of
+    /// <paramref name="clientId"/>, in the order it lists them.
+    /// </summary>
+    public static IReadOnlyList<string> ServiceAccountRoles(JsonObject definition, string clientId) =>
+        definition["users"]?.AsArray()
+            .OfType<JsonObject>()
+            .FirstOrDefault(user => user["serviceAccountClientId"]?.GetValue<string>() == clientId)
+            ?["clientRoles"]?[RealmManagementClientId]?.AsArray()
+            .Select(role => role!.GetValue<string>())
+            .ToList()
+        ?? [];
 
 
     /// <summary>
@@ -209,6 +265,33 @@ public static class KeycloakRealmDefinition
             }
         }
 
+        foreach (var service in ServiceClients)
+        {
+            var client = Client(definition, service.ClientId)
+                ?? throw new InvalidOperationException(
+                    $"The Keycloak realm definition has no client '{service.ClientId}'.");
+
+            foreach (var name in ServiceClientProperties.Where(name => !client.ContainsKey(name)))
+            {
+                throw new InvalidOperationException(
+                    $"Client '{service.ClientId}' in the Keycloak realm definition is missing property '{name}'.");
+            }
+
+            if (client["secret"]?.GetValue<string>() != $"${{{service.SecretVariable}}}")
+            {
+                throw new InvalidOperationException(
+                    $"Client '{service.ClientId}' in the Keycloak realm definition must take its secret from "
+                    + $"${{{service.SecretVariable}}}, the variable the realm worker holds it to.");
+            }
+
+            if (ServiceAccountRoles(definition, service.ClientId).Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"The Keycloak realm definition grants the service account of '{service.ClientId}' no "
+                    + $"{RealmManagementClientId} roles.");
+            }
+        }
+
         foreach (var managed in ManagedIdentityProviders)
         {
             var provider = IdentityProvider(definition, managed.Alias)
@@ -280,6 +363,12 @@ public sealed record ManagedClient(string ClientId, string[] Properties, string[
     /// </summary>
     public bool CreateWhenMissing { get; init; }
 }
+
+/// <summary>
+/// A confidential client the application signs in as, whose secret the deployment supplies in
+/// <paramref name="SecretVariable"/> -- the same name the file's <c>${...}</c> placeholder uses.
+/// </summary>
+public sealed record ServiceClient(string ClientId, string SecretVariable);
 
 /// <summary>
 /// An identity provider whose listed properties and config entries are reconciled onto an

@@ -583,6 +583,20 @@ GROUPSPLIT_TOKEN=$(...) groupsplit groups list
 `groupsplit auth token` prints the current access token for piping into other tools. It is a
 secret; treat it like one.
 
+### Deleting the account
+
+`groupsplit users delete` deletes the account you are signed in as, and its sign-in with it:
+the Keycloak login, its password, any linked Google account and every session it holds, the
+web app's included. Nobody can sign in as it again. It is refused with `ACCOUNT_NOT_SETTLED`
+while any group balance is not zero, and asks for confirmation like any other destructive
+command. On success the CLI throws away its stored credentials, since the login they belong
+to is gone.
+
+A token issued before the deletion stays valid until it expires, a few minutes at most, and
+the API refuses it with `ACCOUNT_DELETED` (exit code 2) rather than treating it as a new
+sign-in. Run `groupsplit auth logout` if a stored session still answers that way. What
+deletion keeps and removes, and why, is in [account deletion](account-deletion.md).
+
 ## Bank sync
 
 Two halves, and only one of them can happen in a terminal.

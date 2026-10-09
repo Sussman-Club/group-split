@@ -15,6 +15,13 @@ public static class ErrorMessages
 
     public const string SessionExpired = "Your session has expired. Please sign in again.";
 
+    /// <summary>Where deleting an account lands: signed out, with nothing left to sign in to.</summary>
+    public const string AccountDeletedSignedOut =
+        "Your account and your sign-in have been deleted, and you have been signed out.";
+
+    /// <summary>A sign-in with a login whose account was deleted, before the login itself was.</summary>
+    public const string AccountDeleted = "This account has been deleted. Its sign-in is being removed too.";
+
     public const string Generic = "Something went wrong. Please try again.";
 
     private const string ServerPrefix = "Something went wrong on our side. Please try again in a moment.";
@@ -61,6 +68,7 @@ public static class ErrorMessages
                                              + "Choose a rule for each item before dividing it.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
+        [ErrorCodes.AccountDeleted] = AccountDeleted,
         // A guest's link is what reaches this now, and it most often means somebody already
         // used it or a member stopped it -- not that the URL was mistyped.
         [ErrorCodes.GroupInvitationNotFound] = "That link no longer works: it has been used or replaced, or it has expired. Ask someone in the group for a new one.",
