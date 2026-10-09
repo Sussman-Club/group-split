@@ -110,9 +110,10 @@
                 <dl class="gs-kv">
                     <div class="gs-kv-row">
                         <dt>When</dt>
-                        @* The app's date, not the machine's: "9/8/2026 9:45 PM" is ambiguous
-                           between two continents and matches nothing else in the product. *@
-                        <dd>@Clock.Local(details.DateTime).ToString("d MMM yyyy, HH:mm")</dd>
+                        @* The app's date, not the machine's: "9/8/2026" is ambiguous between
+                           two continents and matches nothing else in the product. A day and no
+                           time, which was only ever the moment the row was typed in (#252). *@
+                        <dd>@Clock.Day(details.DateTime).ToString("d MMM yyyy")</dd>
                     </div>
 
                     @if (!string.IsNullOrWhiteSpace(details.MerchantName))
@@ -240,7 +241,7 @@
                                         <div class="gs-period-what">
                                             <span class="gs-period-name">@expense.Name</span>
                                             <span class="gs-period-meta">
-                                                @Clock.Local(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? "you" : expense.PaidByUserName) paid
+                                                @Clock.Day(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? "you" : expense.PaidByUserName) paid
                                             </span>
                                         </div>
                                         <span class="gs-period-amount">@expense.Amount.ToMoney()</span>
@@ -303,7 +304,7 @@
                 {
                     <ReceiptSection TransactionId="@TransactionId"
                                     Title="@(details.MerchantName ?? details.Name)"
-                                    Where="@Clock.Local(details.DateTime).ToString("d MMM yyyy")"
+                                    Where="@Clock.Day(details.DateTime).ToString("d MMM yyyy")"
                                     Receipt="@receipt"
                                     Attachments="@_attachments"
                                     IsUploading="@_uploading"
@@ -431,10 +432,11 @@
         // Both at once, because both only ever needed the id this dialog was opened with:
         // read one after the other, each answer grew the dialog under the reader's hand.
         var bill = Receipts.GetAsync(TransactionId);
-        // The reader's offset, which says when a settlement's period ends on their calendar.
+        // The reader's offset, which says when a settlement's period ends on their calendar --
+        // as the date filter ends a day, so the period listed below is the one covered.
         var loaded = await Errors.TryAsync(
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId,
-                (int)Clock.Offset.TotalMinutes),
+                Clock.CutoffOffsetMinutes),
             "Could not load the expense.");
 
         if (!loaded)
@@ -547,7 +549,7 @@
         TransactionDetailsResponse? refreshed = null;
         if (await Errors.TryAsync(async () =>
                 refreshed = await TransactionsClient.GetTransactionAsync(TransactionId,
-                    (int)Clock.Offset.TotalMinutes),
+                    Clock.CutoffOffsetMinutes),
             "Could not refresh the expense after saving the receipt.")
             && refreshed is not null)
         {

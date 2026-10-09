@@ -1,4 +1,5 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
@@ -33,16 +34,10 @@
                     Immediate="true"
                     HideSpinButtons="true"/>
 
-                <MudStack Row="true" Spacing="4">
-                    <MudDatePicker @bind-Date="_selectedDate"
-                                   Label="When"
-                                   Variant="Variant.Outlined"/>
-
-                    <MudTimePicker @bind-Time="_selectedTime"
-                                   Label="Time"
-                                   Variant="Variant.Outlined"
-                                   AmPm="true"/>
-                </MudStack>
+                @* A day and nothing else: a repayment happens on a day (#252). *@
+                <MudDatePicker @bind-Date="_selectedDate"
+                               Label="When"
+                               Variant="Variant.Outlined"/>
 
                 <MudSelect T="Guid" Label="Paid By"
                            Variant="Variant.Outlined"
@@ -110,7 +105,6 @@
     private Guid? _paidToUserId;
 
     private DateTime? _selectedDate;
-    private TimeSpan? _selectedTime;
 
     private ICollection<UserInfo> _groupUsers = [];
 
@@ -129,9 +123,7 @@
 
         _coversThrough = CoversThrough?.ToDateTime(TimeOnly.MinValue);
 
-        var shown = Clock.Local(Original.DateTime);
-        _selectedDate = shown.Date;
-        _selectedTime = shown.TimeOfDay;
+        _selectedDate = Clock.Day(Original.DateTime).ToDateTime(TimeOnly.MinValue);
         _paidToUserId = Original.PaidToUserId;
 
         var loaded = await Errors.TryAsync(async () =>
@@ -176,7 +168,12 @@
         if (!_form.IsValid)
             return;
 
-        _editModel.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+        // Kept as it is while the day is unchanged; a new day is stored as midnight UTC of
+        // that day, which every zone reads back as the same day (TransactionDay).
+        var picked = DateOnly.FromDateTime(_selectedDate ?? Clock.Today);
+        _editModel.DateTime = picked == Clock.Day(Original.DateTime)
+            ? Original.DateTime
+            : TransactionDay.Stored(picked);
         _editModel.Name = "Settlement";
         _editModel.CategoryId = null;
         _editModel.CoversThrough = _coversThrough is { } day ? DateOnly.FromDateTime(day) : null;

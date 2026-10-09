@@ -1,5 +1,6 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Users;
@@ -397,10 +398,13 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.Equal(GroupId, request.GroupId);
 
         // Today, in the reader's zone -- read off the same clock the dialog picks its default
-        // from, because that clock is not necessarily on the UTC day.
+        // from, because that clock is not necessarily on the UTC day -- and stored as a date:
+        // midnight UTC of that day, which every list reads back as the same day (#252). Read
+        // as a local moment, west of Greenwich, it would be yesterday evening.
         var clock = Services.GetRequiredService<LocalClock>();
 
-        Assert.Equal(clock.Today, clock.Local(request.DateTime).Date);
+        Assert.Equal(DateOnly.FromDateTime(clock.Today), clock.Day(request.DateTime));
+        Assert.True(TransactionDay.IsDate(request.DateTime));
     }
 
     /// <summary>

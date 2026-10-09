@@ -1,4 +1,5 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
@@ -114,8 +115,6 @@
                                   PayerIdChanged="@OnPayerPickedAsync"
                                   Date="@_selectedDate"
                                   DateChanged="@OnDatePickedAsync"
-                                  Time="@_selectedTime"
-                                  TimeChanged="@OnTimePickedAsync"
                                   WhenSpent="@WhenSpent"
                                   MerchantId="@_model.MerchantId"
                                   MerchantIdChanged="@OnMerchantChangedAsync"
@@ -326,7 +325,6 @@
     private Guid? _evenRuleId;
 
     private DateTime? _selectedDate;
-    private TimeSpan? _selectedTime;
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
@@ -546,12 +544,9 @@
             PaidByUserId = Original.PaidByUserId
         };
 
-        // In the person's zone. Reading .Date off the stored value gives the wall clock of
-        // whatever offset it arrived with -- UTC -- and re-saving that at the local offset
-        // moved the expense by the zone difference on every edit.
-        var shown = Clock.Local(Original.DateTime);
-        _selectedDate = shown.Date;
-        _selectedTime = shown.TimeOfDay;
+        // The day every list shows for it (TransactionDay): a bank row's date stays the
+        // bank's date, and anything else is the day it was recorded on where the person is.
+        _selectedDate = Clock.Day(Original.DateTime).ToDateTime(TimeOnly.MinValue);
 
         // Without the group's categories and members there is nothing to edit against, so
         // a failed load closes the dialog once the presenter has said why.
@@ -962,13 +957,6 @@
         await RefreshPreviewAsync();
     }
 
-    private async Task OnTimePickedAsync(TimeSpan? time)
-    {
-        _selectedTime = time;
-
-        await RefreshPreviewAsync();
-    }
-
     /// <summary>
     /// The editor's answer, which arrives only when somebody has acted on it: amounts they
     /// are typing, or null for the moment they choose "Automatically".
@@ -1055,8 +1043,19 @@
             StateHasChanged();
     }
 
-    private void ApplyDate() =>
-        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+    /// <summary>
+    /// The stored instant, kept as it is while the day is the one it already reads as: an
+    /// edit to the name of an expense recorded at 14:32 does not move it to midnight. A
+    /// different day is stored as midnight UTC of that day, like any picked day.
+    /// </summary>
+    private void ApplyDate()
+    {
+        var picked = DateOnly.FromDateTime(_selectedDate ?? Clock.Today);
+
+        _model.DateTime = picked == Clock.Day(Original.DateTime)
+            ? Original.DateTime
+            : TransactionDay.Stored(picked);
+    }
 
     /// <summary>
     /// Validated here, because this is the only place left between typing and saving.

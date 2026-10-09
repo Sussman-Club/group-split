@@ -100,20 +100,21 @@
     }
 
     // "Today" and "Yesterday" are the person's days, not the server's: both sides of the
-    // comparison come from the same clock.
+    // comparison come from the same clock, and the row's day is read the way every other
+    // transaction date is (#252) -- a bank row's is the bank's.
     private string Relative(DateTimeOffset when)
     {
-        var local = Clock.Local(when);
-        var today = Clock.Today;
-        var days = (today - local.Date).Days;
+        var day = Clock.Day(when);
+        var today = Clock.TodayDay;
+        var days = today.DayNumber - day.DayNumber;
 
         return days switch
         {
             0 => "Today",
             1 => "Yesterday",
-            < 7 => local.ToString("dddd"),
-            _ when local.Year == today.Year => local.ToString("d MMM"),
-            _ => local.ToString("d MMM yyyy")
+            < 7 => day.ToString("dddd"),
+            _ when day.Year == today.Year => day.ToString("d MMM"),
+            _ => day.ToString("d MMM yyyy")
         };
     }
 

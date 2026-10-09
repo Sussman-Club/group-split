@@ -1,4 +1,5 @@
 @using GroupSplit.Shared
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
@@ -134,8 +135,6 @@
                                   PayerIdChanged="@OnPayerPickedAsync"
                                   Date="@_selectedDate"
                                   DateChanged="@OnDatePickedAsync"
-                                  Time="@_selectedTime"
-                                  TimeChanged="@OnTimePickedAsync"
                                   WhenSpent="@WhenSpent"
                                   MerchantId="@_model.MerchantId"
                                   MerchantIdChanged="@OnMerchantChangedAsync"
@@ -227,10 +226,9 @@
     };
 
     // Set on initialisation from the clock, not here from DateTime.Now: under WebAssembly
-    // that came back as UTC while the offset attached to it below was the browser's, and
-    // an expense recorded at 12:38 in New York was stored eight hours ahead.
+    // that came back as UTC, and the day it named was the day in Greenwich rather than
+    // the person's own.
     private DateTime? _selectedDate;
-    private TimeSpan? _selectedTime;
 
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
@@ -404,13 +402,6 @@
         await OnMoneyChangedAsync();
     }
 
-    private async Task OnTimePickedAsync(TimeSpan? time)
-    {
-        _selectedTime = time;
-
-        await OnMoneyChangedAsync();
-    }
-
     /// <summary>What the merchant chip shows, once one has been picked.</summary>
     private string? _merchantName;
 
@@ -516,9 +507,7 @@
     {
         _groupId = SelectedGroupId;
 
-        var now = Clock.Now;
-        _selectedDate = now.Date;
-        _selectedTime = now.TimeOfDay;
+        _selectedDate = Clock.Today;
 
         await OpenAsync();
     }
@@ -772,11 +761,12 @@
     }
 
     /// <summary>
-    /// The day and time as picked, made into the instant they mean and sent as UTC. The
-    /// clock owns the offset; nothing here asks .NET where the person is.
+    /// The day as picked, stored as midnight UTC of that day, which reads back as the same
+    /// day in every zone (<see cref="TransactionDay.Stored(DateTime)"/>). "Today" is today
+    /// whatever the hour it was typed in.
     /// </summary>
     private void ApplyDate() =>
-        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+        _model.DateTime = TransactionDay.Stored(_selectedDate ?? Clock.Today);
 
     /// <summary>
     /// The request as it stands. <c>GroupId</c> is set from the chip rather than inferred

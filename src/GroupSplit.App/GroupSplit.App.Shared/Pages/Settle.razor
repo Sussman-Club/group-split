@@ -32,7 +32,7 @@
     </div>
     @if (Plan?.LastSettled is { } last)
     {
-        <span class="gs-tag neutral">last settled @Clock.Local(last).ToString("d MMM")</span>
+        <span class="gs-tag neutral">last settled @Clock.Day(last).ToString("d MMM")</span>
     }
 </div>
 
@@ -69,7 +69,7 @@
             <h3>All settled</h3>
             <span>
                 Nothing owed either way, in any group@(Plan?.LastSettled is { } since
-                                                          ? $" since {Clock.Local(since).ToString("d MMMM yyyy")}"
+                                                          ? $" since {Clock.Day(since).ToString("d MMMM yyyy")}"
                                                           : "").
             </span>
         </div>
@@ -150,7 +150,7 @@
                         </div>
                         <div>
                             <div><Money Value="settlement.Amount" /></div>
-                            <span class="when">@Clock.Local(settlement.DateTime).ToString("d MMM")</span>
+                            <span class="when">@Clock.Day(settlement.DateTime).ToString("d MMM")</span>
                         </div>
                     </div>
                 }

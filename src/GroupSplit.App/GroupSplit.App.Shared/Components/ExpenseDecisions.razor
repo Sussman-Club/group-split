@@ -140,17 +140,12 @@
                 break;
 
             case Picker.When:
-                @* Stacked below 600px: two pickers sharing a phone-width dialog clip both
-                   their values. *@
-                <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                    @* Both report: the version of a rule that divides an expense is the one
-                       that stood on the day it was spent, so the day is part of the
-                       division. *@
-                    <MudDatePicker Date="@Date" DateChanged="@OnDatePickedAsync" Label="Date"
-                                   Variant="Variant.Outlined"/>
-                    <MudTimePicker Time="@Time" TimeChanged="@OnTimePickedAsync" Label="Time"
-                                   Variant="Variant.Outlined" AmPm="true"/>
-                </MudStack>
+                @* A day and nothing else. There used to be a time beside it, and the time
+                   never meant anything: it was the moment the form was filled in (#252).
+                   The day reports: the version of a rule that divides an expense is the one
+                   that stood on the day it was spent, so the day is part of the division. *@
+                <MudDatePicker Date="@Date" DateChanged="@OnDatePickedAsync" Label="Date"
+                               Variant="Variant.Outlined"/>
                 break;
 
             case Picker.Where:
@@ -254,8 +249,6 @@
     [Parameter] public bool ShowWhen { get; set; } = true;
     [Parameter] public DateTime? Date { get; set; }
     [Parameter] public EventCallback<DateTime?> DateChanged { get; set; }
-    [Parameter] public TimeSpan? Time { get; set; }
-    [Parameter] public EventCallback<TimeSpan?> TimeChanged { get; set; }
 
     /// <summary>The day, as the chip says it. The caller words it; only it knows "today".</summary>
     [Parameter] public string WhenSpent { get; set; } = "";
@@ -317,8 +310,6 @@
     private Task OnPayerPickedAsync(Guid? id) => PayerIdChanged.InvokeAsync(id);
 
     private Task OnDatePickedAsync(DateTime? date) => DateChanged.InvokeAsync(date);
-
-    private Task OnTimePickedAsync(TimeSpan? time) => TimeChanged.InvokeAsync(time);
 
     /// <summary>
     /// Records the merchant, and closes on the way out.

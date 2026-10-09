@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Models;
 using Microsoft.JSInterop;
 
 namespace GroupSplit.App.Shared.Services;
@@ -60,12 +61,20 @@ public sealed class LocalClock
     public DateTimeOffset Local(DateTimeOffset instant) => instant.ToOffset(_offset);
 
     /// <summary>
-    /// A date and a time as the person picked them, made into the instant they meant --
-    /// which is then sent as UTC, like everything else.
+    /// The day a transaction's stored instant belongs to on the person's calendar. Not
+    /// <c>Local(instant).Date</c>: a bank row is a date stored as midnight UTC, and that is the
+    /// previous evening for anybody west of Greenwich. See <see cref="TransactionDay"/>.
     /// </summary>
-    public DateTimeOffset At(DateTime date, TimeSpan time) =>
-        new DateTimeOffset(DateTime.SpecifyKind(date.Date + time, DateTimeKind.Unspecified), _offset)
-            .ToUniversalTime();
+    public DateOnly Day(DateTimeOffset stored) => TransactionDay.Of(stored, _offset);
+
+    /// <summary>The person's calendar day, as a <see cref="DateOnly"/> to compare a <see cref="Day"/> with.</summary>
+    public DateOnly TodayDay => DateOnly.FromDateTime(Today);
+
+    /// <summary>
+    /// The offset to send with a day the API counts activity through. See
+    /// <see cref="TransactionDay.CutoffOffsetMinutes"/>.
+    /// </summary>
+    public int CutoffOffsetMinutes => TransactionDay.CutoffOffsetMinutes(_offset);
 
     /// <summary>
     /// Asks the browser, for a host that could not ask synchronously. Safe to call more
