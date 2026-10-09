@@ -95,6 +95,11 @@ jobs:
           KEYCLOAK_ADMIN_USER: ${{ vars.KEYCLOAK_ADMIN_USER }}
           KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
           CACHE_PASSWORD: ${{ secrets.CACHE_PASSWORD }}
+          # Pinned for the same reason as the two passwords above: left to Aspire, the
+          # RustFS keys are regenerated on every publish, so the storage container is
+          # recreated with new root credentials on every deploy.
+          STORAGE_ACCESSKEY: ${{ secrets.STORAGE_ACCESSKEY }}
+          STORAGE_SECRETKEY: ${{ secrets.STORAGE_SECRETKEY }}
           SMTP_ENABLED: ${{ vars.SMTP_ENABLED }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           # Resend supports 587 for STARTTLS, which is the mode configured in realms.json.
@@ -154,7 +159,8 @@ jobs:
           }
 
           require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD CACHE_PASSWORD
+                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD CACHE_PASSWORD \
+                  STORAGE_ACCESSKEY STORAGE_SECRETKEY
 
           require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
             || echo "::notice::SMTP_ENABLED is not true. Keycloak will not send password reset or email verification mail."
@@ -316,6 +322,7 @@ jobs:
           parameters="
             WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
             KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD
+            STORAGE_ACCESSKEY STORAGE_SECRETKEY
             SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
             GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
             PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI
@@ -453,8 +460,8 @@ jobs:
           trap 'rm -f payload.json previous.json rollback.json .env.production' EXIT
 
           # Mask the generated secrets before anything below can print them. GitHub masks
-          # only its own secrets; values Aspire generates -- the storage keys, say -- would
-          # reach the log in the clear through any Compose output that echoes them.
+          # only its own secrets; a value Aspire generates for a parameter nobody pinned
+          # would reach the log in the clear through any Compose output that echoes it.
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ''|'#'*) continue ;; esac
             key="${line%%=*}"
@@ -509,14 +516,18 @@ jobs:
           # Says why the update in $status failed: the failed stages, and only their stderr,
           # since the Compose Config stage's stdout is the fully interpolated Compose file. A
           # one-shot service that exited non-zero -- the realm worker, the migrations -- is
-          # named there but not explained, so its own log is fetched as well; otherwise the
-          # reason stays on the host.
+          # named there but not explained, so its own log is fetched as well; so is a service
+          # whose healthcheck never passed, which Compose reports by container name as
+          # "container <project>-<service>-1 is unhealthy". Otherwise the reason stays on the
+          # host, and the rollback below recreates the container and discards it.
           report_failure() {
             local service
             jq -r '(.logs // [])[] | select(.success == false) | "--- \(.stage): \(.command)\n\(.stderr)"' <<<"$status"
-            for service in $(jq -r '[(.logs // [])[] | select(.success == false) | .stderr
-                                     | scan("service \"([^\"]+)\" didn.t complete successfully") | .[0]]
-                                    | unique | .[]' <<<"$status"); do
+            for service in $(jq -r --arg stack "$STACK" '
+                [(.logs // [])[] | select(.success == false) | .stderr
+                 | (scan("service \"([^\"]+)\" didn.t complete successfully") | .[0]),
+                   (scan("container " + $stack + "-(.+?)(?:-[0-9]+)? is unhealthy") | .[0])]
+                | unique | .[]' <<<"$status"); do
               echo "::group::Log of $service"
               curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
                 -d "{\"type\":\"GetStackLog\",\"params\":{\"stack\":\"$STACK\",\"services\":[\"$service\"],\"tail\":200}}" \
