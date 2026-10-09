@@ -74,7 +74,7 @@
                               Label="How much?"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
-                              AdornmentText="$"
+                              AdornmentText="@MoneyExtensions.CurrencySymbol(Original.Currency)"
                               HideSpinButtons="true"
                               ReadOnly="@PayerHasLeft"
                               HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
@@ -122,7 +122,16 @@
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
 
-                @if (_model.GroupId != Original.GroupId)
+                @if (CurrencyRefusal is { } refusal)
+                {
+                    @* The API's refusal, said where the choice was made and before Save
+                       rather than after it: the dialog closes on Save, and an edit refused
+                       once it has gone is every other change in it lost as well. *@
+                    <MudAlert Severity="Severity.Error" Dense="true" data-testid="currency-refusal">
+                        @refusal
+                    </MudAlert>
+                }
+                else if (_model.GroupId != Original.GroupId)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         @(_model.GroupId is null
@@ -137,7 +146,7 @@
                         A personal expense is not shared with anybody, so there is nothing to divide.
                     </MudAlert>
                 }
-                else
+                else if (CurrencyRefusal is null)
                 {
                     <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
                         @if (SplitRuleNeedsManualOverride)
@@ -195,7 +204,7 @@
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_initializing || _failed)"
+                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null)"
                    OnClick="Submit">
             Save
         </MudButton>
@@ -263,6 +272,34 @@
 
     /// <summary>Whether the expense will belong to a group after this edit.</summary>
     private bool IsShared => _model.GroupId is not null;
+
+    /// <summary>
+    /// Why the group picked cannot take this expense, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// The one refusal a move meets that the dialog can see coming: an expense keeps the
+    /// currency it was recorded in, a group keeps its balances in one, and nothing converts
+    /// between them, so the API answers <c>CURRENCY_MISMATCH</c>. Asked here from the groups
+    /// list rather than learned from the save, because the save happens after the dialog
+    /// has closed -- a refusal then would take every other change in the edit with it.
+    /// </remarks>
+    private string? CurrencyRefusal
+    {
+        get
+        {
+            if (_model.GroupId is not { } groupId || groupId == Original.GroupId)
+                return null;
+
+            var group = _groups.FirstOrDefault(candidate => candidate.Id == groupId);
+
+            if (group is null || string.Equals(group.Currency, Original.Currency, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return $"This expense is in {Original.Currency} and {group.Name} keeps its balances in " +
+                   $"{group.Currency}. Amounts are not converted, so it can stay personal or move " +
+                   $"to a group that uses {Original.Currency}.";
+        }
+    }
 
     private UpdateTransactionRequest _model = new();
 
@@ -950,7 +987,7 @@
 
         _awaiting = _model.Amount == 0m ? "Enter an amount to see how it divides." : null;
 
-        if (!IsShared || _awaiting is not null)
+        if (!IsShared || _awaiting is not null || CurrencyRefusal is not null)
         {
             _preview = null;
             _previewError = null;
@@ -1002,6 +1039,12 @@
     /// </remarks>
     private async Task Submit()
     {
+        // Stays open on it, with the refusal on screen and the edit intact, rather than
+        // closing onto a save the API will refuse. The button is off as well; this is for
+        // a submit that arrives some other way.
+        if (CurrencyRefusal is not null)
+            return;
+
         await _form.ValidateAsync();
 
         if (!_form.IsValid)

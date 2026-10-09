@@ -79,9 +79,29 @@
                               Label="How much?"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
-                              AdornmentText="$"
+                              AdornmentText="@MoneyExtensions.CurrencySymbol(Currency)"
                               HideSpinButtons="true"
                               Class="gs-amount"/>
+
+                @* Only for a personal expense. A group keeps its balances in one currency and
+                   nothing converts between them, so there the group's is the only answer and
+                   the symbol above already says it; on your own ledger anything goes, and a
+                   dinner abroad is written down in what it cost. *@
+                @if (!IsShared)
+                {
+                    <MudSelect T="string"
+                               Value="@_currency"
+                               ValueChanged="@OnCurrencyPicked"
+                               Label="Currency"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               data-testid="expense-currency">
+                        @foreach (var offered in MoneyExtensions.OfferedCurrencies)
+                        {
+                            <MudSelectItem Value="@offered">@offered</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
 
                 <MudTextField @bind-Value="_model.Name"
                               @bind-Value:after="OnNameChangedAsync"
@@ -399,9 +419,22 @@
     /// </summary>
     private bool GroupFixed => SelectedGroupId is not null;
 
-    private string ReceiptCurrency => GroupFixed
+    /// <summary>
+    /// The currency a personal expense is in, which the person picks. Ignored once there is
+    /// a group: the group's own is the only one it will take.
+    /// </summary>
+    private string _currency = "USD";
+
+    /// <summary>What the amount is in, as the field's symbol and the request say it.</summary>
+    private string Currency => IsShared ? GroupCurrency : _currency;
+
+    private string GroupCurrency => GroupFixed
         ? SelectedGroupCurrency ?? "USD"
         : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
+
+    private string ReceiptCurrency => Currency;
+
+    private void OnCurrencyPicked(string currency) => _currency = currency;
 
 
 
@@ -709,6 +742,10 @@
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
+
+        // Stated only for a personal expense. In a group the API takes the group's own when
+        // none is named, and naming the one picked while it was personal would be refused.
+        _model.Currency = IsShared ? null : _currency;
 
         // The date is applied here rather than on the way out, because which version of a
         // rule divides an expense depends on when it was spent: a preview built from an

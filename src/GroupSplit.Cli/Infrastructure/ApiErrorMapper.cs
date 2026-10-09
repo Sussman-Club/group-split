@@ -132,6 +132,13 @@ public static class ApiErrorMapper
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse
             => "Signing in again as the same person will not help. Contact support and quote the traceId; "
                + "they resolve it on the server. To use a different account: groupsplit auth login",
+        // Conversion is out of scope, so no flag turns this into a success in that group.
+        // What is left is where else the money can go: your own ledger, which takes any
+        // currency, or a group that keeps its balances in this one.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.CurrencyMismatch
+            => "Amounts are never converted. Keep it personal (inbox file without --group, or "
+               + "transactions create without --group and with --currency), or record it in a "
+               + "group in the same currency. An expense already recorded keeps its currency.",
         // Lost a race with another member over the same guest; nothing was written.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupGuestChanged
             => "Look at the guest again, then retry if it still makes sense: groupsplit groups guests <group-id>",

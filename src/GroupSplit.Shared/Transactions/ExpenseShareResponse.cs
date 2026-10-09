@@ -67,5 +67,27 @@ public record ExpenseShareResponse : TransactionResponse
 /// nothing here has been paid back yet. <c>GET /users/me/position</c> remains the one
 /// answer to "where do I stand".
 /// </para>
+/// <para>
+/// <paramref name="Count"/> is every match; the three amounts are in <see cref="Currency"/>,
+/// and only the matches in it are added into them. Any other currency gets a line of its
+/// own in <see cref="OtherCurrencies"/>, for the reason
+/// <see cref="TransactionSummaryResponse"/> gives: there is no rate to add them with.
+/// </para>
 /// </remarks>
-public record ExpenseShareSummaryResponse(int Count, decimal Total, decimal Share, decimal OwedToOthers);
+public record ExpenseShareSummaryResponse(int Count, decimal Total, decimal Share, decimal OwedToOthers)
+{
+    /// <summary>
+    /// The currency the three amounts are in. Chosen as
+    /// <see cref="TransactionSummaryResponse.Currency"/> is.
+    /// </summary>
+    public string Currency { get; init; } = "USD";
+
+    /// <summary>
+    /// The matches in any other currency, one entry per currency. Empty in the ordinary case.
+    /// </summary>
+    public IReadOnlyList<CurrencyShareTotalResponse> OtherCurrencies { get; init; } = [];
+}
+
+/// <summary>The figures of a share summary, for the matches in one currency only.</summary>
+public record CurrencyShareTotalResponse(
+    string Currency, int Count, decimal Total, decimal Share, decimal OwedToOthers);

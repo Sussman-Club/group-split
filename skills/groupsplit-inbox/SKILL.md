@@ -151,6 +151,12 @@ decision they made.
 `inbox file` copies what the bank already said: the date, the amount, the currency. Those
 have no flags here. Correcting the bank is `transactions update` afterwards.
 
+The currency is kept whichever way it is filed. A row kept personal (no `--group`) stays in
+the bank's currency -- a 20.00 EUR charge is a 20.00 EUR expense -- and a group takes only
+its own, so filing a euro row into a dollar group is refused with `CURRENCY_MISMATCH`, and
+so is moving it there afterwards with `transactions update --group`. Nothing converts.
+Offer to keep it personal; do not re-type it in dollars.
+
 What you may set while filing:
 
 | Flag | |

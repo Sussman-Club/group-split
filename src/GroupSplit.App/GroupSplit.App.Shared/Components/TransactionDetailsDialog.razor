@@ -86,7 +86,7 @@
                 <div class="gs-figures">
                     <div class="gs-figure">
                         <span class="gs-eyebrow">Total</span>
-                        <span class="gs-figure-value gs-num">@details.Amount.ToMoney()</span>
+                        <span class="gs-figure-value gs-num">@details.Amount.ToMoney(details.Currency)</span>
                     </div>
 
                     @* A settlement has no share: its one split is the person paid, for the
@@ -95,7 +95,7 @@
                     {
                         <div class="gs-figure">
                             <span class="gs-eyebrow">@(PaidByMe ? "Your share" : "You owe")</span>
-                            <span class="gs-figure-value gs-num is-quiet">@mine.ToMoney()</span>
+                            <span class="gs-figure-value gs-num is-quiet">@mine.ToMoney(details.Currency)</span>
                             @* Which of the two it is changes what the figure means: your
                                share of your own expense is money you already have. *@
                             <span class="gs-figure-note">
@@ -292,7 +292,7 @@
                                             <span class="gs-tag">guest</span>
                                         }
                                     </span>
-                                    <span class="gs-split-amount gs-num">@split.Amount.ToMoney()</span>
+                                    <span class="gs-split-amount gs-num">@split.Amount.ToMoney(details.Currency)</span>
                                 </div>
                             }
                         </div>

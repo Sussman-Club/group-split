@@ -167,6 +167,11 @@ looking for it -- list or show what it would have changed -- or it may be record
   code 3 (`CLI_USAGE` for an argument or option, `CLI_INVALID_INPUT` inside `--split`,
   `--percent` or `--item`). When a user says "12,50 euros", convert it to `12.50` yourself;
   when they write "1.234,56", that is `1234.56`. Ask if it could be read two ways.
+- **Never convert a currency yourself.** A personal expense may be in any currency
+  (`transactions create ... --currency EUR`, no `--group`); a group takes only its own, and
+  an expense never changes currency -- moving one into a group in another is refused with
+  `CURRENCY_MISMATCH`. Totals come back one currency at a time (`currency`, plus
+  `otherCurrencies`); report them that way and never add them up.
 - **Preview a split before creating it** when the division matters:
   `groupsplit transactions create "Dinner" 84.20 --group <id> --preview` shows the split the
   server would apply and creates nothing.

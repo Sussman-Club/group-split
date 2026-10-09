@@ -186,6 +186,10 @@ public sealed class InboxService(
             Name = Named(request.Name, row),
             Description = request.Description,
             Amount = row.Amount,
+            // What the bank said it was in. Left out, a row kept personal was stamped with
+            // the default currency, so a 20.00 EUR charge became a 20.00 USD expense; a
+            // personal expense may be in any currency, and a group's was checked above.
+            Currency = row.Currency,
             // A statement has a date and not an instant. Midnight UTC keeps it the day the
             // bank said, whichever zone it is later read in.
             DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)

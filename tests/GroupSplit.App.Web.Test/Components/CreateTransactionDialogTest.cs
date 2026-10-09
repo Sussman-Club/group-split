@@ -624,4 +624,84 @@ public class CreateTransactionDialogTest : ComponentTest
 
         return provider;
     }
+
+    // ---- What it is in (#320) -----------------------------------------------------------
+
+    /// <summary>Fills the two fields an expense cannot be saved without, and saves it.</summary>
+    private static async Task<CreateTransactionRequest?> SaveAsync(
+        IRenderedComponent<MudDialogProvider> provider, IDialogReference reference)
+    {
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(20m));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner in Lisbon"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        return await reference.GetReturnValueAsync<CreateTransactionRequest>();
+    }
+
+    /// <summary>
+    /// A personal expense may be in any currency, and the dialog is how somebody says which:
+    /// a dinner abroad written down in dollars is a different amount of money.
+    /// </summary>
+    [Fact]
+    public async Task A_personal_expense_is_sent_in_the_currency_picked_for_it()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>()));
+
+        var currency = provider.FindComponents<MudSelect<string>>()
+            .Single(select => select.Instance.Label == "Currency");
+        await provider.InvokeAsync(() => currency.Instance.ValueChanged.InvokeAsync("EUR"));
+
+        // The amount field says it too, so the figure being typed reads as euros.
+        provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
+
+        var request = await SaveAsync(provider, reference!);
+
+        Assert.Null(request!.GroupId);
+        Assert.Equal("EUR", request.Currency);
+    }
+
+    /// <summary>
+    /// In a group there is nothing to pick: its balances are in one currency, and the API
+    /// takes the group's own when the request names none. Naming one would only invite the
+    /// refusal for a currency the person never chose.
+    /// </summary>
+    [Fact]
+    public async Task A_group_expense_offers_no_currency_and_sends_none()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+                {
+                    { dialog => dialog.SelectedGroupId, GroupId },
+                    { dialog => dialog.SelectedGroupName, "Trip" },
+                    { dialog => dialog.SelectedGroupCurrency, "USD" }
+                }));
+
+        Assert.DoesNotContain(provider.FindComponents<MudSelect<string>>(),
+            select => select.Instance.Label == "Currency");
+
+        var request = await SaveAsync(provider, reference!);
+
+        Assert.Equal(GroupId, request!.GroupId);
+        Assert.Null(request.Currency);
+    }
 }

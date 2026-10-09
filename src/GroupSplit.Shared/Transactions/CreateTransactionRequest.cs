@@ -80,6 +80,21 @@ public record CreateTransactionRequest
     /// 0.00 and an expense saved straight out of it landed in a shared ledger as a row
     /// that moved nobody's balance and that nobody could account for.
     /// </remarks>
+    /// <summary>
+    /// The ISO 4217 code the amount is in, or null for the group's own -- or, for a
+    /// personal expense, the default.
+    /// </summary>
+    /// <remarks>
+    /// Stated for a personal expense, which may be in any currency: nothing adds it to
+    /// anybody else's money, so a dinner abroad can be written down in what it cost. In a
+    /// group it can only be the group's own, because a group keeps its balances in one
+    /// currency and conversion is out of scope -- any other is refused with
+    /// <c>CURRENCY_MISMATCH</c> rather than relabelled. The currency is fixed once the
+    /// expense exists, which is why the edit request has no such field.
+    /// </remarks>
+    [RegularExpression("^[A-Za-z]{3}$", ErrorMessage = "Currency must be a three-letter ISO 4217 code, such as EUR.")]
+    public string? Currency { get; set; }
+
     [Required(ErrorMessage = "Amount is required.")]
     [NotZero(ErrorMessage = "Amount cannot be zero.")]
     [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]

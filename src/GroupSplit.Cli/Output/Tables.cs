@@ -29,9 +29,15 @@ public static class Tables
             .AddColumn("value");
 
     /// <summary>Red when you owe, green when you are owed, so the sign is readable at a glance.</summary>
-    public static string Money(decimal amount)
+    public static string Money(decimal amount) => Money(amount, currency: null);
+
+    /// <summary>
+    /// <see cref="Money(decimal)"/> for an amount that knows its currency, which it names
+    /// when it is not the default -- see <see cref="Amount"/>.
+    /// </summary>
+    public static string Money(decimal amount, string? currency)
     {
-        var text = Markup.Escape(amount.ToString("N2"));
+        var text = Amount(amount, currency);
 
         return amount switch
         {
@@ -40,6 +46,29 @@ public static class Tables
             _ => $"[grey]{text}[/]"
         };
     }
+
+    /// <summary>
+    /// An amount, followed by its currency when that is not the default one.
+    /// </summary>
+    /// <remarks>
+    /// Every group is in the default and so is nearly every expense, and a column of
+    /// "12.00 USD" says the same thing on every row. A personal expense can be in anything
+    /// else, though, and "20.00" beside a column of dollars would read as twenty dollars --
+    /// a different amount of money, not a formatting quibble -- so the one row that is not
+    /// in dollars says so. Already escaped for markup.
+    /// </remarks>
+    public static string Amount(decimal amount, string? currency)
+    {
+        var text = amount.ToString("N2");
+
+        return string.IsNullOrWhiteSpace(currency) ||
+               string.Equals(currency, DefaultCurrency, StringComparison.OrdinalIgnoreCase)
+            ? text
+            : Markup.Escape($"{text} {currency.Trim().ToUpperInvariant()}");
+    }
+
+    /// <summary>What an amount with no currency beside it is in. The API's own default.</summary>
+    public const string DefaultCurrency = "USD";
 
     public static string Empty(string what) => $"[grey]No {Markup.Escape(what)}.[/]";
 

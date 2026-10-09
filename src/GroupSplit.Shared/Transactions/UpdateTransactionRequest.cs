@@ -17,8 +17,9 @@ public record UpdateTransactionRequest
     /// an import lands as the account holder's own and "share this with the flat" is a
     /// move -- so it exists as an ordinary edit rather than as an endpoint of its own. A
     /// move re-derives the division among the destination's members (the old shares name
-    /// people who may not be in it), takes the destination's currency, and refuses a
-    /// category from anywhere else. Only your own expense can be made personal: taking
+    /// people who may not be in it), refuses a category from anywhere else, and refuses a
+    /// group whose currency is not the expense's own (<c>CURRENCY_MISMATCH</c>): the
+    /// expense keeps the currency it was recorded in, and conversion is out of scope. Only your own expense can be made personal: taking
     /// somebody else's out of a group would delete a debt owed to them.
     /// <para>
     /// The model a PATCH is applied to carries the current group, so a patch that says

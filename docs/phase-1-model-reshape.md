@@ -66,6 +66,14 @@ would produce balances that are wrong rather than merely unavailable. A personal
 transaction (no group) may carry any currency; nothing sums across personal transactions
 yet.
 
+*Since then (#320):* that promise had two holes. Keeping a bank row personal stamped it with
+the default currency, and moving an expense into a group took the group's currency instead
+of meeting `CurrencyMismatch`. Both are closed: a personal expense keeps the currency it was
+filed or created in (`currency` on the create request, the row's own when filed), and a move
+into a group in another currency is refused. The listing totals do now sum across personal
+transactions, so they total one currency at a time and report the others beside the figure
+(`otherCurrencies`) rather than adding them in.
+
 Two consequences worth naming: this is the shape Plaid needs later (it hands you a
 currency per transaction, so the column has to exist), and the refusal is a guard on a
 seam that is otherwise silent, so it gets a test rather than a comment.
