@@ -1053,4 +1053,109 @@ public class UpdateTransactionDialogTest : ComponentTest
         // The dialog markup should still render the preserved category name
         Assert.Contains("Archived Food", provider.Markup);
     }
+
+    // ---- Moving an expense in another currency (#320) -----------------------------------
+
+    /// <summary>A personal expense in euros, the way a bank row kept personal now lands.</summary>
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenEuroDinnerAsync()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner in Lisbon",
+                Amount = 20m,
+                Currency = "EUR",
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = null,
+                PaidByUserId = MeId,
+                Splits = []
+            });
+
+        return await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner in Lisbon",
+            Amount = 20m,
+            Currency = "EUR",
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = null,
+            PaidByUserId = MeId
+        });
+    }
+
+    private static Task PickGroupAsync(IRenderedComponent<MudDialogProvider> provider, Guid? groupId) =>
+        provider.InvokeAsync(() =>
+            provider.FindComponent<ExpenseDecisions>().Instance.GroupIdChanged.InvokeAsync(groupId));
+
+    /// <summary>
+    /// The API refuses to put a euro expense into a dollar group, and the dialog closes on
+    /// Save -- so a refusal learned from the save would arrive over a screen that is gone,
+    /// with every other change in the edit gone with it. It is said beside the group picker
+    /// instead, and the dialog stays open holding the edit.
+    /// </summary>
+    [Fact]
+    public async Task Moving_a_euro_expense_into_a_dollar_group_is_refused_in_the_dialog_without_losing_the_edit()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner at Ramiro"));
+
+        await PickGroupAsync(provider, GroupId);
+
+        var refusal = provider.WaitForElement("[data-testid=currency-refusal]");
+        Assert.Contains("This expense is in EUR and Trip keeps its balances in USD", refusal.TextContent);
+
+        var save = provider.FindAll("button").First(button => button.TextContent.Trim() == "Save");
+        Assert.True(save.HasAttribute("disabled"));
+
+        await save.ClickAsync(new MouseEventArgs());
+
+        Assert.False(dialogRef.Result.IsCompleted);
+        Assert.Equal("Dinner at Ramiro", provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?").Instance.Value);
+
+        // And no division asked for a move that cannot happen: that is the API refusing
+        // the same thing a second time, in a snackbar.
+        _commands.Verify(c => c.PreviewUpdateAsync(It.IsAny<Guid>(),
+            It.Is<UpdateTransactionRequest>(request => request.GroupId == GroupId),
+            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Taking_the_group_back_off_clears_the_refusal_and_saving_works_again()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+
+        await PickGroupAsync(provider, GroupId);
+        provider.WaitForElement("[data-testid=currency-refusal]");
+
+        await PickGroupAsync(provider, null);
+
+        Assert.Empty(provider.FindAll("[data-testid=currency-refusal]"));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner at Ramiro"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        Assert.NotNull(patch);
+        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "groupId"));
+    }
+
+    [Fact]
+    public async Task The_amount_field_shows_the_currency_the_expense_is_in()
+    {
+        var (provider, _) = await OpenEuroDinnerAsync();
+
+        provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
+    }
 }

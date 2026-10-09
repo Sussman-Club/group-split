@@ -222,6 +222,7 @@ public class TransactionService(
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         var group = await GroupFor(request.GroupId, ct);
+        var currency = CurrencyFor(group, request.Currency);
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
@@ -236,7 +237,7 @@ public class TransactionService(
         var expense = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            Currency = currency,
             // Stored as UTC, whatever offset the client wrote it with. The column has no
             // zone, so this only makes explicit what the store does anyway -- and it means
             // an instant reads back exactly as it was sent, never re-expressed.
@@ -270,6 +271,7 @@ public class TransactionService(
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         var group = await GroupFor(request.GroupId, ct);
+        var currency = CurrencyFor(group, request.Currency);
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
@@ -287,7 +289,7 @@ public class TransactionService(
         var draft = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            Currency = currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group?.Id,
@@ -366,6 +368,10 @@ public class TransactionService(
 
         var groupMoved = group?.Id != existing.GroupId;
 
+        // Before anything is divided, as the save refuses it: a preview that showed the
+        // shares of a move the save will not make is a promise nobody can keep.
+        RefuseCurrencyMove(existing, group);
+
         // And the payer asked about only when it changes, as the save asks it.
         var payerId = request.PaidByUserId == existing.UserId && !groupMoved
             ? existing.UserId
@@ -424,7 +430,9 @@ public class TransactionService(
         var draft = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            // Its own, wherever the edit puts it: a move into a group in another currency
+            // was refused above, and a move out of one keeps what the money was spent in.
+            Currency = existing.Currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group?.Id,
@@ -739,6 +747,12 @@ public class TransactionService(
             ? expense.Group
             : await GroupFor(request.GroupId, ct);
 
+        // Refused before a single field moves. The expense keeps the currency it was
+        // recorded in, so a group in another one cannot take it: its balances are one
+        // currency, and adding these figures to them would relabel the money rather than
+        // convert it.
+        RefuseCurrencyMove(expense, group);
+
         // Which division the expense holds from here on, asked while it still holds the
         // category and the group the question is about: the one it was written under, a rule
         // the request names instead, or none where the edit hands it back to its category.
@@ -748,7 +762,8 @@ public class TransactionService(
         {
             expense.Group = group;
             expense.GroupId = group?.Id;
-            expense.Currency = group?.Currency ?? Currencies.Default;
+            // The currency stays. Into a group it already matches -- anything else was
+            // refused above -- and out of one it is still what the money was spent in.
 
             if (group == null)
             {
@@ -958,6 +973,55 @@ public class TransactionService(
                    .FirstOrDefaultAsync(@group => @group.Id == groupId, ct)
                ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
     }
+
+    /// <summary>
+    /// The currency a new expense is recorded in: the one it was stated in, or the group's
+    /// when nothing was said.
+    /// </summary>
+    /// <remarks>
+    /// A personal expense may be in any currency, because nothing sums it with anybody
+    /// else's. It used to be stamped with the default whatever it was given, so a euro row
+    /// kept personal became the same number of dollars -- a different amount of money,
+    /// written down as though it were the one the bank reported. A group's balances are in
+    /// one currency and conversion is out of scope, so there a stated currency has to be
+    /// the group's own.
+    /// </remarks>
+    private static string CurrencyFor(Group? group, string? stated)
+    {
+        var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
+
+        if (group is null)
+            return currency ?? Currencies.Default;
+
+        if (currency is not null && !SameCurrency(currency, group.Currency))
+            throw CurrencyMismatch(currency, group);
+
+        return group.Currency;
+    }
+
+    /// <summary>
+    /// Refuses to put an expense into a group that keeps its balances in another currency.
+    /// </summary>
+    /// <remarks>
+    /// The same refusal filing into the group meets, on the other way in. A move used to
+    /// take the destination's currency, which relabelled the amount rather than converting
+    /// it -- twenty euros became twenty dollars in everybody's balance.
+    /// </remarks>
+    private static void RefuseCurrencyMove(Expense expense, Group? destination)
+    {
+        if (destination is not null && destination.Id != expense.GroupId &&
+            !SameCurrency(expense.Currency, destination.Currency))
+            throw CurrencyMismatch(expense.Currency, destination);
+    }
+
+    private static bool SameCurrency(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+
+    private static DomainException CurrencyMismatch(string currency, Group group) =>
+        new ConflictException(ErrorCodes.CurrencyMismatch,
+                $"This is in {currency} and the group keeps its balances in {group.Currency}.")
+            .WithExtension("transactionCurrency", currency)
+            .WithExtension("groupCurrency", group.Currency);
 
     /// <summary>
     /// Which of a group's participants are its guests, as ids. Empty for no group at all,

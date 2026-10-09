@@ -95,10 +95,10 @@ Expenses and settlements.
 | --- | --- |
 | `transactions list` | The expenses **you** paid for, newest first. With `--group`, the group's whole ledger. |
 | `transactions show <transaction-id>` | Show one transaction and how it was split. |
-| `transactions create <name> <amount>` | Record an expense. |
+| `transactions create <name> <amount>` | Record an expense. `--currency <ISO>` for a personal one in another currency (`EUR`); in a group only the group's own is accepted, so omit it there. |
 | `transactions update <transaction-id>` | Change an expense or a settlement. Only what moved is sent; `--redivide` asks for a fresh division, `--preview` shows the result without changing anything. On a settlement, `--covers-through <day>` and `--no-covers-through` set or clear the period it was for. |
-| `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. |
-| `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. |
+| `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. One currency per total (`currency`); anything in another is in `otherCurrencies`, never added in. |
+| `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. One currency for the whole series; others are left out. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |

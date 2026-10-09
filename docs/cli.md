@@ -15,6 +15,7 @@ a nicety for the second kind is load-bearing.
 - [Pointing it at a server](#pointing-it-at-a-server)
 - [Signing in](#signing-in)
 - [Bank sync](#bank-sync)
+- [An expense in another currency](#an-expense-in-another-currency)
 - [Editing an expense](#editing-an-expense)
 - [Amounts](#amounts)
 - [Output](#output)
@@ -623,6 +624,9 @@ page of rows.
 
 Filing copies what the bank said. The date, the amount and the currency have no flags on
 `inbox file` for that reason: correcting the bank is an edit to the expense afterwards.
+Keeping a row personal -- `inbox file` with no `--group` -- keeps the bank's currency too,
+so a 20.00 EUR charge is a 20.00 EUR expense; filing it into a group in another currency is
+refused. See [an expense in another currency](#an-expense-in-another-currency).
 
 When the deployment has no provider configured, `bank list` says so rather than answering
 with an empty list -- "no banks linked" and "bank sync is off here" are different answers.
@@ -782,6 +786,45 @@ Your share of your own dinner is money you already have -- you are owed the rest
 so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a transfer rather
 than an expense, so nothing here has been paid back yet. Where you actually stand is
 `groupsplit users position`.
+
+## An expense in another currency
+
+A group keeps its balances in one currency, and nothing in GroupSplit converts between
+currencies. Your own ledger is different: nothing adds a personal expense to anybody
+else's money, so it may be in any currency.
+
+```bash
+groupsplit tx create "Dinner in Lisbon" 20 --currency EUR     # personal, in euros
+groupsplit inbox file <row-id>                                # kept personal, in the row's currency
+```
+
+`--currency` takes any three-letter ISO 4217 code. Leave it off in a group: the expense takes
+the group's own, and any other is refused. Once recorded, an expense keeps its currency --
+there is no flag that changes it, because changing it would relabel the amount rather than
+convert it.
+
+`CURRENCY_MISMATCH`, exit code 3, is the answer wherever money would cross into a group in
+another currency: `tx create --group` with a different `--currency`, `inbox file --group`
+for a row in another currency, and `tx update --group` moving an expense into one -- or
+between two groups in different currencies. Nothing is written. The way out is to keep it
+personal, or to put it in a group that uses that currency.
+
+In text output an amount names its currency only when it is not the default, so a column of
+dollars stays a column of numbers and the one row in euros reads `20.00 EUR`; `tx show`
+always names it. JSON always carries `currency`.
+
+Totals are one currency each. `tx summary` and `tx shares summary` total the matches in
+`currency` -- the default unless nothing that matched is in it -- and list every other one on
+a line of its own, never added in:
+
+```bash
+groupsplit tx summary
+# 3 expenses totalling 25.00
+# Not in that total: 1 in EUR totalling 20.00 EUR
+```
+
+With `--json` those are `otherCurrencies`. `tx monthly` is a series, so it is drawn in one
+currency and leaves the others out; it says which under the table.
 
 ## Splitting a bill by its items
 

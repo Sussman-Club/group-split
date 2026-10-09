@@ -16,7 +16,8 @@ namespace GroupSplit.API.Test.Transaction;
 /// the account holder's own, and "share this one with the flat" is a move into a group.
 /// The other direction is the correction -- "that was mine, not ours". A move re-derives
 /// the division among the destination's members, because the old shares name people who
-/// may not be in it, and takes the destination's currency.
+/// may not be in it. The currency does not move: an expense keeps the one it was recorded
+/// in, and a group in another is refused rather than relabelling the money.
 /// </remarks>
 public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
@@ -190,6 +191,132 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Transactions.Update(expense.Id, request, Ct).AsTask());
 
         Assert.Equal(ErrorCodes.SplitUserNotInGroup, refusal.Code);
+    }
+
+    // ---- The currency does not move (#320) ---------------------------------------------
+    //
+    // Filing a euro row straight into a dollar group was refused, but moving it there
+    // afterwards took the group's currency -- twenty euros became twenty dollars in
+    // everybody's balance. A move is refused the same way filing is.
+
+    private async Task InCurrency(Guid groupId, string currency)
+    {
+        var group = await DbContext.Set<Data.Entities.Group>().SingleAsync(g => g.Id == groupId, Ct);
+
+        DbContext.Entry(group).Property(g => g.Currency).CurrentValue = currency;
+        await DbContext.SaveChangesAsync(Ct);
+    }
+
+    private Task<Expense> APersonalExpenseIn(string currency, decimal amount = 20m) =>
+        Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Dinner in Lisbon",
+            Amount = amount,
+            Currency = currency,
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct).AsTask();
+
+    [Fact]
+    public async Task A_personal_expense_in_another_currency_cannot_move_into_a_group()
+    {
+        var (groupId, _) = await AGroupOfTwo();
+        var expense = await APersonalExpenseIn("EUR");
+
+        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
+            Transactions.Update(expense.Id, Moving(expense, groupId), Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
+        Assert.Equal("EUR", refusal.Extensions["transactionCurrency"]);
+        Assert.Equal(Currencies.Default, refusal.Extensions["groupCurrency"]);
+
+        // Nothing moved: still personal, still in euros, still the one share it had.
+        var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+        Assert.Null(stored.GroupId);
+        Assert.Equal("EUR", stored.Currency);
+        Assert.Equal(20m, Assert.Single(await SplitsOf(expense.Id)).Amount);
+    }
+
+    [Fact]
+    public async Task A_move_between_groups_in_different_currencies_is_refused()
+    {
+        var (from, _) = await AGroupOfTwo("Dollars");
+        var (to, _) = await AGroupOfTwo("Euros");
+        await InCurrency(to, "EUR");
+
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Lunch",
+            Amount = 20m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = from
+        }, Ct);
+
+        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
+            Transactions.Update(expense.Id, Moving(expense, to), Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
+        Assert.Equal("EUR", refusal.Extensions["groupCurrency"]);
+
+        var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+        Assert.Equal(from, stored.GroupId);
+        Assert.Equal(Currencies.Default, stored.Currency);
+    }
+
+    [Fact]
+    public async Task A_move_into_a_group_in_the_expenses_own_currency_goes_ahead()
+    {
+        var (groupId, _) = await AGroupOfTwo();
+        await InCurrency(groupId, "EUR");
+        var expense = await APersonalExpenseIn("EUR", 30m);
+
+        var moved = await Transactions.Update(expense.Id, Moving(expense, groupId), Ct);
+
+        Assert.Equal(groupId, moved.GroupId);
+        Assert.Equal("EUR", moved.Currency);
+        Assert.Equal(2, (await SplitsOf(expense.Id)).Count);
+    }
+
+    [Fact]
+    public async Task A_group_expense_taken_personal_keeps_its_groups_currency()
+    {
+        var (groupId, _) = await AGroupOfTwo();
+        await InCurrency(groupId, "EUR");
+
+        var expense = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Dinner",
+            Amount = 40m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId
+        }, Ct);
+
+        var moved = await Transactions.Update(expense.Id, Moving(expense, toGroup: null), Ct);
+
+        Assert.Null(moved.GroupId);
+        Assert.Equal("EUR", moved.Currency);
+    }
+
+    [Fact]
+    public async Task Previewing_a_move_into_a_group_in_another_currency_is_the_same_refusal()
+    {
+        var (groupId, _) = await AGroupOfTwo();
+        var expense = await APersonalExpenseIn("EUR");
+
+        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
+            Transactions.PreviewUpdate(expense.Id, Moving(expense, groupId), ct: Ct));
+
+        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
+    }
+
+    [Fact]
+    public async Task An_edit_that_keeps_a_foreign_expense_personal_is_not_refused()
+    {
+        var expense = await APersonalExpenseIn("EUR");
+
+        var edited = await Transactions.Update(expense.Id, Moving(expense, toGroup: null) with { Name = "Dinner" }, Ct);
+
+        Assert.Equal("Dinner", ((Expense)edited).Name);
+        Assert.Equal("EUR", edited.Currency);
     }
 
     /// <summary>

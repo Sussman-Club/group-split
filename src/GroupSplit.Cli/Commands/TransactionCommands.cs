@@ -190,7 +190,7 @@ public static class TransactionCommands
                         transaction.Id.ToString(),
                         transaction.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
                         Markup.Escape(transaction.Name),
-                        transaction.Amount.ToString("N2"),
+                        Tables.Amount(transaction.Amount, transaction.Currency),
                         Markup.Escape(transaction.PaidByUserName),
                         Markup.Escape(transaction.GroupName ?? "-"));
                 }
@@ -226,7 +226,9 @@ public static class TransactionCommands
                 table.AddRow("Id", value.Id.ToString());
                 table.AddRow("Name", Markup.Escape(value.Name));
                 table.AddRow("Description", Markup.Escape(value.Description ?? "-"));
-                table.AddRow("Amount", value.Amount.ToString("N2"));
+                // The currency every time here, unlike the listings: this is the one view of
+                // the expense, and nothing beside it says what the figures are in.
+                table.AddRow("Amount", Markup.Escape($"{value.Amount:N2} {value.Currency}"));
                 table.AddRow("Date", value.DateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
                 table.AddRow("Paid by", Markup.Escape(value.PaidByUserName));
                 table.AddRow("Group", Markup.Escape(value.GroupName ?? "-"));
@@ -255,7 +257,7 @@ public static class TransactionCommands
 
                 foreach (var split in value.Splits)
                 {
-                    splits.AddRow(Markup.Escape(split.UserName), split.Amount.ToString("N2"));
+                    splits.AddRow(Markup.Escape(split.UserName), Tables.Amount(split.Amount, value.Currency));
                 }
 
                 return new Rows(table, new Markup("\n[bold]Split[/]\n"), splits);
@@ -274,6 +276,12 @@ public static class TransactionCommands
             "Total amount, e.g. 42.50: a '.' decimal point and no thousands separators.");
 
         var group = new Option<Guid?>("--group") { Description = "Group to book the expense in." };
+        var currency = new Option<string?>("--currency")
+        {
+            Description = "ISO 4217 code the amount is in, e.g. EUR. Any for a personal expense; "
+                          + "in a group only its own (anything else is refused, exit 3). "
+                          + "Defaults to the group's, or USD."
+        };
         var date = new Option<DateTimeOffset?>("--date")
         {
             Description = "When it happened. Defaults to now."
@@ -307,7 +315,7 @@ public static class TransactionCommands
 
         var command = new Command("create", "Record an expense.")
         {
-            name, amount, group, date, description, category, merchant, paidBy, splitRule, splits, preview
+            name, amount, group, currency, date, description, category, merchant, paidBy, splitRule, splits, preview
         };
 
         command.SetHandler(async (context, ct) =>
@@ -329,6 +337,7 @@ public static class TransactionCommands
                 Amount = parse.GetValue(amount),
                 DateTime = parse.GetValue(date) ?? DateTimeOffset.UtcNow,
                 GroupId = parse.GetValue(group),
+                Currency = parse.GetValue(currency),
                 CategoryId = parse.GetValue(category),
                 MerchantId = parse.GetValue(merchant),
                 PaidByUserId = parse.GetValue(paidBy),
@@ -352,7 +361,7 @@ public static class TransactionCommands
 
             context.Output.Write(created, value => new Markup(
                 $"[green]Created[/] {Markup.Escape(value.Name)} "
-                + $"({value.Amount:N2}) [grey]{value.Id}[/]\n"));
+                + $"({Tables.Amount(value.Amount, value.Currency)}) [grey]{value.Id}[/]\n"));
 
             return ExitCodes.Success;
         });
@@ -816,6 +825,18 @@ public static class TransactionCommands
     }
 
     /// <summary>
+    /// The lines a summary prints for the currencies its total is not in, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// One line each, under the total and never added into it: a personal expense can be in
+    /// any currency, and twenty dollars and twenty euros are not forty of anything. Printed
+    /// rather than left to the JSON, because a total that silently skipped them would read
+    /// as everything that matched.
+    /// </remarks>
+    private static string OtherCurrencies(IEnumerable<string> lines) =>
+        string.Concat(lines.Select(line => $"[grey]Not in that total:[/] {line}\n"));
+
+    /// <summary>
     /// The total over every match, and -- with <c>--group</c> -- over the group's whole
     /// ledger rather than the caller's part of it.
     /// </summary>
@@ -867,7 +888,9 @@ public static class TransactionCommands
 
             context.Output.Write(summary, value => new Rows(
                 new Markup(
-                    $"[bold]{value.Count}[/] expenses totalling [bold]{value.Total:N2}[/]\n"),
+                    $"[bold]{value.Count}[/] expenses totalling [bold]{Tables.Amount(value.Total, value.Currency)}[/]\n"
+                    + OtherCurrencies(value.OtherCurrencies.Select(other =>
+                        $"{other.Count} in {other.Currency} totalling {Tables.Amount(other.Total, other.Currency)}"))),
                 new Markup(scope.Heading + "\n"),
                 // Said every time rather than only when it matters, because a reader cannot
                 // tell those times apart: a group that has settled up in full looks exactly
@@ -1021,15 +1044,19 @@ public static class TransactionCommands
                 {
                     table.AddRow(
                         month.Month.ToString("yyyy-MM"),
-                        month.Paid.ToString("N2"),
-                        month.Share.ToString("N2"));
+                        Tables.Amount(month.Paid, month.Currency),
+                        Tables.Amount(month.Share, month.Currency));
                 }
 
                 // Under the table rather than only in the description, because the
                 // description is read once and the figures are read every time.
+                // One currency for the whole series, so the months can be compared at all;
+                // anything in another is left out here and listed by the summary.
                 return new Rows(table, new Markup(
                     "[grey]Yours alone, and gross: a settlement is a transfer, so nothing here "
-                    + "has been paid back. Where you stand: [/]groupsplit users position\n"));
+                    + "has been paid back. Where you stand: [/]groupsplit users position\n"
+                    + $"[grey]In {Markup.Escape(value.First().Currency)} only. Expenses in any other "
+                    + "currency are listed by: [/]groupsplit transactions summary\n"));
             });
 
             return ExitCodes.Success;
@@ -1096,8 +1123,8 @@ public static class TransactionCommands
                         share.Id.ToString(),
                         share.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
                         Markup.Escape(share.Name),
-                        share.Amount.ToString("N2"),
-                        share.Share.ToString("N2"),
+                        Tables.Amount(share.Amount, share.Currency),
+                        Tables.Amount(share.Share, share.Currency),
                         // Marked rather than left to be worked out from the name: your share
                         // of something you paid for yourself is the one row here that is not
                         // a debt, and it is the whole reason the summary has two totals.
@@ -1140,13 +1167,17 @@ public static class TransactionCommands
 
             context.Output.Write(summary, value => new Rows(
                 new Markup(
-                    $"[bold]{value.Count}[/] expenses totalling [bold]{value.Total:N2}[/], "
-                    + $"your share [bold]{value.Share:N2}[/]\n"),
+                    $"[bold]{value.Count}[/] expenses totalling [bold]{Tables.Amount(value.Total, value.Currency)}[/], "
+                    + $"your share [bold]{Tables.Amount(value.Share, value.Currency)}[/]\n"
+                    + OtherCurrencies(value.OtherCurrencies.Select(other =>
+                        $"{other.Count} in {other.Currency} totalling {Tables.Amount(other.Total, other.Currency)}, "
+                        + $"your share {Tables.Amount(other.Share, other.Currency)}, "
+                        + $"{Tables.Amount(other.OwedToOthers, other.Currency)} of it on expenses somebody else paid"))),
                 // Said separately, and said last, because it is the only one of the four
                 // that is money owed: the rest counts what you paid for yourself, which you
                 // are owed a part of rather than owing.
                 new Markup(
-                    $"[grey]Of that, [/][bold]{value.OwedToOthers:N2}[/][grey] is on expenses "
+                    $"[grey]Of that, [/][bold]{Tables.Amount(value.OwedToOthers, value.Currency)}[/][grey] is on expenses "
                     + "somebody else paid. Settlements are not counted; see "
                     + "`groupsplit users position`.[/]\n")));
 
@@ -1195,7 +1226,7 @@ public static class TransactionCommands
                         row.Id.ToString(),
                         row.SpentOn.ToString("yyyy-MM-dd"),
                         Markup.Escape(row.Title),
-                        Tables.Money(row.Amount),
+                        Tables.Money(row.Amount, row.Currency),
                         Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
                 }
 

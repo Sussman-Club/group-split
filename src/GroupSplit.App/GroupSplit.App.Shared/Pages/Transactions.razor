@@ -209,7 +209,7 @@
                list of other people's expenses would be describing a set nobody asked
                about. *@
             <span class="gs-eyebrow">@TotalLabel</span>
-            <Money Value="Total" Animate Class="gs-stat-value" />
+            <Money Value="Total" Currency="@TotalCurrency" Animate Class="gs-stat-value" />
             <span class="gs-muted" style="font-size: .8125rem">@TotalSub</span>
         </div>
     </div>
@@ -280,7 +280,7 @@
                     <CellTemplate>
                         @* Under "your share" the share is the sort key and the amount is
                            the context, so the amount is the quieter of the two. *@
-                        <Money Value="context.Item.Amount"
+                        <Money Value="context.Item.Amount" Currency="@context.Item.Currency"
                                Class="@(_view is ExpenseView.PaidByYou ? "gs-grid-amount" : "gs-grid-share")" />
                     </CellTemplate>
                 </PropertyColumn>
@@ -294,7 +294,7 @@
                         <CellTemplate>
                             @if (context.Item is ExpenseShareResponse row)
                             {
-                                <Money Value="row.Share" Class="gs-grid-amount" />
+                                <Money Value="row.Share" Currency="@row.Currency" Class="gs-grid-amount" />
                             }
                         </CellTemplate>
                     </TemplateColumn>
@@ -601,9 +601,44 @@
     /// larger figure and the caller's part of it is the smaller, and saying only one of
     /// them is what makes a share listing read as a spending listing.
     /// </summary>
-    private string TotalSub => _view is ExpenseView.PaidByYou
+    private string TotalSub => (_view is ExpenseView.PaidByYou
         ? "across every group"
-        : $"of {(_shareSummary?.Total ?? 0m).ToMoney()} spent around you";
+        : $"of {(_shareSummary?.Total ?? 0m).ToMoney(TotalCurrency)} spent around you") + OtherCurrencies;
+
+    /// <summary>The currency the total figure is in, which the API chooses.</summary>
+    private string TotalCurrency => _view is ExpenseView.PaidByYou
+        ? _paidSummary?.Currency ?? "USD"
+        : _shareSummary?.Currency ?? "USD";
+
+    /// <summary>
+    /// What matched in any other currency, said beside the total and never added into it.
+    /// </summary>
+    /// <remarks>
+    /// A personal expense can be in any currency and a total is in one, because there is
+    /// no rate to add euros to dollars with. Leaving them out without a word would make the
+    /// figure read as everything the list holds, so they are named -- the same figure the
+    /// view is showing, in each of them.
+    /// </remarks>
+    private string OtherCurrencies
+    {
+        get
+        {
+            var others = _view switch
+            {
+                ExpenseView.YourShare => _shareSummary?.OtherCurrencies
+                    .Where(other => other.OwedToOthers != 0m)
+                    .Select(other => other.OwedToOthers.ToMoney(other.Currency)),
+                ExpenseView.Everything => _shareSummary?.OtherCurrencies
+                    .Select(other => other.Share.ToMoney(other.Currency)),
+                _ => _paidSummary?.OtherCurrencies
+                    .Select(other => other.Total.ToMoney(other.Currency))
+            };
+
+            var said = others?.ToList() ?? [];
+
+            return said.Count == 0 ? "" : $", plus {string.Join(" and ", said)} not in this total";
+        }
+    }
 
     /// <summary>What the one ledger control currently says, as the button reads it.</summary>
     private string WhereLabel => _where switch
