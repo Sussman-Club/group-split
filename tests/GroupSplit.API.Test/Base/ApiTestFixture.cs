@@ -4,6 +4,7 @@ using GroupSplit.API.Services;
 using Moq;
 using Microsoft.Extensions.DependencyInjection;
 using GroupSplit.API.Test.Base;
+using GroupSplit.Keycloak;
 
 [assembly: AssemblyFixture(typeof(ApiTestFixture))]
 
@@ -54,6 +55,9 @@ public class ApiTestFixture : IAsyncLifetime
         services.AddSingleton(Mock.Of<IAmazonS3>());
         services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
 
+        // Keycloak is the host's, like object storage. By type, so each test gets its own.
+        services.AddSingleton<FakeKeycloakUserRemoval>();
+        services.AddSingleton<IKeycloakUserRemoval>(provider => provider.GetRequiredService<FakeKeycloakUserRemoval>());
 
     }
 }

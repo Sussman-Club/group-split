@@ -55,12 +55,16 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         _app = app;
         _logs = logs;
 
+        Subject = subject;
         Client = app.GetTestServer().CreateClient();
         Client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, subject);
     }
 
     /// <summary>A client whose requests arrive authenticated as the host's own user.</summary>
     public HttpClient Client { get; }
+
+    /// <summary>The identity provider subject <see cref="Client"/> signs in as.</summary>
+    public string Subject { get; }
 
     public IServiceProvider Services => _app.Services;
 
@@ -140,6 +144,11 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         // service graph, so default to a mock that attachment-focused tests can configure.
         builder.Services.AddSingleton(Mock.Of<IAmazonS3>());
         builder.Services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
+
+        // Keycloak's admin API, which the real host reaches over the network.
+        builder.Services.AddSingleton<FakeKeycloakUserRemoval>();
+        builder.Services.AddSingleton<GroupSplit.Keycloak.IKeycloakUserRemoval>(
+            provider => provider.GetRequiredService<FakeKeycloakUserRemoval>());
 
 
         configure?.Invoke(builder.Services);

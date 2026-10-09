@@ -48,6 +48,17 @@ internal sealed class UserProvisioner(AppDbContext context, ILogger<UserProvisio
 
         if (existingUser is not null)
         {
+            // A deleted account keeps its subject as a tombstone. Its login is deleted at
+            // Keycloak straight after, but that is another system and can lag -- Keycloak can
+            // be down, and a token issued before the deletion stays valid until it expires. A
+            // sign-in landing in that gap is refused here rather than provisioned: a fresh,
+            // empty account under the same login would look to its owner as if the deletion
+            // had not worked, and would give the login a reason to exist again.
+            if (existingUser.Kind == UserKind.Deleted)
+            {
+                throw new ForbiddenException(ErrorCodes.AccountDeleted, "This account has been deleted.");
+            }
+
             return await Refresh(existingUser, principal, email, identityId, cancellationToken);
         }
 

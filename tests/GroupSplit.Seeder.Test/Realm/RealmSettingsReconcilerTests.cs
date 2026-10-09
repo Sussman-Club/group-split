@@ -9,8 +9,16 @@ public sealed class RealmSettingsReconcilerTests
 {
     private const string Origin = "https://groupsplit.example";
 
-    private static string? Environment(string name) =>
-        name == "WEB_HOSTNAME" ? Origin : null;
+    private const string DeletionSecret = "the-deploy-secret";
+
+    private const string SecretVariable = "KEYCLOAK_ACCOUNT_DELETION_SECRET";
+
+    private static string? Environment(string name) => name switch
+    {
+        "WEB_HOSTNAME" => Origin,
+        SecretVariable => DeletionSecret,
+        _ => null
+    };
 
     /// <summary>
     /// The realm as a first-boot import with <see cref="Origin"/> would have written it. The
@@ -514,6 +522,129 @@ public sealed class RealmSettingsReconcilerTests
         Assert.Equal("true", mapper["config"]!["access.token.claim"]!.GetValue<string>());
     }
 
+    // ---- the account-deletion client -------------------------------------------------------
+
+    private const string DeletionClient = "account-deletion";
+
+    /// <summary>
+    /// Every realm deployed so far: imported before the client existed, and never imported
+    /// again. Without the worker creating it, deleting an account could not delete the login.
+    /// </summary>
+    private static JsonObject ImportedBeforeTheDeletionClient()
+    {
+        var realm = Imported();
+
+        realm["clients"] = new JsonArray(realm["clients"]!.AsArray().OfType<JsonObject>()
+            .Where(client => client["clientId"]!.GetValue<string>() != DeletionClient)
+            .Select(client => (JsonNode)client.DeepClone())
+            .ToArray());
+        realm.Remove("users");
+
+        return realm;
+    }
+
+    [Fact]
+    public async Task A_realm_without_the_deletion_client_is_given_one()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheDeletionClient());
+
+        await Reconcile(admin);
+
+        var client = admin.Clients[DeletionClient];
+        Assert.False(client["publicClient"]!.GetValue<bool>());
+        Assert.True(client["serviceAccountsEnabled"]!.GetValue<bool>());
+        Assert.False(client["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(client["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(client["implicitFlowEnabled"]!.GetValue<bool>());
+        Assert.Equal(DeletionSecret, admin.Secrets[DeletionClient]);
+        Assert.Equal(["manage-users"], admin.ServiceAccountRoles[DeletionClient]);
+        Assert.Equal([$"create client {DeletionClient}", "grant manage-users"], admin.Writes);
+    }
+
+    /// <summary>
+    /// The secret is a deploy secret, so rotating it is changing that secret and deploying.
+    /// The worker is what carries the new value into Keycloak.
+    /// </summary>
+    [Fact]
+    public async Task A_rotated_secret_is_written_to_the_existing_client()
+    {
+        var admin = new StubRealmAdmin(Imported());
+
+        await Reconcile(admin, name => name == SecretVariable ? "rotated" : Environment(name));
+
+        Assert.Equal("rotated", admin.Secrets[DeletionClient]);
+        Assert.Equal(1, admin.ClientUpdates);
+    }
+
+    /// <summary>
+    /// A narrow client is only worth having while it stays narrow, so a role somebody granted
+    /// it by hand is taken away again, and a missing one is put back.
+    /// </summary>
+    [Fact]
+    public async Task The_service_account_holds_exactly_the_roles_in_the_file()
+    {
+        var admin = new StubRealmAdmin(Imported());
+        admin.ServiceAccountRoles[DeletionClient] = ["view-realm", "manage-realm"];
+
+        await Reconcile(admin);
+
+        Assert.Equal(["manage-users"], admin.ServiceAccountRoles[DeletionClient]);
+    }
+
+    /// <summary>
+    /// The client must only ever sign in as itself. One that also accepted a browser sign-in or
+    /// a password would be a user-management login anybody could try.
+    /// </summary>
+    [Fact]
+    public async Task A_deletion_client_opened_up_by_hand_is_closed_again()
+    {
+        var current = Imported();
+        var client = KeycloakRealmDefinition.Client(current, DeletionClient)!;
+        client["standardFlowEnabled"] = true;
+        client["directAccessGrantsEnabled"] = true;
+        client["publicClient"] = true;
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var updated = admin.Clients[DeletionClient];
+        Assert.False(updated["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(updated["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(updated["publicClient"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Creating_the_deletion_client_twice_is_not_attempted()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheDeletionClient());
+
+        await Reconcile(admin);
+        var writes = admin.Writes.Count;
+        await Reconcile(admin);
+
+        Assert.Equal(writes, admin.Writes.Count);
+        Assert.Equal(0, admin.ClientUpdates);
+    }
+
+    /// <summary>
+    /// Without the secret the client would be created with none, or kept on an old one the API
+    /// is no longer given -- either way every account deletion would leave its login behind.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_secret_fails_the_run_before_anything_is_written()
+    {
+        var current = ImportedBeforeTheDeletionClient();
+        current["displayName"] = "Old name";
+        var admin = new StubRealmAdmin(current);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Reconcile(admin, name => name == SecretVariable ? null : Environment(name)));
+
+        Assert.Contains(SecretVariable, failure.Message);
+        Assert.Empty(admin.Writes);
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
     private static string[] Strings(JsonNode? node) =>
         node!.AsArray().Select(item => item!.GetValue<string>()).ToArray();
 
@@ -525,7 +656,21 @@ public sealed class RealmSettingsReconcilerTests
 
             foreach (var client in realm["clients"]?.AsArray().OfType<JsonObject>() ?? [])
             {
-                Store(client);
+                var copy = Store(client);
+                var clientId = copy["clientId"]!.GetValue<string>();
+
+                // Keycloak keeps the secret apart from the representation it lists.
+                if (copy["secret"]?.GetValue<string>() is { } secret)
+                {
+                    Secrets[clientId] = secret;
+                    copy.Remove("secret");
+                }
+
+                if (copy["serviceAccountsEnabled"]?.GetValue<bool>() == true)
+                {
+                    ServiceAccountRoles[clientId] = KeycloakRealmDefinition
+                        .ServiceAccountRoles(realm, clientId).ToList();
+                }
             }
 
             foreach (var provider in realm["identityProviders"]?.AsArray().OfType<JsonObject>() ?? [])
@@ -715,18 +860,44 @@ public sealed class RealmSettingsReconcilerTests
 
             var copy = (JsonObject)client.DeepClone();
             copy["protocolMappers"] = Clients[clientId]["protocolMappers"]?.DeepClone();
+
+            if (copy["secret"]?.GetValue<string>() is { } secret)
+            {
+                Secrets[clientId] = secret;
+                copy.Remove("secret");
+            }
+
             Clients[clientId] = copy;
             ClientUpdates++;
             Writes.Add($"client {clientId}");
             return Task.CompletedTask;
         }
 
+        public Dictionary<string, string> Secrets { get; } = [];
+
+        public Dictionary<string, List<string>> ServiceAccountRoles { get; } = [];
+
         public Task CreateClientAsync(JsonObject client, CancellationToken ct = default)
         {
             var clientId = client["clientId"]!.GetValue<string>();
             Assert.False(Clients.ContainsKey(clientId), $"Client '{clientId}' already exists.");
 
-            Store(client);
+            Assert.Null(client["roles"]);
+
+            var copy = Store(client);
+
+            // Keycloak keeps the secret apart from the representation it lists.
+            if (copy["secret"]?.GetValue<string>() is { } secret)
+            {
+                Secrets[clientId] = secret;
+                copy.Remove("secret");
+            }
+
+            if (copy["serviceAccountsEnabled"]?.GetValue<bool>() == true)
+            {
+                ServiceAccountRoles[clientId] = [];
+            }
+
             Writes.Add($"create client {clientId}");
             return Task.CompletedTask;
         }
@@ -762,7 +933,7 @@ public sealed class RealmSettingsReconcilerTests
         }
 
         /// <summary>Stores a client the way Keycloak does: with internal ids on it and its mappers.</summary>
-        private void Store(JsonObject client)
+        private JsonObject Store(JsonObject client)
         {
             var copy = (JsonObject)client.DeepClone();
             copy["id"] = Guid.NewGuid().ToString();
@@ -773,6 +944,36 @@ public sealed class RealmSettingsReconcilerTests
             }
 
             Clients[copy["clientId"]!.GetValue<string>()] = copy;
+            return copy;
+        }
+
+        private string ClientIdOf(string id) =>
+            Clients.Single(client => client.Value["id"]!.GetValue<string>() == id).Key;
+
+        public Task<string?> GetClientSecretAsync(string id, CancellationToken ct = default) =>
+            Task.FromResult(Secrets.GetValueOrDefault(ClientIdOf(id)));
+
+        public Task<IReadOnlyList<string>> GetServiceAccountRolesAsync(
+            string id, string roleClientId, CancellationToken ct = default)
+        {
+            Assert.Equal("realm-management", roleClientId);
+            return Task.FromResult<IReadOnlyList<string>>([.. ServiceAccountRoles[ClientIdOf(id)]]);
+        }
+
+        public Task GrantServiceAccountRolesAsync(
+            string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default)
+        {
+            ServiceAccountRoles[ClientIdOf(id)].AddRange(roles);
+            Writes.AddRange(roles.Select(role => $"grant {role}"));
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeServiceAccountRolesAsync(
+            string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default)
+        {
+            ServiceAccountRoles[ClientIdOf(id)].RemoveAll(roles.Contains);
+            Writes.AddRange(roles.Select(role => $"revoke {role}"));
+            return Task.CompletedTask;
         }
 
         public string AdminRealm => "master";

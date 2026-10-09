@@ -53,8 +53,13 @@ var cache = builder.AddRedis("cache")
     .WithPersistence(TimeSpan.FromSeconds(30))
     .WithOtlpExporter();
 
+// What the API deletes a deleted account's Keycloak login with. Keycloak imports it into a fresh
+// realm, the worker below holds an existing realm to it, and the API signs in with it.
+var accountDeletionSecret = builder.AddAccountDeletionSecret();
+
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn()
+    .WithAccountDeletionSecret(accountDeletionSecret)
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
     .WithOtlpExporter();
@@ -64,6 +69,7 @@ var keycloak = builder.AddKeycloak("keycloak")
 // Its admin credentials differ by mode, so each branch below gives it its own.
 var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.RealmWorker")
     .WithEnvironment("Realm__Operation", "reconcile")
+    .WithAccountDeletionSecret(accountDeletionSecret)
     .WithReference(keycloak)
     .WaitFor(keycloak);
 
@@ -94,7 +100,11 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WithPlaid()
     .WithVeryfiReceiptTranscription()
     .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
-    // Do not serve traffic until the realm settings have been reconciled successfully.
+    // Deleting an account deletes its Keycloak login, through a client that can manage users
+    // in the app's realm and do nothing else.
+    .WithAccountDeletionClient(accountDeletionSecret)
+    // Do not serve traffic until the realm settings have been reconciled successfully -- which
+    // includes the client above existing, with the secret just given to the API.
     .WaitForCompletion(realmSettings);
 
 var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
@@ -258,6 +268,9 @@ else
     // It still validates browser-issued tokens, so it needs the same public issuer.
     api
         .WithKeycloakAuthority(authority)
+        // Its admin calls go to Keycloak on the Compose network, which answers only below its
+        // relative path -- the same reason the realm worker is told it.
+        .WithEnvironment("Keycloak__RelativePath", KeycloakDeploymentExtensions.RelativePath)
         // Where bank providers are told to deliver webhooks: the same public origin, whose
         // /webhooks path the web app forwards here.
         .WithBankingOrigin(hostname)

@@ -91,6 +91,11 @@ Members are equal: there are no roles. A departure is remembered rather than del
 shared before somebody left does not bring them back, and nothing may change what they paid or
 owed once they have gone.
 
+Deleting an account anonymises its row -- the ledger keeps it, because everybody else's
+balances are made of it -- and deletes its Keycloak login, so nobody can sign in as it again.
+What goes, what stays and what happens when Keycloak cannot be reached is in
+[docs/account-deletion.md](docs/account-deletion.md).
+
 ## Errors
 
 Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`
@@ -273,6 +278,13 @@ somebody else's address there linked your Google account to theirs. The filter m
 refuse any Google ID token whose `email_verified` is not `true`, so an address Google never
 checked cannot match an account either. The provider's switch, client ID and secret stay
 with the container. A realm without a `google` provider is not given one.
+
+It owns one client whole: `account-deletion`, which the API deletes a deleted account's login
+through. Unlike `web-app` it is created when the realm lacks it -- every realm imported before
+it existed does -- and on every run it is held to client credentials only, to the secret in
+`KEYCLOAK_ACCOUNT_DELETION_SECRET`, and to exactly the `realm-management` roles `realms.json`
+gives its service account (`manage-users`), revoking anything added by hand. See
+[docs/account-deletion.md](docs/account-deletion.md).
 
 The worker deliberately does not manage SMTP settings, the rest of each client and provider,
 protocol mappers other than the `cli` audience, the built-in authentication flows, roles, or

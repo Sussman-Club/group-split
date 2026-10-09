@@ -9,8 +9,11 @@
 /// the moment somebody actually signs in as them. Claiming an invitation adds one of these
 /// to a user row that already holds shares, so the identity is the thing that arrives late.
 /// <para>
-/// It is also what a deleted account gives up. The person's rows stay -- other members'
-/// balances are made of them -- and the identity goes, so nobody can sign in as them again.
+/// A deleted account keeps it, as a tombstone. The person's rows stay -- other members'
+/// balances are made of them -- and so does the subject, which is not personal data once the
+/// login it named is gone from Keycloak: it is what lets a sign-in with that subject, made
+/// before Keycloak has caught up, be refused as a deleted account rather than welcomed as a
+/// new one. See <see cref="PendingLoginDeletion"/>.
 /// </para>
 /// </remarks>
 public class UserIdentity : Entity

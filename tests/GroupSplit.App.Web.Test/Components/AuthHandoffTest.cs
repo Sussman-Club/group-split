@@ -101,6 +101,22 @@ public class AuthHandoffTest : ComponentTest
     }
 
     /// <summary>
+    /// Where deleting an account lands. It reports something the person did, not something
+    /// that went wrong, so it is not shown as an error.
+    /// </summary>
+    [Fact]
+    public void A_deleted_account_is_told_it_is_gone_and_signed_out_without_an_error()
+    {
+        GoTo(AuthRoutes.Handoff(HandoffReason.AccountDeleted));
+
+        var page = Render();
+
+        Assert.Contains(ErrorMessages.AccountDeletedSignedOut, page.Markup, StringComparison.Ordinal);
+        Assert.Empty(page.FindAll(".mud-alert-outlined-error"));
+        Assert.NotEmpty(page.FindAll(".mud-alert-outlined-info"));
+    }
+
+    /// <summary>
     /// The URL says which of our sentences applies, never what the sentence is. A page that
     /// rendered the query string would let anyone put their own words -- "your account is
     /// locked, call this number" -- in a red box on the app's real sign-in page.

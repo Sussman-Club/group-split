@@ -58,6 +58,83 @@ public class KeycloakAdminClientTests
         Assert.Contains("username=admin", request.Body);
     }
 
+    /// <summary>
+    /// The API's way in: a confidential client in the app's realm, signing in as itself. No
+    /// user, no password, and nothing sent to the master realm.
+    /// </summary>
+    [Fact]
+    public async Task With_a_client_secret_it_signs_in_as_the_client_against_its_own_realm()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/group-split/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+
+        await ClientFor(handler, new KeycloakAdminOptions
+        {
+            AdminRealm = "group-split",
+            AdminClientId = "account-deletion",
+            AdminClientSecret = "the-secret"
+        }).SignInAsync(TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.EndsWith("/realms/group-split/protocol/openid-connect/token", request.Uri);
+        Assert.Contains("grant_type=client_credentials", request.Body);
+        Assert.Contains("client_id=account-deletion", request.Body);
+        Assert.Contains("client_secret=the-secret", request.Body);
+        Assert.DoesNotContain("username", request.Body);
+    }
+
+    /// <summary>
+    /// Sessions first, then the user: after the delete a sign-out could only answer 404.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_user_ends_their_sessions_and_then_deletes_them()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}", string.Empty, HttpStatusCode.NoContent);
+
+        await ClientFor(handler).RemoveUserAsync(SeededId, TestContext.Current.CancellationToken);
+
+        var calls = handler.Requests.Where(request => request.Uri.Contains("/admin/"))
+            .Select(request => $"{request.Method} {new Uri(request.Uri).AbsolutePath}")
+            .ToList();
+
+        Assert.Equal(
+            [
+                $"POST /admin/realms/group-split/users/{SeededId}/logout",
+                $"DELETE /admin/realms/group-split/users/{SeededId}"
+            ],
+            calls);
+    }
+
+    /// <summary>A user already gone is a removal already done, so a retry after a lost answer succeeds.</summary>
+    [Fact]
+    public async Task Removing_a_user_who_is_not_there_succeeds()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}", string.Empty, HttpStatusCode.NotFound);
+
+        await ClientFor(handler).RemoveUserAsync(SeededId, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(handler.Requests, request => request.Method == HttpMethod.Delete);
+    }
+
+    /// <summary>Anything else is a failure, said with Keycloak's reason, so the caller can retry later.</summary>
+    [Fact]
+    public async Task A_refused_removal_is_an_error()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}",
+            """{"error":"unknown_error"}""", HttpStatusCode.Forbidden);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ClientFor(handler).RemoveUserAsync(SeededId, TestContext.Current.CancellationToken));
+
+        Assert.Contains("403", failure.Message);
+    }
+
     /// <summary>The trap, pinned: a plain user create would silently renumber the account.</summary>
     [Fact]
     public async Task Creating_an_account_goes_through_partial_import_so_the_id_survives()

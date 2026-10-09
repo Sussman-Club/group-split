@@ -63,6 +63,13 @@ public static class ErrorCodes
     /// </summary>
     public const string MerchantEditForbidden = "MERCHANT_EDIT_FORBIDDEN";
 
+    /// <summary>
+    /// The token is valid and names an account that has been deleted. Its login is being
+    /// deleted at the identity provider, or was a moment ago and this token predates that;
+    /// either way nothing is provisioned in its place.
+    /// </summary>
+    public const string AccountDeleted = "ACCOUNT_DELETED";
+
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";

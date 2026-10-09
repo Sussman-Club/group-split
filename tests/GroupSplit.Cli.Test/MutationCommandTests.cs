@@ -1554,6 +1554,25 @@ public sealed class MutationCommandTests : IDisposable
         Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
     }
 
+    /// <summary>
+    /// The login goes with the account, so the prompt says so: somebody deleting an account
+    /// from a terminal is also deleting the sign-in their web app uses.
+    /// </summary>
+    [Fact]
+    public async Task Users_delete_says_the_sign_in_is_deleted_too()
+    {
+        _api.Returns("/api/users/me", new
+        {
+            id = Guid.NewGuid(), fullName = "Anabel Benitez", email = "anabel@example.com"
+        });
+
+        var result = await Cli.RunAsync("users", "delete");
+
+        Assert.Contains(
+            result.Json.GetProperty("changes").EnumerateArray().Select(change => change.GetString()),
+            change => change!.Contains("sign-in is deleted"));
+    }
+
     [Fact]
     public async Task An_unsettled_account_deletion_names_the_groups_standing_in_the_way()
     {

@@ -11,6 +11,14 @@ public static class AuthRoutes
     public const string Logout = "/auth/logout";
 
     /// <summary>
+    /// Ends the app's own session only, for an account that has just been deleted. Keycloak's
+    /// side needs no sign-out: deleting the account deleted the login, and every session it
+    /// held went with it. Going through Keycloak anyway would ask it to end a session for a
+    /// user it no longer has -- or, if it could not be reached for the deletion, fail outright.
+    /// </summary>
+    public const string AccountDeleted = "/auth/account-deleted";
+
+    /// <summary>
     /// The branded hand-off page. Named here because <see cref="Handoff"/> writes its
     /// query string and the page reads it, and the two have to agree.
     /// </summary>
@@ -78,6 +86,9 @@ public static class HandoffReason
     /// <summary>The session behind the cookie is gone, and the API answered 401.</summary>
     public const string SessionExpired = "session-expired";
 
+    /// <summary>The person deleted their account, and this is where signing them out lands.</summary>
+    public const string AccountDeleted = "account-deleted";
+
     /// <summary>
     /// What to show for <paramref name="reason"/>, or null when there is nothing to say --
     /// an ordinary visit to the sign-in page, or a code this version does not know.
@@ -85,6 +96,13 @@ public static class HandoffReason
     public static string? Message(string? reason) => reason switch
     {
         SessionExpired => ErrorMessages.SessionExpired,
+        AccountDeleted => ErrorMessages.AccountDeletedSignedOut,
         _ => null
     };
+
+    /// <summary>
+    /// Whether <paramref name="reason"/> reports something the person did rather than
+    /// something that went wrong, so the page shows it as news and not as an error.
+    /// </summary>
+    public static bool IsNotice(string? reason) => reason == AccountDeleted;
 }

@@ -15,6 +15,7 @@ public static class IdentityApi
 
         group.MapLogin();
         group.MapLogout();
+        group.MapAccountDeleted();
         group.MapAccountConsole();
 
         return group;
@@ -34,6 +35,29 @@ public static class IdentityApi
             properties: new AuthenticationProperties { RedirectUri = "/" },
             authenticationSchemes:
             [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
+    }
+
+    /// <summary>
+    /// Signs out of this app and nowhere else, after the account behind the session was
+    /// deleted, and says so on the sign-in page.
+    /// </summary>
+    /// <remarks>
+    /// The cookie scheme alone, not OpenID Connect. Deleting the account deleted its Keycloak
+    /// login, and Keycloak ended every session the login held as it did -- so the end-session
+    /// round trip <see cref="MapLogout"/> makes has nothing left to end, and sends the browser
+    /// to an identity provider that may be the very thing that could not be reached. Signing
+    /// out of the cookie also clears the session's stored tokens; see
+    /// <c>AuthenticationExtensions.OnSigningOut</c>.
+    /// </remarks>
+    private static void MapAccountDeleted(this RouteGroupBuilder group)
+    {
+        // AuthRoutes.AccountDeleted, below this group's /auth.
+        group.MapGet("/account-deleted", () => Results.SignOut(
+            properties: new AuthenticationProperties
+            {
+                RedirectUri = AuthRoutes.Handoff(HandoffReason.AccountDeleted)
+            },
+            authenticationSchemes: [CookieAuthenticationDefaults.AuthenticationScheme]));
     }
 
     /// <summary>Redirects to Keycloak's account console.</summary>

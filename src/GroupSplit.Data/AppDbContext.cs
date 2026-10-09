@@ -787,6 +787,20 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired();
         });
 
+        modelBuilder.Entity<PendingLoginDeletion>(entity =>
+        {
+            // The same subject the identity row holds. Unique because a login is deleted once;
+            // a second row for it would only be a second sweep doing the same work.
+            entity.Property(pending => pending.IdentityId)
+                .IsRequired()
+                .HasMaxLength(128);
+
+            entity.HasIndex(pending => pending.IdentityId).IsUnique();
+
+            entity.Property(pending => pending.RequestedAt).IsRequired();
+            entity.Property(pending => pending.Attempts).IsRequired();
+        });
+
         var modelEntities = modelBuilder.Model.GetEntityTypes().ToList();
 
         // Ensure all entities inheriting from base Entity have a primary key on Id

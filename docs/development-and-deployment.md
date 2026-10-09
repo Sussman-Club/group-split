@@ -103,6 +103,7 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `storage-accessKey`, `storage-secretKey` | secrets `STORAGE_ACCESSKEY`, `STORAGE_SECRETKEY` | yes | Root credentials of the RustFS receipt store, which the API signs its S3 requests with. Pinned for the same reason as `cache-password`: generated per publish, they recreated the storage container with new root credentials on every deploy, and everything that depends on it waited on its healthcheck each time. Nothing outside the stack ever sees them, so any two random strings will do. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. Only used when Keycloak first creates its master realm. |
 | `keycloak-admin-user`, `keycloak-admin-password` | variable `KEYCLOAK_ADMIN_USER`; secret `KEYCLOAK_ADMIN_PASSWORD` | yes | An existing master-realm admin, which the `realm-settings` worker signs in as on every deploy. Not the bootstrap admin, which need not exist once somebody has replaced it. Wrong or missing, the worker fails and the API does not start. |
+| `keycloak-account-deletion-secret` | secret `KEYCLOAK_ACCOUNT_DELETION_SECRET` | yes | Secret of `account-deletion`, the `group-split` client whose service account holds only `manage-users`, which the API deletes a deleted account's login through. Any long random string (`openssl rand -hex 32`). The `realm-settings` worker creates the client on a realm that lacks it and sets its secret to this value on every deploy, so there is no step to take in Keycloak, and rotating it is changing this secret and deploying. Missing, the publish fails; see [Deleting an account](account-deletion.md). |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
 | `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
 | `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
@@ -526,7 +527,10 @@ in both run and publish modes, the flow bindings among them. It does the same fo
 mapper, creating the `cli` client when the realm has none.
 It also reconciles the `google` provider's `trustEmail`, its essential-claim filter on
 `email_verified`, and the first broker login flow it names, which is rebuilt whole when it
-differs. See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
+differs. It creates the `account-deletion` client when the realm lacks it, and holds it to
+the secret in `KEYCLOAK_ACCOUNT_DELETION_SECRET` and to its `manage-users` role; see
+[Deleting an account](account-deletion.md).
+See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
 It leaves SMTP configuration, the rest of each client and provider, other protocol mappers,
 the built-in authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
 restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
