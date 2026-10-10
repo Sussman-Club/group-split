@@ -714,6 +714,17 @@ The URL carries the dashboard's browser token, which is why it is opt-in and nev
 Nothing else about the run changes: a wait on a resource that fails still stops rather than
 waiting for somebody to fix it from the dashboard. The dashboard goes away with the test run.
 
+## What the integration tests take from your user secrets
+
+`GroupSplit.AppHost.Test` runs the same AppHost, so it loads the same user secrets. It keeps
+the ones that describe state your machine already holds -- the Keycloak admin and the
+generated database, cache and storage passwords, which have to match the data volumes a
+normal run has initialised. Every provider parameter -- Azure OpenAI, Veryfi, Google sign-in, Plaid -- is set
+by `AppHostFixture.Parameters` and passed on the AppHost's command line, which outranks user
+secrets and `Parameters__…` environment variables, so a local test run never reaches a real
+provider on your key. `FixtureParameterTest` fails, naming the parameter but never its value,
+if one of them is ever overridden.
+
 ## Building in a sandbox that has no SDK
 
 CI installs .NET with `actions/setup-dotnet`, which fetches it from
