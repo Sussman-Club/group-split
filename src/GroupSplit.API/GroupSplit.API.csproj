@@ -7,15 +7,15 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.0-preview.1.26479.8" />
-        <PackageReference Include="Aspire.OpenAI" Version="13.6.0-preview.1.26479.8" />
-        <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.102.1" />
-        <PackageReference Include="AWSSDK.S3" Version="4.0.104.1" />
-        <PackageReference Include="Going.Plaid" Version="6.68.0" />
-        <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.12" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
-        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
-        <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12">
+        <PackageReference Include="Aspire.Keycloak.Authentication" />
+        <PackageReference Include="Aspire.OpenAI" />
+        <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" />
+        <PackageReference Include="AWSSDK.S3" />
+        <PackageReference Include="Going.Plaid" />
+        <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
+        <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

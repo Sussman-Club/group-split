@@ -12,21 +12,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.0-preview.1.26479.8" />
-    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.0" />
+    <PackageReference Include="Aspire.Keycloak.Authentication" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" />
     <!-- User access token management for the OIDC handler, which ships SaveTokens and no
          way to keep what it saved current. Apache-2.0, and distinct from Duende.BFF, which
          is under Duende's own licence and would replace this app's whole BFF. -->
-    <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" Version="4.2.0" />
+    <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" />
     <!-- OidcConstants, for the protocol error codes this app reads off a failed exchange.
          It arrives transitively with the package above; referenced here because we compile
          against it, and a direct reference is what stops that becoming accidental. -->
-    <PackageReference Include="Duende.IdentityModel" Version="8.1.0" />
-    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.9.0" />
+    <PackageReference Include="Duende.IdentityModel" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" />
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Web.Client\GroupSplit.App.Web.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
   </ItemGroup>
 
   <ItemGroup>
