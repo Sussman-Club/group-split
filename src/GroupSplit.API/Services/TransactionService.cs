@@ -745,7 +745,7 @@ public class TransactionService(
             if (recordedIn is { } transferGroup)
                 DepartedPositions.RefuseIfMoved(departed, transfer, transferGroup);
 
-            await dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
             return transfer;
         }
 
@@ -891,7 +891,7 @@ public class TransactionService(
         if (recordedIn is { } recordedGroup)
             DepartedPositions.RefuseIfMoved(departed, expense, recordedGroup);
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
 
         return expense;
     }
@@ -1059,7 +1059,7 @@ public class TransactionService(
 
         dbContext.Remove(transaction);
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
     }
 
     /// <summary>

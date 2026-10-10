@@ -165,8 +165,9 @@ public sealed class AccountService(
 
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states -- and the login deletion is never
-        // owed without the account having gone, or the other way round.
-        await context.SaveChangesAsync(cancellationToken);
+        // owed without the account having gone, or the other way round. A membership that
+        // is no longer what was read (LeftAt is a concurrency token) stops all of it.
+        await context.SaveChangesAsync(cancellationToken, LostRace.ChangedMeanwhile);
 
         return (outstanding, pending);
     }

@@ -17,7 +17,6 @@ public static class ErrorHandlingExtensions
 
             // In registration order; the first to return true wins.
             services.AddExceptionHandler<DomainExceptionHandler>();
-            services.AddExceptionHandler<DatabaseConflictHandler>();
             services.AddExceptionHandler<UnhandledExceptionHandler>();
 
             return services;

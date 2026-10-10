@@ -429,52 +429,6 @@ public class ProblemResponseTest : IAsyncLifetime
         Assert.Contains(problem.TraceId!, logged.Message, StringComparison.Ordinal);
     }
 
-    // ---- Races the database settles -------------------------------------------------------
-
-    /// <summary>
-    /// Two saves of one row at once: the concurrency token refuses the second, and that is a
-    /// documented conflict rather than a bug.
-    /// </summary>
-    [Fact]
-    public async Task A_save_that_lost_to_another_is_a_conflict_not_a_500()
-    {
-        var response = await Client.GetAsync(ApiEndpointHost.LostRaceRoute, Ct);
-
-        var problem = await ReadProblem(response, HttpStatusCode.Conflict);
-        Assert.Equal(ErrorCodes.ConcurrentChange, problem.Code);
-        Assert.DoesNotContain(_host.Logs, log => log.Level >= LogLevel.Warning);
-    }
-
-    /// <summary>
-    /// The unique indexes behind a check the services already make answer with that
-    /// check's code: two requests can both pass it, and the index is what stops the second.
-    /// </summary>
-    [Theory]
-    [InlineData("IX_Category_GroupId_Name", ErrorCodes.CategoryNameTaken)]
-    [InlineData("IX_SplitRule_GroupId_Name", ErrorCodes.SplitRuleNameTaken)]
-    [InlineData("IX_Transaction_BankTransactionId", ErrorCodes.BankTransactionAlreadyFiled)]
-    [InlineData("IX_Receipt_ExpenseId", ErrorCodes.ConcurrentChange)]
-    public async Task A_unique_index_settling_a_race_answers_with_its_documented_code(string index, string code)
-    {
-        var response = await Client.GetAsync($"{ApiEndpointHost.LostRaceRoute}?index={index}", Ct);
-
-        var problem = await ReadProblem(response, HttpStatusCode.Conflict);
-        Assert.Equal(code, problem.Code);
-
-        var body = await response.Content.ReadAsStringAsync(Ct);
-        Assert.DoesNotContain(index, body, StringComparison.Ordinal);
-    }
-
-    /// <summary>An index nothing expects to be raced is a write nobody meant: still a bug.</summary>
-    [Fact]
-    public async Task A_unique_violation_on_any_other_index_is_still_a_500()
-    {
-        var response = await Client.GetAsync($"{ApiEndpointHost.LostRaceRoute}?index=IX_User_Email", Ct);
-
-        var problem = await ReadProblem(response, HttpStatusCode.InternalServerError);
-        Assert.Equal(ErrorCodes.InternalError, problem.Code);
-    }
-
     /// <summary>Expected refusals, by contrast, are not errors in the log.</summary>
     [Fact]
     public async Task A_refusal_is_logged_as_information_not_error()

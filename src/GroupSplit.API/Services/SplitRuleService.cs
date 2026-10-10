@@ -137,7 +137,7 @@ public class SplitRuleService(
         };
 
         dbContext.Add(rule);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, NameRace(request.Name));
 
         return rule;
     }
@@ -193,7 +193,7 @@ public class SplitRuleService(
             dbContext.Add(proposed);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, NameRace(request.Name), LostRace.ChangedMeanwhile);
 
         return rule;
     }
@@ -296,7 +296,7 @@ public class SplitRuleService(
             dbContext.Add(proposed[i]);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
 
         return await GetHistory(rule.Id, ct);
     }
@@ -336,7 +336,7 @@ public class SplitRuleService(
                 "Expenses have been divided by this rule, so it is part of their history and cannot be deleted.");
 
         dbContext.Remove(rule);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
     }
 
     private async Task<SplitRule> Existing(Guid id, CancellationToken ct) =>
@@ -509,7 +509,16 @@ public class SplitRuleService(
             rule.Name.ToLower() == name.ToLower(), ct);
 
         if (taken)
-            throw new ConflictException(ErrorCodes.SplitRuleNameTaken,
-                $"This group already has a rule called \"{name}\".");
+            throw NameTaken(name);
     }
+
+    /// <summary>
+    /// The same refusal when two requests both passed that check, and the index behind it
+    /// -- case-insensitive, like the check -- is what stopped the second.
+    /// </summary>
+    private static LostRace NameRace(string name) =>
+        LostRace.OnUniqueIndex("IX_SplitRule_GroupId_Name", () => NameTaken(name));
+
+    private static ConflictException NameTaken(string name) =>
+        new(ErrorCodes.SplitRuleNameTaken, $"This group already has a rule called \"{name}\".");
 }

@@ -97,7 +97,7 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When | Extra members |
 | --- | --- | --- |
 | `GROUP_GUEST_CHANGED` | Two members changed the same guest at the same moment -- a removal racing a link being issued, replaced or stopped, or the link being claimed -- and this request lost. Nothing it asked for was written. Read the guest again and decide afresh. | |
-| `CONCURRENT_CHANGE` | Somebody else changed or deleted the same row between this request reading it and writing it, and this request lost: the database refused the write rather than let it land on something that is no longer what was read. Nothing it asked for was written. Read it again and decide afresh. Also the second of two first saves of one expense's bill. Edits carry no version of what the client read, so two edits of a category, a rule or an expense a minute apart still both land, the later one winning. | |
+| `CONCURRENT_CHANGE` | Somebody else changed or deleted the same row between this request reading it and writing it, and this request lost: the database refused the write rather than let it land on something that is no longer what was read. Nothing it asked for was written. Read it again and decide afresh. Answered by editing or deleting an expense, a category, a split rule or a bill, by filing or linking an imported row, by leaving a group and by deleting an account. Also the second of two first saves of one expense's bill. Edits carry no version of what the client read, so two edits of a category, a rule or an expense a minute apart still both land, the later one winning. | |
 | `GROUP_MEMBER_NOT_SETTLED` | The member or guest being removed still has a balance in the group. For a guest, a member records the repayment that squares them first. | `balance`: their net balance, negative when they owe. |
 | `ACCOUNT_NOT_SETTLED` | The account being deleted still has a balance in one or more groups. Nothing was changed. | `outstandingBalances`: an array of `{ groupId, groupName, balance }`. |
 | `CATEGORY_NAME_TAKEN` | The group already has a category with that name, in any case: "food" is taken by "Food". The unique index compares `lower("Name")` too, so of two requests at once the second gets this rather than a 500. | |
@@ -203,6 +203,15 @@ Everything lives under [`src/GroupSplit.API/Errors`](../src/GroupSplit.API/Error
   `detail`: `throw new ConflictException(ErrorCodes.SplitRuleInUse, "This rule is still the default for a category.")`.
   Attach extension members with `.WithExtension("balance", userBalance)`. Nothing catches these
   in the service layer; the exception handler does.
+- **A save the database can decide** says which races it can lose, where it saves. Two
+  requests can both pass a service's check, and then a unique index refuses the second
+  insert, or an update or delete finds its row changed or gone. The save names those:
+  `await dbContext.SaveChangesAsync(ct, NameRace(request.Name), LostRace.ChangedMeanwhile)`.
+  `LostRace` answers a `UniqueConstraintException` on a named index with that check's own
+  refusal, and a `DbUpdateConcurrencyException` with `CONCURRENT_CHANGE`. The index name
+  comes from `EntityFrameworkCore.Exceptions.PostgreSQL`, switched on in `Program.cs` with
+  `UseExceptionProcessor()`. A violation the save does not name is a bug and stays a 500,
+  and the HTTP pipeline never sees a database exception it has to understand.
 - **In an endpoint** that already has the answer in hand, return a problem rather than throw:
   `Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.")`, or
   `Problems.Conflict(code, detail, extensions)`. Never `Results.NotFound()` on its own: it
@@ -224,7 +233,6 @@ How it fits together:
 | --- | --- |
 | `Problems` | The one factory. Builds a problem from a status, code and detail; `Enrich` stamps `code`, `type`, `instance` and `traceId` on every problem the framework produces, whoever produced it. |
 | `DomainExceptionHandler` | `IExceptionHandler` that maps the typed exceptions. Logs at `Information` with the code, without a stack trace. |
-| `DatabaseConflictHandler` | Maps the database settling a race: `DbUpdateConcurrencyException` to `CONCURRENT_CHANGE`, and a unique violation on an index it names (the category and rule name indexes, the one-expense-per-row index, the one-bill-per-expense index) to that index's code. Any other unique violation is a bug and stays a 500. |
 | `UnhandledExceptionHandler` | The last `IExceptionHandler`. Logs at `Error` with the exception and the trace id, marks the activity as failed, answers `INTERNAL_ERROR`. |
 | `AddApiErrorHandling()` / `UseApiErrorHandling()` | The wiring: `AddProblemDetails` with `Enrich` as the customization, the two handlers, `UseExceptionHandler()` and `UseStatusCodePages()` first in the pipeline. `Program.cs` and the endpoint test host both call these, so they cannot drift. |
 

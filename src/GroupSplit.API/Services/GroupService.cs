@@ -786,7 +786,8 @@ public class GroupService(
 
         await DetachMember(group, user, LeftReason.Left, user.Id, cancellationToken);
 
-        await context.SaveChangesAsync(cancellationToken);
+        // LeftAt is a concurrency token: a membership that is not what was read is not left.
+        await context.SaveChangesAsync(cancellationToken, LostRace.ChangedMeanwhile);
     }
 
     public async Task<UserPositionResponse> GetPosition(CancellationToken cancellationToken = default)

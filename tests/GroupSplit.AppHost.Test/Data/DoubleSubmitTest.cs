@@ -1,5 +1,7 @@
 using System.Data.Common;
 using Aspire.Hosting.Testing;
+using EntityFramework.Exceptions.Common;
+using EntityFramework.Exceptions.PostgreSQL;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -74,7 +76,8 @@ public class DoubleSubmitTest(AppHostFixture appHost) : IAsyncLifetime
 
     /// <summary>
     /// The services as the API registers them, on the retrying strategy the deployed
-    /// provider uses, so a transaction here has to be opened the way it has to be there.
+    /// provider uses, so a transaction here has to be opened the way it has to be there,
+    /// and with the exception processor, so a failed save names the index that refused it.
     /// </summary>
     private static ServiceProvider Provider(string connectionString, IInterceptor? interceptor)
     {
@@ -83,7 +86,8 @@ public class DoubleSubmitTest(AppHostFixture appHost) : IAsyncLifetime
         services.AddLogging();
         services.AddDbContext<AppDbContext, PostgreSqlAppDbContext>(options =>
         {
-            options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure());
+            options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+                .UseExceptionProcessor();
 
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
@@ -339,6 +343,70 @@ public class DoubleSubmitTest(AppHostFixture appHost) : IAsyncLifetime
             .CountAsync(rule => rule.Group.Id == groupId && rule.Name.ToLower() == "shared", Ct));
     }
 
+    /// <summary>
+    /// A save answers only for the indexes it names, and tells them apart by the name the
+    /// exception processor reads off the model. A violation of any other index is a write
+    /// nobody meant, and is thrown as it is: a 500.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task A_unique_index_a_save_does_not_name_is_not_answered_for_it()
+    {
+        var (owner, member) = await TwoPeople();
+        var groupId = await GroupOf(owner, member, "Unnamed index");
+
+        await As(owner, scope => Service<ICategoryService>(scope).Create(
+            new CreateCategoryRequest { GroupId = groupId, Name = "Food" }, Ct));
+
+        using var scope = _services!.CreateScope();
+        var context = Service<AppDbContext>(scope);
+
+        context.Add(new Category
+        {
+            Group = await context.Set<Group>().FirstAsync(group => group.Id == groupId, Ct),
+            Name = "FOOD"
+        });
+
+        var refused = await Assert.ThrowsAsync<UniqueConstraintException>(() => context.SaveChangesAsync(Ct,
+            LostRace.OnUniqueIndex("IX_SplitRule_GroupId_Name",
+                () => new ConflictException(ErrorCodes.SplitRuleNameTaken, "Not this one."))));
+
+        Assert.Equal("IX_Category_GroupId_Name", refused.ConstraintName);
+    }
+
+    // ---- Bills --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Both read the expense as having no bill, and both write one. Bills take no lock, so
+    /// the index holding an expense to one bill is what refuses the second.
+    /// </summary>
+    [Fact(Timeout = 180_000)]
+    public async Task Saving_an_expenses_first_bill_twice_at_once_saves_one_bill()
+    {
+        var (owner, member) = await TwoPeople();
+        var groupId = await GroupOf(owner, member, "Bill twice");
+
+        var expense = await As(owner, scope => Service<ITransactionService>(scope).Create(
+            DinnerFor(groupId, owner, member), Ct).AsTask());
+
+        var bill = new SaveReceiptRequest
+        {
+            Subtotal = 30m,
+            Total = 30m,
+            Items = [new ReceiptItemInput { Name = "Dinner", UnitPrice = 30m, TotalPrice = 30m }]
+        };
+
+        var (mine, theirs) = await Race(
+            BeforeWriting("Receipt"),
+            () => As(owner, scope => Service<IReceiptService>(scope).SaveForExpense(expense.Id, bill, Ct)),
+            () => AsOther(owner, scope => Service<IReceiptService>(scope).SaveForExpense(expense.Id, bill, Ct)));
+
+        AssertOneWonAndOneWasTold(mine, theirs, ErrorCodes.ConcurrentChange);
+
+        using var check = _services!.CreateScope();
+        Assert.Equal(1, await Service<AppDbContext>(check).Set<Receipt>()
+            .CountAsync(receipt => receipt.ExpenseId == expense.Id, Ct));
+    }
+
     // ---- The race -----------------------------------------------------------------------------
 
     /// <summary>What one call came to: its answer, or what it was refused with.</summary>
@@ -347,15 +415,11 @@ public class DoubleSubmitTest(AppHostFixture appHost) : IAsyncLifetime
         public bool Failed => Error is not null;
 
         /// <summary>
-        /// The refusal the API answers this with, as the exception handlers map it; null
-        /// for anything that would be a 500.
+        /// The refusal the API answers this with; null for anything that would be a 500.
+        /// Whatever the database decided, the service has to have said what it means: the
+        /// HTTP pipeline knows nothing about database exceptions.
         /// </summary>
-        public DomainException? Refusal => Error switch
-        {
-            DomainException refusal => refusal,
-            null => null,
-            _ => DatabaseConflicts.Translate(Error)
-        };
+        public DomainException? Refusal => Error as DomainException;
 
         public string Describe() => Error?.ToString() ?? $"answered {Value}";
     }

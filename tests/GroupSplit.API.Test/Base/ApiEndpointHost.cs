@@ -47,13 +47,6 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
     /// <summary>What the throwing route throws, so a test can check that none of it leaks.</summary>
     public const string ThrowingMessage = "SELECT secret FROM table -- must never reach a client";
 
-    /// <summary>
-    /// A route whose handler fails the way a save does when the database settles a race on
-    /// the named unique index -- or, given none, on a concurrency token. The in-memory
-    /// provider enforces neither, so this is how the tests reach the handler that maps them.
-    /// </summary>
-    public const string LostRaceRoute = "/test/lost-race";
-
     private readonly WebApplication _app;
     private readonly CapturingLoggerProvider _logs;
 
@@ -173,21 +166,6 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         app.MapDomainApi();
 
         app.MapGet(ThrowingRoute, () => { throw new InvalidOperationException(ThrowingMessage); })
-            .RequireAuthorization();
-
-        app.MapGet(LostRaceRoute, (string? index) =>
-            {
-                if (index is null)
-                    throw new DbUpdateConcurrencyException("The row was changed by somebody else.");
-
-                throw new DbUpdateException("An error occurred while saving the entity changes.",
-                    new Npgsql.PostgresException(
-                        $"duplicate key value violates unique constraint \"{index}\"", "ERROR", "ERROR",
-                        Npgsql.PostgresErrorCodes.UniqueViolation, detail: null, hint: null, position: 0,
-                        internalPosition: 0, internalQuery: null, where: null, schemaName: "public",
-                        tableName: null, columnName: null, dataTypeName: null, constraintName: index,
-                        file: null, line: null, routine: null));
-            })
             .RequireAuthorization();
 
         await using (var scope = app.Services.CreateAsyncScope())

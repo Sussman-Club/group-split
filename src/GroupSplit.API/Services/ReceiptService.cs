@@ -225,7 +225,7 @@ public class ReceiptService(
             await splitter.WriteSplitsAsync(expense, ct);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, BillSavedMeanwhile, LostRace.ChangedMeanwhile);
         return await ForExpense(expenseId, ct);
     }
 
@@ -254,7 +254,7 @@ public class ReceiptService(
             await splitter.WriteSplitsAsync(expense, ct);
         }
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
         return receipt;
     }
 
@@ -393,7 +393,7 @@ public class ReceiptService(
         else
             await splitter.WriteSplitsAsync(expense,
                 preview.Shares.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList(), ct);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
         return expense;
     }
 
@@ -401,8 +401,16 @@ public class ReceiptService(
     {
         await MineToChange(expenseId, ct);
         dbContext.Remove(await ForExpense(expenseId, ct));
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
     }
+
+    /// <summary>
+    /// Two first saves of one expense's bill: both found no bill and wrote one, and the index
+    /// that holds an expense to one bill refuses the second.
+    /// </summary>
+    private static readonly LostRace BillSavedMeanwhile = LostRace.OnUniqueIndex("IX_Receipt_ExpenseId", () =>
+        new ConflictException(ErrorCodes.ConcurrentChange,
+            "Somebody else saved a bill for this expense at the same moment. Look again before saving."));
 
     private async Task<IReadOnlyCollection<Guid>> Members(Expense expense, CancellationToken ct) =>
         expense.GroupId is { } groupId ? await participants.IdsOf(groupId, ct) : [expense.Payer];

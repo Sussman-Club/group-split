@@ -1,3 +1,4 @@
+using EntityFramework.Exceptions.PostgreSQL;
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
@@ -47,7 +48,11 @@ builder.Services.AddAuthorizationBuilder();
 // deletes its login there. The client holds manage-users in the app's realm and nothing else.
 builder.AddKeycloakAdminClient();
 
-builder.AddPostgreSqlAppDbContext("db");
+// A failed save says what the database refused -- a UniqueConstraintException naming the
+// index, say, still a DbUpdateException wrapping Npgsql's error -- so a service can answer
+// the race it lost where it saved; see LostRace.
+builder.AddPostgreSqlAppDbContext("db",
+    configureDbContextOptions: options => options.UseExceptionProcessor());
 builder.Services.AddReceiptStorage(builder.Configuration);
 builder.Services.AddReceiptTranscription(builder.Configuration);
 builder.Services.AddDomainServices();

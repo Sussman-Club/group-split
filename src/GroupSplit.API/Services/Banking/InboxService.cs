@@ -155,8 +155,7 @@ public sealed class InboxService(
 
         if (row.Status == BankTransactionStatus.Filed)
         {
-            throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
-                "This imported transaction has already been added as an expense.");
+            throw AlreadyFiled();
         }
 
         // Money coming in is not an expense, and there is no other kind of transaction yet.
@@ -218,10 +217,20 @@ public sealed class InboxService(
         expense.MerchantId = row.MerchantId;
         row.Status = BankTransactionStatus.Filed;
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, FiledMeanwhile, LostRace.ChangedMeanwhile);
 
         return expense;
     }
+
+    private static ConflictException AlreadyFiled() =>
+        new(ErrorCodes.BankTransactionAlreadyFiled, "This imported transaction has already been added as an expense.");
+
+    /// <summary>
+    /// The same refusal from the index that holds a row to one expense, should the lock above
+    /// ever not be what stops the second file or link: the row is filed, whichever got there.
+    /// </summary>
+    private static readonly LostRace FiledMeanwhile =
+        LostRace.OnUniqueIndex("IX_Transaction_BankTransactionId", AlreadyFiled);
 
     /// <summary>
     /// How sure to sound about it. The same refusal carries both grades, and claiming the
@@ -271,8 +280,7 @@ public sealed class InboxService(
 
         if (row.Status == BankTransactionStatus.Filed)
         {
-            throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
-                "This imported transaction has already been added as an expense.");
+            throw AlreadyFiled();
         }
 
         if (row.Amount < 0)
@@ -317,7 +325,7 @@ public sealed class InboxService(
         expense.MerchantId = row.MerchantId;
         row.Status = BankTransactionStatus.Filed;
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, FiledMeanwhile, LostRace.ChangedMeanwhile);
 
         return expense;
     }

@@ -76,7 +76,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         };
 
         dbContext.Add(category);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, NameRace(request.Name));
 
         return category;
     }
@@ -95,7 +95,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         // this touches.
         category.DefaultSplitRule = await RuleOf(category.Group, request.DefaultSplitRuleId, ct);
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, NameRace(request.Name), LostRace.ChangedMeanwhile);
 
         return category;
     }
@@ -112,7 +112,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
 
         category.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
 
         return category;
     }
@@ -131,7 +131,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
                 "This category still has expenses filed under it. Archive it instead.");
 
         dbContext.Remove(category);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct, LostRace.ChangedMeanwhile);
     }
 
     // Archived ones included, or nothing could be brought back: the one call that must find
@@ -172,7 +172,16 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
             category.Name.ToLower() == name.ToLower(), ct);
 
         if (taken)
-            throw new ConflictException(ErrorCodes.CategoryNameTaken,
-                $"This group already has a category called \"{name}\".");
+            throw NameTaken(name);
     }
+
+    /// <summary>
+    /// The same refusal when two requests both passed that check, and the index behind it
+    /// -- case-insensitive, like the check -- is what stopped the second.
+    /// </summary>
+    private static LostRace NameRace(string name) =>
+        LostRace.OnUniqueIndex("IX_Category_GroupId_Name", () => NameTaken(name));
+
+    private static ConflictException NameTaken(string name) =>
+        new(ErrorCodes.CategoryNameTaken, $"This group already has a category called \"{name}\".");
 }
