@@ -202,13 +202,13 @@ else if (NotFound)
     /// two years ago.
     /// </remarks>
     private string LastActivity => GroupsService.Transactions?.Items.Count > 0
-        ? " · last activity " + Relative(GroupsService.Transactions.Items.Max(item => item.DateTime))
+        ? " · last activity " + Relative(GroupsService.Transactions.Items.Max(item => Clock.Day(item.DateTime)))
         : "";
 
-    private string Relative(DateTimeOffset when)
+    // The row's day the way every transaction date is read (#252): a bank row's is the bank's.
+    private string Relative(DateOnly day)
     {
-        var local = Clock.Local(when);
-        var days = (Clock.Today - local.Date).Days;
+        var days = Clock.TodayDay.DayNumber - day.DayNumber;
 
         return days switch
         {
@@ -216,8 +216,8 @@ else if (NotFound)
             1 => "yesterday",
             < 7 => $"{days} days ago",
             < 31 => $"{days / 7} week{(days / 7 == 1 ? "" : "s")} ago",
-            _ when local.Year == Clock.Today.Year => local.ToString("d MMM"),
-            _ => local.ToString("d MMM yyyy")
+            _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
+            _ => day.ToString("d MMM yyyy")
         };
     }
 

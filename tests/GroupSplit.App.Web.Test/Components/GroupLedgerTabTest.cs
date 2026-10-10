@@ -1048,4 +1048,60 @@ public class GroupLedgerTabTest : ComponentTest
         Assert.Equal(2, tab.FindComponents<MudTooltip>().Count);
         Assert.All(tab.FindComponents<MudTooltip>(), tooltip => Assert.False(tooltip.Instance.ShowOnFocus));
     }
+
+    // ---- the day and time on a row (#252) -----------------------------------------------
+
+    /// <summary>New York at UTC-5 and Sydney at UTC+10: either side of Greenwich.</summary>
+    public static TheoryData<int> Readers => [-5, 10];
+
+    /// <summary>What the "When" cell of the row named <paramref name="name"/> says, line by line.</summary>
+    private static string[] When(IRenderedComponent<GroupLedgerTab> tab, string name) =>
+        tab.FindAll("tr").Single(row => row.TextContent.Contains(name, StringComparison.Ordinal))
+            .QuerySelector("td")!
+            .QuerySelectorAll("div.gs-num")
+            .Select(line => line.TextContent.Trim())
+            .ToArray();
+
+    /// <summary>
+    /// A charge the bank posted on 9 October is stored at midnight UTC, which is 19:00 on the
+    /// 8th in New York. It reads as the 9th there and in Sydney, with no time under it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Readers))]
+    public void A_bank_row_shows_the_banks_date_and_no_time(int hours)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+        _entries =
+        [
+            Expense(Guid.NewGuid(), "IKEA") with { DateTime = new DateTimeOffset(2026, 10, 9, 0, 0, 0, TimeSpan.Zero) }
+        ];
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Contains("IKEA", tab.Markup, StringComparison.Ordinal));
+        Assert.Equal([new DateOnly(2026, 10, 9).ToString("d MMM yyyy")], When(tab, "IKEA"));
+    }
+
+    /// <summary>
+    /// Anything else is a moment and is shown as one: the day and the time it fell on where
+    /// the reader is.
+    /// </summary>
+    [Theory]
+    [InlineData(-5, 8, 13)]
+    [InlineData(10, 9, 4)]
+    public void A_recorded_moment_shows_its_day_and_time_where_the_reader_is(int hours, int day, int hour)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+        _entries =
+        [
+            Expense(Guid.NewGuid(), "Dinner") with { DateTime = new DateTimeOffset(2026, 10, 8, 18, 30, 0, TimeSpan.Zero) }
+        ];
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Contains("Dinner", tab.Markup, StringComparison.Ordinal));
+        Assert.Equal(
+            [new DateOnly(2026, 10, day).ToString("d MMM yyyy"), new TimeOnly(hour, 30).ToString("t")],
+            When(tab, "Dinner"));
+    }
 }

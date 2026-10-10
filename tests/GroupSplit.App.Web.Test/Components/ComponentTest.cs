@@ -134,4 +134,22 @@ public abstract class ComponentTest : BunitContext
     protected Mock<ISnackbar> Snackbar { get; } = new();
 
     protected DataChangeNotifier Changes => Services.GetRequiredService<DataChangeNotifier>();
+
+    /// <summary>
+    /// Puts the reader at a fixed offset from UTC, whatever the machine's zone, by giving the
+    /// clock a browser that answers synchronously -- the WebAssembly case. Call it before the
+    /// first render; the later registration is the one resolved.
+    /// </summary>
+    protected LocalClock ReaderAt(TimeSpan offset)
+    {
+        var js = new Mock<IJSInProcessRuntime>();
+
+        js.Setup(runtime => runtime.Invoke<int>("gs.tzOffsetMinutes", It.IsAny<object?[]?>()))
+            .Returns((int)offset.TotalMinutes);
+
+        var clock = new LocalClock(js.Object);
+        Services.AddSingleton(clock);
+
+        return clock;
+    }
 }

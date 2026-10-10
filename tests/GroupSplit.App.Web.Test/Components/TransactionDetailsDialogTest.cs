@@ -316,4 +316,55 @@ public class TransactionDetailsDialogTest : ComponentTest
         Assert.Contains(">open<", dialog.Markup);
         Assert.Contains("$12.50", dialog.Markup);
     }
+
+    // ---- when it happened (#252) ----------------------------------------------------------
+
+    private void DatedAt(DateTimeOffset stored) =>
+        _transactions
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = _expense,
+                Name = "IKEA",
+                Amount = 89.99m,
+                DateTime = stored,
+                PaidByUserName = "Anabel Benitez",
+                PaidByUserId = Me,
+                Splits = []
+            });
+
+    private static string When(IRenderedComponent<MudDialogProvider> dialog) =>
+        dialog.FindAll(".gs-kv-row")
+            .First(row => row.QuerySelector("dt")?.TextContent.Trim() == "When")
+            .QuerySelector("dd")!.TextContent.Trim();
+
+    /// <summary>
+    /// The bank's date, alone: midnight UTC on the 9th is 19:00 on the 8th in New York and
+    /// 10:00 on the 9th in Sydney, and neither time is anything the bank said.
+    /// </summary>
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(10)]
+    public async Task A_bank_row_shows_the_banks_date_and_no_time(int hours)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+        DatedAt(new DateTimeOffset(2026, 10, 9, 0, 0, 0, TimeSpan.Zero));
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Equal("9 Oct 2026", When(dialog)));
+    }
+
+    [Theory]
+    [InlineData(-5, "8 Oct 2026, 13:30")]
+    [InlineData(10, "9 Oct 2026, 04:30")]
+    public async Task A_recorded_moment_shows_its_day_and_time_where_the_reader_is(int hours, string shown)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+        DatedAt(new DateTimeOffset(2026, 10, 8, 18, 30, 0, TimeSpan.Zero));
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Equal(shown, When(dialog)));
+    }
 }

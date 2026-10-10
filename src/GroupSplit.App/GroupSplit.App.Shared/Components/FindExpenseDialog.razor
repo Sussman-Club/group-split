@@ -61,7 +61,7 @@
                             <Avatar Name="@expense.Name" />
                             <span class="gs-match-choice-copy">
                                 <span class="title">@expense.Name</span>
-                                <span class="meta">@(expense.GroupName ?? "Personal") · @Clock.Local(expense.DateTime).ToString("d") · @expense.PaidByUserName paid</span>
+                                <span class="meta">@(expense.GroupName ?? "Personal") · @Clock.Day(expense.DateTime).ToString("d") · @expense.PaidByUserName paid</span>
                                 @if (!attachable)
                                 {
                                     <span class="gs-tag neutral">@WhyNotAttachable(expense)</span>

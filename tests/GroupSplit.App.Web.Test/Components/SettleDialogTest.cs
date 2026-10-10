@@ -195,4 +195,26 @@ public class SettleDialogTest : ComponentTest
         Assert.Equal(70m, request!.Amount);
         Assert.Null(request.Through);
     }
+
+    /// <summary>
+    /// The day the repayment was made on is a day and nothing else, so it is stored the way a
+    /// bank row's date is -- midnight UTC -- and reads as that day, with no time, in every
+    /// zone (#252). It was stored at midday UTC, which every list showed as "12:00", and
+    /// which is the next day from UTC+12.
+    /// </summary>
+    [Fact]
+    public async Task The_day_it_was_paid_on_is_stored_as_a_date()
+    {
+        var (provider, dialog) = await Open();
+
+        var when = provider.FindComponents<MudDatePicker>().Single(field => field.Instance.Label == "When");
+        await provider.InvokeAsync(() => when.Instance.DateChanged.InvokeAsync(new DateTime(2026, 9, 30)));
+
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+
+        Assert.Equal(new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero), request!.Date);
+    }
 }

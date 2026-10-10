@@ -548,10 +548,9 @@
 
         // In the person's zone. Reading .Date off the stored value gives the wall clock of
         // whatever offset it arrived with -- UTC -- and re-saving that at the local offset
-        // moved the expense by the zone difference on every edit.
-        var shown = Clock.Local(Original.DateTime);
-        _selectedDate = shown.Date;
-        _selectedTime = shown.TimeOfDay;
+        // moved the expense by the zone difference on every edit. A bank row is a date with no
+        // time (#252): it opens on the bank's day with the time left empty.
+        (_selectedDate, _selectedTime) = Clock.Pickers(Original.DateTime);
 
         // Without the group's categories and members there is nothing to edit against, so
         // a failed load closes the dialog once the presenter has said why.
@@ -1055,8 +1054,13 @@
             StateHasChanged();
     }
 
+    /// <summary>
+    /// The pickers made into the instant they mean. A bank row left on its day with no time
+    /// picked is kept exactly as it was stored, rather than becoming a moment
+    /// (<see cref="LocalClock.Edited"/>).
+    /// </summary>
     private void ApplyDate() =>
-        _model.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+        _model.DateTime = Clock.Edited(Original.DateTime, _selectedDate, _selectedTime);
 
     /// <summary>
     /// Validated here, because this is the only place left between typing and saving.
