@@ -174,17 +174,21 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     }
 
     /// <summary>
-    /// Signs out, tolerating the abort Chromium reports for the navigation. The sign-out is
-    /// a redirect chain out to the realm and back into a Blazor page, and the document that
-    /// started it is superseded on the way -- which arrives here as ERR_ABORTED even though
-    /// every hop was followed.
+    /// Signs out the way a person does: the Account page's "Sign out", which posts the
+    /// sign-out form with its antiforgery token. A GET of <c>/auth/logout</c> no longer signs
+    /// anybody out, so another site cannot do it with a link. The sign-out is a redirect
+    /// chain out to the realm and back into a Blazor page, and the document that started it
+    /// is superseded on the way -- which can arrive here as ERR_ABORTED even though every hop
+    /// was followed.
     /// </summary>
     private async Task SignOutAsync(IPage page)
     {
+        await page.GotoAsync(Url("account"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+
         try
         {
-            await page.GotoAsync(
-                Url("auth/logout"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+            await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign out", Exact = true })
+                .ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
         }
         catch (PlaywrightException exception) when (exception.Message.Contains("ERR_ABORTED"))
         {
