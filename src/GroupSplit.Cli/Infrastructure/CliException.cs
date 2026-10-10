@@ -20,6 +20,14 @@ public sealed record CliError(
     /// </summary>
     [JsonPropertyName("traceId")]
     public string? TraceId { get; init; }
+
+    /// <summary>
+    /// On a <c>RATE_LIMITED</c> refusal: whole seconds to wait before the same command will
+    /// be let through. Absent otherwise.
+    /// </summary>
+    [JsonPropertyName("retryAfter")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RetryAfter { get; init; }
 }
 
 /// <summary>

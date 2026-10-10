@@ -36,7 +36,8 @@ public static class SchemaCommand
                         error = ExitCodes.Error,
                         authRequired = ExitCodes.AuthRequired,
                         invalidInput = ExitCodes.InvalidInput,
-                        confirmationRequired = ExitCodes.ConfirmationRequired
+                        confirmationRequired = ExitCodes.ConfirmationRequired,
+                        rateLimited = ExitCodes.RateLimited
                     },
                     command = Describe(root)
                 },

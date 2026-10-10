@@ -266,7 +266,7 @@ public static class InboxApi
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
                 .DisableAntiforgery()
-                .WithMetadata(new RequestSizeLimitAttribute(11 * 1024 * 1024));
+                .WithMetadata(new RequestSizeLimitAttribute(ReceiptAttachmentsApi.MaximumRequestLength));
 
             group.MapGet("{id:guid}/receipt-attachments/{attachmentId:guid}", async (
                     Guid id,
@@ -291,7 +291,8 @@ public static class InboxApi
                 .Produces<ReceiptTranscriptionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status502BadGateway);
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
 
             group.MapDelete("{id:guid}/receipt-attachments/{attachmentId:guid}", async (
                     Guid id,

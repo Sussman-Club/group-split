@@ -307,6 +307,17 @@ public static class ErrorCodes
     /// </summary>
     public const string ReceiptItemsMissingRule = "RECEIPT_ITEMS_MISSING_RULE";
 
+    // ---- Too many requests (429) ----------------------------------------------------------
+
+    /// <summary>
+    /// The caller has used up their allowance for this kind of request -- transcribing a
+    /// receipt, linking or syncing a bank, inviting somebody -- for now. Counted per
+    /// signed-in person, never per address. Carries <c>retryAfter</c>, in seconds, and the
+    /// same figure in a <c>Retry-After</c> header. Nothing was done; the identical request
+    /// will succeed once the wait is over.
+    /// </summary>
+    public const string RateLimited = "RATE_LIMITED";
+
     // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
 
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
@@ -348,6 +359,7 @@ public static class ErrorCodes
         404 => NotFound,
         409 => Conflict,
         422 => ValidationFailed,
+        429 => RateLimited,
         >= 500 => InternalError,
         _ => $"HTTP_{status}"
     };

@@ -39,6 +39,12 @@ public record ProblemDetails
     /// </summary>
     public const string MatchesExtension = "matches";
 
+    /// <summary>
+    /// Extension member on an <see cref="Errors.ErrorCodes.RateLimited"/> problem: how many
+    /// seconds to wait before the same request will be let through, as a whole number.
+    /// </summary>
+    public const string RetryAfterExtension = "retryAfter";
+
     public string? Type { get; init; }
 
     public string? Title { get; init; }

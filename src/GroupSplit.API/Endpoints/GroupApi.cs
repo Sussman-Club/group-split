@@ -287,7 +287,8 @@ public static class GroupApi
                 .WithName("AddGroupGuests")
                 .Produces<GroupGuestResponse[]>()
                 .ProducesValidationProblem()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         /// <summary>
@@ -311,7 +312,8 @@ public static class GroupApi
                 .WithName("IssueGuestLink")
                 .Produces<GroupGuestResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         /// <summary>Stops the guest's link. The guest stays.</summary>
@@ -351,7 +353,8 @@ public static class GroupApi
                 .Deprecated()
                 .Produces<GroupInvitationResponse[]>()
                 .ProducesValidationProblem()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         private RouteHandlerBuilder MapGetInvitations()
@@ -428,7 +431,8 @@ public static class GroupApi
                 })
                 .WithName("CreateGroupJoinLink")
                 .Produces<GroupJoinLinkResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         /// <summary>

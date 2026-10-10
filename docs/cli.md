@@ -1389,6 +1389,7 @@ always carries all of it, whatever `--fields` named.
 | `2` | Authentication: not signed in, expired, or refused. |
 | `3` | The invocation was wrong: bad usage, a rejected value, or no server configured. |
 | `4` | A mutation needs confirming. stdout carries the confirmation envelope. |
+| `5` | Rate limited: too many requests of one kind (receipt transcription, bank link and sync, invitations) in the window. Nothing was done. The envelope's `retryAfter` says how many seconds to wait; the same command then succeeds. |
 
 The distinction between 1 and 3 is the one worth relying on: **3 means retrying will not help
 until something changes.**
@@ -1431,6 +1432,11 @@ remediation says to contact support with the `traceId`, and support resolves it 
 [identities.md](identities.md) describes.
 
 `traceId` is the API's own, and matches its log line.
+
+`retryAfter` is present only on a `RATE_LIMITED` refusal (exit code 5): the whole seconds until
+the identical command will be let through. The limits are per signed-in person and cover receipt
+transcription, bank link-token, linking, refresh and sync, and invitations and join links; see
+[errors.md](errors.md#too-many-requests-429).
 
 ## Confirming changes
 
