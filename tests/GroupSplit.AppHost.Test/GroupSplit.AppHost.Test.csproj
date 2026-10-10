@@ -10,6 +10,17 @@
     for Microsoft Testing Platform, please visit:
       https://xunit.net/docs/getting-started/v3/microsoft-testing-platform
     -->
+    <!--
+    xUnit1069 wants every test carrying a Timeout to reference
+    TestContext.Current.CancellationToken, so the timeout can abort the work rather than only
+    fail the test afterwards. Neither kind of test here can satisfy it as written:
+    - the database and realm tests do pass the token on, through a Ct property, and the
+      analyzer only counts a reference in the test method itself;
+    - Playwright's API takes no CancellationToken anywhere, so the browser tests have nothing
+      to hand it to. Their Timeout is the outer backstop, and each Playwright call carries a
+      timeout of its own, which is what actually stops a stalled operation.
+    -->
+    <NoWarn>$(NoWarn);xUnit1069</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -14,6 +14,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class DepartedDeleteGuardTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid GroupId = Guid.NewGuid();
     private static readonly Guid Anabel = Guid.NewGuid();
     private static readonly Guid Omar = Guid.NewGuid();
@@ -59,7 +61,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Anabel, "Anabel Benítez", GroupId, (Anabel, "Anabel Benítez"), (Omar, "Omar Rivero"));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId, Ct));
     }
 
     [Fact]
@@ -67,7 +69,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Sofia, "Sofia Kovács", GroupId, (Anabel, "Anabel Benítez"), (Sofia, "Sofia Kovács"));
 
-        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId));
+        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId, Ct));
     }
 
     [Fact]
@@ -75,7 +77,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Anabel, "Anabel Benítez", GroupId, (Anabel, "Anabel Benítez"), (Sofia, "Sofia Kovács"));
 
-        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId));
+        Assert.Equal("Sofia Kovács", await Guard().FirstLeaverOnAsync(id, GroupId, Ct));
     }
 
     /// <summary>
@@ -86,7 +88,7 @@ public class DepartedDeleteGuardTest
     {
         var id = Expense(Anabel, "Anabel Benítez", groupId: null, (Anabel, "Anabel Benítez"));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id, groupId: null));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, groupId: null, Ct));
 
         Assert.Empty(_transactions.Invocations);
         Assert.Empty(_groups.Invocations);
@@ -102,7 +104,7 @@ public class DepartedDeleteGuardTest
         var id = ExpenseWith(Anabel, "Anabel Benítez", GroupId,
             (Anabel, "Anabel Benítez", 20m), (Sofia, "Sofia Kovács", 0m));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId, Ct));
     }
 
     [Fact]
@@ -114,6 +116,6 @@ public class DepartedDeleteGuardTest
             .Setup(client => client.GetTransactionAsync(id, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("Not found", 404, null, new Dictionary<string, IEnumerable<string>>(), null));
 
-        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId));
+        Assert.Null(await Guard().FirstLeaverOnAsync(id, GroupId, Ct));
     }
 }

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
+using MudBlazor.Extensions;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -666,8 +667,8 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
 
         // And the rest of the edit is where it was.
-        Assert.Equal("Dinner", name.Instance.Value);
-        Assert.Equal(120m, amount.Instance.Value);
+        Assert.Equal("Dinner", name.Instance.GetState(x => x.Value));
+        Assert.Equal(120m, amount.Instance.GetState(x => x.Value));
     }
 
     /// <summary>

@@ -29,6 +29,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class LateAnswerTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     /// <summary>Held open so the first span's answer can be made to arrive last.</summary>
     private readonly TaskCompletionSource _firstAnswer = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -105,11 +107,11 @@ public class LateAnswerTest
         await _page.IsReadyTask;
 
         // January is asked for and does not answer yet -- the request is in flight.
-        var january = _page.LoadAsync(January);
+        var january = _page.LoadAsync(January, Ct);
 
         // February is asked for and answers straight away: 2 expenses, 8.00. This is what
         // is on the cards, and what the list underneath is showing.
-        await _page.LoadAsync(February);
+        await _page.LoadAsync(February, Ct);
 
         Assert.Equal(February, _page.Query);
         Assert.Equal(2, _page.MatchesSummary?.Count);

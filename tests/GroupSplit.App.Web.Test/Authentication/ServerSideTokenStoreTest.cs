@@ -15,15 +15,17 @@ namespace GroupSplit.App.Web.Test.Authentication;
 /// </summary>
 public class ServerSideTokenStoreTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     [Fact]
     public async Task Tokens_survive_a_round_trip()
     {
         var store = Build();
         var user = SignedIn();
 
-        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"));
+        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"), ct: Ct);
 
-        var read = await store.GetTokenAsync(user);
+        var read = await store.GetTokenAsync(user, ct: Ct);
 
         Assert.True(read.WasSuccessful(out var tokens));
 
@@ -45,9 +47,9 @@ public class ServerSideTokenStoreTest
         var store = Build();
         var user = SignedIn();
 
-        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"));
+        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"), ct: Ct);
 
-        var read = await store.GetTokenAsync(user);
+        var read = await store.GetTokenAsync(user, ct: Ct);
 
         Assert.True(read.WasSuccessful(out var tokens));
         Assert.Equal("a-refresh-token", tokens.RefreshToken?.RefreshToken.ToString());
@@ -67,10 +69,10 @@ public class ServerSideTokenStoreTest
         var oneBrowser = SignedIn();
         var anotherBrowser = SignedIn();
 
-        await store.StoreTokenAsync(oneBrowser, Token("one-access-token", "one-refresh-token"));
-        await store.StoreTokenAsync(anotherBrowser, Token("another-access-token", "another-refresh-token"));
+        await store.StoreTokenAsync(oneBrowser, Token("one-access-token", "one-refresh-token"), ct: Ct);
+        await store.StoreTokenAsync(anotherBrowser, Token("another-access-token", "another-refresh-token"), ct: Ct);
 
-        var read = await store.GetTokenAsync(oneBrowser);
+        var read = await store.GetTokenAsync(oneBrowser, ct: Ct);
 
         Assert.True(read.WasSuccessful(out var tokens));
         Assert.Equal("one-access-token", tokens.TokenForSpecifiedParameters?.AccessToken.ToString());
@@ -86,16 +88,16 @@ public class ServerSideTokenStoreTest
         var store = Build();
         var user = SignedIn();
 
-        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"));
-        await store.ClearTokenAsync(user);
+        await store.StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"), ct: Ct);
+        await store.ClearTokenAsync(user, ct: Ct);
 
-        Assert.False((await store.GetTokenAsync(user)).Succeeded);
+        Assert.False((await store.GetTokenAsync(user, ct: Ct)).Succeeded);
     }
 
     [Fact]
     public async Task A_session_with_nothing_stored_fails_rather_than_returning_an_empty_token()
     {
-        Assert.False((await Build().GetTokenAsync(SignedIn())).Succeeded);
+        Assert.False((await Build().GetTokenAsync(SignedIn(), ct: Ct)).Succeeded);
     }
 
     /// <summary>
@@ -112,11 +114,11 @@ public class ServerSideTokenStoreTest
                 [new Claim(ClaimTypes.NameIdentifier, "a-subject")],
                 CookieAuthenticationDefaults.AuthenticationScheme));
 
-        Assert.False((await store.GetTokenAsync(withoutSessionClaim)).Succeeded);
+        Assert.False((await store.GetTokenAsync(withoutSessionClaim, ct: Ct)).Succeeded);
 
         // And storing is refused rather than thrown, so a refresh that cannot be written
         // down still hands this request a working token.
-        await store.StoreTokenAsync(withoutSessionClaim, Token("an-access-token", "a-refresh-token"));
+        await store.StoreTokenAsync(withoutSessionClaim, Token("an-access-token", "a-refresh-token"), ct: Ct);
     }
 
     /// <summary>
@@ -132,7 +134,7 @@ public class ServerSideTokenStoreTest
 
         var store = new ServerSideTokenStore(cache, NullLogger<ServerSideTokenStore>.Instance);
 
-        await store.StoreTokenAsync(SignedIn(), Token("an-access-token", "a-refresh-token"));
+        await store.StoreTokenAsync(SignedIn(), Token("an-access-token", "a-refresh-token"), ct: Ct);
 
         var written = Assert.IsType<DistributedCacheEntryOptions>(cache.LastOptions);
 

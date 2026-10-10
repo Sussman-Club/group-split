@@ -46,7 +46,7 @@ public sealed class AuthHardeningTests : IDisposable
 
         var list = await Cli.RunAsync("groups", "list");
         Assert.Equal(ExitCodes.AuthRequired, list.ExitCode);
-        Assert.Empty(_idp.Requests.Where(r => r.Path == "/api/groups"));
+        Assert.DoesNotContain(_idp.Requests, r => r.Path == "/api/groups");
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class AuthHardeningTests : IDisposable
 
         Assert.Equal(ExitCodes.AuthRequired, result.ExitCode);
         Assert.Contains("attacker.example.com", result.Error.GetProperty("error").GetString());
-        Assert.Empty(_idp.Requests.Where(r => r.Path.Contains("auth/device")));
+        Assert.DoesNotContain(_idp.Requests, r => r.Path.Contains("auth/device"));
     }
 
     [Fact]

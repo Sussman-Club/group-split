@@ -4,14 +4,6 @@ using Microsoft.Playwright;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// xUnit1069: the analyzer wants a test carrying a Timeout to reference
-// TestContext.Current.CancellationToken, so the timeout can abort the work rather than
-// only fail the test afterwards. Playwright's API takes no CancellationToken anywhere,
-// so there is nothing here to hand it to. The Timeout is kept as the outer backstop and
-// each call below carries a Playwright timeout of its own, which is what actually stops
-// a stalled operation; the two together are the best this API allows.
-#pragma warning disable xUnit1069
-
 public class HomePageTest(AppHostFixture appHost) : WebPageTest(appHost)
 {
     private readonly AppHostFixture _appHost = appHost;

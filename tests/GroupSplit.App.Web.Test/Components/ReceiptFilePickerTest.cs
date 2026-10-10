@@ -7,6 +7,8 @@ namespace GroupSplit.App.Web.Test.Components;
 
 public class ReceiptFilePickerTest : ComponentTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     [Fact]
     public async Task The_read_button_invokes_the_callback_without_submitting_and_keeps_the_input_mounted()
     {
@@ -36,10 +38,10 @@ public class ReceiptFilePickerTest : ComponentTest
         var file = new BufferedBrowserFile("receipt.pdf", "application/pdf", DateTimeOffset.UtcNow,
             "receipt"u8.ToArray());
 
-        await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+        await using var stream = file.OpenReadStream(10 * 1024 * 1024, Ct);
         using var reader = new StreamReader(stream);
 
-        Assert.Equal("receipt", await reader.ReadToEndAsync());
+        Assert.Equal("receipt", await reader.ReadToEndAsync(Ct));
         Assert.Equal("receipt.pdf", file.Name);
         Assert.Equal("application/pdf", file.ContentType);
     }

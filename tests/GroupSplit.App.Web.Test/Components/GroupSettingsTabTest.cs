@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
+using MudBlazor.Extensions;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -557,7 +558,7 @@ public class GroupSettingsTabTest : ComponentTest
             .ClickAsync(new MouseEventArgs());
 
         // The kind it already is, selected -- not an empty box the person has to guess at.
-        Assert.Equal(RuleType.Even, provider.FindComponent<MudSelect<RuleType?>>().Instance.Value);
+        Assert.Equal(RuleType.Even, provider.FindComponent<MudSelect<RuleType?>>().Instance.GetState(x => x.Value));
 
         await Button(provider, "Save").ClickAsync(new MouseEventArgs());
         await editing;

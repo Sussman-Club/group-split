@@ -24,6 +24,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class JoinLinkCommandTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid Trip = Guid.NewGuid();
 
     private static readonly JsonSerializerOptions Api = new(JsonSerializerDefaults.Web);
@@ -85,7 +87,7 @@ public class JoinLinkCommandTest
         var announced = false;
         _changes.GroupsChanged += () => { announced = true; return Task.CompletedTask; };
 
-        var made = await _commands.CreateJoinLinkAsync(Trip, "Weekend in Lisbon");
+        var made = await _commands.CreateJoinLinkAsync(Trip, "Weekend in Lisbon", Ct);
 
         Assert.Equal("abc", made?.Token);
         Assert.True(announced);
@@ -110,7 +112,7 @@ public class JoinLinkCommandTest
         var announced = false;
         _changes.GroupsChanged += () => { announced = true; return Task.CompletedTask; };
 
-        Assert.True(await _commands.RevokeJoinLinkAsync(Trip, "Weekend in Lisbon"));
+        Assert.True(await _commands.RevokeJoinLinkAsync(Trip, "Weekend in Lisbon", Ct));
         Assert.True(announced);
 
         var (message, severity) = Assert.Single(_said);
@@ -126,7 +128,7 @@ public class JoinLinkCommandTest
             .Setup(c => c.AcceptJoinLinkAsync("abc", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new JoinedGroupResponse(Trip, "Weekend in Lisbon", 4, false));
 
-        var joined = await _commands.JoinByLinkAsync("abc");
+        var joined = await _commands.JoinByLinkAsync("abc", Ct);
 
         Assert.Equal(Trip, joined?.GroupId);
 
@@ -143,7 +145,7 @@ public class JoinLinkCommandTest
             .Setup(c => c.AcceptJoinLinkAsync("abc", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new JoinedGroupResponse(Trip, "Weekend in Lisbon", 4, true));
 
-        var joined = await _commands.JoinByLinkAsync("abc");
+        var joined = await _commands.JoinByLinkAsync("abc", Ct);
 
         // Still answered with the group, because the page's next move is to open it -- the
         // person was trying to get somewhere and they are allowed to be there.
@@ -166,8 +168,8 @@ public class JoinLinkCommandTest
             .Setup(c => c.AcceptJoinLinkAsync("stale", It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusal(409, ErrorCodes.GroupJoinLinkExpired));
 
-        Assert.Null(await _commands.JoinByLinkAsync("gone"));
-        Assert.Null(await _commands.JoinByLinkAsync("stale"));
+        Assert.Null(await _commands.JoinByLinkAsync("gone", Ct));
+        Assert.Null(await _commands.JoinByLinkAsync("stale", Ct));
 
         Assert.Equal(2, _said.Count);
         Assert.All(_said, said => Assert.Equal(Severity.Error, said.Severity));

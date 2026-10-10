@@ -20,6 +20,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </summary>
 public class PageStateRefreshTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     // ---- A server in memory ------------------------------------------------------------------
     //
     // The generated clients are mocked over these lists, and every write mutates them, so
@@ -107,7 +109,7 @@ public class PageStateRefreshTest
             ? scope
             : scope.Where(t =>
                 t.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                t.GroupName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (t.GroupName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 t.PaidByUserName.Contains(search, StringComparison.OrdinalIgnoreCase));
 
     private static TransactionSummaryResponse SummaryOf(
@@ -347,7 +349,7 @@ public class PageStateRefreshTest
         var dinner = _expensesPage.Page!.Items.Single(t => t.Name == "Dinner");
         var balanceReadsBefore = BalanceReads;
 
-        var done = await _expensesPage.UpdateAsync(dinner, AmountPatch(120m));
+        var done = await _expensesPage.UpdateAsync(dinner, AmountPatch(120m), Ct);
 
         Assert.True(done);
         Assert.Equal(120m, _expensesPage.Page!.Items.Single(t => t.Name == "Dinner").Amount);
@@ -364,7 +366,7 @@ public class PageStateRefreshTest
         var done = await _groupsPage.CreateTransactionAsync(new CreateTransactionRequest
         {
             GroupId = Trip, Name = "Museum", Amount = 30m
-        });
+        }, Ct);
 
         Assert.True(done);
         Assert.Contains(_expensesPage.Page!.Items, t => t.Name == "Museum");
@@ -378,7 +380,7 @@ public class PageStateRefreshTest
         await ReadyAsync();
         var taxi = _expensesPage.Page!.Items.Single(t => t.Name == "Taxi");
 
-        var done = await _expensesPage.DeleteAsync(taxi);
+        var done = await _expensesPage.DeleteAsync(taxi, Ct);
 
         Assert.True(done);
         Assert.DoesNotContain(_expensesPage.Page!.Items, t => t.Id == taxi.Id);
@@ -431,7 +433,7 @@ public class PageStateRefreshTest
         var groupBefore = _groupsPage.Transactions;
         var dinner = expensesBefore!.Items.Single(t => t.Name == "Dinner");
 
-        await _expensesPage.UpdateAsync(dinner, AmountPatch(1m));
+        await _expensesPage.UpdateAsync(dinner, AmountPatch(1m), Ct);
 
         Assert.NotSame(expensesBefore, _expensesPage.Page);
         Assert.NotSame(groupBefore, _groupsPage.Transactions);
@@ -444,7 +446,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        var done = await _groupsPage.CreateGroupAsync(new CreateGroupRequest { Name = "Five-a-side" });
+        var done = await _groupsPage.CreateGroupAsync(new CreateGroupRequest { Name = "Five-a-side" }, Ct);
 
         Assert.True(done);
         var created = Assert.Single(_groupsPage.Groups, g => g.Name == "Five-a-side");
@@ -461,7 +463,7 @@ public class PageStateRefreshTest
         var patch = new PatchDocument<CreateGroupRequest>();
         patch.Replace(x => x.Name, "Lisbon 2026");
 
-        var done = await _groupsPage.UpdateGroupAsync(patch);
+        var done = await _groupsPage.UpdateGroupAsync(patch, Ct);
 
         Assert.True(done);
         Assert.Equal("Lisbon 2026", _groupsPage.SelectedGroup?.Name);
@@ -495,7 +497,7 @@ public class PageStateRefreshTest
         await ReadyAsync();
 
         await _expensesPage.LoadAsync(new TransactionQuery(
-            Page: 2, PageSize: 1, SortBy: "amount", SortDescending: true, Search: "din"));
+            Page: 2, PageSize: 1, SortBy: "amount", SortDescending: true, Search: "din"), Ct);
 
         _transactionsClient.Verify(c => c.GetTransactionsAsync(
             It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
@@ -508,7 +510,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(new TransactionQuery(Page: 1, PageSize: 2, SortBy: "amount"));
+        await _expensesPage.LoadAsync(new TransactionQuery(Page: 1, PageSize: 2, SortBy: "amount"), Ct);
 
         var page = _expensesPage.Page!;
 
@@ -526,7 +528,7 @@ public class PageStateRefreshTest
         await ReadyAsync();
         var readsBefore = ListingReads;
 
-        await _expensesPage.LoadAsync(_expensesPage.Query);
+        await _expensesPage.LoadAsync(_expensesPage.Query, Ct);
 
         Assert.Equal(readsBefore, ListingReads);
     }
@@ -536,7 +538,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Search = "din" });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { Search = "din" }, Ct);
 
         Assert.Equal("Dinner", Assert.Single(_expensesPage.Page!.Items).Name);
         Assert.Equal(1, _expensesPage.MatchesSummary!.Count);
@@ -563,7 +565,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 1 });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 1 }, Ct);
 
         Assert.Single(_expensesPage.Page!.Items);
         Assert.Equal(3, _expensesPage.Summary!.Count);
@@ -574,12 +576,12 @@ public class PageStateRefreshTest
     public async Task A_write_re_reads_the_page_in_hand_and_the_figures_with_it()
     {
         await ReadyAsync();
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 2 });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 2 }, Ct);
 
         var done = await _expensesPage.CreateAsync(new CreateTransactionRequest
         {
             GroupId = Trip, Name = "Museum", Amount = 30m
-        });
+        }, Ct);
 
         Assert.True(done);
 
@@ -650,7 +652,7 @@ public class PageStateRefreshTest
 
         var range = new DateFilter(DateFilterPreset.ThisMonth);
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range }, Ct);
 
         // Resolved against the same clock the state was built with: no JS behind it, so the
         // runtime's own offset and day, which is what the state used too.
@@ -672,7 +674,7 @@ public class PageStateRefreshTest
         await _expensesPage.LoadAsync(TransactionQuery.Default with
         {
             Range = new DateFilter(DateFilterPreset.LastMonth)
-        });
+        }, Ct);
 
         Assert.Empty(_expensesPage.Page!.Items);
         Assert.Equal(0, _expensesPage.Page.TotalCount);
@@ -680,7 +682,7 @@ public class PageStateRefreshTest
         await _expensesPage.LoadAsync(TransactionQuery.Default with
         {
             Range = new DateFilter(DateFilterPreset.ThisMonth)
-        });
+        }, Ct);
 
         Assert.Equal(3, _expensesPage.Page!.TotalCount);
     }
@@ -697,7 +699,7 @@ public class PageStateRefreshTest
         await _expensesPage.LoadAsync(TransactionQuery.Default with
         {
             Range = new DateFilter(DateFilterPreset.LastMonth)
-        });
+        }, Ct);
 
         Assert.Equal(0, _expensesPage.MatchesSummary!.Count);
         Assert.Equal(0m, _expensesPage.MatchesSummary.Total);
@@ -716,7 +718,7 @@ public class PageStateRefreshTest
         {
             Search = "din",
             Range = new DateFilter(DateFilterPreset.ThisMonth)
-        });
+        }, Ct);
 
         Assert.Equal("Dinner", Assert.Single(_expensesPage.Page!.Items).Name);
         Assert.Equal(1, _expensesPage.MatchesSummary!.Count);
@@ -727,7 +729,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = DateFilter.AllTime });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = DateFilter.AllTime }, Ct);
 
         Assert.Null(_expensesPage.MatchesSummary);
     }
@@ -744,14 +746,14 @@ public class PageStateRefreshTest
         await _expensesPage.LoadAsync(TransactionQuery.Default with
         {
             Range = new DateFilter(DateFilterPreset.ThisMonth)
-        });
+        }, Ct);
 
         var readsBefore = ListingReads;
 
         await _expensesPage.LoadAsync(TransactionQuery.Default with
         {
             Range = new DateFilter(DateFilterPreset.ThisMonth)
-        });
+        }, Ct);
 
         Assert.Equal(readsBefore, ListingReads);
     }
@@ -768,7 +770,7 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        var done = await _groupsPage.ArchiveGroupAsync();
+        var done = await _groupsPage.ArchiveGroupAsync(Ct);
 
         Assert.True(done);
         Assert.True(_groupsPage.SelectedGroup!.IsArchive);
@@ -782,9 +784,9 @@ public class PageStateRefreshTest
     public async Task Unarchiving_takes_it_back()
     {
         await ReadyAsync();
-        await _groupsPage.ArchiveGroupAsync();
+        await _groupsPage.ArchiveGroupAsync(Ct);
 
-        var done = await _groupsPage.UnarchiveGroupAsync();
+        var done = await _groupsPage.UnarchiveGroupAsync(Ct);
 
         Assert.True(done);
         Assert.False(_groupsPage.SelectedGroup!.IsArchive);
@@ -807,7 +809,7 @@ public class PageStateRefreshTest
             .Setup(c => c.ArchiveGroupAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("nope", 409, "", new Dictionary<string, IEnumerable<string>>(), null));
 
-        var done = await _groupsPage.ArchiveGroupAsync();
+        var done = await _groupsPage.ArchiveGroupAsync(Ct);
 
         Assert.False(done);
         Assert.False(_groupsPage.SelectedGroup!.IsArchive);
@@ -833,7 +835,7 @@ public class PageStateRefreshTest
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ApiException("down", 503, "", new Dictionary<string, IEnumerable<string>>(), null));
 
-        var done = await _expensesPage.UpdateAsync(dinner, AmountPatch(120m));
+        var done = await _expensesPage.UpdateAsync(dinner, AmountPatch(120m), Ct);
 
         Assert.True(done);
         Assert.Equal(120m, _transactions.Single(t => t.Name == "Dinner").Amount);

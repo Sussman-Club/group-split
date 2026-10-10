@@ -14,8 +14,11 @@
         <!-- Load-bearing for the migrations, and easy to mistake for dead weight: AddEFMigrations
              names this project as a path string, so nothing in C# here references its assembly and
              MSBuild has no other reason to build it. Take this out and the migrations resource
-             starts against output that was never produced. -->
-        <ProjectReference Include="..\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
+             starts against output that was never produced. Not a project resource, though: it is
+             a library, run by the EF tooling rather than started, so Aspire is told not to
+             generate one for it (ASPIRE004). -->
+        <ProjectReference Include="..\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj"
+                          IsAspireProjectResource="false" />
         <ProjectReference Include="..\GroupSplit.Seeder\GroupSplit.Seeder.csproj" />
         <ProjectReference Include="..\GroupSplit.RealmWorker\GroupSplit.RealmWorker.csproj" />
     </ItemGroup>

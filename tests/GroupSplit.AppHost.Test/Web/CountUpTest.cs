@@ -4,10 +4,6 @@ using Microsoft.Playwright.Xunit.v3;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// See the note in HomePageTest: Playwright's API takes no CancellationToken, so a test
-// carrying a Timeout has nothing to hand TestContext.Current.CancellationToken to.
-#pragma warning disable xUnit1069
-
 /// <summary>
 /// The count-up in <c>gs.js</c>, against the one thing it shares with Blazor: the text
 /// node holding the figure.

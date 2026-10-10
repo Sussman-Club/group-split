@@ -102,7 +102,7 @@ public class AllForOneMemberTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Provisioned.EnsureFor(loaded, me, Ct);
 
-        Assert.Single((await RulesOf(group.Id)).Where(rule => rule.BuiltIn && rule.AllFor == Self));
+        Assert.Single(await RulesOf(group.Id), rule => rule.BuiltIn && rule.AllFor == Self);
     }
 
     /// <summary>

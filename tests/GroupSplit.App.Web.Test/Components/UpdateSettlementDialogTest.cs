@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
+using MudBlazor.Extensions;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -71,7 +72,7 @@ public class UpdateSettlementDialogTest : ComponentTest
 
         // Both ends are guests, and both are chosen: a filtered list would have no item to
         // show for either.
-        Assert.Equal(Dani.Id, paidBy.Instance.Value);
+        Assert.Equal(Dani.Id, paidBy.Instance.GetState(x => x.Value));
 
         await provider.InvokeAsync(() => paidBy.Instance.OpenMenu());
 

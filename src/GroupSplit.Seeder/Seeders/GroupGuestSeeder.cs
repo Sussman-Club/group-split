@@ -75,7 +75,7 @@ public class GroupGuestSeeder(
     /// seed made, and is left as it is.
     /// </remarks>
     protected override Task<bool> ExistsAsync(GroupGuest entity, CancellationToken ct) =>
-        db.Set<GroupGuest>().IgnoreQueryFilters().AnyAsync(guest => guest.Id == entity.Id, ct);
+        DbContext.Set<GroupGuest>().IgnoreQueryFilters().AnyAsync(guest => guest.Id == entity.Id, ct);
 
     /// <summary>
     /// The stand-in this guest's money is recorded against, made here.
@@ -94,12 +94,12 @@ public class GroupGuestSeeder(
     {
         var id = dto.ParticipantUserId ?? dto.Id;
 
-        if (await db.Set<User>().AnyAsync(user => user.Id == id, ct))
+        if (await DbContext.Set<User>().AnyAsync(user => user.Id == id, ct))
             return id;
 
         // A name and nothing else: no address, and no identity, so nobody can sign in as
         // it. What every listing shows for them is that name.
-        db.Add(new User { Id = id, FirstName = dto.Name.Trim(), Kind = UserKind.StandIn });
+        DbContext.Add(new User { Id = id, FirstName = dto.Name.Trim(), Kind = UserKind.StandIn });
 
         return id;
     }

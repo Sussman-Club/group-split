@@ -21,6 +21,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class SettleUpCommandTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid Trip = Guid.NewGuid();
 
     private static readonly JsonSerializerOptions Api = new(JsonSerializerDefaults.Web);
@@ -90,7 +92,7 @@ public class SettleUpCommandTest
             .Setup(c => c.SettleUpAsync(Trip, It.IsAny<SettleUpRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Settled());
 
-        var settled = await _commands.SettleUpAsync(Trip, new SettleUpRequest());
+        var settled = await _commands.SettleUpAsync(Trip, new SettleUpRequest(), Ct);
 
         Assert.Equal(2, settled?.Payments.Count);
         Assert.Equal(65.00m, settled?.Total);
@@ -119,7 +121,7 @@ public class SettleUpCommandTest
         var announced = false;
         _changes.TransactionsChanged += () => { announced = true; return Task.CompletedTask; };
 
-        await _commands.SettleUpAsync(Trip, new SettleUpRequest());
+        await _commands.SettleUpAsync(Trip, new SettleUpRequest(), Ct);
 
         Assert.True(announced);
     }
@@ -139,7 +141,7 @@ public class SettleUpCommandTest
                 Date = DateTimeOffset.UtcNow
             });
 
-        await _commands.SettleUpAsync(Trip, new SettleUpRequest());
+        await _commands.SettleUpAsync(Trip, new SettleUpRequest(), Ct);
 
         var (message, _) = Assert.Single(_said);
 
@@ -158,7 +160,7 @@ public class SettleUpCommandTest
 
         // Null, so the dialog it came from can stay open rather than closing on a write that
         // did not happen.
-        Assert.Null(await _commands.SettleUpAsync(Trip, new SettleUpRequest()));
+        Assert.Null(await _commands.SettleUpAsync(Trip, new SettleUpRequest(), Ct));
 
         // Nothing moved, so nothing is asked to read itself again.
         Assert.False(announced);

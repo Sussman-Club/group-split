@@ -25,6 +25,8 @@ namespace GroupSplit.App.Web.Test.Authentication;
 /// </remarks>
 public class SignOutTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     /// <summary>A refresh token left in the store outlives the session it belonged to.</summary>
     [Fact]
     public async Task The_tokens_are_thrown_away()
@@ -33,7 +35,7 @@ public class SignOutTest
 
         await AuthenticationExtensions.OnSigningOut(context);
 
-        Assert.False((await store.GetTokenAsync(user)).Succeeded);
+        Assert.False((await store.GetTokenAsync(user, ct: Ct)).Succeeded);
     }
 
     /// <summary>

@@ -21,6 +21,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class SplitPreviewQuietTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private readonly Mock<ITransactionsClient> _client = new();
     private readonly Mock<ISnackbar> _snackbar = new();
 
@@ -43,7 +45,7 @@ public class SplitPreviewQuietTest
     {
         PreviewRefusedWith(ErrorCodes.SplitsDoNotSumToAmount);
 
-        Assert.Null(await Commands().PreviewAsync(new CreateTransactionRequest()));
+        Assert.Null(await Commands().PreviewAsync(new CreateTransactionRequest(), Ct));
         Assert.Equal(0, Snackbars());
     }
 
@@ -52,7 +54,7 @@ public class SplitPreviewQuietTest
     {
         PreviewRefusedWith(ErrorCodes.TransactionPayerNotInGroup);
 
-        Assert.Null(await Commands().PreviewAsync(new CreateTransactionRequest()));
+        Assert.Null(await Commands().PreviewAsync(new CreateTransactionRequest(), Ct));
         Assert.Equal(1, Snackbars());
     }
 }

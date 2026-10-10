@@ -6,9 +6,6 @@ using Microsoft.Playwright;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// See HomePageTest for why the analyzer is silenced: Playwright takes no CancellationToken.
-#pragma warning disable xUnit1069
-
 /// <summary>
 /// Which account somebody lands in the first time they sign in with Google -- the one moment
 /// Keycloak decides that from an email address rather than from an existing link.

@@ -5,9 +5,6 @@ using Microsoft.Playwright;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// See HomePageTest for why the analyzer is silenced: Playwright takes no CancellationToken.
-#pragma warning disable xUnit1069
-
 /// <summary>
 /// Deleting an account deletes its Keycloak login, and the next sign-in is refused.
 /// </summary>

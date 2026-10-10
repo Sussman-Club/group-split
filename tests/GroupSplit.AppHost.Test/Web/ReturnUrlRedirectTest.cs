@@ -4,9 +4,6 @@ using Microsoft.Playwright;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// See HomePageTest for why the analyzer is silenced: Playwright takes no CancellationToken.
-#pragma warning disable xUnit1069
-
 /// <summary>
 /// Where a real sign-in lands when the link that started it carried a crafted return URL:
 /// the whole round trip, through Keycloak and back through the OIDC callback, in a browser

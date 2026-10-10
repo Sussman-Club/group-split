@@ -6,6 +6,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using GroupSplit.AppHost.Test.Base;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GroupSplit.AppHost.Test.Web;
 
@@ -106,9 +107,14 @@ public partial class PasswordResetMailTest(AppHostFixture appHost)
             .Resources.OfType<IResourceWithEnvironment>()
             .Single(resource => resource.Name == resourceName);
 
-        var environment = await resource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Run);
+        var configuration = await ExecutionConfigurationBuilder.Create(resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(
+                appHost.Application.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+                NullLogger.Instance,
+                Ct);
 
-        return Assert.Contains("SMTP_ENABLED", (IDictionary<string, string>)environment);
+        return Assert.Contains("SMTP_ENABLED", configuration.EnvironmentVariables.ToDictionary());
     }
 
     [GeneratedRegex(@"href=""(?<href>[^""]*login-actions/reset-credentials[^""]*)""")]

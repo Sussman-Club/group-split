@@ -32,6 +32,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class CategoryAndRuleCommandTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid Trip = Guid.NewGuid();
     private static readonly Guid Groceries = Guid.NewGuid();
     private static readonly Guid FourWays = Guid.NewGuid();
@@ -94,7 +96,7 @@ public class CategoryAndRuleCommandTest
         {
             GroupId = Trip,
             Name = "Groceries"
-        });
+        }, Ct);
 
         Assert.Equal("Groceries", created?.Name);
         Assert.Equal(1, _announced);
@@ -122,7 +124,7 @@ public class CategoryAndRuleCommandTest
         {
             Name = "Food",
             DefaultSplitRuleId = FourWays
-        });
+        }, Ct);
 
         Assert.Equal("Food", updated?.Name);
         Assert.Equal(1, _announced);
@@ -144,7 +146,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.DeleteCategoryAsync(Groceries, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        Assert.True(await _categoryCommands.DeleteAsync(Groceries, "Groceries"));
+        Assert.True(await _categoryCommands.DeleteAsync(Groceries, "Groceries", Ct));
         Assert.Equal(1, _announced);
 
         var (message, severity) = Assert.Single(_said);
@@ -165,7 +167,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.DeleteCategoryAsync(Groceries, It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusals.Of(409, ErrorCodes.CategoryInUse));
 
-        Assert.False(await _categoryCommands.DeleteAsync(Groceries, "Groceries"));
+        Assert.False(await _categoryCommands.DeleteAsync(Groceries, "Groceries", Ct));
         Assert.Equal(0, _announced);
 
         var (message, severity) = Assert.Single(_said);
@@ -186,7 +188,7 @@ public class CategoryAndRuleCommandTest
         {
             GroupId = Trip,
             Name = "Groceries"
-        });
+        }, Ct);
 
         Assert.Null(created);
         Assert.Equal(0, _announced);
@@ -200,7 +202,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([ACategory("Groceries", FourWays, "Groceries")]);
 
-        var loaded = await _categoryCommands.ForGroupAsync(Trip);
+        var loaded = await _categoryCommands.ForGroupAsync(Trip, ct: Ct);
 
         Assert.Equal("Groceries", Assert.Single(loaded!).Name);
         Assert.Empty(_said);
@@ -218,7 +220,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.GetCategoriesAsync(Trip, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusals.Of(404, ErrorCodes.GroupNotFound));
 
-        Assert.Null(await _categoryCommands.ForGroupAsync(Trip));
+        Assert.Null(await _categoryCommands.ForGroupAsync(Trip, ct: Ct));
 
         var (message, severity) = Assert.Single(_said);
 
@@ -250,7 +252,7 @@ public class CategoryAndRuleCommandTest
             GroupId = Trip,
             Name = "Groceries",
             Definition = new EvenSplitRuleDto()
-        });
+        }, Ct);
 
         Assert.Equal(FourWays, created?.Id);
         Assert.Equal(1, _announced);
@@ -279,7 +281,7 @@ public class CategoryAndRuleCommandTest
         {
             Name = "Groceries",
             Definition = new EvenSplitRuleDto()
-        });
+        }, Ct);
 
         Assert.Equal(FourWays, updated?.Id);
         Assert.Equal(1, _announced);
@@ -309,7 +311,7 @@ public class CategoryAndRuleCommandTest
         {
             Name = "Groceries",
             Definition = new EvenSplitRuleDto()
-        });
+        }, Ct);
 
         Assert.Null(updated);
         Assert.Equal(0, _announced);
@@ -328,7 +330,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.GetSplitRuleAsync(FourWays, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ARule("Groceries"));
 
-        var rule = await _ruleCommands.GetAsync(FourWays);
+        var rule = await _ruleCommands.GetAsync(FourWays, Ct);
 
         Assert.IsType<EvenSplitRuleDto>(rule?.Definition);
         Assert.Empty(_said);
@@ -341,7 +343,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.GetSplitRulesAsync(Trip, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new SplitRuleResponse(FourWays, Trip, "Groceries")]);
 
-        var loaded = await _ruleCommands.ForGroupAsync(Trip);
+        var loaded = await _ruleCommands.ForGroupAsync(Trip, Ct);
 
         Assert.Equal("Groceries", Assert.Single(loaded!).Name);
 
@@ -349,7 +351,7 @@ public class CategoryAndRuleCommandTest
             .Setup(c => c.GetSplitRulesAsync(Trip, It.IsAny<CancellationToken>()))
             .ThrowsAsync(Refusals.Of(404, ErrorCodes.GroupNotFound));
 
-        Assert.Null(await _ruleCommands.ForGroupAsync(Trip));
+        Assert.Null(await _ruleCommands.ForGroupAsync(Trip, Ct));
         Assert.Equal(Severity.Error, Assert.Single(_said).Severity);
     }
 

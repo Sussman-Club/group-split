@@ -47,7 +47,7 @@ public class ProblemResponseTest : IAsyncLifetime
         Assert.Equal((int)expected, problem.Status);
         Assert.False(string.IsNullOrEmpty(problem.Code), $"every problem carries a code, this one was: {body}");
         Assert.False(string.IsNullOrEmpty(problem.TraceId), $"every problem carries a trace id, this one was: {body}");
-        Assert.Equal(Problems.TypeFor(problem.Code), problem.Type);
+        Assert.Equal(Problems.TypeFor(problem.Code!), problem.Type);
         Assert.Equal(response.RequestMessage!.RequestUri!.AbsolutePath, problem.Instance);
 
         return problem;

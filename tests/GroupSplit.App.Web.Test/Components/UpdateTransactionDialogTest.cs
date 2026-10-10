@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
+using MudBlazor.Extensions;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -311,8 +312,8 @@ public class UpdateTransactionDialogTest : ComponentTest
         Assert.Contains("Not saved", remaining.TextContent, StringComparison.Ordinal);
         Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
 
-        Assert.Equal("Dinner with the cousins", name.Instance.Value);
-        Assert.Equal(120m, amount.Instance.Value);
+        Assert.Equal("Dinner with the cousins", name.Instance.GetState(x => x.Value));
+        Assert.Equal(120m, amount.Instance.GetState(x => x.Value));
     }
 
     /// <summary>
@@ -1316,7 +1317,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         Assert.False(dialogRef.Result.IsCompleted);
         Assert.Equal("Dinner at Ramiro", provider.FindComponents<MudTextField<string>>()
-            .Single(field => field.Instance.Label == "What was it?").Instance.Value);
+            .Single(field => field.Instance.Label == "What was it?").Instance.GetState(x => x.Value));
 
         // And no division asked for a move that cannot happen: that is the API refusing
         // the same thing a second time, in a snackbar.

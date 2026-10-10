@@ -25,6 +25,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class GroupSelectionTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid Me = Guid.NewGuid();
     private static readonly GroupResponse Flat = new(Guid.NewGuid(), "Flat", 2);
     private static readonly GroupResponse Trip = new(Guid.NewGuid(), "Weekend in Lisbon", 3);
@@ -142,9 +144,9 @@ public class GroupSelectionTest
 
         page.SelectedGroup = Trip;
 
-        await page.LeaveGroupAsync(Flat.Id);
-        await page.RemoveGroupMemberAsync(Flat.Id, Me, "Me");
-        await page.SettleAsync(Flat.Id, new SettleRequest(), "Omar");
+        await page.LeaveGroupAsync(Flat.Id, Ct);
+        await page.RemoveGroupMemberAsync(Flat.Id, Me, "Me", Ct);
+        await page.SettleAsync(Flat.Id, new SettleRequest(), "Omar", Ct);
 
         commands.Verify(c => c.LeaveAsync(Flat.Id, Flat.Name, It.IsAny<CancellationToken>()), Times.Once);
         commands.Verify(c => c.RemoveMemberAsync(Flat.Id, Me, "Me", It.IsAny<CancellationToken>()), Times.Once);

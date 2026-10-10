@@ -46,7 +46,7 @@ public class MerchantPickerTest : ComponentTest
     [Fact]
     public async Task One_letter_and_a_space_is_not_sent()
     {
-        var found = await Autocomplete().SearchFunc!("a ", Xunit.TestContext.Current.CancellationToken);
+        var found = await Autocomplete().SearchFunc!("a ", Xunit.TestContext.Current.CancellationToken)!;
 
         Assert.Empty(found);
         _merchants.Verify(m => m.SearchAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -55,7 +55,7 @@ public class MerchantPickerTest : ComponentTest
     [Fact]
     public async Task Two_letters_are_sent_trimmed()
     {
-        await Autocomplete().SearchFunc!(" li ", Xunit.TestContext.Current.CancellationToken);
+        await Autocomplete().SearchFunc!(" li ", Xunit.TestContext.Current.CancellationToken)!;
 
         _merchants.Verify(m => m.SearchAsync("li", It.IsAny<CancellationToken>()), Times.Once);
     }

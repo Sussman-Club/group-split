@@ -231,8 +231,8 @@ public class ReceiptDraftDialogTest : ComponentTest
         var status = provider.FindComponents<MudSelect<bool?>>().First();
         await provider.InvokeAsync(() => status.Instance.ValueChanged.InvokeAsync(false));
 
-        Assert.Single(provider.FindComponents<MudNumericField<decimal?>>()
-            .Where(field => field.Instance.Label == "Tax rate"));
+        Assert.Single(provider.FindComponents<MudNumericField<decimal?>>(),
+            field => field.Instance.Label == "Tax rate");
 
         await provider.FindAll("button")
             .Single(button => button.TextContent.Contains("Save receipt", StringComparison.Ordinal))

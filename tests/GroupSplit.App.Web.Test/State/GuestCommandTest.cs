@@ -28,6 +28,8 @@ namespace GroupSplit.App.Web.Test.State;
 /// </remarks>
 public class GuestCommandTest
 {
+    private static CancellationToken Ct => Xunit.TestContext.Current.CancellationToken;
+
     private static readonly Guid Flat = Guid.NewGuid();
 
     private static readonly Guid Omar = Guid.NewGuid();
@@ -75,7 +77,7 @@ public class GuestCommandTest
             .Setup(c => c.AddGroupGuestsAsync(Flat, It.IsAny<AddGuestsRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Guest(Omar, "Omar")]);
 
-        Assert.True(await _commands.AddGuestsAsync(Flat, "The flat", new AddGuestsRequest { Names = ["Omar"] }));
+        Assert.True(await _commands.AddGuestsAsync(Flat, "The flat", new AddGuestsRequest { Names = ["Omar"] }, Ct));
 
         _groups.Verify(c => c.AddGroupGuestsAsync(Flat,
             It.Is<AddGuestsRequest>(request => !request.IssueLinks && request.Names.Single() == "Omar"),
@@ -93,7 +95,7 @@ public class GuestCommandTest
             .Setup(c => c.AddGroupGuestsAsync(Flat, It.IsAny<AddGuestsRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Guest(Omar, "Omar"), Guest(Luz, "Luz")]);
 
-        Assert.True(await _commands.AddGuestsAsync(Flat, "The flat", new AddGuestsRequest { Names = ["Omar", "Luz"] }));
+        Assert.True(await _commands.AddGuestsAsync(Flat, "The flat", new AddGuestsRequest { Names = ["Omar", "Luz"] }, Ct));
 
         Assert.Contains(_said, said => said.Message == "2 guests added to The flat.");
     }
@@ -113,7 +115,7 @@ public class GuestCommandTest
             .Setup(c => c.IssueGuestLinkAsync(Flat, Omar, It.IsAny<IssueGuestLinkRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Guest(Omar, "Omar", "token-omar"));
 
-        var issued = await _commands.IssueGuestLinkAsync(Flat, Omar, replace);
+        var issued = await _commands.IssueGuestLinkAsync(Flat, Omar, replace, Ct);
 
         Assert.Equal("token-omar", issued?.Token);
         _groups.Verify(c => c.IssueGuestLinkAsync(Flat, Omar,
@@ -128,7 +130,7 @@ public class GuestCommandTest
     [Fact]
     public async Task Stopping_a_link_says_the_guest_stays()
     {
-        Assert.True(await _commands.RevokeGuestLinkAsync(Flat, Omar, "Omar"));
+        Assert.True(await _commands.RevokeGuestLinkAsync(Flat, Omar, "Omar", Ct));
 
         _groups.Verify(c => c.RevokeGuestLinkAsync(Flat, Omar, It.IsAny<CancellationToken>()), Times.Once);
 
@@ -152,7 +154,7 @@ public class GuestCommandTest
             .Setup(c => c.RemoveGroupMemberAsync(Flat, Omar, It.IsAny<CancellationToken>()))
             .ThrowsAsync(NotSettled((decimal)balance));
 
-        Assert.False(await _commands.RemoveMemberAsync(Flat, Omar, "Omar"));
+        Assert.False(await _commands.RemoveMemberAsync(Flat, Omar, "Omar", Ct));
 
         var said = Assert.Single(_said);
         Assert.Equal(Severity.Error, said.Severity);
@@ -170,7 +172,7 @@ public class GuestCommandTest
             .Setup(c => c.RemoveGroupMemberAsync(Flat, Omar, It.IsAny<CancellationToken>()))
             .ThrowsAsync(NotSettled(balance: null));
 
-        Assert.False(await _commands.RemoveMemberAsync(Flat, Omar, "Omar"));
+        Assert.False(await _commands.RemoveMemberAsync(Flat, Omar, "Omar", Ct));
 
         var said = Assert.Single(_said);
         Assert.Contains(ErrorMessages.For(ErrorCodes.GroupMemberNotSettled), said.Message, StringComparison.Ordinal);
@@ -179,7 +181,7 @@ public class GuestCommandTest
     [Fact]
     public async Task Removing_somebody_who_is_square_says_so()
     {
-        Assert.True(await _commands.RemoveMemberAsync(Flat, Omar, "Omar"));
+        Assert.True(await _commands.RemoveMemberAsync(Flat, Omar, "Omar", Ct));
 
         Assert.Contains(_said, said => said.Message == "Omar removed from the group." && said.Severity == Severity.Success);
     }
@@ -194,7 +196,7 @@ public class GuestCommandTest
     {
         var request = new RecordRepaymentRequest { FromUserId = Omar, ToUserId = Luz, Amount = 20m };
 
-        Assert.True(await _commands.RecordRepaymentAsync(Flat, request, "Omar", "Luz"));
+        Assert.True(await _commands.RecordRepaymentAsync(Flat, request, "Omar", "Luz", Ct));
 
         _groups.Verify(c => c.RecordRepaymentAsync(Flat, request, It.IsAny<CancellationToken>()), Times.Once);
         Assert.Contains(_said, said => said.Message == "Recorded: Omar paid Luz $20.00.");
@@ -215,7 +217,7 @@ public class GuestCommandTest
                 InvitationOutcome.Declined, SharesMoved: 0, AmountOwed: 0m, PaymentsMoved: 0, AmountPaid: 0m,
                 RulesAffected: 0, RulesEmptied: 0, AbsorbedByUserId: null, AbsorbedByUserName: null));
 
-        Assert.True(await _commands.DeclineInvitationAsync("token-omar", "The flat"));
+        Assert.True(await _commands.DeclineInvitationAsync("token-omar", "The flat", Ct));
 
         var said = Assert.Single(_said);
         Assert.Equal("The flat still has Omar as a guest. The link no longer works.", said.Message);
@@ -235,7 +237,7 @@ public class GuestCommandTest
     {
         Claimed(rulesTaken: 1);
 
-        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar"));
+        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar", Ct));
 
         Assert.Contains(_said, said => said.Message.Contains("One split rule", StringComparison.Ordinal));
     }
@@ -248,7 +250,7 @@ public class GuestCommandTest
     {
         Claimed(rulesTaken: 0);
 
-        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar"));
+        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar", Ct));
 
         Assert.DoesNotContain(_said, said => said.Message.Contains("split rule", StringComparison.Ordinal));
     }
@@ -262,7 +264,7 @@ public class GuestCommandTest
     {
         Claimed(rulesTaken: 0, settlementsCancelled: 2);
 
-        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar"));
+        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar", Ct));
 
         var joined = Assert.Single(_said, said => said.Severity == Severity.Success);
         Assert.Equal(
@@ -275,7 +277,7 @@ public class GuestCommandTest
     {
         Claimed(rulesTaken: 0);
 
-        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar"));
+        Assert.NotNull(await _commands.ClaimInvitationAsync("token-omar", Ct));
 
         Assert.DoesNotContain(_said, said => said.Message.Contains("repayment", StringComparison.Ordinal));
     }

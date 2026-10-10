@@ -5,9 +5,6 @@ using Microsoft.Playwright;
 
 namespace GroupSplit.AppHost.Test.Web;
 
-// See HomePageTest for why the analyzer is silenced: Playwright takes no CancellationToken.
-#pragma warning disable xUnit1069
-
 /// <summary>
 /// A real sign-in, and what the session does afterwards.
 /// </summary>

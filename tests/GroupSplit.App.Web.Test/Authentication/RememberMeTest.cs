@@ -108,8 +108,8 @@ public class RememberMeTest
     public void The_sign_in_screens_promise_the_period_the_cookie_actually_gets()
     {
         Assert.Equal(
-            (int)AuthenticationExtensions.RememberedSessionLifetime.TotalDays,
-            RememberMeChoice.Days);
+            RememberMeChoice.Days,
+            (int)AuthenticationExtensions.RememberedSessionLifetime.TotalDays);
     }
 
     private static TimeProvider Time() => new FixedTime(SignedInAt);
