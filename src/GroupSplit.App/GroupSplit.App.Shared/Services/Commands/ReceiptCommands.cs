@@ -1,7 +1,6 @@
 using GroupSplit.Shared;
 using GroupSplit.App.Shared.Services.Errors;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 namespace GroupSplit.App.Shared.Services.Commands;
 
 public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter errors, DataChangeNotifier changes) : IReceiptCommands
@@ -47,7 +46,7 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
     }
 
     public async Task<ReceiptResponse?> PatchItemAsync(Guid transactionId, Guid itemId,
-        JsonPatchDocument<ReceiptItemPatch> patch, CancellationToken ct = default)
+        PatchDocument<ReceiptItemPatch> patch, CancellationToken ct = default)
     {
         ReceiptResponse? result = null;
         await errors.TryAsync(async () =>

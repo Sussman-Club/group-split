@@ -4,8 +4,6 @@ using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson.Operations;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -377,9 +375,9 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await save();
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
         Assert.NotNull(patch);
-        Assert.Contains(patch!.Operations, operation => operation.path == "/Amount");
+        Assert.Contains(patch!.Operations, operation => operation.Path == "/Amount");
     }
 
     /// <summary>
@@ -503,7 +501,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var submitButton = provider.FindAll("button").First(b => b.TextContent.Trim() == "Save");
         await submitButton.ClickAsync(new MouseEventArgs());
 
-        var result = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var result = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
         Assert.NotNull(result);
 
         // No fields changed, so patch operations shouldn't remove categoryId.
@@ -594,13 +592,13 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(b => b.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
 
         var operation = Assert.Single(patch!.Operations, op => Touches(op, "merchantId"));
 
-        Assert.Equal(corner, Assert.IsType<Guid>(operation.value));
+        Assert.Equal(corner, Assert.IsType<Guid>(operation.Value));
     }
 
     /// <summary>
@@ -788,12 +786,12 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
 
         var operation = Assert.Single(patch!.Operations, op => Touches(op, "splits"));
-        Assert.Null(operation.value);
+        Assert.Null(operation.Value);
 
         // And the preview was asked the same question, or the numbers on screen would be
         // the shares being replaced rather than the ones about to be stored.
@@ -887,11 +885,11 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
-        Assert.Null(Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).value);
-        Assert.Null(Assert.Single(patch.Operations, op => Touches(op, "splits")).value);
+        Assert.Null(Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).Value);
+        Assert.Null(Assert.Single(patch.Operations, op => Touches(op, "splits")).Value);
     }
 
     /// <summary>
@@ -937,15 +935,15 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
 
         // The new category, and the instruction that makes picking it mean anything.
         Assert.Equal(RentCategoryId, Assert.IsType<Guid>(
-            Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).value));
+            Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).Value));
 
-        Assert.Null(Assert.Single(patch.Operations, op => Touches(op, "splits")).value);
+        Assert.Null(Assert.Single(patch.Operations, op => Touches(op, "splits")).Value);
 
         // And the numbers on screen are the ones about to be stored, rather than the
         // shares being replaced.
@@ -1001,19 +999,19 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
 
         var splits = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(
-            Assert.Single(patch!.Operations, op => Touches(op, "splits")).value);
+            Assert.Single(patch!.Operations, op => Touches(op, "splits")).Value);
 
         Assert.Equal(70m, Assert.Single(splits, split => split.UserId == MeId).Amount);
         Assert.Equal(30m, Assert.Single(splits, split => split.UserId == daniel).Amount);
 
         // The pick is still in the patch: overriding the division does not un-file it.
         Assert.Equal(RentCategoryId, Assert.IsType<Guid>(
-            Assert.Single(patch.Operations, op => Touches(op, "categoryId")).value));
+            Assert.Single(patch.Operations, op => Touches(op, "categoryId")).Value));
 
         // And the preview was asked for the stated shares rather than the category's rule.
         _commands.Verify(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
@@ -1075,7 +1073,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         Assert.NotNull(patch);
 
@@ -1083,7 +1081,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         // only thing it may say about the shares is the ones the expense already holds.
         foreach (var operation in patch!.Operations.Where(op => Touches(op, "splits")))
         {
-            var stated = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(operation.value);
+            var stated = Assert.IsAssignableFrom<IReadOnlyList<SplitInput>>(operation.Value);
 
             Assert.Equal(100m, Assert.Single(stated, split => split.UserId == MeId).Amount);
         }
@@ -1125,8 +1123,8 @@ public class UpdateTransactionDialogTest : ComponentTest
     /// Whether a patch operation addresses one member, whatever case the serializer wrote
     /// the path in.
     /// </summary>
-    private static bool Touches(Operation<UpdateTransactionRequest> operation, string member) =>
-        string.Equals(operation.path, $"/{member}", StringComparison.OrdinalIgnoreCase);
+    private static bool Touches(PatchOperation operation, string member) =>
+        string.Equals(operation.Path, $"/{member}", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The edit dialog says nothing about what divided an expense, whatever it was divided
@@ -1346,7 +1344,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
         Assert.NotNull(patch);
         Assert.DoesNotContain(patch!.Operations, op => Touches(op, "groupId"));
     }

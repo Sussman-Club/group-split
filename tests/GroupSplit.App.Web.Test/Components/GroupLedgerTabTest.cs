@@ -6,7 +6,6 @@ using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -565,7 +564,7 @@ public class GroupLedgerTabTest : ComponentTest
             .ReturnsAsync(() =>
             {
                 var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
-                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                reference.Dismiss(DialogResult.Ok<PatchDocument<UpdateTransactionRequest>?>(null));
                 return reference;
             });
 
@@ -604,7 +603,7 @@ public class GroupLedgerTabTest : ComponentTest
             .ReturnsAsync(() =>
             {
                 var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
-                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                reference.Dismiss(DialogResult.Ok<PatchDocument<UpdateTransactionRequest>?>(null));
                 return reference;
             });
 
@@ -1025,7 +1024,7 @@ public class GroupLedgerTabTest : ComponentTest
             .ReturnsAsync(() =>
             {
                 var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
-                reference.Dismiss(DialogResult.Ok<JsonPatchDocument<UpdateTransactionRequest>?>(null));
+                reference.Dismiss(DialogResult.Ok<PatchDocument<UpdateTransactionRequest>?>(null));
                 return reference;
             });
 

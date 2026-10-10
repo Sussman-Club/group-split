@@ -2,7 +2,6 @@ using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Commands;
@@ -39,11 +38,11 @@ public sealed class GroupCommands(
     /// because that is what somebody notices; a patch that only moves the default split
     /// used to be announced as "renamed to" the name it already had.
     /// </summary>
-    public Task<bool> RenameAsync(Guid groupId, JsonPatchDocument<CreateGroupRequest> patch,
+    public Task<bool> RenameAsync(Guid groupId, PatchDocument<CreateGroupRequest> patch,
         CancellationToken ct = default)
     {
         var renames = patch.Operations.Any(operation =>
-            operation.path.TrimStart('/').Equals(nameof(CreateGroupRequest.Name), StringComparison.OrdinalIgnoreCase));
+            operation.Path.TrimStart('/').Equals(nameof(CreateGroupRequest.Name), StringComparison.OrdinalIgnoreCase));
 
         return errors.TryAsync(async () =>
         {

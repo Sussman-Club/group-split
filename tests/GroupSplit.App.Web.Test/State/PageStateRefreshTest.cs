@@ -7,7 +7,6 @@ using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Moq;
 using MudBlazor;
 
@@ -170,12 +169,12 @@ public class PageStateRefreshTest
 
         _transactionsClient
             .Setup(c => c.UpdateTransactionAsync(It.IsAny<Guid>(),
-                It.IsAny<JsonPatchDocument<UpdateTransactionRequest>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, JsonPatchDocument<UpdateTransactionRequest> patch, CancellationToken _) =>
+                It.IsAny<PatchDocument<UpdateTransactionRequest>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, PatchDocument<UpdateTransactionRequest> patch, CancellationToken _) =>
             {
                 var index = _transactions.FindIndex(t => t.Id == id);
                 var edited = new UpdateTransactionRequest { Amount = _transactions[index].Amount };
-                patch.ApplyTo(edited);
+                Apply(patch, edited);
                 _transactions[index] = _transactions[index] with { Amount = edited.Amount };
                 var current = _transactions[index];
                 return new TransactionDetailsResponse
@@ -254,13 +253,13 @@ public class PageStateRefreshTest
             });
 
         _groupsClient
-            .Setup(c => c.UpdateGroupAsync(It.IsAny<Guid>(), It.IsAny<JsonPatchDocument<CreateGroupRequest>>(),
+            .Setup(c => c.UpdateGroupAsync(It.IsAny<Guid>(), It.IsAny<PatchDocument<CreateGroupRequest>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, JsonPatchDocument<CreateGroupRequest> patch, CancellationToken _) =>
+            .ReturnsAsync((Guid id, PatchDocument<CreateGroupRequest> patch, CancellationToken _) =>
             {
                 var index = _groups.FindIndex(g => g.Id == id);
                 var edited = new CreateGroupRequest { Name = _groups[index].Name };
-                patch.ApplyTo(edited);
+                Apply(patch, edited);
                 _groups[index] = _groups[index] with { Name = edited.Name };
 
                 for (var i = 0; i < _transactions.Count; i++)
@@ -319,9 +318,21 @@ public class PageStateRefreshTest
     private int BalanceReads =>
         _groupsClient.Invocations.Count(i => i.Method.Name == nameof(IGroupsClient.GetGroupUserBalanceAsync));
 
-    private static JsonPatchDocument<UpdateTransactionRequest> AmountPatch(decimal amount)
+    /// <summary>
+    /// What the API does with a patch, for the fake clients above: each operation sets the
+    /// member its pointer names. The clients only ever write a <c>replace</c> of a top-level
+    /// member, and applying one is the API's business, so the type they write it with has
+    /// no way to do this itself.
+    /// </summary>
+    private static void Apply<T>(PatchDocument<T> patch, T model) where T : class
     {
-        var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+        foreach (var operation in patch.Operations)
+            typeof(T).GetProperty(operation.Path.TrimStart('/'))!.SetValue(model, operation.Value);
+    }
+
+    private static PatchDocument<UpdateTransactionRequest> AmountPatch(decimal amount)
+    {
+        var patch = new PatchDocument<UpdateTransactionRequest>();
         patch.Replace(x => x.Amount, amount);
         return patch;
     }
@@ -447,7 +458,7 @@ public class PageStateRefreshTest
     public async Task Renaming_a_group_renames_it_on_every_expense_row()
     {
         await ReadyAsync();
-        var patch = new JsonPatchDocument<CreateGroupRequest>();
+        var patch = new PatchDocument<CreateGroupRequest>();
         patch.Replace(x => x.Name, "Lisbon 2026");
 
         var done = await _groupsPage.UpdateGroupAsync(patch);

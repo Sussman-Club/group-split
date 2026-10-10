@@ -2,8 +2,6 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -103,19 +101,19 @@ public class UpdateSettlementDialogTest : ComponentTest
         return (provider, dialog);
     }
 
-    private static async Task<JsonPatchDocument<UpdateTransactionRequest>> SaveAsync(
+    private static async Task<PatchDocument<UpdateTransactionRequest>> SaveAsync(
         IRenderedComponent<MudDialogProvider> provider, IDialogReference dialog)
     {
         await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Save")
             .ClickAsync(new MouseEventArgs());
 
-        return (await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>())!;
+        return (await dialog.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>())!;
     }
 
-    private static Operation<UpdateTransactionRequest>? CoversThroughOperation(
-        JsonPatchDocument<UpdateTransactionRequest> patch) =>
+    private static PatchOperation? CoversThroughOperation(
+        PatchDocument<UpdateTransactionRequest> patch) =>
         patch.Operations.SingleOrDefault(operation =>
-            string.Equals(operation.path, "/CoversThrough", StringComparison.OrdinalIgnoreCase));
+            string.Equals(operation.Path, "/CoversThrough", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The day a settlement covers through is shown, and saving without touching it sends
@@ -145,6 +143,6 @@ public class UpdateSettlementDialogTest : ComponentTest
         var operation = CoversThroughOperation(await SaveAsync(provider, dialog));
 
         Assert.NotNull(operation);
-        Assert.Null(operation.value);
+        Assert.Null(operation.Value);
     }
 }

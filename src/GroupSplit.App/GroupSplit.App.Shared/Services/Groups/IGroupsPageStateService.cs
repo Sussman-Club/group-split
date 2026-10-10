@@ -1,6 +1,5 @@
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Groups;
 
@@ -118,7 +117,7 @@ public interface IGroupsPageStateService
     /// <summary>The caller taking themselves out, which needs a settled balance.</summary>
     Task<bool> LeaveGroupAsync(Guid groupId, CancellationToken cancellationToken = default);
 
-    Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
+    Task<bool> UpdateGroupAsync(PatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
     Task<bool> CreateTransactionAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
     Task<bool> CreateTransactionWithReceiptAsync(CreateTransactionRequest request, IBrowserFile file,
         SaveReceiptRequest? receipt, CancellationToken cancellationToken = default);

@@ -119,7 +119,7 @@ public class ReceiptDraftDialogTest : ComponentTest
         _receipts.Verify(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
             It.IsAny<CancellationToken>()), Times.Once);
         _receipts.Verify(receipts => receipts.PatchItemAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
-            It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+            It.IsAny<PatchDocument<ReceiptItemPatch>>(),
             It.IsAny<CancellationToken>()), Times.Never);
         Assert.True(reference.Result.IsCompleted);
     }
@@ -151,7 +151,7 @@ public class ReceiptDraftDialogTest : ComponentTest
                 && request.Items[1].TotalPrice == 19m),
             It.IsAny<CancellationToken>()), Times.Once);
         _receipts.Verify(receipts => receipts.PatchItemAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
-            It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+            It.IsAny<PatchDocument<ReceiptItemPatch>>(),
             It.IsAny<CancellationToken>()), Times.Never);
         Assert.True(reference.Result.IsCompleted);
     }
@@ -162,7 +162,7 @@ public class ReceiptDraftDialogTest : ComponentTest
         var bill = Bill();
         _receipts
             .Setup(receipts => receipts.PatchItemAsync(_expense, bill.Items[0].Id,
-                It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+                It.IsAny<PatchDocument<ReceiptItemPatch>>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(bill);
 
@@ -176,7 +176,7 @@ public class ReceiptDraftDialogTest : ComponentTest
             .ClickAsync(new MouseEventArgs());
 
         _receipts.Verify(receipts => receipts.PatchItemAsync(_expense, bill.Items[0].Id,
-            It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+            It.IsAny<PatchDocument<ReceiptItemPatch>>(),
             It.IsAny<CancellationToken>()), Times.Once);
         _receipts.Verify(receipts => receipts.SaveAsync(It.IsAny<Guid>(),
             It.IsAny<SaveReceiptRequest>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -208,7 +208,7 @@ public class ReceiptDraftDialogTest : ComponentTest
                 && request.Items[2].TotalPrice == -2m),
             It.IsAny<CancellationToken>()), Times.Once);
         _receipts.Verify(receipts => receipts.PatchItemAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
-            It.IsAny<Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument<ReceiptItemPatch>>(),
+            It.IsAny<PatchDocument<ReceiptItemPatch>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 

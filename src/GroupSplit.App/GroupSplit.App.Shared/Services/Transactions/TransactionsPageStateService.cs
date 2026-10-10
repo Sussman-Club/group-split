@@ -3,7 +3,6 @@ using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Transactions;
@@ -207,7 +206,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         SaveReceiptRequest? receipt, CancellationToken ct = default) =>
         _commands.CreateWithReceiptAsync(request, file, receipt, ct);
 
-    public Task<bool> UpdateAsync(TransactionResponse transaction, JsonPatchDocument<UpdateTransactionRequest> patch,
+    public Task<bool> UpdateAsync(TransactionResponse transaction, PatchDocument<UpdateTransactionRequest> patch,
         CancellationToken ct = default) =>
         _commands.UpdateAsync(transaction.Id, patch, transaction.Name, ct);
 

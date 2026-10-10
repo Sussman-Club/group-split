@@ -3,7 +3,6 @@ using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Groups;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -27,14 +26,14 @@ public class GroupDetailsCardTest : ComponentTest
 
     private readonly Mock<IGroupsPageStateService> _state = new();
 
-    private JsonPatchDocument<CreateGroupRequest>? _written;
+    private PatchDocument<CreateGroupRequest>? _written;
 
     public GroupDetailsCardTest()
     {
         _state
-            .Setup(state => state.UpdateGroupAsync(It.IsAny<JsonPatchDocument<CreateGroupRequest>>(),
+            .Setup(state => state.UpdateGroupAsync(It.IsAny<PatchDocument<CreateGroupRequest>>(),
                 It.IsAny<CancellationToken>()))
-            .Callback((JsonPatchDocument<CreateGroupRequest> patch, CancellationToken _) => _written = patch)
+            .Callback((PatchDocument<CreateGroupRequest> patch, CancellationToken _) => _written = patch)
             .ReturnsAsync(true);
 
         _state.Setup(state => state.ArchiveGroupAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
@@ -93,8 +92,8 @@ public class GroupDetailsCardTest : ComponentTest
 
         Assert.NotNull(_written);
         var operation = Assert.Single(_written.Operations);
-        Assert.EndsWith("Name", operation.path, StringComparison.Ordinal);
-        Assert.Equal("The bigger flat", operation.value);
+        Assert.EndsWith("Name", operation.Path, StringComparison.Ordinal);
+        Assert.Equal("The bigger flat", operation.Value);
 
         Assert.True(Save(card).HasAttribute("disabled"));
     }
@@ -111,7 +110,7 @@ public class GroupDetailsCardTest : ComponentTest
         await Save(card).ClickAsync(new());
 
         Assert.Null(_written);
-        _state.Verify(state => state.UpdateGroupAsync(It.IsAny<JsonPatchDocument<CreateGroupRequest>>(),
+        _state.Verify(state => state.UpdateGroupAsync(It.IsAny<PatchDocument<CreateGroupRequest>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 

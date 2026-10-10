@@ -3,7 +3,6 @@
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Transactions
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ITransactionsClient TransactionsClient
@@ -1115,12 +1114,12 @@
     /// asks for new ones both arrive with none stated, and only the second is an
     /// instruction.
     /// </param>
-    static JsonPatchDocument<UpdateTransactionRequest> CreatePatch(
+    static PatchDocument<UpdateTransactionRequest> CreatePatch(
         UpdateTransactionRequest original,
         UpdateTransactionRequest updated,
         bool redivide)
     {
-        var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+        var patch = new PatchDocument<UpdateTransactionRequest>();
 
         if (original.Name != updated.Name)
             patch.Replace(x => x.Name, updated.Name);

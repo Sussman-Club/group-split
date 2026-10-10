@@ -4,7 +4,6 @@ using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -744,10 +743,10 @@ public static class TransactionCommands
     /// nothing to compare against, because the endpoint reads the absence of the operation
     /// rather than the value.
     /// </remarks>
-    private static JsonPatchDocument<UpdateTransactionRequest> Patch(
+    private static PatchDocument<UpdateTransactionRequest> Patch(
         TransactionDetailsResponse current, UpdateTransactionRequest edited, bool redivide)
     {
-        var patch = new JsonPatchDocument<UpdateTransactionRequest>();
+        var patch = new PatchDocument<UpdateTransactionRequest>();
 
         if (current.Name != edited.Name) patch.Replace(request => request.Name, edited.Name);
         if (current.Amount != edited.Amount) patch.Replace(request => request.Amount, edited.Amount);

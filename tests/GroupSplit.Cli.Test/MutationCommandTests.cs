@@ -53,6 +53,30 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal("Late dinner", operations[0].GetProperty("value").GetString());
     }
 
+    /// <summary>
+    /// The body byte for byte, which the tests around it deliberately do not pin. This one
+    /// does because the bytes are the contract: they are what the API's JSON Patch reader
+    /// has to accept, and the CLI builds them without that library. The spelling below is
+    /// what <c>Microsoft.AspNetCore.JsonPatch.SystemTextJson</c> writes for the same
+    /// operations, PascalCase pointers and the trailing <c>from</c> included, so a change
+    /// here is a change to the wire rather than to the command.
+    /// </summary>
+    [Fact]
+    public async Task Transactions_update_writes_the_patch_the_api_reads()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"));
+
+        await Cli.RunAsync("transactions", "update", id.ToString(),
+            "--name", "Late dinner", "--description", "With dessert", "--redivide");
+
+        Assert.Equal(
+            """[{"value":"Late dinner","path":"/Name","op":"replace","from":null},"""
+            + """{"value":"With dessert","path":"/Description","op":"replace","from":null},"""
+            + """{"value":null,"path":"/Splits","op":"replace","from":null}]""",
+            _api.Requests.Single(r => r.Method == "PATCH").Body);
+    }
+
     [Fact]
     public async Task Transactions_update_can_move_an_expense_onto_your_own_ledger()
     {
@@ -256,6 +280,20 @@ public sealed class MutationCommandTests : IDisposable
         var operations = _api.Requests.Single(r => r.Method == "PATCH").Json;
         Assert.Equal("/name", operations[0].GetProperty("path").GetString(), ignoreCase: true);
         Assert.Equal("Trip to Lisbon", operations[0].GetProperty("value").GetString());
+    }
+
+    /// <summary>The group's patch byte for byte, for the reason the expense's is above.</summary>
+    [Fact]
+    public async Task Groups_rename_writes_the_patch_the_api_reads()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/groups/{id}", Group("Trip to Lisbon"));
+
+        await Cli.RunAsync("groups", "rename", id.ToString(), "Trip to Lisbon");
+
+        Assert.Equal(
+            """[{"value":"Trip to Lisbon","path":"/Name","op":"replace","from":null}]""",
+            _api.Requests.Single(r => r.Method == "PATCH").Body);
     }
 
     /// <summary>

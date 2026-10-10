@@ -6,7 +6,6 @@
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @inject ITransactionsClient TransactionsClient
 @inject IDepartedDeleteGuard DeleteGuard
 @inject ITransactionsPageStateService TransactionsService
@@ -907,7 +906,7 @@
 
         var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var request = await dialog.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         if (request is not null)
             await TransactionsService.UpdateAsync(row, request);

@@ -3,7 +3,6 @@ using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Groups;
@@ -432,7 +431,7 @@ public class GroupsPageStateService : IGroupsPageStateService
     public Task<bool> LeaveGroupAsync(Guid groupId, CancellationToken cancellationToken = default) =>
         _groupCommands.LeaveAsync(groupId, NameOf(groupId), cancellationToken);
 
-    public Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest,
+    public Task<bool> UpdateGroupAsync(PatchDocument<CreateGroupRequest> updateRequest,
         CancellationToken cancellationToken = default) =>
         _groupCommands.RenameAsync(Selected().Id, updateRequest, cancellationToken);
 

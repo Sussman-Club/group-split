@@ -4,7 +4,6 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ITransactionsClient TransactionsClient
@@ -622,7 +621,7 @@
 
         var dialog = await DialogService.ShowAsync<UpdateSettlementDialog>("Edit Settlement", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var request = await dialog.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         if (request is not null)
             await TransactionsService.UpdateAsync(original, request);
@@ -652,7 +651,7 @@
 
         var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
 
-        var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var request = await dialog.GetReturnValueAsync<PatchDocument<UpdateTransactionRequest>>();
 
         if (request is not null)
             await TransactionsService.UpdateAsync(original, request);

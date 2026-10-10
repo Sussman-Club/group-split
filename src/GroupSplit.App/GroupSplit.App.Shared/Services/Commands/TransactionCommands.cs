@@ -3,7 +3,6 @@ using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using MudBlazor;
 
 namespace GroupSplit.App.Shared.Services.Commands;
@@ -112,7 +111,7 @@ public sealed class TransactionCommands(
         await dialogs.ShowAsync<AttachBankRowDialog>("Your bank already sent this", parameters, options);
     }
 
-    public Task<bool> UpdateAsync(Guid transactionId, JsonPatchDocument<UpdateTransactionRequest> patch,
+    public Task<bool> UpdateAsync(Guid transactionId, PatchDocument<UpdateTransactionRequest> patch,
         string name, CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {

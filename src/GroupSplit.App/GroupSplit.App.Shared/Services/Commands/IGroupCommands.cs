@@ -1,5 +1,4 @@
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 
 namespace GroupSplit.App.Shared.Services.Commands;
 
@@ -27,7 +26,7 @@ public interface IGroupCommands
 {
     Task<GroupResponse?> CreateAsync(CreateGroupRequest request, CancellationToken ct = default);
 
-    Task<bool> RenameAsync(Guid groupId, JsonPatchDocument<CreateGroupRequest> patch,
+    Task<bool> RenameAsync(Guid groupId, PatchDocument<CreateGroupRequest> patch,
         CancellationToken ct = default);
 
     /// <summary>

@@ -11,7 +11,7 @@
     {%- assign title = parameter.Schema.Title -%}
     {%- if title startswith "JsonPatchDocumentOf" or title == "JsonPatchDocument" -%}
         {%- if UseSystemTextJson -%}
-            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument" -%}
+            {%- assign jsonPatchTypeName = "GroupSplit.Shared.PatchDocument" -%}
         {%- else -%}
             {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.JsonPatchDocument" -%}
         {%- endif -%}
@@ -42,7 +42,7 @@ The implementation is generated in Client.Class.liquid; here we declare the matc
     {%- assign title = parameter.Schema.Title -%}
     {%- if title startswith "JsonPatchDocumentOf" or title == "JsonPatchDocument" -%}
         {%- if UseSystemTextJson -%}
-            {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.SystemTextJson.JsonPatchDocument" -%}
+            {%- assign jsonPatchTypeName = "GroupSplit.Shared.PatchDocument" -%}
         {%- else -%}
             {%- assign jsonPatchTypeName = "Microsoft.AspNetCore.JsonPatch.JsonPatchDocument" -%}
         {%- endif -%}

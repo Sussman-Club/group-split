@@ -1,7 +1,6 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Commands
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @using System.ComponentModel.DataAnnotations
 @namespace GroupSplit.App.Shared.Components
 @inject IReceiptCommands Receipts
@@ -354,7 +353,7 @@
     private async Task<ReceiptResponse?> PatchLineTextAsync(Guid transactionId, EditableLine item)
     {
         var source = Receipt!.Items.Single(candidate => candidate.Id == item.Id);
-        var patch = new JsonPatchDocument<ReceiptItemPatch>();
+        var patch = new PatchDocument<ReceiptItemPatch>();
         var name = item.Name.Trim();
         if (!string.Equals(name, source.Name, StringComparison.Ordinal))
             patch.Replace(line => line.Name, name);

@@ -2,7 +2,6 @@ using System.CommandLine;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
-using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -126,7 +125,7 @@ public static class GroupCommands
 
         command.SetHandler(async (context, ct) =>
         {
-            var patch = new JsonPatchDocument<CreateGroupRequest>();
+            var patch = new PatchDocument<CreateGroupRequest>();
             patch.Replace(request => request.Name, context.ParseResult.GetValue(name)!);
 
             var group = await context.Groups.UpdateGroupAsync(
@@ -172,7 +171,7 @@ public static class GroupCommands
 
         command.SetHandler(async (context, ct) =>
         {
-            var patch = new JsonPatchDocument<CreateGroupRequest>();
+            var patch = new PatchDocument<CreateGroupRequest>();
             patch.Replace(request => request.DefaultSplitRuleId, context.ParseResult.GetValue(ruleId));
 
             var group = await context.Groups.UpdateGroupAsync(

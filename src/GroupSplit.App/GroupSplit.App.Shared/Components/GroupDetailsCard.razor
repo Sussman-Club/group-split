@@ -1,6 +1,5 @@
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsPageStateService GroupsService
 
@@ -183,7 +182,7 @@
         if (!_form.IsValid || !Dirty)
             return;
 
-        var patch = new JsonPatchDocument<CreateGroupRequest>();
+        var patch = new PatchDocument<CreateGroupRequest>();
 
         if (_original.Name != _edit.Name)
             patch.Replace(request => request.Name, _edit.Name);
