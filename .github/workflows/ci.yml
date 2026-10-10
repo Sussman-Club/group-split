@@ -81,14 +81,19 @@ jobs:
           dotnet restore tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj
           dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
+      # Warnings are errors here, and only here: the build is clean, and a warning that
+      # cannot fail it is one nobody reads -- 187 of them had piled up before this was
+      # turned on. Locally they stay warnings, so work in progress still builds. The
+      # analyzer level is pinned in Directory.Build.props, so an SDK update alone cannot
+      # add new ones.
       - name: Build
         run: |
-          dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release --no-restore
-          dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore
-          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.API.Test/GroupSplit.API.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build tests/GroupSplit.App.Web.Test/GroupSplit.App.Web.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build tests/GroupSplit.Cli.Test/GroupSplit.Cli.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore -warnaserror
 
       - name: Check CSS bundle
         run: python3 tests/check-css.py src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css
@@ -115,7 +120,7 @@ jobs:
       # Build rather than publish: it covers the same targets in seconds, and the
       # deploy exercises publish itself.
       - name: Build the deploy configuration
-        run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore
+        run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore -warnaserror
 
       # GroupSplit.AppHost.Test is neither built nor run here. It has the `integration`
       # job below, which is the only place carrying the Docker and Playwright setup it
@@ -282,8 +287,8 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore
-          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+          dotnet build tests/GroupSplit.AppHost.Test/GroupSplit.AppHost.Test.csproj -c Release --no-restore -warnaserror
+          dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore -warnaserror
 
       # Playwright ships its browsers separately from the NuGet package; the install
       # script is written into the test project's build output.
