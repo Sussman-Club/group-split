@@ -36,6 +36,8 @@ builder.AddRedisDistributedCache("cache");
 
 builder.AddGroupSplitAuthentication();
 
+builder.AddSecurityHeaders();
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddAuthorizationBuilder();
@@ -74,6 +76,9 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 
+// First, so every response carries them -- an error page, a 404, a proxied API answer.
+app.UseSecurityHeaders();
+
 app.MapDefaultEndpoints();
 
 app.MapApiForwarder();
@@ -92,7 +97,7 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    // A year, with subdomains: see AddSecurityHeaders.
     app.UseHsts();
 }
 

@@ -697,6 +697,19 @@ replica would still race: the refresh concurrency control is in-process, so two 
 could exchange one refresh token at once -- and the Data Protection volume above is per-host,
 so a second host would need a shared ring as well.
 
+## Security headers and the cross-site check
+
+Every response the web app writes itself carries a content security policy, `X-Frame-Options:
+DENY`, `Referrer-Policy: strict-origin-when-cross-origin` and `nosniff`; outside development,
+HSTS for a year with subdomains. The policy is in `SecurityHeadersExtensions`, one directive per
+thing a page loads: `'wasm-unsafe-eval'` for the WebAssembly runtime, inline styles for
+MudBlazor, Google Fonts, Plaid Link, Plaid's logo hosts, and this origin's own WebSocket for the
+server-rendered mode. The import map is the page's one inline script and is let in by a nonce.
+Adding a script, a frame or a font from somewhere new means adding it there too -- the browser
+refuses it silently otherwise, with only a line in the console to say so.
+
+Responses under `/idp` are Keycloak's, and keep the headers Keycloak sends.
+
 ## A dashboard for the integration tests
 
 `GroupSplit.AppHost.Test` starts the whole AppHost without a dashboard, which leaves a test
