@@ -271,7 +271,7 @@
                                     <span>
                                         <strong>@match.Name</strong>,
                                         <Money Value="@match.Amount" Currency="@match.Currency" />
-                                        in @match.Where on @Clock.Local(match.DateTime).ToString("d")@(match.IsConfident ? "." : $" -- {Apart(match)}.")
+                                        in @match.Where on @Clock.Day(match.DateTime).ToString("d")@(match.IsConfident ? "." : $" -- {Apart(match)}.")
                                     </span>
                                     <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
                                         <MudButton Variant="@(match.IsConfident ? Variant.Filled : Variant.Text)"

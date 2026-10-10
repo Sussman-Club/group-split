@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Models;
 using Microsoft.JSInterop;
 
 namespace GroupSplit.App.Shared.Services;
@@ -66,6 +67,88 @@ public sealed class LocalClock
     public DateTimeOffset At(DateTime date, TimeSpan time) =>
         new DateTimeOffset(DateTime.SpecifyKind(date.Date + time, DateTimeKind.Unspecified), _offset)
             .ToUniversalTime();
+
+    /// <summary>
+    /// The day a transaction's stored instant belongs to on the person's calendar. Not
+    /// <c>Local(instant).Date</c>: a bank row is a date stored as midnight UTC, and that is the
+    /// previous evening for anybody west of Greenwich. See <see cref="TransactionDay"/>.
+    /// </summary>
+    public DateOnly Day(DateTimeOffset stored) => TransactionDay.Of(stored, _offset);
+
+    /// <summary>
+    /// The time of day a transaction was recorded at, in the person's zone; none for a bank
+    /// row, which is a date and has no time. See <see cref="TransactionDay"/>.
+    /// </summary>
+    public TimeOnly? TimeOf(DateTimeOffset stored) => TransactionDay.TimeOf(stored, _offset);
+
+    /// <summary>
+    /// A transaction's day and time as one piece of text -- "9 Oct 2026, 14:32" -- or its day
+    /// alone when it is a date with no time. Every place that writes both goes through here,
+    /// so none of them can show a bank row at 20:00 the evening before.
+    /// </summary>
+    public string Stamp(DateTimeOffset stored, string dayFormat, string timeFormat) =>
+        TimeOf(stored) is { } time
+            ? $"{Day(stored).ToString(dayFormat)}, {time.ToString(timeFormat)}"
+            : Day(stored).ToString(dayFormat);
+
+    /// <summary>The person's calendar day, as a <see cref="DateOnly"/> to compare a <see cref="Day"/> with.</summary>
+    public DateOnly TodayDay => DateOnly.FromDateTime(Today);
+
+    /// <summary>
+    /// A transaction's day as a short list says it: "Today", "Yesterday", a weekday within the
+    /// week, then the date. Both sides of the comparison are the person's days, not the
+    /// server's, and the row's is read through <see cref="Day"/> -- so a bank row posted
+    /// today is "Today" by the bank's date, wherever the person is.
+    /// </summary>
+    public string Relative(DateTimeOffset stored)
+    {
+        var day = Day(stored);
+        var today = TodayDay;
+
+        return (today.DayNumber - day.DayNumber) switch
+        {
+            0 => "Today",
+            1 => "Yesterday",
+            < 7 => day.ToString("dddd"),
+            _ when day.Year == today.Year => day.ToString("d MMM"),
+            _ => day.ToString("d MMM yyyy")
+        };
+    }
+
+    /// <summary>
+    /// What a date picker and a time picker open on for a stored transaction: its day and
+    /// local time, or, for a date with no time, its day and an empty time.
+    /// </summary>
+    public (DateTime Date, TimeSpan? Time) Pickers(DateTimeOffset stored) =>
+        (Day(stored).ToDateTime(TimeOnly.MinValue), TimeOf(stored)?.ToTimeSpan());
+
+    /// <summary>
+    /// The instant an edit stores, from what the two pickers hold now.
+    /// </summary>
+    /// <remarks>
+    /// A moment is made from the pickers through <see cref="At"/>, as it always was. A date
+    /// with no time -- a bank row -- opens with an empty time (see <see cref="Pickers"/>), and
+    /// stays a date until somebody gives it one: left on its day it is stored exactly as it
+    /// was, moved to another day it is that day at midnight UTC, and only a time picked for
+    /// it makes it a moment.
+    /// </remarks>
+    public DateTimeOffset Edited(DateTimeOffset original, DateTime? date, TimeSpan? time)
+    {
+        var day = date ?? Today;
+
+        if (!TransactionDay.IsDate(original) || time is not null)
+            return At(day, time ?? TimeSpan.Zero);
+
+        return DateOnly.FromDateTime(day) == Day(original)
+            ? original
+            : TransactionDay.Stored(day);
+    }
+
+    /// <summary>
+    /// The offset to send with a day the API counts activity through. See
+    /// <see cref="TransactionDay.CutoffOffsetMinutes"/>.
+    /// </summary>
+    public int CutoffOffsetMinutes => TransactionDay.CutoffOffsetMinutes(_offset);
 
     /// <summary>
     /// Asks the browser, for a host that could not ask synchronously. Safe to call more

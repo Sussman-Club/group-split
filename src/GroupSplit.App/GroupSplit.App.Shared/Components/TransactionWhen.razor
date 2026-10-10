@@ -1,0 +1,21 @@
+@namespace GroupSplit.App.Shared.Components
+@inject LocalClock Clock
+
+@*
+    The "When" cell of a list of transactions: the day, bold, and under it the time it was
+    recorded at, both in the reader's zone. A bank row is a date with no time (#252), so it
+    shows the bank's day and nothing under it -- not 20:00 the evening before, which is what
+    midnight UTC is in New York. The ledger tab and the Expenses page both draw it from here,
+    so the two cannot come to disagree about which day a row is on.
+*@
+
+<div class="gs-num" style="font-weight: 700; font-size: .875rem">@Clock.Day(Value).ToString("d MMM yyyy")</div>
+@if (Clock.TimeOf(Value) is { } time)
+{
+    <div class="gs-muted gs-num" style="font-size: .75rem">@time.ToString("t")</div>
+}
+
+@code {
+    /// <summary>The transaction's stored instant.</summary>
+    [Parameter, EditorRequired] public DateTimeOffset Value { get; set; }
+}
