@@ -194,6 +194,8 @@ public static class ErrorMessages
             "The entries do not describe a history: each one has to start after the one before it.",
 
         [ErrorCodes.RateLimited] = RateLimitedPrefix + " Please wait a few minutes and try again.",
+        [ErrorCodes.CrossSiteRequestRefused] =
+            "That request did not come from this app's own pages, so it was not sent. Reload the page and try again.",
 
         [ErrorCodes.BankConnectionNotFound] = "That linked bank no longer exists.",
         [ErrorCodes.BankTransactionNotFound] = "That imported transaction is no longer in your inbox.",

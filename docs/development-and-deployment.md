@@ -710,6 +710,11 @@ refuses it silently otherwise, with only a line in the console to say so.
 
 Responses under `/idp` are Keycloak's, and keep the headers Keycloak sends.
 
+Writes through the cookie-authenticated `/api` route must show they came from the app's own
+pages: `Sec-Fetch-Site: same-origin`, or the `X-GroupSplit-Request` header the WebAssembly
+client adds. Anything else is answered 403 `CROSS_SITE_REQUEST_REFUSED` and never forwarded.
+Signing out is a form `POST` to `/auth/logout` carrying the page's antiforgery token.
+
 ## A dashboard for the integration tests
 
 `GroupSplit.AppHost.Test` starts the whole AppHost without a dashboard, which leaves a test

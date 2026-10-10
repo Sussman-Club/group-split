@@ -73,8 +73,8 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
         => InvokeAsync(StateHasChanged);
 
-    // Logout is a full-page navigation to the BFF, which ends the Keycloak
-    // session and lands back on "/".
+    // Logout is a form POST to the BFF, a full page load, which ends the
+    // Keycloak session and lands back on "/".
     private Task TryLogout() => AuthService.Logout();
 
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;

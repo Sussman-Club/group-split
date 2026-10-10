@@ -32,6 +32,61 @@ public class IdentityEndpointTest
     }
 
     /// <summary>
+    /// Signing out from one of the app's own pages: a form post carrying its antiforgery
+    /// token, answered with the redirect to Keycloak's end-session endpoint and an expired
+    /// ticket cookie.
+    /// </summary>
+    [Fact]
+    public async Task Signing_out_is_a_post_from_the_apps_own_page()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+
+        using var request = await host.FormPostFromOwnPage("/auth/logout");
+        using var response = await host.Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith(
+            $"{Authority}/protocol/openid-connect/logout",
+            Assert.IsType<Uri>(response.Headers.Location).ToString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith("GroupSplit.Auth=;", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// As a GET, any page anywhere could sign a person out with an image tag.
+    /// </summary>
+    [Fact]
+    public async Task Signing_out_with_a_get_is_not_allowed()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+
+        using var response = await host.Client.GetAsync("/auth/logout", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+    }
+
+    /// <summary>
+    /// A post without the token is one another page made: a form on a sibling subdomain is
+    /// the same site, so the SameSite=Lax cookie goes with it.
+    /// </summary>
+    [Fact]
+    public async Task Signing_out_with_a_post_that_carries_no_antiforgery_token_is_refused()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+
+        using var response = await host.Client.PostAsync(
+            "/auth/logout",
+            new FormUrlEncodedContent(new Dictionary<string, string>()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
     /// After the account is deleted, signing out is the app's alone. Keycloak deleted the
     /// login and its sessions with it, so a round trip through its end-session endpoint has
     /// nothing to end -- and goes to the one system that may not be answering.

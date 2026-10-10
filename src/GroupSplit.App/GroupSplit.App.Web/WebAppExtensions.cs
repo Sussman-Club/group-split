@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using Duende.AccessTokenManagement.OpenIdConnect;
+using GroupSplit.App.Shared.Services;
+using GroupSplit.Shared.Errors;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Yarp.ReverseProxy.Forwarder;
@@ -41,11 +43,22 @@ public static class WebAppExtensions
 
     extension(IEndpointRouteBuilder app)
     {
+        /// <summary>
+        /// The browser's door to the API: authenticated by this app's cookie, and the
+        /// session's access token put on the request on the way through.
+        /// <para>
+        /// A write is refused unless it shows it came from this app's own pages -- see
+        /// <see cref="RefuseCrossSiteWrites{TBuilder}"/>. SameSite=Lax alone does not cover
+        /// it: a bodyless POST or a multipart upload is a "simple" request with no
+        /// preflight, and a sibling subdomain on the same site gets the cookie attached.
+        /// </para>
+        /// </summary>
         public RouteGroupBuilder MapApiForwarder()
         {
             var group = app.MapGroup("/api");
             
             group.RequireAuthorization();
+            group.RefuseCrossSiteWrites();
 
             group.MapForwarder("{*path}","https+http://api", new ForwarderRequestConfig(), b =>
             {
@@ -212,6 +225,70 @@ public static class WebAppExtensions
             => app.MapForwarder($"{WebhookPrefix}/{{*path}}", "https+http://api")
                 .AllowAnonymous()
                 .DisableAntiforgery();
+    }
+
+    /// <summary>
+    /// Answers 403 <see cref="ErrorCodes.CrossSiteRequestRefused"/> to a write that does not
+    /// show it was sent by this app's own pages, before it is forwarded anywhere.
+    /// </summary>
+    /// <remarks>
+    /// Reads are let through: a GET changes nothing, and refusing one would break a receipt
+    /// opened in a new tab, which arrives with <c>Sec-Fetch-Site: none</c>.
+    /// </remarks>
+    private static TBuilder RefuseCrossSiteWrites<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.Add(endpoint =>
+        {
+            // As in RefuseAmbiguousPaths: a forwarder's delegate is already here.
+            if (endpoint.RequestDelegate is not { } next) return;
+
+            endpoint.RequestDelegate = context => IsFromOwnPages(context.Request)
+                ? next(context)
+                : RefuseCrossSite(context);
+        });
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="request"/> is a read, or a write that shows it came from
+    /// this origin's own pages: <c>Sec-Fetch-Site: same-origin</c>, which every current
+    /// browser sends, or the <see cref="SameOriginRequest"/> header the app's client adds,
+    /// which no other origin can add without a preflight this app never answers.
+    /// </summary>
+    internal static bool IsFromOwnPages(HttpRequest request) =>
+        HttpMethods.IsGet(request.Method)
+        || HttpMethods.IsHead(request.Method)
+        || HttpMethods.IsOptions(request.Method)
+        || string.Equals(request.Headers["Sec-Fetch-Site"], "same-origin", StringComparison.OrdinalIgnoreCase)
+        || request.Headers.ContainsKey(SameOriginRequest.HeaderName);
+
+    /// <summary>The problem the API would have written, in the shape the app reads.</summary>
+    private static Task RefuseCrossSite(HttpContext context)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(WebAppExtensions));
+
+        logger.LogWarning(
+            "Refused a cross-site {Method} to {Path} (Sec-Fetch-Site: {FetchSite}, Origin: {Origin}).",
+            context.Request.Method, context.Request.Path,
+            context.Request.Headers["Sec-Fetch-Site"].ToString(), context.Request.Headers.Origin.ToString());
+
+        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = StatusCodes.Status403Forbidden,
+            Type = "https://groupsplit.app/errors/" + ErrorCodes.CrossSiteRequestRefused.ToLowerInvariant().Replace('_', '-'),
+            Title = "The request did not come from this app",
+            Detail = "A change was sent to this app's API without proof that one of its own pages sent it, so it was not forwarded.",
+            Extensions =
+            {
+                [GroupSplit.Shared.ProblemDetails.CodeExtension] = ErrorCodes.CrossSiteRequestRefused,
+                [GroupSplit.Shared.ProblemDetails.TraceIdExtension] =
+                    System.Diagnostics.Activity.Current?.Id ?? context.TraceIdentifier
+            }
+        };
+
+        return Results.Problem(problem).ExecuteAsync(context);
     }
 
     /// <summary>
