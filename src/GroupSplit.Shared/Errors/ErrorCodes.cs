@@ -81,6 +81,13 @@ public static class ErrorCodes
     /// and decide afresh: they may be gone, or have a different link now.
     /// </summary>
     public const string GroupGuestChanged = "GROUP_GUEST_CHANGED";
+
+    /// <summary>
+    /// Somebody else changed or deleted the same row between this request reading it and
+    /// writing it, and this request is the one that lost. Nothing it asked for was written.
+    /// Read it again and decide afresh.
+    /// </summary>
+    public const string ConcurrentChange = "CONCURRENT_CHANGE";
     public const string AccountNotSettled = "ACCOUNT_NOT_SETTLED";
     public const string TransactionPayerNotInGroup = "TRANSACTION_PAYER_NOT_IN_GROUP";
     public const string SplitUserNotInGroup = "SPLIT_USER_NOT_IN_GROUP";

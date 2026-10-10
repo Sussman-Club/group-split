@@ -95,6 +95,10 @@ For each row, in order:
 Do not pick for them. The three are not interchangeable and the wrong one is not obviously
 wrong afterwards.
 
+A file or link that timed out is safe to run again. Of two at once, or a second after the
+first landed, one writes and the other answers `BANK_TRANSACTION_ALREADY_FILED`: check with
+`inbox list --status filed` rather than treating that as a failure.
+
 ## A charge is one expense
 
 One card charge files as one expense. A warehouse run that was the flat's groceries *and* a

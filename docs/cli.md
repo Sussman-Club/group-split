@@ -691,6 +691,11 @@ groupsplit inbox dismiss-match <row-id> <transaction-id>   # not a match at all
 division are untouched: a card settling for six more than the receipt is not a correction
 anybody asked for. `dismiss-match` means the pair is never suggested again.
 
+Filing or linking a row that another request has just filed -- a second terminal, a retry
+after a timeout -- waits for that request and then answers `BANK_TRANSACTION_ALREADY_FILED`
+(exit 3). Nothing second is written, so rerunning `inbox file` after an unclear failure is
+safe; `inbox list --status filed` shows where the row went.
+
 Nothing has to wait for the refusal. `inbox list` marks the rows and counts them underneath,
 and `groupsplit inbox matches <row-id>` names what each row matched and why -- how many days
 apart and how far the amounts are -- without filing anything.
@@ -1431,6 +1436,10 @@ remediation says to contact support with the `traceId`, and support resolves it 
 [identities.md](identities.md) describes.
 
 `traceId` is the API's own, and matches its log line.
+
+`CONCURRENT_CHANGE` (exit 3) means another save of the same thing landed while this one was
+being made, and nothing was written. Read it again before running the command a second time:
+rerunning blindly would put back what the other person just changed.
 
 ## Confirming changes
 

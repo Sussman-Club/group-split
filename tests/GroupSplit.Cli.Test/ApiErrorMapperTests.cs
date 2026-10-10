@@ -204,6 +204,24 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("groups guests", remediation);
     }
 
+    /// <summary>
+    /// Two saves of the same thing at once: nothing was written, and the one thing that
+    /// helps is reading it again before deciding whether to run the command a second time.
+    /// </summary>
+    [Fact]
+    public void Losing_a_race_over_anything_else_says_to_read_it_again_before_retrying()
+    {
+        var error = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            code = SharedErrorCodes.ConcurrentChange
+        })).Error;
+
+        Assert.Equal("CONCURRENT_CHANGE", error.Code);
+        Assert.Contains("nothing was saved", error.Remediation);
+        Assert.Contains("Read it again", error.Remediation);
+    }
+
     [Fact]
     public void A_guest_route_given_the_wrong_id_points_at_the_guest_listing()
     {

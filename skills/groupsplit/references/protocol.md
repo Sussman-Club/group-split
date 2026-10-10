@@ -61,6 +61,10 @@ On stderr, whenever a command fails:
 - `remediation` is written to be acted on, and often names the command that would help.
 - `traceId` is the API's own and matches its log line. Quote it when reporting a problem.
 
+`CONCURRENT_CHANGE` (exit 3): somebody else saved the same thing while this command was
+saving it, and nothing was written. Read it again and decide afresh -- rerunning the same
+command blindly would undo their change.
+
 ### Codes the CLI raises itself
 
 Prefixed `CLI_`, which is how you tell them apart from the server's. Most of them mean the

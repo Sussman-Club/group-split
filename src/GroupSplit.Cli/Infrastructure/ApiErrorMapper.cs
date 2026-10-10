@@ -146,6 +146,11 @@ public static class ApiErrorMapper
         // Lost a race with another member over the same guest; nothing was written.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupGuestChanged
             => "Look at the guest again, then retry if it still makes sense: groupsplit groups guests <group-id>",
+        // The same, for anything else two saves can reach at once: an expense, a bill, a
+        // category, a rule, an imported row. Which one is the command that was run.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.ConcurrentChange
+            => "Somebody else changed it at the same moment and nothing was saved. "
+               + "Read it again, then rerun the command if it still makes sense.",
         // The edit is not wrong in itself; the person it would move has gone. Say what is
         // still open, so the caller does not try the same thing a different way.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.TransactionMovesDepartedBalance

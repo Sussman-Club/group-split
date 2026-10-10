@@ -103,6 +103,10 @@ public static class ErrorMessages
         // People tab re-reads on the change announcement, so looking again is enough.
         [ErrorCodes.GroupGuestChanged] =
             "Someone else changed this guest at the same moment, so nothing was done. Look again and try once more.",
+        // Two saves of the same thing landed together and this one lost; nothing was
+        // written. Re-reading shows what the other one did.
+        [ErrorCodes.ConcurrentChange] =
+            "Someone else changed this at the same moment, so nothing was saved. Look again and try once more.",
         [ErrorCodes.GroupMemberNotSettled] =
             "Nobody can leave or be removed while they still owe or are owed money in this group. Settle up first.",
         [ErrorCodes.AccountNotSettled] = "Settle up in every group before deleting your account.",

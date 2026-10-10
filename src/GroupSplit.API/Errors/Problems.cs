@@ -43,6 +43,7 @@ public static class Problems
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group",
 
         [ErrorCodes.GroupMemberNotSettled] = "Member has an outstanding balance",
+        [ErrorCodes.ConcurrentChange] = "Changed by somebody else at the same moment",
         [ErrorCodes.AccountNotSettled] = "Account has outstanding balances",
         [ErrorCodes.TransactionPayerNotInGroup] = "Payer is not a member of the group",
         [ErrorCodes.SplitUserNotInGroup] = "A share names someone outside the group",
