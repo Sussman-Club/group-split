@@ -233,8 +233,13 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
     {
         var stem = Stem(user);
 
+        // Whatever the case, as the name index compares: a rule somebody called "all for ana"
+        // takes "All for Ana" too, and missing it here would choose a name the insert can
+        // only ever lose on.
+        var lowered = stem.ToLowerInvariant();
+
         var taken = await context.Set<SplitRule>()
-            .Where(rule => rule.Group.Id == groupId && rule.Id != except && rule.Name.StartsWith(stem))
+            .Where(rule => rule.Group.Id == groupId && rule.Id != except && rule.Name.ToLower().StartsWith(lowered))
             .Select(rule => rule.Name)
             .ToListAsync(ct);
 

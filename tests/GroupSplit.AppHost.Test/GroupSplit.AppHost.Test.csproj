@@ -48,6 +48,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GroupSplit.AppHost\GroupSplit.AppHost.csproj" />
     <ProjectReference Include="..\..\src\GroupSplit.Data.PostgreSQL\GroupSplit.Data.PostgreSQL.csproj" />
+    <!-- The migrations themselves, so a test can migrate a database of its own to a chosen
+         point and give a migration the data it has to cope with. -->
+    <ProjectReference Include="..\..\src\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
     <!-- The domain services, so the queries they build can be run against the real
          provider. The unit suite runs them on the in-memory provider, which evaluates
          whatever it cannot translate instead of refusing, so a query that Npgsql rejects

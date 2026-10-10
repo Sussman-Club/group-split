@@ -406,6 +406,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<DateTimeOffset?>("LeftAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("LeftByUserId")

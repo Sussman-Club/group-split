@@ -108,5 +108,11 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
             entity.Property(row => row.RawJson).HasColumnType("jsonb");
         });
 
+        // Names are unique in a group whatever their case: the services refuse "food" beside
+        // "Food" because a member cannot tell the two apart in a picker, and the index has to
+        // say the same or two requests at once both get in. The indexes are on lower("Name"),
+        // which the model cannot express, so the migration that made them
+        // (CaseInsensitiveCategoryAndRuleNames) writes them by hand under the names declared
+        // in AppDbContext.
     }
 }
