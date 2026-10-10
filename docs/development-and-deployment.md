@@ -400,8 +400,9 @@ rather than the service's 30, so a tunnel left over from webhook work goes away 
 ## The sign-in key ring
 
 The web app has a second, unrelated key ring. It protects the sign-in cookie, the
-antiforgery token, and the OIDC correlation, nonce and state cookies -- none of which is
-stored in the database, so this ring is nothing to do with the one above and the two never
+antiforgery token, the OIDC correlation, nonce and state cookies, and the sign-in tickets and
+tokens held in Redis (see [Sessions across a deploy](#sessions-across-a-deploy)) -- none of
+which is stored in the database, so this ring is nothing to do with the one above and the two never
 read each other's keys.
 
 It lives in a Docker volume mounted at the container's home directory, and
@@ -687,6 +688,12 @@ It carries a data volume and snapshots every thirty seconds, so the host rebooti
 stack being brought fully down costs at most the last few seconds of session writes rather
 than every session. Nothing in there is worth backing up -- the worst case is everybody
 signing in again.
+
+Both are encrypted with [the sign-in key ring](#the-sign-in-key-ring) before they are
+written, because what is in there is every signed-in person's refresh token, and the volume
+is a file on the host. An entry the ring cannot open -- one written in plain text before
+this was done, or under a key that has since been lost -- reads as nothing stored: that
+session is signed out and signs in again, and nothing fails.
 
 `CACHE_PASSWORD` is a required secret for the same reason `DB_SERVER_PASSWORD` is: Aspire
 generates one per publish otherwise, and the container is already running with the last one.
