@@ -112,7 +112,19 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
             // the bottom of their own list reads as a join that did not work.
             membership.ArchivedAt = null;
 
-            await context.SaveChangesAsync(ct);
+            try
+            {
+                await context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // The same race as the insert below, for somebody coming back: the other
+                // follow of the link reopened the row first, and LeftAt no longer says what
+                // this one read. They are in, which is what both asked for.
+                context.Entry(membership).State = EntityState.Detached;
+                return JoinOutcome.AlreadyAMember;
+            }
+
             outcome = JoinOutcome.Rejoined;
         }
         else

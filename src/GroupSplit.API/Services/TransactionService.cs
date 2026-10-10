@@ -221,8 +221,16 @@ public class TransactionService(
     /// record against, which is what four of the error codes this replaces were for.
     /// </remarks>
     public async ValueTask<Expense> Create(CreateTransactionRequest request,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        // In one transaction holding the group, so nobody named here can leave between being
+        // found in it and the expense naming them: the leave waits for this to commit and
+        // then sees the balance, or this waits for the leave and then sees them gone.
+        await dbContext.Atomically(userContext, () => Recorded(request, ct), ct);
+
+    private async Task<Expense> Recorded(CreateTransactionRequest request, CancellationToken ct)
     {
+        await dbContext.ShareGroups([request.GroupId], ct);
+
         var currentUser = userContext.User;
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
@@ -630,8 +638,17 @@ public class TransactionService(
     }
 
     public async ValueTask<Transaction> Update(Guid id, UpdateTransactionRequest request,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        // Holding the group it is in and the one it moves to, as recording does, for the same
+        // reason: an edit naming somebody must not land while they are leaving.
+        await dbContext.Atomically(userContext, () => Updated(id, request, ct), ct);
+
+    private async Task<Transaction> Updated(Guid id, UpdateTransactionRequest request, CancellationToken ct)
     {
+        await dbContext.ShareGroups(
+            [await ScopedTransaction(id).Select(candidate => candidate.GroupId).FirstOrDefaultAsync(ct), request.GroupId],
+            ct);
+
         var transaction = await ScopedTransaction(id)
             .Include(t => t.Group)
             .Include(t => t.Splits)
@@ -993,8 +1010,16 @@ public class TransactionService(
                select transaction;
     }
 
-    public async Task Delete(Guid id, CancellationToken ct = default)
+    public Task Delete(Guid id, CancellationToken ct = default) =>
+        // Holding the group: taking somebody's part out of it while they leave would leave
+        // them owed, or owing, the moment after their balance was read as square.
+        dbContext.Atomically(userContext, () => Deleted(id, ct), ct);
+
+    private async Task Deleted(Guid id, CancellationToken ct)
     {
+        await dbContext.ShareGroups(
+            [await ScopedTransaction(id).Select(candidate => candidate.GroupId).FirstOrDefaultAsync(ct)], ct);
+
         var transaction = await ScopedTransaction(id)
             .Include(candidate => candidate.Splits)
             .FirstOrDefaultAsync(ct);

@@ -400,8 +400,18 @@ public class GroupService(
                select user;
     }
 
-    public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
-        CancellationToken cancellationToken = default)
+    public Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
+        CancellationToken cancellationToken = default) =>
+        // Holding the group, as leaving does; see Leave.
+        context.Atomically(userContext, async () =>
+        {
+            await context.LockGroups([groupId], cancellationToken);
+
+            return await Removed(groupId, userId, cancellationToken);
+        }, cancellationToken);
+
+    private async Task<IQueryable<Group>> Removed(Guid groupId, Guid userId,
+        CancellationToken cancellationToken)
     {
         var currentUser = userContext.User;
         if (userId == currentUser.Id)
@@ -680,8 +690,18 @@ public class GroupService(
         return groupBalance;
     }
 
-    public async Task Settle(Guid groupId, SettleRequest request,
-        CancellationToken cancellationToken = default)
+    public Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default) =>
+        // Holding the group the way recording an expense does: a payment naming somebody
+        // must not land between their balance being read as square and their leaving.
+        context.Atomically(userContext, async () =>
+        {
+            await context.ShareGroups([groupId], cancellationToken);
+
+            await Settled(groupId, request, cancellationToken);
+        }, cancellationToken);
+
+    private async Task Settled(Guid groupId, SettleRequest request, CancellationToken cancellationToken)
     {
         var currentUser = userContext.User;
 
@@ -725,7 +745,20 @@ public class GroupService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task Leave(Guid groupId, CancellationToken cancellationToken = default)
+    public Task Leave(Guid groupId, CancellationToken cancellationToken = default) =>
+        // Holding the group from the checks to the save. Without it two members leaving
+        // together each saw the other still there and emptied the group, and an expense
+        // naming the member could land between their balance being read and their leaving,
+        // so they left owing. Recording money shares the same lock, so it waits for this or
+        // this waits for it -- and either way the later one sees the earlier.
+        context.Atomically(userContext, async () =>
+        {
+            await context.LockGroups([groupId], cancellationToken);
+
+            await Left(groupId, cancellationToken);
+        }, cancellationToken);
+
+    private async Task Left(Guid groupId, CancellationToken cancellationToken)
     {
         var user = userContext.User;
 

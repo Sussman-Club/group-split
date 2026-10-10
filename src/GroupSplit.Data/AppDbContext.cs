@@ -75,6 +75,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                             .HasConversion<string>()
                             .HasMaxLength(16);
 
+                        // Every departure and every return changes it, so of two at once --
+                        // following a link back in twice -- the second matches no row and
+                        // fails instead of writing the return a second time.
+                        join.Property(membership => membership.LeftAt).IsConcurrencyToken();
+
                         // Who ended it, kept only while that account exists.
                         join.HasOne<User>()
                             .WithMany()

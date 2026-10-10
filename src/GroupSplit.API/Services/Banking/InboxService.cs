@@ -135,6 +135,22 @@ public sealed class InboxService(
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)
     {
+        // One transaction with the row claimed first, so filing it twice -- a double click,
+        // two tabs, the bulk action and the single one together -- or filing it while it is
+        // being linked is one expense and one refusal. The second waits for the first and
+        // then reads the row as filed, where it used to pass the same check, write a second
+        // expense, and fail on the link with a 500 that left that expense behind.
+        var expense = await dbContext.Atomically(userContext, () => Filed(id, request, ct), ct);
+
+        await receiptAttachments.AttachToExpense(id, expense.Id, ct);
+
+        return expense;
+    }
+
+    private async Task<Expense> Filed(Guid id, FileBankTransactionRequest request, CancellationToken ct)
+    {
+        await dbContext.LockBankTransaction(id, ct);
+
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -203,7 +219,6 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
-        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }
@@ -240,6 +255,18 @@ public sealed class InboxService(
 
     public async Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default)
     {
+        // Claimed the way filing claims it, so the two cannot both take the row.
+        var expense = await dbContext.Atomically(userContext, () => Linked(id, request, ct), ct);
+
+        await receiptAttachments.AttachToExpense(id, expense.Id, ct);
+
+        return expense;
+    }
+
+    private async Task<Expense> Linked(Guid id, LinkBankTransactionRequest request, CancellationToken ct)
+    {
+        await dbContext.LockBankTransaction(id, ct);
+
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -254,6 +281,11 @@ public sealed class InboxService(
                     "This is money coming in, so it is not an expense to attach to one.")
                 .WithExtension("amount", row.Amount);
         }
+
+        // And the expense, after the row: two rows linked to one expense at once would
+        // otherwise both find it free, and the second link would overwrite the first and
+        // leave that row filed against nothing.
+        await dbContext.LockTransaction(request.TransactionId, ct);
 
         var expense = await Mine(request.TransactionId, ct);
 
@@ -286,7 +318,6 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
-        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }

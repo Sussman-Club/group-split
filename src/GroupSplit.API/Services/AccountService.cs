@@ -26,6 +26,7 @@ public interface IAccountService
 }
 
 public sealed class AccountService(
+    ICurrentUser userContext,
     IGroupService groups,
     ILoginDeletion logins,
     TimeProvider clock,
@@ -50,6 +51,36 @@ public sealed class AccountService(
     public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
     {
+        // Leaving every group at once, so holding every group the way leaving one does: an
+        // expense naming them cannot land between their balances being read and the save.
+        var (outstanding, pending) = await context.Atomically(userContext, async () =>
+        {
+            await context.LockGroups(await context.Set<GroupMembership>()
+                .Where(membership => membership.UserId == userId)
+                .Select(membership => membership.GroupId)
+                .ToListAsync(cancellationToken), cancellationToken);
+
+            return await Deleted(userId, cancellationToken);
+        }, cancellationToken);
+
+        // Once the deletion is committed, and outside the transaction: Keycloak is another
+        // system, a login deleted there cannot be rolled back with a failed commit here, and
+        // the groups should not stay locked while it answers.
+        if (pending is not null)
+        {
+            await DeleteLoginNow(pending, cancellationToken);
+        }
+
+        return outstanding;
+    }
+
+    /// <summary>
+    /// The deletion itself, saved but not yet committed, and the login deletion it now owes
+    /// Keycloak, if any.
+    /// </summary>
+    private async Task<(IReadOnlyList<OutstandingBalance> Outstanding, PendingLoginDeletion? Pending)> Deleted(
+        Guid userId, CancellationToken cancellationToken)
+    {
         var user = await context.Set<User>()
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
@@ -59,7 +90,7 @@ public sealed class AccountService(
         // than be one -- a deleted account cannot sign in to ask twice.
         if (user.Kind == UserKind.Deleted)
         {
-            return [];
+            return ([], null);
         }
 
         await context.Entry(user).Collection(entity => entity.Groups)
@@ -95,7 +126,7 @@ public sealed class AccountService(
 
         if (outstanding.Count > 0)
         {
-            return outstanding;
+            return (outstanding, null);
         }
 
         foreach (var group in sharedGroups)
@@ -137,12 +168,7 @@ public sealed class AccountService(
         // owed without the account having gone, or the other way round.
         await context.SaveChangesAsync(cancellationToken);
 
-        if (pending is not null)
-        {
-            await DeleteLoginNow(pending, cancellationToken);
-        }
-
-        return outstanding;
+        return (outstanding, pending);
     }
 
     /// <summary>

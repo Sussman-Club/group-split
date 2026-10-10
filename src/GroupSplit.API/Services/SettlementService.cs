@@ -132,9 +132,20 @@ public class SettlementService(
     IGroupParticipants participants,
     AppDbContext context) : ISettlementService
 {
-    public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
+        CancellationToken cancellationToken = default) =>
+        // Holding the group from the balance read to the save, so pressing the button twice
+        // settles once: the second waits, reads the balance the first one cleared, and has
+        // nothing to settle. Two reads of the same balance each paying it in full used to
+        // leave the debtor owed the whole amount back.
+        context.Atomically(userContext, () => SettledUp(groupId, request, cancellationToken),
+            cancellationToken);
+
+    private async Task<SettleUpResponse> SettledUp(Guid groupId, SettleUpRequest request,
+        CancellationToken cancellationToken)
     {
+        await context.LockGroups([groupId], cancellationToken);
+
         // Scoped to the caller's own groups, so a group they are not in is not found rather
         // than empty -- an empty answer here would read as "already settled".
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
@@ -181,8 +192,19 @@ public class SettlementService(
         };
     }
 
-    public async Task<SettlementPayment> RecordRepayment(Guid groupId,
-        RecordRepaymentRequest request, CancellationToken cancellationToken = default)
+    public Task<SettlementPayment> RecordRepayment(Guid groupId,
+        RecordRepaymentRequest request, CancellationToken cancellationToken = default) =>
+        // Holding the group the way recording an expense does: a repayment naming somebody
+        // must not land between their balance being read as square and their leaving.
+        context.Atomically(userContext, async () =>
+        {
+            await context.ShareGroups([groupId], cancellationToken);
+
+            return await RecordedRepayment(groupId, request, cancellationToken);
+        }, cancellationToken);
+
+    private async Task<SettlementPayment> RecordedRepayment(Guid groupId,
+        RecordRepaymentRequest request, CancellationToken cancellationToken)
     {
         // Scoped to the caller's own groups, as everywhere else: a group they are not in is
         // not found, rather than one they can write repayments into.
@@ -251,8 +273,22 @@ public class SettlementService(
         return new SettlementPlanResponse(owed - youOwe, owed, youOwe, youPay, owedToYou, lastSettled);
     }
 
-    public async Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
+        CancellationToken cancellationToken = default) =>
+        // Settling up's guard, over every group the payment could be spread across: which
+        // ones those are is only known from the balances it is about to read.
+        context.Atomically(userContext, async () =>
+        {
+            await context.LockGroups(await context.Set<GroupMembership>()
+                .Where(membership => membership.UserId == userContext.User.Id)
+                .Select(membership => membership.GroupId)
+                .ToListAsync(cancellationToken), cancellationToken);
+
+            return await SettledWithPerson(request, cancellationToken);
+        }, cancellationToken);
+
+    private async Task<SettleWithPersonResponse> SettledWithPerson(SettleWithPersonRequest request,
+        CancellationToken cancellationToken)
     {
         var caller = userContext.User;
 
