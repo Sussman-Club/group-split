@@ -39,6 +39,7 @@ branches on one member of it, `code`, and shows people a message of its own choo
 | 403 | Forbidden | `ForbiddenException` | You are known and may not do this. |
 | 404 | Not found | `NotFoundException`, or `Problems.NotFound(...)` from an endpoint | What the URL names, or what the body refers to, does not exist for you. A resource in someone else's group answers this way too: whether it exists is not yours to learn. |
 | 409 | Conflict | `ConflictException`, or `Problems.Conflict(...)` from an endpoint | The request is fine, the current state refuses it. Something has to change first. |
+| 429 | Too many requests | the rate limiter, never thrown | Wait `retryAfter` seconds and send the same request again. |
 | 500 | Bug | anything else | Our fault. The body carries only the trace id. |
 
 ## The code catalog
@@ -91,6 +92,7 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. Leaving is `DELETE /groups/{id}/members/me`. |
 | `MERCHANT_EDIT_FORBIDDEN` | A rename, a new logo or a deletion of a merchant, by anybody. A merchant is shared by every group that has spent there, so any of the three changes what other people see on their own expenses, and the app has no role entitled to decide that for them. Answered before the merchant is looked up, so it is the same whether the id exists or not. To change where one expense was spent, point the expense at a different merchant. |
 | `ACCOUNT_DELETED` | The token is valid and its subject belongs to an account that has been deleted. Answered by every authenticated route, before the route itself runs. The login is deleted from Keycloak along with the account, so this is only ever seen in the gap: a token issued before the deletion, or a sign-in while Keycloak could not yet be reached to delete the login. Nothing is provisioned in the account's place, and signing in again will not help. See [account deletion](account-deletion.md). |
+| `CROSS_SITE_REQUEST_REFUSED` | Answered by the web app, not the API: a write (anything but `GET`, `HEAD` or `OPTIONS`) reached the cookie-authenticated `/api` route carrying neither `Sec-Fetch-Site: same-origin`, which every current browser sends on the app's own requests, nor the `X-GroupSplit-Request` header the app's own client adds for a browser too old to send that. Nothing reached the API. Token-bearing clients use `/native/api` and never see this. |
 
 ### Conflict (409)
 
@@ -167,6 +169,16 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 | `RECEIPT_DOES_NOT_ADD_UP` | A bill contradicts itself, or has stopped describing its expense: the subtotal, tax and tip do not come to the total, the lines do not come to the subtotal, or the total is not the expense's amount. The last one drifts apart after the bill is saved -- an imported row linked to an expense recorded for a different figure -- so it is checked again at division time and names the bill rather than the shares. An edit to the amount of an expense divided by its bill re-totals the bill instead, the difference on its tip, and is refused with this code when it would take the tip below nothing. Caught before the division rather than after, because a refusal about the shares cannot say which half of the bill was mistyped. | The figures it compared: `subtotal`, `tax`, `tip`, `total`, or `itemTotal` and `subtotal`, or `total` and `amount` (with `tip` and `difference` on an amount edit). |
 | `RECEIPT_ITEMS_MISSING_RULE` | Lines on the bill have no split rule on them, so it cannot be divided yet. Refused rather than spread over everybody: a line somebody forgot and one the table really did share look identical from here, and charging five people for one person's steak is the kind of wrong nobody checks for afterwards. The bill is still saved and still readable in that state -- it simply will not divide. | `itemIds`, so a client can say which without holding the whole receipt. |
 | `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode -- both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
+
+### Too many requests (429)
+
+The caller has used up an allowance. Counted per signed-in person (the token's `sub`), never per
+address, in a fixed window per kind of request; nothing was done, and the identical request
+succeeds once the wait is over. The `Retry-After` header carries the same number of seconds.
+
+| Code | When | Extra members |
+| --- | --- | --- |
+| `RATE_LIMITED` | Too many requests of one kind in the window. The kinds, and their defaults per hour: **transcription** (30) -- `POST /receipts/transcribe` and both attachment `/transcribe` routes; **bank** (30) -- `POST /bank-connections/link-token`, `POST /bank-connections`, and a connection's `/refresh` and `/sync`; **invitations** (60) -- adding guests, issuing a guest's link, `POST /groups/{id}/invitations`, `POST /groups/{id}/join-links`, and claiming, declining or accepting one. Each is configurable under `RateLimits:<Kind>:PermitLimit` and `RateLimits:<Kind>:Window`. | `retryAfter`: whole seconds to wait. |
 
 ### Bad gateway (502)
 

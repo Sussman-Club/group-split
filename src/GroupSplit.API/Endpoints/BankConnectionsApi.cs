@@ -1,4 +1,5 @@
 using GroupSplit.API.Errors;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.Shared;
 
@@ -74,7 +75,8 @@ public static class BankConnectionsApi
                 .Produces<LinkTokenResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status502BadGateway);
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .RateLimitedAs(ApiRateLimitPolicies.Bank);
         }
 
         private RouteHandlerBuilder MapLink()
@@ -98,7 +100,8 @@ public static class BankConnectionsApi
                 // worth reading: the bank granted access and storing it failed, and the
                 // answer says whether that access was handed back.
                 .ProducesProblem(StatusCodes.Status500InternalServerError)
-                .ProducesProblem(StatusCodes.Status502BadGateway);
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .RateLimitedAs(ApiRateLimitPolicies.Bank);
         }
 
         private RouteHandlerBuilder MapRefresh()
@@ -117,7 +120,8 @@ public static class BankConnectionsApi
                 .Produces<BankConnectionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status502BadGateway);
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .RateLimitedAs(ApiRateLimitPolicies.Bank);
         }
 
         /// <summary>
@@ -137,7 +141,8 @@ public static class BankConnectionsApi
                 .WithName("SyncBankConnection")
                 .Produces(StatusCodes.Status202Accepted)
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .RateLimitedAs(ApiRateLimitPolicies.Bank);
         }
 
         private RouteHandlerBuilder MapUnlink()

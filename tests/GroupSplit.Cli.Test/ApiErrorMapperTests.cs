@@ -247,6 +247,55 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("502", mapped.Error.Message);
     }
 
+    /// <summary>
+    /// A 429 is neither a fault (1) nor a wrong argument (3): the identical command works
+    /// once the wait is over, so it has its own exit code and says how long.
+    /// </summary>
+    [Fact]
+    public void Too_many_requests_has_its_own_exit_code_and_says_how_long_to_wait()
+    {
+        var mapped = ApiErrorMapper.Map(Exception(429, new
+        {
+            title = "Too many requests of this kind for now",
+            detail = "Too many requests of this kind. Wait before trying again.",
+            code = SharedErrorCodes.RateLimited,
+            retryAfter = 1740
+        }));
+
+        Assert.Equal(ExitCodes.RateLimited, mapped.ExitCode);
+        Assert.Equal(SharedErrorCodes.RateLimited, mapped.Error.Code);
+        Assert.Equal(1740, mapped.Error.RetryAfter);
+        Assert.Contains("1740 seconds", mapped.Error.Remediation, StringComparison.Ordinal);
+
+        // On the envelope an agent parses, not only in the prose.
+        var envelope = JsonSerializer.SerializeToElement(mapped.Error);
+        Assert.Equal(1740, envelope.GetProperty("retryAfter").GetInt32());
+    }
+
+    /// <summary>
+    /// A proxy in front can answer 429 with no problem body at all; the header still says
+    /// how long, and the code still says what happened.
+    /// </summary>
+    [Fact]
+    public void Too_many_requests_from_a_proxy_reads_the_retry_after_header()
+    {
+        var headers = new Dictionary<string, IEnumerable<string>> { ["Retry-After"] = ["30"] };
+
+        var mapped = ApiErrorMapper.Map(new ApiException("failed", 429, "<html>slow down</html>", headers, null));
+
+        Assert.Equal(ExitCodes.RateLimited, mapped.ExitCode);
+        Assert.Equal(SharedErrorCodes.RateLimited, mapped.Error.Code);
+        Assert.Equal(30, mapped.Error.RetryAfter);
+    }
+
+    [Fact]
+    public void Retry_after_is_left_off_every_other_envelope()
+    {
+        var mapped = ApiErrorMapper.Map(new ApiException("failed", 404, null, Headers, null));
+
+        Assert.False(JsonSerializer.SerializeToElement(mapped.Error).TryGetProperty("retryAfter", out _));
+    }
+
     [Fact]
     public void A_status_with_no_body_falls_back_to_the_generic_code_for_that_status()
     {

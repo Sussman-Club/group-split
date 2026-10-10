@@ -73,6 +73,8 @@ public static class Problems
         [ErrorCodes.SplitRuleHistoryInvalid] = "The history is not a chain",
         [ErrorCodes.BankTransactionIsCredit] = "Money coming in cannot be filed as an expense",
 
+        [ErrorCodes.RateLimited] = "Too many requests of this kind for now",
+
         [ErrorCodes.BankProviderUnavailable] = "The bank service did not answer",
         [ErrorCodes.ReceiptTranscriptionProviderUnavailable] = "The receipt transcription service did not answer"
     };

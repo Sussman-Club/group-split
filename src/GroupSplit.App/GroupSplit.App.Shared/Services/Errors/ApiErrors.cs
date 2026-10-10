@@ -96,11 +96,16 @@ public static class ApiErrors
     /// code alone does not. A stale link is refused the same way to somebody who left and to
     /// somebody who was removed, and only the problem's reason tells the two apart.
     /// </summary>
-    private static string RefusalMessage(string code, int? status, ProblemDetails? problem) =>
-        code == ErrorCodes.GroupRejoinNeedsNewInvitation &&
-        problem?.GetExtension<string>("leftReason", GroupSplitSerializer.Options) == "Removed"
-            ? ErrorMessages.RejoinAfterRemoval
-            : ErrorMessages.For(code, status);
+    private static string RefusalMessage(string code, int? status, ProblemDetails? problem) => code switch
+    {
+        ErrorCodes.GroupRejoinNeedsNewInvitation
+            when problem?.GetExtension<string>("leftReason", GroupSplitSerializer.Options) == "Removed"
+            => ErrorMessages.RejoinAfterRemoval,
+        // The wait is the one thing worth saying, and only the problem knows it.
+        ErrorCodes.RateLimited => ErrorMessages.RateLimited(
+            problem?.GetExtension<int?>(ProblemDetails.RetryAfterExtension, GroupSplitSerializer.Options)),
+        _ => ErrorMessages.For(code, status)
+    };
 
     /// <summary>Problem details out of a raw body, or null when the body is not that.</summary>
     private static ProblemDetails? Parse(string? body)

@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using System.Text;
 using Duende.AccessTokenManagement;
 using Duende.AccessTokenManagement.OpenIdConnect;
 using GroupSplit.App.Web.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -130,7 +132,7 @@ public class ServerSideTokenStoreTest
     {
         var cache = new RecordingCache();
 
-        var store = new ServerSideTokenStore(cache, NullLogger<ServerSideTokenStore>.Instance);
+        var store = Build(cache);
 
         await store.StoreTokenAsync(SignedIn(), Token("an-access-token", "a-refresh-token"));
 
@@ -141,13 +143,80 @@ public class ServerSideTokenStoreTest
             $"tokens are kept {written.SlidingExpiration}, less than a remembered session");
     }
 
-    /// <summary>Remembers how the entry was written, which is what the test above is about.</summary>
+    /// <summary>
+    /// Redis snapshots to its volume every thirty seconds, so whatever is written here is on
+    /// a disk. A refresh token in plain text there is a session anybody with the volume can
+    /// carry on.
+    /// </summary>
+    [Fact]
+    public async Task What_is_written_to_the_cache_is_not_the_tokens_in_plain_text()
+    {
+        var cache = new RecordingCache();
+        var store = Build(cache);
+
+        await store.StoreTokenAsync(SignedIn(), Token("an-access-token", "a-refresh-token"));
+
+        var written = Encoding.UTF8.GetString(Assert.IsType<byte[]>(cache.LastValue));
+
+        Assert.DoesNotContain("a-refresh-token", written, StringComparison.Ordinal);
+        Assert.DoesNotContain("an-access-token", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every entry in Redis at the moment this deploys was written in plain text. Those are
+    /// answered as nothing stored -- the person signs in again -- not as a fault, and the
+    /// unreadable entry is dropped rather than tried again on every request.
+    /// </summary>
+    [Fact]
+    public async Task An_entry_written_in_plain_text_is_treated_as_absent()
+    {
+        var cache = new RecordingCache();
+        var store = Build(cache);
+        var user = SignedIn();
+        var key = Assert.IsType<string>(SessionTokenKey.For(user));
+
+        await cache.SetStringAsync(key, PlainTextEntry);
+
+        var read = await store.GetTokenAsync(user);
+
+        Assert.False(read.WasSuccessful(out _, out var failure));
+        Assert.Equal("no_stored_token", failure.Error);
+        Assert.Null(await cache.GetAsync(key));
+    }
+
+    /// <summary>What the store wrote before its entries were protected.</summary>
+    private static readonly string PlainTextEntry =
+        ("{'AccessToken':'an-access-token','AccessTokenType':'Bearer','ClientId':'web-app',"
+         + "'Expiration':'2030-01-01T00:00:00+00:00','RefreshToken':'a-refresh-token'}")
+        .Replace("'", ((char)34).ToString());
+
+    /// <summary>
+    /// Likewise one protected under a key the ring no longer has -- a ring lost with its
+    /// volume, say.
+    /// </summary>
+    [Fact]
+    public async Task An_entry_another_key_ring_wrote_is_treated_as_absent()
+    {
+        var cache = new RecordingCache();
+        var user = SignedIn();
+
+        await Build(cache, new EphemeralDataProtectionProvider())
+            .StoreTokenAsync(user, Token("an-access-token", "a-refresh-token"));
+
+        var read = await Build(cache, new EphemeralDataProtectionProvider()).GetTokenAsync(user);
+
+        Assert.False(read.Succeeded);
+    }
+
+    /// <summary>Remembers how the entry was written, which is what the tests above are about.</summary>
     private sealed class RecordingCache : IDistributedCache
     {
         private readonly MemoryDistributedCache _inner = new(
             new OptionsWrapper<MemoryDistributedCacheOptions>(new MemoryDistributedCacheOptions()));
 
         public DistributedCacheEntryOptions? LastOptions { get; private set; }
+
+        public byte[]? LastValue { get; private set; }
 
         public byte[]? Get(string key) => _inner.Get(key);
 
@@ -157,6 +226,7 @@ public class ServerSideTokenStoreTest
         public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
         {
             LastOptions = options;
+            LastValue = value;
             _inner.Set(key, value, options);
         }
 
@@ -164,6 +234,7 @@ public class ServerSideTokenStoreTest
             string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
         {
             LastOptions = options;
+            LastValue = value;
 
             return _inner.SetAsync(key, value, options, token);
         }
@@ -179,10 +250,11 @@ public class ServerSideTokenStoreTest
             _inner.RemoveAsync(key, token);
     }
 
-    private static ServerSideTokenStore Build() =>
+    private static ServerSideTokenStore Build(IDistributedCache? cache = null, IDataProtectionProvider? protection = null) =>
         new(
-            new MemoryDistributedCache(
+            cache ?? new MemoryDistributedCache(
                 new OptionsWrapper<MemoryDistributedCacheOptions>(new MemoryDistributedCacheOptions())),
+            protection ?? new EphemeralDataProtectionProvider(),
             NullLogger<ServerSideTokenStore>.Instance);
 
     /// <summary>A principal as it comes out of a sign-in, carrying its session claim.</summary>

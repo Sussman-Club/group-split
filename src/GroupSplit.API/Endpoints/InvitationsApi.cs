@@ -1,4 +1,5 @@
 using GroupSplit.API.Errors;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Shared;
 
@@ -128,7 +129,8 @@ public static class InvitationsApi
                 .WithName("ClaimInvitation")
                 .Produces<InvitationClaimedResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         /// <summary>
@@ -154,7 +156,8 @@ public static class InvitationsApi
                 })
                 .WithName("DeclineInvitation")
                 .Produces<InvitationClosedResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
 
         /// <summary>
@@ -197,7 +200,8 @@ public static class InvitationsApi
                 .WithName("AcceptJoinLink")
                 .Produces<JoinedGroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .RateLimitedAs(ApiRateLimitPolicies.Invitations);
         }
     }
 }

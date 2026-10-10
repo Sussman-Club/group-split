@@ -346,6 +346,28 @@
             }
         },
 
+        // Submits a POST as a full page load, for the one endpoint that has to
+        // be both: signing out ends in a redirect to Keycloak, which a fetch
+        // cannot follow, and it is a POST so another site cannot sign anybody
+        // out with a link. `fields` carries the antiforgery token.
+        postForm(action, fields) {
+            const form = document.createElement("form");
+            form.method = "post";
+            form.action = action;
+            form.hidden = true;
+
+            for (const [name, value] of Object.entries(fields ?? {})) {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        },
+
         // ------------------------------------------------------- plaid --
 
         // Plaid Link runs in the browser because it has to: the person's bank

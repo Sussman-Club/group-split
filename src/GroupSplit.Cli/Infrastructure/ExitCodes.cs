@@ -28,4 +28,11 @@ public static class ExitCodes
     /// confirmation envelope describing what would change.
     /// </summary>
     public const int ConfirmationRequired = 4;
+
+    /// <summary>
+    /// The server is limiting how often this kind of request may be made, and refused this
+    /// one. Nothing was done. The envelope's <c>retryAfter</c> says how many seconds to wait;
+    /// the identical command will succeed after that.
+    /// </summary>
+    public const int RateLimited = 5;
 }

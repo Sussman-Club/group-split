@@ -36,12 +36,13 @@ carries the whole of it.
 | `2` | Authentication: not signed in, expired, or refused. |
 | `3` | The invocation was wrong: bad usage, a rejected value, or no server configured. |
 | `4` | A mutation needs confirming. stdout carries the confirmation envelope. |
+| `5` | Rate limited: too many requests of one kind (receipt transcription, bank link and sync, invitations) in the window. Nothing was done. The envelope's `retryAfter` says how many seconds to wait; the same command then succeeds. |
 
 The distinction worth relying on is between 1 and 3: **3 means retrying will not help until
 something changes.** A parse error is 3, and so is a value the server rejected.
 
 Adding a code is a compatible change. Changing what an existing one means is not, so these
-five will not be redefined underneath you.
+six will not be redefined underneath you.
 
 ## The error envelope
 
@@ -60,6 +61,8 @@ On stderr, whenever a command fails:
 - `error` is prose for a person and may be reworded. Do not match on it.
 - `remediation` is written to be acted on, and often names the command that would help.
 - `traceId` is the API's own and matches its log line. Quote it when reporting a problem.
+- `retryAfter` appears only with exit code 5 (`RATE_LIMITED`): whole seconds until the same
+  command will be let through. Wait that long and run it once more; do not retry in a loop.
 
 ### Codes the CLI raises itself
 

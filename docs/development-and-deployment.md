@@ -117,7 +117,7 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `receipt-transcription-provider` | secret `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
-| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response for an investigation. Leave it off outside debugging. |
+| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response for an investigation, at Debug, so the API's `GroupSplit.API.Services.ReceiptTranscription.Veryfi` category has to be lowered to Debug too before anything is written. Leave both off outside debugging. |
 | `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
 | `azure-openai-endpoint`, `azure-openai-model` | secrets `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
 | `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
@@ -400,8 +400,9 @@ rather than the service's 30, so a tunnel left over from webhook work goes away 
 ## The sign-in key ring
 
 The web app has a second, unrelated key ring. It protects the sign-in cookie, the
-antiforgery token, and the OIDC correlation, nonce and state cookies -- none of which is
-stored in the database, so this ring is nothing to do with the one above and the two never
+antiforgery token, the OIDC correlation, nonce and state cookies, and the sign-in tickets and
+tokens held in Redis (see [Sessions across a deploy](#sessions-across-a-deploy)) -- none of
+which is stored in the database, so this ring is nothing to do with the one above and the two never
 read each other's keys.
 
 It lives in a Docker volume mounted at the container's home directory, and
@@ -688,6 +689,12 @@ stack being brought fully down costs at most the last few seconds of session wri
 than every session. Nothing in there is worth backing up -- the worst case is everybody
 signing in again.
 
+Both are encrypted with [the sign-in key ring](#the-sign-in-key-ring) before they are
+written, because what is in there is every signed-in person's refresh token, and the volume
+is a file on the host. An entry the ring cannot open -- one written in plain text before
+this was done, or under a key that has since been lost -- reads as nothing stored: that
+session is signed out and signs in again, and nothing fails.
+
 `CACHE_PASSWORD` is a required secret for the same reason `DB_SERVER_PASSWORD` is: Aspire
 generates one per publish otherwise, and the container is already running with the last one.
 
@@ -696,6 +703,24 @@ which is the price of the sessions surviving anything else. And running more tha
 replica would still race: the refresh concurrency control is in-process, so two replicas
 could exchange one refresh token at once -- and the Data Protection volume above is per-host,
 so a second host would need a shared ring as well.
+
+## Security headers and the cross-site check
+
+Every response the web app writes itself carries a content security policy, `X-Frame-Options:
+DENY`, `Referrer-Policy: strict-origin-when-cross-origin` and `nosniff`; outside development,
+HSTS for a year with subdomains. The policy is in `SecurityHeadersExtensions`, one directive per
+thing a page loads: `'wasm-unsafe-eval'` for the WebAssembly runtime, inline styles for
+MudBlazor, Google Fonts, Plaid Link, Plaid's logo hosts, and this origin's own WebSocket for the
+server-rendered mode. The import map is the page's one inline script and is let in by a nonce.
+Adding a script, a frame or a font from somewhere new means adding it there too -- the browser
+refuses it silently otherwise, with only a line in the console to say so.
+
+Responses under `/idp` are Keycloak's, and keep the headers Keycloak sends.
+
+Writes through the cookie-authenticated `/api` route must show they came from the app's own
+pages: `Sec-Fetch-Site: same-origin`, or the `X-GroupSplit-Request` header the WebAssembly
+client adds. Anything else is answered 403 `CROSS_SITE_REQUEST_REFUSED` and never forwarded.
+Signing out is a form `POST` to `/auth/logout` carrying the page's antiforgery token.
 
 ## A dashboard for the integration tests
 

@@ -16,6 +16,11 @@ public class ClientOptionsSetter(IWebAssemblyHostEnvironment hostEnvironment) : 
             };
 
             client.BaseAddress = uriBuilder.Uri;
+
+            // The /api route refuses a write it cannot tell came from this app's pages. The
+            // browser's Sec-Fetch-Site says so on its own; this says so in a browser that
+            // does not send that. See SameOriginRequest.
+            client.DefaultRequestHeaders.Add(SameOriginRequest.HeaderName, SameOriginRequest.HeaderValue);
         });
     }
 }

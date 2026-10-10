@@ -138,6 +138,7 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         builder.Services.AddDomainServices();
         builder.Services.AddApiValidation();
         builder.Services.AddApiErrorHandling();
+        builder.Services.AddApiRateLimiting();
 
         // The real host gets this from Aspire's RustFS resource. Endpoint tests should not
         // need a live object store just to resolve a route that happens to share the domain
@@ -162,6 +163,7 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         app.UseAuthentication();
         app.UseMiddleware<CurrentUserMiddleware>();
         app.UseAuthorization();
+        app.UseApiRateLimiting();
 
         app.MapDomainApi();
 

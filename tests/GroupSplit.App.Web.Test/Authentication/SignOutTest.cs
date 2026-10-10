@@ -4,6 +4,7 @@ using Duende.AccessTokenManagement.OpenIdConnect;
 using GroupSplit.App.Web.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -54,6 +55,7 @@ public class SignOutTest
         var tokenStore = new ServerSideTokenStore(
             new MemoryDistributedCache(
                 new OptionsWrapper<MemoryDistributedCacheOptions>(new MemoryDistributedCacheOptions())),
+            new EphemeralDataProtectionProvider(),
             NullLogger<ServerSideTokenStore>.Instance);
 
         var identity = new ClaimsIdentity(

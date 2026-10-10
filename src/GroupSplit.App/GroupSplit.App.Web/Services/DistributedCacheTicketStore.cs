@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace GroupSplit.App.Web.Services;
@@ -14,10 +16,24 @@ namespace GroupSplit.App.Web.Services;
 /// everything else sharing localhost. Past Kestrel's 32 KB header limit that
 /// surfaces as an HTTP 431.
 /// </para>
+/// <para>
+/// Encrypted with the web app's Data Protection ring, as the cookie it replaces was. The
+/// ticket is who somebody is, and the cache is Redis, which snapshots to a volume. A ticket
+/// the ring cannot open -- stored in plain text before this, or under a lost key -- is
+/// answered as missing, so the cookie naming it simply stops signing anybody in.
+/// </para>
 /// </summary>
-internal sealed class DistributedCacheTicketStore(IDistributedCache cache) : ITicketStore
+internal sealed class DistributedCacheTicketStore(
+    IDistributedCache cache,
+    IDataProtectionProvider dataProtection,
+    ILogger<DistributedCacheTicketStore> logger) : ITicketStore
 {
     private const string KeyPrefix = "gs-auth-ticket:";
+
+    /// <summary>The purpose tickets are protected under. Changing it signs everybody out.</summary>
+    internal const string ProtectorPurpose = "GroupSplit.App.Web.AuthTickets.v1";
+
+    private readonly IDataProtector _protector = dataProtection.CreateProtector(ProtectorPurpose);
 
     /// <summary>Fallback lifetime for a ticket that carries no absolute expiry.</summary>
     private static readonly TimeSpan DefaultLifetime = TimeSpan.FromHours(12);
@@ -44,14 +60,30 @@ internal sealed class DistributedCacheTicketStore(IDistributedCache cache) : ITi
             options.SetSlidingExpiration(DefaultLifetime);
         }
 
-        await cache.SetAsync(key, TicketSerializer.Default.Serialize(ticket), options);
+        await cache.SetAsync(key, _protector.Protect(TicketSerializer.Default.Serialize(ticket)), options);
     }
 
     public async Task<AuthenticationTicket?> RetrieveAsync(string key)
     {
         var payload = await cache.GetAsync(key);
 
-        return payload is null ? null : TicketSerializer.Default.Deserialize(payload);
+        if (payload is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return TicketSerializer.Default.Deserialize(_protector.Unprotect(payload));
+        }
+        catch (CryptographicException)
+        {
+            logger.LogInformation("A stored sign-in ticket could not be unprotected and is being discarded.");
+
+            await cache.RemoveAsync(key);
+
+            return null;
+        }
     }
 
     public Task RemoveAsync(string key) => cache.RemoveAsync(key);

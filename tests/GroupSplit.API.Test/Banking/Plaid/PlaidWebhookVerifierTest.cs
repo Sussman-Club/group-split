@@ -44,12 +44,13 @@ public class PlaidWebhookVerifierTest
     public async Task The_key_is_fetched_once_and_then_remembered()
     {
         const string body = """{"a":1}""";
+        const string other = """{"a":2}""";
         ServeKey();
 
         var verifier = Verifier();
 
         Assert.True(await verifier.VerifyAsync(Headers(Token(body)), body, Ct));
-        Assert.True(await verifier.VerifyAsync(Headers(Token(body)), body, Ct));
+        Assert.True(await verifier.VerifyAsync(Headers(Token(other)), other, Ct));
 
         // One fetch for two webhooks. Plaid asks that these be cached, and a second recorded
         // answer was never queued, so a second fetch would have thrown.
@@ -79,6 +80,61 @@ public class PlaidWebhookVerifierTest
         var accepted = await Verifier().VerifyAsync(Headers(token), body, Ct);
 
         Assert.False(accepted);
+    }
+
+    /// <summary>
+    /// The age check alone leaves five minutes in which a captured webhook can be sent again
+    /// as often as anybody likes.
+    /// </summary>
+    [Fact]
+    public async Task The_same_webhook_sent_twice_inside_the_window_is_refused_the_second_time()
+    {
+        const string body = """{"webhook_type":"TRANSACTIONS","webhook_code":"SYNC_UPDATES_AVAILABLE"}""";
+        ServeKey();
+        var verifier = Verifier();
+        var token = Token(body);
+
+        Assert.True(await verifier.VerifyAsync(Headers(token), body, Ct));
+
+        _clock.Advance(TimeSpan.FromMinutes(1));
+
+        Assert.False(await verifier.VerifyAsync(Headers(token), body, Ct));
+    }
+
+    /// <summary>
+    /// What is remembered is the pair. The same body signed again later is a new webhook --
+    /// Plaid sends identical notifications for the same item routinely.
+    /// </summary>
+    [Fact]
+    public async Task The_same_body_signed_again_later_is_a_new_webhook()
+    {
+        const string body = """{"webhook_type":"TRANSACTIONS","webhook_code":"SYNC_UPDATES_AVAILABLE"}""";
+        ServeKey();
+        var verifier = Verifier();
+
+        Assert.True(await verifier.VerifyAsync(Headers(Token(body)), body, Ct));
+
+        _clock.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.True(await verifier.VerifyAsync(Headers(Token(body)), body, Ct));
+    }
+
+    /// <summary>
+    /// A forgery is refused before it is remembered, so it cannot use up the slot the genuine
+    /// webhook with the same body and second would need.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_webhook_is_not_remembered()
+    {
+        const string body = """{"a":1}""";
+        ServeKey();
+        var verifier = Verifier();
+        var genuine = Token(body);
+        var parts = genuine.Split('.');
+        var forged = $"{parts[0]}.{parts[1]}.{Convert.ToBase64String(new byte[64]).TrimEnd('=').Replace('+', '-').Replace('/', '_')}";
+
+        Assert.False(await verifier.VerifyAsync(Headers(forged), body, Ct));
+        Assert.True(await verifier.VerifyAsync(Headers(genuine), body, Ct));
     }
 
     [Fact]

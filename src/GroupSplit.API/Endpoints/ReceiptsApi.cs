@@ -47,7 +47,12 @@ public static class ReceiptsApi
                 .ProducesProblem(StatusCodes.Status400BadRequest)
                 .ProducesProblem(StatusCodes.Status409Conflict)
                 .ProducesProblem(StatusCodes.Status502BadGateway)
-                .DisableAntiforgery();
+                .DisableAntiforgery()
+                // The same ceiling an attachment upload has: the file is held to 10 MB, and the
+                // rest is room for the multipart framing. Without it Kestrel's 30 MB default
+                // applied, and the form is buffered in full before anything reads the length.
+                .WithMetadata(new RequestSizeLimitAttribute(ReceiptAttachmentsApi.MaximumRequestLength))
+                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
 
             return group;
         }

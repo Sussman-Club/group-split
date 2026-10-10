@@ -26,6 +26,27 @@ public static class ErrorMessages
 
     private const string ServerPrefix = "Something went wrong on our side. Please try again in a moment.";
 
+    private const string RateLimitedPrefix = "You have done that a lot in a short time.";
+
+    /// <summary>
+    /// The 429 message, saying how long to wait when the API said. Rounded up to whole
+    /// minutes past the first one: "try again in 3,412 seconds" is a number nobody can use.
+    /// </summary>
+    public static string RateLimited(int? retryAfterSeconds)
+    {
+        if (retryAfterSeconds is not { } seconds || seconds <= 0)
+            return ByCode[ErrorCodes.RateLimited];
+
+        if (seconds < 60)
+            return $"{RateLimitedPrefix} Please try again in {seconds} seconds.";
+
+        var minutes = (seconds + 59) / 60;
+
+        return minutes == 1
+            ? $"{RateLimitedPrefix} Please try again in a minute."
+            : $"{RateLimitedPrefix} Please try again in {minutes} minutes.";
+    }
+
     /// <summary>
     /// The 5xx message carries the trace id: it is the one thing that lets whoever reads a
     /// bug report find the log line, and the person seeing it has nothing else to quote.
@@ -172,6 +193,10 @@ public static class ErrorMessages
         [ErrorCodes.SplitRuleHistoryInvalid] =
             "The entries do not describe a history: each one has to start after the one before it.",
 
+        [ErrorCodes.RateLimited] = RateLimitedPrefix + " Please wait a few minutes and try again.",
+        [ErrorCodes.CrossSiteRequestRefused] =
+            "That request did not come from this app's own pages, so it was not sent. Reload the page and try again.",
+
         [ErrorCodes.BankConnectionNotFound] = "That linked bank no longer exists.",
         [ErrorCodes.BankTransactionNotFound] = "That imported transaction is no longer in your inbox.",
         [ErrorCodes.BankSyncUnavailable] = "Bank sync is not switched on for this app yet.",
@@ -236,6 +261,7 @@ public static class ErrorMessages
         403 => ByCode[ErrorCodes.Forbidden],
         404 => ByCode[ErrorCodes.NotFound],
         409 => ByCode[ErrorCodes.Conflict],
+        429 => ByCode[ErrorCodes.RateLimited],
         >= 500 => ServerPrefix,
         _ => Generic
     };

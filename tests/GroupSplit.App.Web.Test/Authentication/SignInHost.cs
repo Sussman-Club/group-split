@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +23,27 @@ internal sealed class SignInHost(WebApplication app) : IAsyncDisposable
 {
     public HttpClient Client { get; } = app.GetTestServer().CreateClient();
 
+    private const string AntiforgeryPath = "/test/antiforgery";
+
+    /// <summary>
+    /// A form post the way the app's own page sends it: the antiforgery field in the body
+    /// and its cookie on the request.
+    /// </summary>
+    public async Task<HttpRequestMessage> FormPostFromOwnPage(string path)
+    {
+        using var issued = await Client.GetAsync(AntiforgeryPath, TestContext.Current.CancellationToken);
+        var field = (await issued.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Split('=', 2);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string> { [field[0]] = field[1] })
+        };
+
+        request.Headers.Add("Cookie", issued.Headers.GetValues("Set-Cookie").Select(cookie => cookie.Split(';')[0]));
+
+        return request;
+    }
+
     public IServiceProvider Services => app.Services;
 
     /// <summary>Configures the host the way the deployed app is, without starting it.</summary>
@@ -41,6 +64,7 @@ internal sealed class SignInHost(WebApplication app) : IAsyncDisposable
 
         builder.AddGroupSplitAuthentication();
         builder.Services.AddAuthorizationBuilder();
+        builder.Services.AddAntiforgery();
 
         // Stands in for the realm's discovery document. Replaces the manager rather
         // than setting Options.Configuration: the handler only reads the latter while
@@ -61,8 +85,18 @@ internal sealed class SignInHost(WebApplication app) : IAsyncDisposable
 
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseAntiforgery();
 
         app.MapIdentity();
+
+        // What a page rendered by the app carries: an antiforgery token for its forms, with
+        // the cookie it is checked against.
+        app.MapGet(AntiforgeryPath, (IAntiforgery antiforgery, HttpContext context) =>
+        {
+            var tokens = antiforgery.GetAndStoreTokens(context);
+
+            return Results.Text($"{tokens.FormFieldName}={tokens.RequestToken}");
+        });
 
         return app;
     }
