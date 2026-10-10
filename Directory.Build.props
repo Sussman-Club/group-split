@@ -1,0 +1,25 @@
+<Project>
+
+    <!-- What every project in the repository agrees on, said once. A property belongs here
+         only when no project sets it differently; anything one project needs stays in its
+         own csproj. -->
+    <PropertyGroup>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <!-- The SDK's own rules at the level of the .NET 10 SDK, pinned rather than left at
+             "latest": CI builds with -warnaserror and global.json rolls the SDK forward, so
+             a floating level would let a newer SDK's rules fail a build nobody changed.
+             Raise it on purpose, with the warnings it brings fixed in the same change. -->
+        <AnalysisLevel>10.0</AnalysisLevel>
+    </PropertyGroup>
+
+    <!-- Aspire's experimental APIs, which the AppHost and its tests use on purpose: each one
+         is an Aspire feature the stack depends on before Aspire calls it stable. Listed once
+         here instead of a #pragma at the top of every file that touches one. A new ID means
+         a new experimental API in use; add it here knowingly. -->
+    <PropertyGroup>
+        <NoWarn>$(NoWarn);ASPIREBROWSERLOGS001;ASPIRECOMPUTE003;ASPIRECSHARPAPPS001;ASPIREDOTNETPROJECT001;ASPIREDOTNETTOOL;ASPIREINTERACTION001;ASPIREPERSISTENCE001;ASPIREPIPELINES001;ASPIREPIPELINES003;ASPIREPOSTGRES001;ASPIREPROBES001;ASPIREPROJECTS001;ASPIRETERMINAL001</NoWarn>
+    </PropertyGroup>
+
+</Project>

@@ -3,8 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.AppHost.Extensions;
 
-#pragma warning disable ASPIREPROJECTS001
-
 public class SeederResource(string name) : ProjectResource(name);
 
 public static class SeederCommandNames

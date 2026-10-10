@@ -2,8 +2,6 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <Nullable>enable</Nullable>
-        <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>dotnet-GroupSplit.Seeder-361159df-1089-4935-a74e-f59cee95174c</UserSecretsId>
     </PropertyGroup>
 

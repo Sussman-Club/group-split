@@ -2,8 +2,6 @@ using Aspire.Hosting.Pipelines;
 
 namespace GroupSplit.AppHost.Extensions;
 
-#pragma warning disable ASPIREPIPELINES001
-
 /// <summary>
 /// Checks that only make sense once parameter values exist.
 /// <para>

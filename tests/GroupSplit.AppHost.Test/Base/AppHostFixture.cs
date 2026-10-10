@@ -6,8 +6,6 @@ using GroupSplit.AppHost.Test.Base;
 using Microsoft.Extensions.DependencyInjection;
 using Projects;
 
-#pragma warning disable ASPIREDOTNETTOOL
-
 
 [assembly: AssemblyFixture(typeof(AppHostFixture))]
 

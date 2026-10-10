@@ -1,7 +1,5 @@
 namespace GroupSplit.AppHost.Extensions;
 
-#pragma warning disable ASPIREPROJECTS001
-
 /// <summary>The command-line client, modelled so it can be run against the local stack.</summary>
 public class CliResource(string name) : ProjectResource(name);
 

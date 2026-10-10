@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>0e766784-9914-4481-8993-8188692ff53b</UserSecretsId>
     <!-- GroupSplit.App.Shared references the API for build ordering only, but project content
          still flows, so the API's appsettings land here alongside our own and publish fails

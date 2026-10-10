@@ -5,8 +5,6 @@ using Aspire.Hosting.Pipelines;
 
 namespace GroupSplit.AppHost.Extensions;
 
-#pragma warning disable ASPIREPIPELINES001
-
 /// <summary>
 /// Publish-time wiring for the Docker Compose target. Everything here is deployment shaped and
 /// deliberately absent from run mode, where the AppHost orchestrator handles the same concerns.

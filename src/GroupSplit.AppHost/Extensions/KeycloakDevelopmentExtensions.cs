@@ -1,7 +1,5 @@
 namespace GroupSplit.AppHost.Extensions;
 
-#pragma warning disable ASPIREPERSISTENCE001
-
 public static class KeycloakDevelopmentExtensions
 {
     extension(IResourceBuilder<KeycloakResource> keycloak)

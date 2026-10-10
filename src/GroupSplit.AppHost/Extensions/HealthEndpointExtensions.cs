@@ -1,7 +1,3 @@
-// Probes and the endpoint-selector overload are still experimental API, suppressed here the
-// same way AppHost.cs suppresses them.
-#pragma warning disable ASPIREPROBES001
-
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 
 namespace GroupSplit.AppHost.Extensions;

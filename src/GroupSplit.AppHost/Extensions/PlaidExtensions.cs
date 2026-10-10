@@ -1,5 +1,3 @@
-#pragma warning disable ASPIREPIPELINES001
-
 using Aspire.Hosting.Pipelines;
 
 namespace GroupSplit.AppHost.Extensions;

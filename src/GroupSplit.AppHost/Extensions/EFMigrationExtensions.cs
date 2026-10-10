@@ -1,7 +1,5 @@
 using Aspire.Hosting.EntityFrameworkCore;
 
-#pragma warning disable ASPIREDOTNETTOOL, ASPIRECSHARPAPPS001
-
 namespace GroupSplit.AppHost.Extensions;
 
 public static class EFMigrationExtensions

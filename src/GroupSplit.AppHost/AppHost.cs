@@ -3,8 +3,6 @@ using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
-#pragma warning disable ASPIRECOMPUTE003, ASPIREPROBES001, ASPIRETERMINAL001, ASPIREPOSTGRES001, ASPIREBROWSERLOGS001, ASPIREPIPELINES001, ASPIREPIPELINES003, ASPIREINTERACTION001, ASPIREDOTNETPROJECT001
-
 // Named once: the API reaches the bucket through the reference below, and the deployed
 // storage container is told to create it by the same name.
 const string receiptsBucket = "receipts";
