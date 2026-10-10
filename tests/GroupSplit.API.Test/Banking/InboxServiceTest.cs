@@ -131,6 +131,76 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Empty(await DbContext.Set<Expense>().ToListAsync(Ct));
     }
 
+    /// <summary>
+    /// A personal expense may be in any currency, so keeping a row personal keeps what the
+    /// bank said it was in. It used to be stamped with the default, which wrote a 20.00 EUR
+    /// charge down as 20.00 USD (#320).
+    /// </summary>
+    [Fact]
+    public async Task A_row_in_another_currency_kept_personal_stays_in_that_currency()
+    {
+        var row = await Row(amount: 20m, currency: "EUR");
+
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+
+        Assert.Null(stored.GroupId);
+        Assert.Equal("EUR", stored.Currency);
+        Assert.Equal(20m, stored.Amount);
+    }
+
+    /// <summary>
+    /// The inbox's bulk "Keep personal": the same empty request, one row after another, and
+    /// nothing in it saying what currency any of them is in. Each has to keep its own.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_several_rows_personal_at_once_keeps_each_ones_own_currency()
+    {
+        var euros = await Row(amount: 20m, currency: "EUR", providerId: "eur");
+        var pounds = await Row(amount: 12m, currency: "GBP", providerId: "gbp");
+        var dollars = await Row(amount: 9m, currency: "USD", providerId: "usd");
+
+        foreach (var row in new[] { euros, pounds, dollars })
+            await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        var filed = await DbContext.Set<Expense>().AsNoTracking()
+            .ToDictionaryAsync(expense => expense.BankTransactionId!.Value, expense => expense.Currency, Ct);
+
+        Assert.Equal("EUR", filed[euros.Id]);
+        Assert.Equal("GBP", filed[pounds.Id]);
+        Assert.Equal("USD", filed[dollars.Id]);
+    }
+
+    /// <summary>
+    /// The second way round the rule: filed personal, then shared. The move meets the same
+    /// refusal filing straight into the group does, instead of taking the group's currency.
+    /// </summary>
+    [Fact]
+    public async Task A_foreign_row_kept_personal_cannot_then_be_moved_into_the_group()
+    {
+        var (group, _, _) = await GroupWithEvenCategory();
+        var row = await Row(amount: 20m, currency: "EUR");
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        var e = await Assert.ThrowsAsync<ConflictException>(() => GetService<ITransactionService>().Update(
+            expense.Id,
+            new UpdateTransactionRequest
+            {
+                Name = expense.Name,
+                Amount = expense.Amount,
+                DateTime = expense.DateTime,
+                PaidByUserId = expense.UserId,
+                GroupId = group.Id
+            }, Ct).AsTask());
+
+        Assert.Equal(ErrorCodes.CurrencyMismatch, e.Code);
+
+        var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(candidate => candidate.Id == expense.Id, Ct);
+        Assert.Null(stored.GroupId);
+        Assert.Equal("EUR", stored.Currency);
+    }
+
     [Fact]
     public async Task Ignoring_takes_a_row_out_of_the_inbox_and_restoring_brings_it_back()
     {

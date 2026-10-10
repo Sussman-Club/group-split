@@ -296,7 +296,8 @@ public static class GroupApi
         /// </summary>
         /// <remarks>
         /// Asking again without <c>replace</c> returns the link already out, so "send link"
-        /// can always just copy. Whoever opens it and claims it takes the guest's place.
+        /// can always just copy -- unless it has expired, when a new one is issued in its
+        /// place. Whoever opens it and claims it takes the guest's place.
         /// </remarks>
         private RouteHandlerBuilder MapIssueGuestLink()
         {
@@ -538,8 +539,9 @@ public static class GroupApi
         private RouteHandlerBuilder MapGetGroupUserBalance()
         {
             // ?through=&utcOffset= gives the balances, and the plan that clears them, for
-            // everything dated up to that day after every settlement already made: what a
-            // settle dialog previews before it settles a period.
+            // everything dated up to that day after the settlements made for it, and later
+            // ones as far as they pay it down: what a settle dialog previews before it
+            // settles a period.
             return group.MapGet("{groupId:guid}/balances", async (
                     Guid groupId,
                     [AsParameters] CutoffQuery cutoff,

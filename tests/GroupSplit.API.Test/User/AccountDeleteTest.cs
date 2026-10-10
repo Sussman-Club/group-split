@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,7 +12,7 @@ namespace GroupSplit.API.Test.User;
 /// <summary>
 /// Tests for deleting one's own account. It is anonymised rather than erased: the
 /// transactions are half of everyone else's history, so what goes is the name, the
-/// address and the mapping to the Keycloak subject.
+/// address and the Keycloak login. See <c>docs/account-deletion.md</c>.
 /// </summary>
 public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
@@ -77,7 +78,7 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_settled_account_loses_its_name_address_and_identity()
+    public async Task A_settled_account_loses_its_name_address_and_login()
     {
         var user = GetService<ICurrentUser>().User;
 
@@ -90,9 +91,190 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Null(stored.FirstName);
         Assert.Null(stored.LastName);
         Assert.Null(stored.Email);
+        Assert.Equal(Data.Entities.UserKind.Deleted, stored.Kind);
 
-        // The row survives so the ledger still resolves; the mapping to Keycloak does not.
-        Assert.False(await HasIdentity(user.Id));
+        // The row survives so the ledger still resolves; the Keycloak login does not.
+        Assert.Equal([TestUserClaims.UserId], Keycloak.Removed);
+        Assert.Empty(await Pending());
+    }
+
+    /// <summary>
+    /// The subject stays on the deleted row. It names nobody once the login is gone, and it is
+    /// what lets a sign-in made before Keycloak catches up be recognised as this account.
+    /// </summary>
+    [Fact]
+    public async Task The_subject_stays_behind_as_a_tombstone()
+    {
+        var user = GetService<ICurrentUser>().User;
+
+        Assert.Empty(await Delete());
+
+        Assert.True(await HasIdentity(user.Id));
+    }
+
+    /// <summary>
+    /// The bug in #360, from the API's side: the next request with the same login used to
+    /// find no account and quietly provision a new, empty one, so deleting the account
+    /// looked to its owner as if it had not worked.
+    /// </summary>
+    [Fact]
+    public async Task Signing_in_again_afterwards_is_refused_rather_than_provisioned()
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.Empty(await Delete());
+
+        var users = await DbContext.Set<Data.Entities.User>().CountAsync(ct);
+
+        var refusal = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            GetService<IUserProvisioner>().GetOrCreate(SameLogin(), ct));
+
+        Assert.Equal(ErrorCodes.AccountDeleted, refusal.Code);
+        Assert.Equal(users, await DbContext.Set<Data.Entities.User>().CountAsync(ct));
+    }
+
+    /// <summary>
+    /// Keycloak being down does not undo or block the deletion -- it has already happened --
+    /// and it does not lose the login deletion either: that is written down, with the attempt
+    /// counted, for the sweep.
+    /// </summary>
+    [Fact]
+    public async Task When_keycloak_cannot_be_reached_the_account_is_deleted_and_the_login_is_owed()
+    {
+        var user = GetService<ICurrentUser>().User;
+        Keycloak.FailuresBeforeSuccess = int.MaxValue;
+
+        Assert.Empty(await Delete());
+
+        Assert.Equal(Data.Entities.UserKind.Deleted, (await Reread(user.Id)).Kind);
+        Assert.Empty(Keycloak.Removed);
+
+        var owed = Assert.Single(await Pending());
+
+        Assert.Equal(TestUserClaims.UserId, owed.IdentityId);
+        Assert.Equal(1, owed.Attempts);
+    }
+
+    /// <summary>
+    /// The other half of not losing it: the login is refused at sign-in while it is owed, so
+    /// an outage at Keycloak is never a window for a fresh account under the deleted login.
+    /// </summary>
+    [Fact]
+    public async Task While_the_login_is_owed_signing_in_with_it_is_refused()
+    {
+        Keycloak.FailuresBeforeSuccess = int.MaxValue;
+
+        Assert.Empty(await Delete());
+
+        var refusal = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            GetService<IUserProvisioner>().GetOrCreate(SameLogin(), TestContext.Current.CancellationToken));
+
+        Assert.Equal(ErrorCodes.AccountDeleted, refusal.Code);
+    }
+
+    [Fact]
+    public async Task The_sweep_deletes_a_login_once_keycloak_answers_again()
+    {
+        Keycloak.FailuresBeforeSuccess = 1;
+
+        Assert.Empty(await Delete());
+        Assert.Empty(Keycloak.Removed);
+
+        await PastTheGrace();
+        await Sweep();
+
+        Assert.Equal([TestUserClaims.UserId], Keycloak.Removed);
+        Assert.Empty(await Pending());
+    }
+
+    /// <summary>
+    /// Keycloak staying down is worth an error in the log, but never a reason to stop: giving
+    /// up would leave a login standing for somebody who asked for it to go.
+    /// </summary>
+    [Fact]
+    public async Task The_sweep_keeps_trying_however_long_keycloak_is_down()
+    {
+        Keycloak.FailuresBeforeSuccess = int.MaxValue;
+
+        Assert.Empty(await Delete());
+        await PastTheGrace();
+
+        for (var sweep = 0; sweep < 5; sweep++)
+        {
+            await Sweep();
+        }
+
+        Assert.Equal(6, Assert.Single(await Pending()).Attempts);
+
+        Keycloak.FailuresBeforeSuccess = 0;
+        await Sweep();
+
+        Assert.Equal([TestUserClaims.UserId], Keycloak.Removed);
+        Assert.Empty(await Pending());
+    }
+
+    /// <summary>
+    /// A deletion younger than a minute belongs to the request that wrote it, which tries
+    /// straight after saving; the sweep leaves it alone rather than racing it.
+    /// </summary>
+    [Fact]
+    public async Task The_sweep_leaves_a_fresh_deletion_to_the_request_that_wrote_it()
+    {
+        Keycloak.FailuresBeforeSuccess = int.MaxValue;
+
+        Assert.Empty(await Delete());
+        await Sweep();
+
+        Assert.Equal(1, Keycloak.Calls);
+    }
+
+    [Fact]
+    public async Task Deleting_a_deleted_account_again_changes_nothing()
+    {
+        var user = GetService<ICurrentUser>().User;
+
+        Assert.Empty(await Delete());
+
+        using var scope = ServiceProvider.CreateScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<IAccountService>()
+            .DeleteAccount(user.Id, TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, Keycloak.Calls);
+        Assert.Empty(await Pending());
+    }
+
+    private FakeKeycloakUserRemoval Keycloak => GetService<FakeKeycloakUserRemoval>();
+
+    /// <summary>The same Keycloak subject the deleted account signed in with.</summary>
+    private ClaimsPrincipal SameLogin() =>
+        new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, TestUserClaims.UserId)], "TestAuth"));
+
+    private Task<List<Data.Entities.PendingLoginDeletion>> Pending() =>
+        DbContext.Set<Data.Entities.PendingLoginDeletion>()
+            .AsNoTracking()
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>Ages every owed deletion past the window the sweep leaves to the request.</summary>
+    private async Task PastTheGrace()
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        foreach (var pending in await DbContext.Set<Data.Entities.PendingLoginDeletion>().ToListAsync(ct))
+        {
+            pending.RequestedAt -= SweepPendingLoginDeletionsHandler.Grace + TimeSpan.FromMinutes(1);
+        }
+
+        await DbContext.SaveChangesAsync(ct);
+        DbContext.ChangeTracker.Clear();
+    }
+
+    /// <summary>One run of the sweep, in a scope of its own the way the job worker runs it.</summary>
+    private async Task Sweep()
+    {
+        using var scope = ServiceProvider.CreateScope();
+
+        await ActivatorUtilities.CreateInstance<SweepPendingLoginDeletionsHandler>(scope.ServiceProvider)
+            .HandleAsync(new SweepPendingLoginDeletions(), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -156,25 +338,6 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task Signing_in_again_afterwards_provisions_a_new_account()
-    {
-        var ct = TestContext.Current.CancellationToken;
-        var user = GetService<ICurrentUser>().User;
-
-        Assert.Empty(await Delete());
-
-        // The same Keycloak subject as before. Dropping the mapping is what stops it
-        // finding the row that was just cleared and handing the account back.
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, TestUserClaims.UserId)],
-            "TestAuth"));
-
-        var provisioned = await GetService<IUserProvisioner>().GetOrCreate(principal, ct);
-
-        Assert.NotEqual(user.Id, provisioned.Id);
-    }
-
-    [Fact]
     public async Task An_unsettled_group_blocks_deletion_from_outside_that_group()
     {
         var (stranger, group) = await StrangerOwingIn("Vigo");
@@ -214,7 +377,8 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var stored = await Reread(user.Id);
 
         Assert.Null(stored.Email);
-        Assert.False(await HasIdentity(user.Id));
+        Assert.Equal(Data.Entities.UserKind.Deleted, stored.Kind);
+        Assert.Equal([TestUserClaims.UserId], Keycloak.Removed);
     }
 
     [Fact]

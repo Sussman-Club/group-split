@@ -112,7 +112,7 @@
             <div class="gs-card gs-stat gs-reveal" style="--i: 3">
                 <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
                 <span class="gs-eyebrow">Shared, this month</span>
-                <Money Value="ThisMonth" Animate Class="gs-stat-value" />
+                <Money Value="ThisMonth" Currency="@_thisMonth?.Currency" Animate Class="gs-stat-value" />
                 <span class="gs-muted" style="font-size: .8125rem">@MonthSub</span>
             </div>
 
@@ -195,7 +195,7 @@
             var said = $"{ThisMonthCount} expense{(ThisMonthCount == 1 ? "" : "s")}";
 
             return _lastMonth is { } previous
-                ? $"{said} · {previous.Total.ToMoney()} last month"
+                ? $"{said} · {previous.Total.ToMoney(previous.Currency)} last month"
                 : said;
         }
     }

@@ -16,4 +16,10 @@ public class AuthService(NavigationManager nav) : IAuthService
         nav.NavigateTo(AuthRoutes.Logout, forceLoad: true);
         return Task.CompletedTask;
     }
+
+    public Task SignOutDeletedAccount(CancellationToken ct)
+    {
+        nav.NavigateTo(AuthRoutes.AccountDeleted, forceLoad: true);
+        return Task.CompletedTask;
+    }
 }

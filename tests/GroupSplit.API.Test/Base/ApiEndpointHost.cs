@@ -55,12 +55,16 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         _app = app;
         _logs = logs;
 
+        Subject = subject;
         Client = app.GetTestServer().CreateClient();
         Client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, subject);
     }
 
     /// <summary>A client whose requests arrive authenticated as the host's own user.</summary>
     public HttpClient Client { get; }
+
+    /// <summary>The identity provider subject <see cref="Client"/> signs in as.</summary>
+    public string Subject { get; }
 
     public IServiceProvider Services => _app.Services;
 
@@ -77,6 +81,19 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         var client = _app.GetTestServer().CreateClient();
         client.DefaultRequestHeaders.Add(
             TestAuthenticationHandler.SubjectHeader, Guid.NewGuid().ToString());
+        return client;
+    }
+
+    /// <summary>
+    /// A client signed in as a subject of the test's choosing, with the email it names --
+    /// for the cases where the two have to disagree with what is stored: somebody recreated
+    /// in Keycloak, with a new subject and an address an existing row already holds.
+    /// </summary>
+    public HttpClient ClientFor(string subject, string email)
+    {
+        var client = _app.GetTestServer().CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, subject);
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.EmailHeader, email);
         return client;
     }
 
@@ -127,6 +144,11 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         // service graph, so default to a mock that attachment-focused tests can configure.
         builder.Services.AddSingleton(Mock.Of<IAmazonS3>());
         builder.Services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
+
+        // Keycloak's admin API, which the real host reaches over the network.
+        builder.Services.AddSingleton<FakeKeycloakUserRemoval>();
+        builder.Services.AddSingleton<GroupSplit.Keycloak.IKeycloakUserRemoval>(
+            provider => provider.GetRequiredService<FakeKeycloakUserRemoval>());
 
 
         configure?.Invoke(builder.Services);
@@ -180,6 +202,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         public const string SchemeName = "Test";
         public const string SubjectHeader = "X-Test-Subject";
 
+        /// <summary>The email claim, when a test needs one other than the subject's own.</summary>
+        public const string EmailHeader = "X-Test-Email";
+
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue(SubjectHeader, out var subject)
@@ -188,10 +213,15 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
+            var email = Request.Headers.TryGetValue(EmailHeader, out var given)
+                        && !string.IsNullOrWhiteSpace(given)
+                ? given.ToString()
+                : $"{subject}@example.test";
+
             var identity = new ClaimsIdentity(
                 [
                     new Claim(ClaimTypes.NameIdentifier, subject!),
-                    new Claim(ClaimTypes.Email, $"{subject}@example.test")
+                    new Claim(ClaimTypes.Email, email)
                 ],
                 SchemeName);
 

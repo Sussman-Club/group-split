@@ -61,6 +61,7 @@ public static class Problems
         [ErrorCodes.BankTransactionAlreadyFiled] = "This row has already been filed",
         [ErrorCodes.BankConnectionNeedsAttention] = "The bank connection needs signing in again",
         [ErrorCodes.CurrencyMismatch] = "The currencies do not match",
+        [ErrorCodes.IdentityEmailInUse] = "The email on this sign-in belongs to another account",
 
         [ErrorCodes.SplitRuleInvalid] = "The split rule is not valid",
         [ErrorCodes.SplitsInvalid] = "The shares are not valid",

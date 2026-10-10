@@ -44,7 +44,9 @@ way the app does:
   assign each line's split rule. `receipts divide` explicitly stores the division when the
   bill is not already the source of the expense's shares. If an itemised receipt already
   drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync;
-  an incomplete correction remains editable and leaves the last valid shares in place.
+  an incomplete correction remains editable and leaves the last valid shares in place, and
+  the call that completes it divides again. A forgotten tip is `transactions update --amount`:
+  the bill is re-totalled, the difference on its tip.
   Never imply that OCR has already made those decisions.
 
 `attachments delete` is destructive and uses the normal exit-4 confirmation envelope. A
@@ -105,13 +107,12 @@ capture the two separately -- a warning folded into stdout will break your JSON 
 These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.withdraw-invitation`, `groups.settle`, `groups.settle-between`, `groups.settle-up`,
 `settle.pay`, `groups.link.create` (when a link already exists), `groups.link.revoke`,
-`groups.guest-link.create` (only with `--new` on a guest who has a link),
+`groups.guest-link.create` (only with `--new` on a guest whose link still works),
 `groups.guest-link.revoke`,
 `invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
 `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
-`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `merchants.update`
-(only when it renames -- a merchant is shared by every group that has spent there, so the
-prompt carries the count), `merchants.delete`, `bank.unlink` and `users.delete`.
+`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `bank.unlink` and
+`users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 
@@ -127,7 +128,9 @@ With no terminal you get exit code 4 and this on stdout:
 
 **Show `summary` and every line of `changes` to the user, and wait for them to agree.** Then
 run `confirmCommand` verbatim -- it is the exact invocation, so you never have to
-reconstruct one from your own history.
+reconstruct one from your own history. It carries every option you gave, `--profile` and
+`--server` included, names files by absolute path, and is quoted for a POSIX shell.
+`--fields` never narrows this envelope.
 
 Do not put `--yes` on a command yourself. The flag exists for a caller who has already been
 told what it does; reaching for it to avoid a round trip performs a deletion nobody asked
@@ -148,9 +151,12 @@ Failures print an envelope on stderr:
 ```
 
 Branch on `code`, never on `error` -- the prose may be reworded. A `CLI_` prefix means the
-CLI refused before any request was sent; anything else came from the server and means the
-request was understood and refused. `remediation` is written to be acted on. Pass `traceId`
-along when reporting a problem.
+CLI raised it rather than the server; anything else came from the server and means the
+request was understood and refused. Most `CLI_` codes mean nothing was sent, but
+**`CLI_OUTCOME_UNKNOWN` means the request may have been carried out**: the connection broke
+after it left, or the server took too long. Never repeat a change on that code without first
+looking for it -- list or show what it would have changed -- or it may be recorded twice.
+`remediation` is written to be acted on. Pass `traceId` along when reporting a problem.
 
 ## Rules
 
@@ -158,6 +164,16 @@ along when reporting a problem.
   first, then act on what you were given.
 - **Amounts have two decimal places** and the currency is the group's. Do not round a
   user's figure to make a split come out even -- `--preview` instead, below.
+- **Write every amount as `12.50`**: a `.` decimal point, no thousands separators, whatever
+  the machine's language. `12,50`, `1,234.56`, `1.234,56` and `12.555` are refused with exit
+  code 3 (`CLI_USAGE` for an argument or option, `CLI_INVALID_INPUT` inside `--split`,
+  `--percent` or `--item`). When a user says "12,50 euros", convert it to `12.50` yourself;
+  when they write "1.234,56", that is `1234.56`. Ask if it could be read two ways.
+- **Never convert a currency yourself.** A personal expense may be in any currency
+  (`transactions create ... --currency EUR`, no `--group`); a group takes only its own, and
+  an expense never changes currency -- moving one into a group in another is refused with
+  `CURRENCY_MISMATCH`. Totals come back one currency at a time (`currency`, plus
+  `otherCurrencies`); report them that way and never add them up.
 - **Preview a split before creating it** when the division matters:
   `groupsplit transactions create "Dinner" 84.20 --group <id> --preview` shows the split the
   server would apply and creates nothing.
@@ -182,6 +198,10 @@ along when reporting a problem.
   guest links this account has opened -- there is no address to match, so nothing knows
   about one that was never followed. If the user never opened theirs, a member can print it
   again with `groups guest-link create`.
+- **A guest's link expires 30 days after it is issued.** Expired, it is the same 404
+  (`GROUP_INVITATION_NOT_FOUND`) as a claimed one, and `groups guests` marks it expired.
+  `groups guest-link create` issues a new one -- the old URL stays dead, so it has to be sent
+  again.
 - **A guest's link is a credential, not an id.** Whoever opens one takes on the shares
   recorded for that guest, so it belongs to the person the user is sending it to and
   nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript
@@ -193,8 +213,8 @@ along when reporting a problem.
   group specifically.
 - **Settling a period is `--through <day>`, not arithmetic.** "Settle August" is
   `settle plan --through 2026-08-31` (or `groups settle-up <group-id> --through ...`). It
-  counts expenses up to the day and every repayment whatever its date, so nothing already
-  paid is asked for twice. Summing a month's expenses yourself leaves the repayments out --
+  counts expenses up to the day and the repayments made for it, and later repayments only
+  as far as they pay it down, so nothing already paid is asked for twice. Summing a month's expenses yourself leaves the repayments out --
   do not present that as what is owed.
 - **`groupsplit config list`** answers what the *next* command will talk to, and says which
   source each value came from. Run it before wondering why a request went somewhere

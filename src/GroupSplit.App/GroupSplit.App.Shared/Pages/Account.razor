@@ -81,7 +81,8 @@ else
                     <h2>Delete account</h2>
                 </div>
                 <p class="gs-muted" style="margin: 0 0 16px; font-size: .875rem">
-                    Removes your name and email address, and unlinks your sign-in. Expenses you
+                    Removes your name and email address, and deletes your sign-in: your password,
+                    any linked Google account and every session you have open. Expenses you
                     recorded stay in their groups, because they are what everyone else's share
                     was worked out from. You have to settle up in every group first.
                 </p>
@@ -133,7 +134,7 @@ else
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, "Delete your account? Your name and email address are removed and your sign-in is unlinked. This cannot be undone." },
+            { x => x.ContentText, "Delete your account? Your name and email address are removed and your sign-in is deleted, so you cannot sign in again. This cannot be undone." },
             { x => x.ButtonText, "Delete account" },
             { x => x.Color, Color.Error }
         };
@@ -156,10 +157,11 @@ else
         {
             await Users.DeleteCurrentUserAsync();
 
-            // The account no longer exists, so the session points at nothing. Signing out
-            // is what clears it -- and without it the next request would provision a
-            // fresh, empty account under the same sign-in.
-            await AuthService.Logout();
+            // The account no longer exists, so the session points at nothing, and every
+            // request it made from here on would be refused as a deleted account. Only the
+            // app's own session is left to end: the login, and its Keycloak sessions, went
+            // with the account.
+            await AuthService.SignOutDeletedAccount();
         }
         catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
         {

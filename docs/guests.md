@@ -136,9 +136,13 @@ somebody else inherits the debts recorded for that guest. So:
   always just copy. `Replace` mints a new one and kills the old.
 - **Single use.** Claiming ends the guest and clears the token, so a forwarded copy gets the
   same 404 a mistyped link does.
+- **It expires**, 30 days after it was issued (`GroupGuest.LinkLifetime`), so an unclaimed
+  link in an old chat, a screenshot or a browser history stops being a way to take somebody's
+  place. See [Expiry](#expiry).
 - **Every way a link ends forgets who opened it.** Replaced, stopped, turned down, claimed, or
   the guest removed: `GuestLinkExtensions.EndLink` clears the token *and* deletes the
-  `InvitationOpened` rows for that guest. Otherwise somebody who opened a leaked link would be
+  `InvitationOpened` rows for that guest. (Expiring is not an ending -- nothing runs at that
+  moment -- so an expired link's rows go when a member issues the next one.) Otherwise somebody who opened a leaked link would be
   handed its replacement in their own list.
 - **It is a concurrency token**, and so is `EndedAt`. Every write that matters to a guest
   changes one of them, so of two at the same moment the second matches no row: two claimers
@@ -155,6 +159,43 @@ somebody else inherits the debts recorded for that guest. So:
 
 The web app copies the link rather than printing it on the page: a URL on screen is a URL in
 a screenshot.
+
+### Expiry
+
+A guest's link works for `GroupGuest.LinkLifetime` -- 30 days -- from `LinkIssuedAt`, fixed
+in code like `GroupJoinLink.Lifetime` (14 days) and for the same reason: a choice on a dialog
+nobody has an opinion about, against a link that is one press to issue again. Longer than a
+join link's because the person a guest's link is for has usually never heard of the app, and
+"I'll sign up when I get home" takes a while.
+
+- **Worked out, not stored.** There is no expiry column: the end is always `LinkIssuedAt` plus
+  the lifetime, and a second column could only disagree with it. Changing the lifetime
+  changes every link already out, which is what a change made for safety should do. Links
+  issued before this existed expire 30 days after they were issued, with no backfill.
+- **The same 404.** An expired link answers `GROUP_INVITATION_NOT_FOUND`, exactly as a claimed,
+  stopped or mistyped one does. A join link says it expired (`GROUP_JOIN_LINK_EXPIRED`), but a
+  join link hands over nothing; saying "expired" here would confirm to whoever holds a leaked
+  link that a position was once on offer. The claim page names expiry among the reasons a
+  link stops working and says to ask the group for a new one.
+- **Checked first.** `Held` refuses an expired link before anything else about the caller, the
+  rejoin rule included, so somebody who left after it was issued gets the 404 too rather than
+  being told the link predates their leaving.
+- **Judged once, when the claim arrives.** `Claim` reads the clock once and judges the link by
+  that instant throughout, re-read included. A claim that arrives a moment before the expiry
+  completes even if it finishes after; one that arrives at or after it is refused before
+  anything is written. Reading the clock twice could pass the first check and fail the
+  second, after the work had begun.
+- **Shown to the group.** `GET /groups/{id}/guests` reports `LinkExpiresAt`, and for a link
+  that ran out `LinkExpired` true, `HasLink` false and no `Token`: there is nothing to copy.
+  The web app's guest row says "link expired 7 Nov 2026" and offers "Send link" again; the CLI
+  marks it expired. The deprecated `GET /groups/{id}/invitations` and `GET /invitations` list
+  only links that still work, now with `ExpiresAt`.
+- **Issuing again is the fix.** Asking for the link (`POST .../link`) when the one out has
+  expired issues a new one, `replace` or not -- "send link" means a link that works -- and
+  ends the old one the usual way, forgetting who opened it.
+- **And restarts the rejoin rule.** The new link's `LinkIssuedAt` is now, so somebody who left
+  after the expired link went out, and before this one, may come back by it -- the same as
+  for any link issued after they left.
 
 ### The list of links you have opened
 
@@ -231,6 +272,7 @@ All are marked deprecated in the OpenAPI document. `SETTLEMENT_WITH_PENDING_INVI
 | Which of two writes to a guest wins | the `Token` and `EndedAt` concurrency tokens |
 | What an account has open | `InvitationService.Mine`, written by `Describe` |
 | Whether a departed person may use a link | `IGroupJoiner.Join`, `EnsureMayRejoin`, against `LinkIssuedAt` |
+| Whether a link has expired | `GroupGuest.HasWorkingLink`, `LinkLifetime` from `LinkIssuedAt` |
 | What becomes of the guest's own "all for them" rule | `IMemberSplitRules.HandOver` on a claim; kept, like a leaver's, on removal |
 
 ## Known gaps
@@ -244,6 +286,10 @@ All are marked deprecated in the OpenAPI document. `SETTLEMENT_WITH_PENDING_INVI
   Sam" has to go through Pat's link, claimed by Sam.
 - **A removed guest cannot be restored.** Adding them again by name makes a new guest with a
   new stand-in.
-- **Guest links do not expire**, unlike join links.
+- **An expired link is not told apart.** Whoever holds one hears what a claimed or mistyped
+  one gets, so a guest who simply waited too long cannot tell that a new link would work.
+  That is the price of not confirming to a stranger that the link was once good; the claim
+  page says expiry is one of the reasons.
+- **Nobody is told a link ran out.** The group sees it on the guest's row when it looks.
 - **Stand-ins accumulate**, one per guest ever added. They are tiny and hold the history, so
   this is deliberate, but nothing ever cleans them up.

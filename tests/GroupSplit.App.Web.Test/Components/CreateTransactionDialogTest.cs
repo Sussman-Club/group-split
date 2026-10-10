@@ -404,6 +404,79 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
+    /// Typed into the field itself rather than handed to it, because the parse is the
+    /// defect: <c>12,50</c> was recorded as a $1,250 expense (#313).
+    /// </summary>
+    [Fact]
+    public async Task An_amount_typed_with_a_comma_is_recorded_as_that_many_cents()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense",
+                    new DialogParameters<CreateTransactionDialog> { { d => d.SelectedGroupId, GroupId } }));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await amount.Find("input").ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "12,50" });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Cena"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var request = await reference!.GetReturnValueAsync<CreateTransactionRequest>();
+
+        Assert.Equal(12.50m, request!.Amount);
+    }
+
+    /// <summary>
+    /// And one that could be read two ways is not recorded at all -- not as 1234.56, not as
+    /// 1.23456, and not as the zero a failed parse used to leave in the model.
+    /// </summary>
+    [Fact]
+    public async Task An_amount_with_a_thousands_separator_cannot_be_added()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense",
+                    new DialogParameters<CreateTransactionDialog> { { d => d.SelectedGroupId, GroupId } }));
+
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await amount.Find("input").ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "1.234,56" });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Cena"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.False(reference!.Result.IsCompleted);
+        Assert.Contains("no thousands separators", provider.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A read that fails does not take the expense down with it.
     /// </summary>
     /// <remarks>
@@ -528,6 +601,125 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.Contains("Lidl", where.TextContent, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Shares typed by hand that stop adding up when the amount moves are refused at Save,
+    /// in the dialog, with everything else still in it (#323).
+    /// </summary>
+    /// <remarks>
+    /// Save validated the form and nothing else, so the dialog closed, the page sent the
+    /// request, the API refused it, and the name, the note and every pick were gone with the
+    /// dialog. The remaining line was text and nothing more.
+    /// </remarks>
+    [Fact]
+    public async Task Shares_that_no_longer_add_up_are_refused_without_closing_over_the_rest()
+    {
+        var daniel = Guid.NewGuid();
+
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"),
+                new UserInfo(daniel, "Daniel", "Jones", "daniel@example.com")
+            ]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add an expense", new DialogParameters<CreateTransactionDialog>
+                {
+                    { dialog => dialog.SelectedGroupId, GroupId }
+                }));
+
+        var amount = provider.FindComponents<DecimalField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(100m));
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner"));
+
+        // 70/30 by hand, and then the amount corrected underneath it.
+        var editor = provider.FindComponent<SplitEditor>();
+
+        await provider.InvokeAsync(() => editor.Instance.ValueChanged.InvokeAsync(
+        [
+            new SplitInput { UserId = MeId, Amount = 70m },
+            new SplitInput { UserId = daniel, Amount = 30m }
+        ]));
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.False(reference!.Result.IsCompleted);
+
+        var remaining = provider.Find(".gs-split-remaining");
+        Assert.Contains("Not saved", remaining.TextContent, StringComparison.Ordinal);
+        Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
+
+        // And the rest of the edit is where it was.
+        Assert.Equal("Dinner", name.Instance.Value);
+        Assert.Equal(120m, amount.Instance.Value);
+    }
+
+    /// <summary>
+    /// A group picked while the last one's people are still on their way is the one whose
+    /// people and categories the dialog offers (#323).
+    /// </summary>
+    /// <remarks>
+    /// The three reads behind a pick wrote what they found as they found it, so an answer
+    /// about the group somebody had already moved off landed over the group they moved to:
+    /// the flat's members offered as the trip's payers and shares.
+    /// </remarks>
+    [Fact]
+    public async Task A_group_picked_while_the_last_one_loads_keeps_its_own_people()
+    {
+        var flat = new GroupResponse(Guid.NewGuid(), "Flat", 2);
+        var trip = new GroupResponse(Guid.NewGuid(), "Trip", 2);
+        var flatmate = new UserInfo(Guid.NewGuid(), "Flat", "Mate", null);
+        var traveller = new UserInfo(Guid.NewGuid(), "Fellow", "Traveller", null);
+        var flatMembers = new TaskCompletionSource<ICollection<UserInfo>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _groups
+            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([flat, trip]);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))
+            .Returns(flatMembers.Task);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(trip.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([traveller]);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(flat.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), flat.Id, "Rent", null, null)]);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(trip.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), trip.Id, "Fuel", null, null)]);
+
+        var provider = await OpenAsync(null);
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+
+        // The flat first, whose people are slow; then the trip, before they arrive.
+        var pickingFlat = provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(flat.Id));
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(trip.Id));
+
+        flatMembers.SetResult([flatmate]);
+        await pickingFlat;
+
+        var editor = provider.FindComponent<SplitEditor>();
+        Assert.Equal([traveller.Id], editor.Instance.Members.Select(member => member.Id));
+        Assert.Equal(["Fuel"], decisions.Instance.Categories.Select(category => category.Name));
+    }
+
     private static IReadOnlyList<AngleSharp.Dom.IElement> Chips(
         IRenderedComponent<MudDialogProvider> provider) =>
         [.. provider.FindAll("button.gs-expense-chip")];
@@ -550,5 +742,85 @@ public class CreateTransactionDialogTest : ComponentTest
                 .ShowAsync<CreateTransactionDialog>("Add expense", parameters));
 
         return provider;
+    }
+
+    // ---- What it is in (#320) -----------------------------------------------------------
+
+    /// <summary>Fills the two fields an expense cannot be saved without, and saves it.</summary>
+    private static async Task<CreateTransactionRequest?> SaveAsync(
+        IRenderedComponent<MudDialogProvider> provider, IDialogReference reference)
+    {
+        var amount = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(20m));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner in Lisbon"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        return await reference.GetReturnValueAsync<CreateTransactionRequest>();
+    }
+
+    /// <summary>
+    /// A personal expense may be in any currency, and the dialog is how somebody says which:
+    /// a dinner abroad written down in dollars is a different amount of money.
+    /// </summary>
+    [Fact]
+    public async Task A_personal_expense_is_sent_in_the_currency_picked_for_it()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>()));
+
+        var currency = provider.FindComponents<MudSelect<string>>()
+            .Single(select => select.Instance.Label == "Currency");
+        await provider.InvokeAsync(() => currency.Instance.ValueChanged.InvokeAsync("EUR"));
+
+        // The amount field says it too, so the figure being typed reads as euros.
+        provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
+
+        var request = await SaveAsync(provider, reference!);
+
+        Assert.Null(request!.GroupId);
+        Assert.Equal("EUR", request.Currency);
+    }
+
+    /// <summary>
+    /// In a group there is nothing to pick: its balances are in one currency, and the API
+    /// takes the group's own when the request names none. Naming one would only invite the
+    /// refusal for a currency the person never chose.
+    /// </summary>
+    [Fact]
+    public async Task A_group_expense_offers_no_currency_and_sends_none()
+    {
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+                {
+                    { dialog => dialog.SelectedGroupId, GroupId },
+                    { dialog => dialog.SelectedGroupName, "Trip" },
+                    { dialog => dialog.SelectedGroupCurrency, "USD" }
+                }));
+
+        Assert.DoesNotContain(provider.FindComponents<MudSelect<string>>(),
+            select => select.Instance.Label == "Currency");
+
+        var request = await SaveAsync(provider, reference!);
+
+        Assert.Equal(GroupId, request!.GroupId);
+        Assert.Null(request.Currency);
     }
 }

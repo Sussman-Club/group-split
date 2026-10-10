@@ -24,6 +24,9 @@ namespace GroupSplit.Shared;
 /// somebody claims the link. The same id the group's members listing shows them under,
 /// marked as not having joined.
 /// </param>
+/// <param name="ExpiresAt">
+/// When the link stops working if nobody claims it. Only links that still work are listed.
+/// </param>
 public record GroupInvitationResponse(
     Guid Id,
     Guid GroupId,
@@ -32,4 +35,5 @@ public record GroupInvitationResponse(
     string Token,
     string? InvitedByUserName,
     DateTimeOffset InvitedAt,
-    Guid ParticipantUserId);
+    Guid ParticipantUserId,
+    DateTimeOffset ExpiresAt);

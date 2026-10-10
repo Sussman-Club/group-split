@@ -11,6 +11,7 @@
 @inject LocalClock Clock
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject LoadGuard Guard
 @implements IDisposable
 
 @*
@@ -42,6 +43,16 @@
            group's guests -- they can be given a share, so every screen that chooses a
            person needs them -- but here they have a card of their own, because what can be
            done about a guest is different. *@
+        @if (_loadFailed)
+        {
+            @* A read, not a write: nothing anybody did here failed, so it is said in the card
+               it is about rather than as an error after an action. *@
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2 gs-members-load-failed">
+                Could not load who is in this group, so this may be out of date.
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@ReloadAsync">Try again</MudButton>
+            </MudAlert>
+        }
+
         <div class="gs-list">
             @foreach (var member in _joined)
             {
@@ -253,6 +264,12 @@
     /// </summary>
     private int _version;
 
+    /// <summary>
+    /// Whether the last read of the members failed, so the card says it may be out of date
+    /// and offers to read it again.
+    /// </summary>
+    private bool _loadFailed;
+
     /// <summary>Whose link was last copied, so the row can say it landed.</summary>
     private Guid? _copied;
 
@@ -274,16 +291,41 @@
         return ReloadAsync();
     }
 
+    /// <summary>
+    /// Re-reads the three lists. Never throws: a failure is a load failure, said as one.
+    /// </summary>
+    /// <remarks>
+    /// This runs on every announcement that the membership moved, and the announcement is
+    /// made from inside the write that moved it -- so a read failing here used to surface in
+    /// that write's own error handling. An invitation that had gone through was reported as
+    /// "Could not add them", and the person sent it again; and under server rendering, the
+    /// same exception from a parameter set took the circuit down (#323).
+    /// </remarks>
     private async Task ReloadAsync()
     {
         var version = ++_version;
 
-        var members = await GroupsService.GetGroupMembersAsync().ToListAsync();
+        List<UserInfo>? members = null;
+
+        var loaded = await Guard.RunAsync(
+            async () => members = await GroupsService.GetGroupMembersAsync().ToListAsync(),
+            "who is in this group");
+
         var guests = await GroupsService.GetGroupGuestsAsync();
         var past = await GroupsService.GetGroupPastMembersAsync();
 
         if (version != _version)
             return;
+
+        _loadFailed = !loaded;
+
+        // What was on screen stays there when the read failed: it is this group's, only a
+        // moment behind, and an empty card would claim nobody is in it.
+        if (members is null)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
 
         _members = members;
         _joined = [.. members.Where(member => !member.IsGuest)];
@@ -298,6 +340,11 @@
     /// whether anybody has sent them a link -- the one fact about a guest that decides
     /// which buttons the row offers, so it is said in words beside them too.
     /// </summary>
+    /// <remarks>
+    /// A link that ran out unclaimed says so, with the day it did. It offers "Send link"
+    /// again, like a guest who never had one, because that is what it is now: the old URL
+    /// answers nobody, and sending one issues a new link in its place.
+    /// </remarks>
     private string GuestMeta(GroupGuestResponse guest)
     {
         var added = $"Guest · added {Clock.Local(guest.AddedAt).ToString("d MMM yyyy")}";
@@ -307,7 +354,11 @@
 
         var link = guest switch
         {
+            { LinkExpired: true, LinkExpiresAt: { } expired } =>
+                $" · link expired {Clock.Local(expired).ToString("d MMM yyyy")}",
             { HasLink: false } => " · no link",
+            { LinkIssuedAt: { } issued, LinkExpiresAt: { } expires } =>
+                $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}, expires {Clock.Local(expires).ToString("d MMM yyyy")}",
             { LinkIssuedAt: { } issued } => $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}",
             _ => " · link sent"
         };
@@ -317,6 +368,10 @@
 
     private async Task AddPeopleAsync()
     {
+        // The group this was opened on, kept for the answer: by the time somebody confirms,
+        // the page may be showing another one (#323).
+        var groupId = GroupId;
+
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
 
         var parameters = new DialogParameters<AddGuestsDialog> { { x => x.CurrentUsers, _members.ToArray() } };
@@ -326,11 +381,13 @@
         var request = await dialog.GetReturnValueAsync<AddGuestsRequest>();
 
         if (request is not null)
-            await GroupsService.AddGuestsAsync(request);
+            await GroupsService.AddGuestsAsync(groupId, request);
     }
 
     private async Task RemoveAsync(UserInfo member)
     {
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first. The group's join link stops working, and they will need a new link to come back." },
@@ -343,7 +400,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove member", parameters, options);
 
         if (await dialog.ConfirmedAsync())
-            await GroupsService.RemoveGroupMemberAsync(member.Id, member.FullName);
+            await GroupsService.RemoveGroupMemberAsync(groupId, member.Id, member.FullName);
     }
 
     /// <summary>
@@ -358,6 +415,8 @@
     /// </remarks>
     private async Task RemoveGuestAsync(GroupGuestResponse guest)
     {
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, ParticipantCopy.RemoveGuestQuestion(guest.Name) },
@@ -370,7 +429,7 @@
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove guest", parameters, options);
 
         if (await dialog.ConfirmedAsync())
-            await GroupsService.RemoveGroupMemberAsync(guest.UserId, guest.Name);
+            await GroupsService.RemoveGroupMemberAsync(groupId, guest.UserId, guest.Name);
     }
 
     /// <summary>
@@ -385,7 +444,7 @@
     {
         _busy = guest.UserId;
 
-        var issued = await GroupsService.IssueGuestLinkAsync(guest.UserId, replace: false);
+        var issued = await GroupsService.IssueGuestLinkAsync(GroupId, guest.UserId, replace: false);
 
         _busy = null;
 
@@ -413,6 +472,8 @@
     /// </summary>
     private async Task NewLinkAsync(GroupGuestResponse guest)
     {
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, $"Make a new link for {guest.Name}? The one you sent before stops working." },
@@ -428,7 +489,7 @@
 
         _busy = guest.UserId;
 
-        var issued = await GroupsService.IssueGuestLinkAsync(guest.UserId, replace: true);
+        var issued = await GroupsService.IssueGuestLinkAsync(groupId, guest.UserId, replace: true);
 
         _busy = null;
 
@@ -442,7 +503,7 @@
     /// link" cannot put back, and the guest stays exactly as they were.
     /// </summary>
     private Task StopLinkAsync(GroupGuestResponse guest) =>
-        GroupsService.RevokeGuestLinkAsync(guest.UserId, guest.Name);
+        GroupsService.RevokeGuestLinkAsync(GroupId, guest.UserId, guest.Name);
 
     /// <summary>
     /// Copies a guest's link, built here rather than by the API.
@@ -479,6 +540,8 @@
 
     private async Task LeaveAsync()
     {
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, "Leave this group? What you paid stays in your own records, but you will no longer see the group or be able to change anything in it." },
@@ -493,7 +556,7 @@
         if (!await dialog.ConfirmedAsync())
             return;
 
-        if (await GroupsService.LeaveGroupAsync())
+        if (await GroupsService.LeaveGroupAsync(groupId))
             Nav.NavigateTo("/groups");
     }
 

@@ -117,7 +117,17 @@ public class GroupMembersTabTest : ComponentTest
         new(guest.Id, Group.Id, Group.Name, guest.FirstName!, "Anabel", Added,
             HasLink: token is not null, Token: token,
             LinkIssuedByUserName: token is null ? null : "Anabel",
-            LinkIssuedAt: token is null ? null : Sent);
+            LinkIssuedAt: token is null ? null : Sent,
+            LinkExpiresAt: token is null ? null : Sent.AddDays(30));
+
+    /// <summary>A guest whose link went out and ran out, unclaimed.</summary>
+    private static GroupGuestResponse ExpiredRow(UserInfo guest) =>
+        new(guest.Id, Group.Id, Group.Name, guest.FirstName!, "Anabel", Added,
+            HasLink: false, Token: null,
+            LinkIssuedByUserName: "Anabel",
+            LinkIssuedAt: Sent,
+            LinkExpiresAt: Sent.AddDays(30),
+            LinkExpired: true);
 
     private IRenderedComponent<GroupMembersTab> Render() =>
         base.Render<GroupMembersTab>(parameters => parameters
@@ -207,11 +217,36 @@ public class GroupMembersTabTest : ComponentTest
 
         var added = Added.ToLocalTime().ToString("d MMM yyyy");
         var sent = Sent.ToLocalTime().ToString("d MMM yyyy");
+        var expires = Sent.AddDays(30).ToLocalTime().ToString("d MMM yyyy");
 
         Assert.Equal($"Guest · added {added} by Anabel · no link",
             Row(tab, "Daniel").QuerySelector(".meta")!.TextContent.Trim());
-        Assert.Equal($"Guest · added {added} by Anabel · link sent {sent}",
+        Assert.Equal($"Guest · added {added} by Anabel · link sent {sent}, expires {expires}",
             Row(tab, "Luz").QuerySelector(".meta")!.TextContent.Trim());
+    }
+
+    /// <summary>
+    /// A link that ran out says so, with the day, and the row offers "Send link" again --
+    /// not "Copy link", which would read as though the old URL still worked.
+    /// </summary>
+    [Fact]
+    public void A_guest_whose_link_expired_says_so_and_is_offered_a_new_one()
+    {
+        _state
+            .Setup(state => state.GetGroupGuestsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([GuestRow(Daniel, token: null), ExpiredRow(Luz)]);
+
+        var tab = Render();
+
+        var added = Added.ToLocalTime().ToString("d MMM yyyy");
+        var expired = Sent.AddDays(30).ToLocalTime().ToString("d MMM yyyy");
+        var row = Row(tab, "Luz");
+
+        Assert.Equal($"Guest · added {added} by Anabel · link expired {expired}",
+            row.QuerySelector(".meta")!.TextContent.Trim());
+
+        Assert.NotNull(row.QuerySelector("button[aria-label='Send Luz a link']"));
+        Assert.Null(row.QuerySelector("button[aria-label='Copy the link for Luz']"));
     }
 
     /// <summary>
@@ -284,6 +319,168 @@ public class GroupMembersTabTest : ComponentTest
         Assert.Equal(2, Reads(nameof(IGroupsPageStateService.GetGroupJoinLinkAsync)));
     }
 
+    /// <summary>A members read that fails the way a dropped connection does.</summary>
+    private static async IAsyncEnumerable<UserInfo> Unreachable()
+    {
+        await Task.Yield();
+
+        throw new HttpRequestException("The server could not be reached.");
+
+#pragma warning disable CS0162 // An iterator needs a yield to be one.
+        yield break;
+#pragma warning restore CS0162
+    }
+
+    /// <summary>
+    /// A reload that fails is said as a load failure, in the card, with what was on screen
+    /// left there -- and the announcement that started it completes (#323).
+    /// </summary>
+    /// <remarks>
+    /// The members were read with nothing around the call, so the failure went up through the
+    /// announcement into whatever write had made it, and under server rendering a failure in
+    /// a parameter set took the circuit down.
+    /// </remarks>
+    [Fact]
+    public async Task A_failed_reload_is_shown_as_a_load_failure()
+    {
+        var tab = Render();
+
+        _state
+            .Setup(state => state.GetGroupMembersAsync(It.IsAny<CancellationToken>()))
+            .Returns(Unreachable);
+
+        await tab.InvokeAsync(() => Changes.NotifyGroupsChangedAsync());
+
+        Assert.Contains("Could not load who is in this group, so this may be out of date.",
+            Card(tab, "Members").TextContent, StringComparison.Ordinal);
+        Assert.Contains("Omar Sussman", Card(tab, "Members").InnerHtml, StringComparison.Ordinal);
+
+        Snackbar.Verify(snackbar => snackbar.Add(
+            It.Is<string>(message => message.StartsWith("Could not load who is in this group.", StringComparison.Ordinal)),
+            Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()), Times.Once);
+
+        // And "Try again" reads them again, and the notice goes once they arrive.
+        _state
+            .Setup(state => state.GetGroupMembersAsync(It.IsAny<CancellationToken>()))
+            .Returns(() => new[] { Me, Omar, Daniel, Luz }.ToAsyncEnumerable());
+
+        await Card(tab, "Members").QuerySelectorAll("button")
+            .Single(button => button.TextContent.Trim() == "Try again")
+            .ClickAsync(new());
+
+        Assert.DoesNotContain("Could not load who is in this group", tab.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The case the issue was raised about: adding a guest goes through, the refresh it
+    /// announces fails, and the person is told the guest was added -- not that adding failed,
+    /// which is what sent them to add the guest a second time (#323).
+    /// </summary>
+    [Fact]
+    public async Task A_failed_refresh_after_adding_a_guest_does_not_report_the_add_as_failed()
+    {
+        var groups = new Mock<IGroupsClient>();
+        groups
+            .Setup(client => client.AddGroupGuestsAsync(Group.Id, It.IsAny<AddGuestsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([GuestRow(Daniel, token: null)]);
+
+        var commands = new GroupSplit.App.Shared.Services.Commands.GroupCommands(
+            groups.Object, Mock.Of<IInvitationsClient>(),
+            Services.GetRequiredService<GroupSplit.App.Shared.Services.Errors.ApiErrorPresenter>(),
+            Snackbar.Object, Changes);
+
+        var tab = Render();
+
+        _state
+            .Setup(state => state.GetGroupMembersAsync(It.IsAny<CancellationToken>()))
+            .Returns(Unreachable);
+
+        var added = await tab.InvokeAsync(() =>
+            commands.AddGuestsAsync(Group.Id, Group.Name, new AddGuestsRequest { Names = ["Daniel"] }));
+
+        Assert.True(added);
+        SaidSuccess($"Daniel added to {Group.Name} as a guest.");
+        Snackbar.Verify(snackbar => snackbar.Add(
+            It.Is<string>(message => message.StartsWith("Could not add them.", StringComparison.Ordinal)),
+            It.IsAny<Severity>(), It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()), Times.Never);
+    }
+
+    // ---- Which group a confirmed action is for ----------------------------------------------
+
+    /// <summary>
+    /// A confirmation that stays open until the test answers it, so the page can move on
+    /// underneath it first.
+    /// </summary>
+    private Func<DialogResult, Task> HoldConfirmationsOpen()
+    {
+        DialogReference? open = null;
+
+        _dialogs
+            .Setup(dialogs => dialogs.ShowAsync<ConfirmationDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<ConfirmationDialog>>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(() => open = new DialogReference(Guid.NewGuid(), _dialogs.Object));
+
+        return result =>
+        {
+            open!.Dismiss(result);
+            return Task.CompletedTask;
+        };
+    }
+
+    /// <summary>
+    /// "Remove member" opened on one group and confirmed after the page moved to another
+    /// removes them from the group it was opened on (#323).
+    /// </summary>
+    /// <remarks>
+    /// The write read the selected group when the button was pressed, so the member was
+    /// removed from whichever group was on screen by then.
+    /// </remarks>
+    [Fact]
+    public async Task Removing_a_member_acts_on_the_group_the_question_was_asked_in()
+    {
+        var answer = HoldConfirmationsOpen();
+        var elsewhere = Guid.NewGuid();
+
+        var tab = Render();
+
+        var removing = tab.Find("button[aria-label='Remove Omar Sussman']").ClickAsync(new());
+
+        tab.Render(parameters => parameters
+            .Add(t => t.GroupId, elsewhere)
+            .Add(t => t.UserInfo, Me));
+
+        await tab.InvokeAsync(() => answer(DialogResult.Ok(true)));
+        await removing;
+
+        _state.Verify(state => state.RemoveGroupMemberAsync(Group.Id, Omar.Id, "Omar Sussman",
+            It.IsAny<CancellationToken>()), Times.Once);
+        _state.Verify(state => state.RemoveGroupMemberAsync(elsewhere, It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>The same for leaving: it is the group the question named that is left.</summary>
+    [Fact]
+    public async Task Leaving_acts_on_the_group_the_question_was_asked_in()
+    {
+        var answer = HoldConfirmationsOpen();
+        var elsewhere = Guid.NewGuid();
+
+        var tab = Render();
+
+        var leaving = tab.FindAll("button").Single(button => button.TextContent.Trim() == "Leave group")
+            .ClickAsync(new());
+
+        tab.Render(parameters => parameters
+            .Add(t => t.GroupId, elsewhere)
+            .Add(t => t.UserInfo, Me));
+
+        await tab.InvokeAsync(() => answer(DialogResult.Ok(true)));
+        await leaving;
+
+        _state.Verify(state => state.LeaveGroupAsync(Group.Id, It.IsAny<CancellationToken>()), Times.Once);
+        _state.Verify(state => state.LeaveGroupAsync(elsewhere, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // ---- Adding ----------------------------------------------------------------------------
 
     /// <summary>
@@ -310,7 +507,7 @@ public class GroupMembersTabTest : ComponentTest
 
         await tab.FindAll("button").Single(button => button.TextContent.Trim() == "Add people").ClickAsync(new());
 
-        _state.Verify(state => state.AddGuestsAsync(
+        _state.Verify(state => state.AddGuestsAsync(Group.Id,
             It.Is<AddGuestsRequest>(sent => !sent.IssueLinks && sent.Names.Single() == "Nuria"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -325,7 +522,7 @@ public class GroupMembersTabTest : ComponentTest
     public async Task Send_link_issues_a_link_and_copies_it()
     {
         _state
-            .Setup(state => state.IssueGuestLinkAsync(Daniel.Id, false, It.IsAny<CancellationToken>()))
+            .Setup(state => state.IssueGuestLinkAsync(Group.Id, Daniel.Id, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(GuestRow(Daniel, token: "token-daniel"));
 
         var tab = Render();
@@ -336,7 +533,7 @@ public class GroupMembersTabTest : ComponentTest
 
         await Button(Row(tab, "Daniel"), "Send link").ClickAsync(new());
 
-        _state.Verify(state => state.IssueGuestLinkAsync(Daniel.Id, false, It.IsAny<CancellationToken>()), Times.Once);
+        _state.Verify(state => state.IssueGuestLinkAsync(Group.Id, Daniel.Id, false, It.IsAny<CancellationToken>()), Times.Once);
         Copied("http://localhost/claim/token-daniel");
         SaidSuccess("Link for Daniel copied. Whoever opens it can join as Daniel.");
     }
@@ -350,15 +547,15 @@ public class GroupMembersTabTest : ComponentTest
     public async Task Copy_link_copies_the_current_link_even_when_the_listing_is_stale()
     {
         _state
-            .Setup(state => state.IssueGuestLinkAsync(Luz.Id, false, It.IsAny<CancellationToken>()))
+            .Setup(state => state.IssueGuestLinkAsync(Group.Id, Luz.Id, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(GuestRow(Luz, token: "token-luz-replaced-elsewhere"));
 
         var tab = Render();
 
         await Button(Row(tab, "Luz"), "Copy link").ClickAsync(new());
 
-        _state.Verify(state => state.IssueGuestLinkAsync(Luz.Id, false, It.IsAny<CancellationToken>()), Times.Once);
-        _state.Verify(state => state.IssueGuestLinkAsync(It.IsAny<Guid>(), true, It.IsAny<CancellationToken>()), Times.Never);
+        _state.Verify(state => state.IssueGuestLinkAsync(Group.Id, Luz.Id, false, It.IsAny<CancellationToken>()), Times.Once);
+        _state.Verify(state => state.IssueGuestLinkAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), true, It.IsAny<CancellationToken>()), Times.Never);
         Copied("http://localhost/claim/token-luz-replaced-elsewhere");
         SaidSuccess("Link for Luz copied. Whoever opens it can join as Luz.");
     }
@@ -384,7 +581,7 @@ public class GroupMembersTabTest : ComponentTest
     public async Task New_link_asks_first_then_replaces_the_link_and_copies_it()
     {
         _state
-            .Setup(state => state.IssueGuestLinkAsync(Luz.Id, true, It.IsAny<CancellationToken>()))
+            .Setup(state => state.IssueGuestLinkAsync(Group.Id, Luz.Id, true, It.IsAny<CancellationToken>()))
             .ReturnsAsync(GuestRow(Luz, token: "token-luz-2"));
 
         var popovers = Render<MudPopoverProvider>();
@@ -396,7 +593,7 @@ public class GroupMembersTabTest : ComponentTest
         Assert.Contains("stops working", question, StringComparison.Ordinal);
 
         tab.WaitForAssertion(() =>
-            _state.Verify(state => state.IssueGuestLinkAsync(Luz.Id, true, It.IsAny<CancellationToken>()), Times.Once));
+            _state.Verify(state => state.IssueGuestLinkAsync(Group.Id, Luz.Id, true, It.IsAny<CancellationToken>()), Times.Once));
         Copied("http://localhost/claim/token-luz-2");
     }
 
@@ -411,7 +608,7 @@ public class GroupMembersTabTest : ComponentTest
         await ChooseFromMenuAsync(tab, popovers, "Luz", "New link");
 
         Assert.Single(_asked);
-        _state.Verify(state => state.IssueGuestLinkAsync(It.IsAny<Guid>(), It.IsAny<bool>(),
+        _state.Verify(state => state.IssueGuestLinkAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -425,8 +622,8 @@ public class GroupMembersTabTest : ComponentTest
         await ChooseFromMenuAsync(tab, popovers, "Luz", "Stop link");
 
         tab.WaitForAssertion(() =>
-            _state.Verify(state => state.RevokeGuestLinkAsync(Luz.Id, "Luz", It.IsAny<CancellationToken>()), Times.Once));
-        _state.Verify(state => state.RemoveGroupMemberAsync(It.IsAny<Guid>(), It.IsAny<string>(),
+            _state.Verify(state => state.RevokeGuestLinkAsync(Group.Id, Luz.Id, "Luz", It.IsAny<CancellationToken>()), Times.Once));
+        _state.Verify(state => state.RemoveGroupMemberAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -447,7 +644,7 @@ public class GroupMembersTabTest : ComponentTest
         Assert.Equal("Remove guest", title);
         Assert.Equal("Remove Daniel? They have to be square with the group first. Their history stays.", question);
 
-        _state.Verify(state => state.RemoveGroupMemberAsync(Daniel.Id, "Daniel", It.IsAny<CancellationToken>()),
+        _state.Verify(state => state.RemoveGroupMemberAsync(Group.Id, Daniel.Id, "Daniel", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -460,7 +657,7 @@ public class GroupMembersTabTest : ComponentTest
 
         await Row(tab, "Daniel").QuerySelector("button[aria-label='Remove Daniel']")!.ClickAsync(new());
 
-        _state.Verify(state => state.RemoveGroupMemberAsync(It.IsAny<Guid>(), It.IsAny<string>(),
+        _state.Verify(state => state.RemoveGroupMemberAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 }

@@ -288,8 +288,7 @@ public static class BankCommands
                     $"{connection.InstitutionName} stops syncing "
                     + $"({connection.Accounts.Count} accounts).",
                     "Rows already filed as expenses are kept; anything still waiting in the inbox goes."
-                ],
-                confirmCommand: $"groupsplit bank unlink {id} --yes");
+                ]);
 
             await client.UnlinkBankConnectionAsync(id, ct);
 

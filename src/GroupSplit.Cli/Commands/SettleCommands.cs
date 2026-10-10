@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Cli.Output;
 using GroupSplit.Shared;
@@ -81,10 +82,8 @@ public static class SettleCommands
             Description = "The person on the other end of the payment."
         };
 
-        var amount = new Option<decimal?>("--amount")
-        {
-            Description = "How much moved. Defaults to the whole of what is outstanding between you."
-        };
+        var amount = Amounts.Option("--amount",
+            "How much moved, e.g. 40.00. Defaults to the whole of what is outstanding between you.");
 
         var direction = new Option<SettlementDirection>("--direction")
         {
@@ -167,8 +166,15 @@ public static class SettleCommands
                     ? $"Record {paying:N2} paid to {person.UserName}?"
                     : $"Record {paying:N2} received from {person.UserName}?",
                 changes: lines,
-                confirmCommand: $"groupsplit settle pay {userId} --amount {paying:0.##} "
-                                + $"--direction {chosen}{ThroughOption.Flag(day)} --yes");
+                // The figure the prompt named, not "whatever is outstanding": confirming
+                // after another repayment landed must not pay the new remainder instead.
+                // Written the one way --amount is read on every machine -- a '.' decimal
+                // and two places -- so it comes back as the same number whatever the
+                // culture; ConfirmCommandTests checks under es-ES.
+                pinned: new Dictionary<Option, string>
+                {
+                    [amount] = paying.ToString("0.00", CultureInfo.InvariantCulture)
+                });
 
             var recorded = await context.Users.SettleWithPersonAsync(
                 new SettleWithPersonRequest

@@ -266,6 +266,52 @@ public class AppHostFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Starts the <c>realm-settings</c> worker again and waits for that run, not the one at
+    /// start-up, to finish successfully. The tests that call this take the realm apart first,
+    /// so they share <c>GoogleFirstBrokerLogin.Collection</c> and run one at a time.
+    /// </summary>
+    public async Task RunRealmWorkerAsync()
+    {
+        const string worker = "realm-settings";
+
+        var notifications = Application.ResourceNotifications;
+
+        // Subscribed before the start, so a run quick enough to finish before the wait began
+        // cannot be mistaken for the one before it.
+        var started = notifications.WaitForResourceAsync(
+            worker, resource => !IsDone(resource.Snapshot), TestContext.Current.CancellationToken);
+
+        var start = await Application.ResourceCommands.ExecuteCommandAsync(
+            worker, KnownResourceCommands.StartCommand, TestContext.Current.CancellationToken);
+
+        Assert.True(start.Success, $"Starting {worker} failed: {start.Message ?? "no error message"}.");
+
+        await started;
+
+        ResourceEvent? finished = null;
+
+        await WaitForAsync(
+            worker,
+            async (resources, token) => finished = await resources.WaitForResourceAsync(
+                worker, resource => IsDone(resource.Snapshot), token),
+            "finish its run");
+
+        Assert.True(
+            finished!.Snapshot.ExitCode == 0,
+            $"{worker} exited with {finished.Snapshot.ExitCode}:" + Environment.NewLine
+            + await ReadLogAsync(worker));
+
+        // The worker puts the realm's token lifespan back to the file's, and the tests that
+        // wait out an expiry rely on the short one set at start-up.
+        await Keycloak.ShortenAccessTokenLifespanAsync(TestContext.Current.CancellationToken);
+
+        static bool IsDone(CustomResourceSnapshot snapshot) =>
+            snapshot.State?.Text is { } state
+            && (state == KnownResourceStates.Finished || state == KnownResourceStates.Exited
+                || state == KnownResourceStates.FailedToStart);
+    }
+
     /// <summary>The last state seen for every resource, newest first.</summary>
     public string DescribeResources()
     {
@@ -324,14 +370,21 @@ public class AppHostFixture : IAsyncLifetime
         var logs = Application.Services.GetRequiredService<ResourceLoggerService>();
         var tail = new Queue<string>(lineBudget);
 
+        // A container's log is kept under its instance name (keycloak-abcdefgh), not the
+        // name in the app model, so asking by name alone finds nothing for one. The resource
+        // overload resolves the instance names; a name the model does not have is asked for
+        // as it is.
+        var resource = Application.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.FirstOrDefault(candidate => candidate.Name == resourceName);
+        var source = resource is null ? logs.GetAllAsync(resourceName) : logs.GetAllAsync(resource);
+
         using var timeout = new CancellationTokenSource(LogCollectionTimeout);
 
         try
         {
             // GetAllAsync replays what was buffered and then keeps watching, so it never
             // completes on its own -- the timeout above is what ends the enumeration.
-            await foreach (var batch in logs.GetAllAsync(resourceName)
-                               .WithCancellation(timeout.Token))
+            await foreach (var batch in source.WithCancellation(timeout.Token))
             {
                 foreach (var line in batch)
                 {

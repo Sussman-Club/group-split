@@ -24,7 +24,8 @@ running the command: you are not always holding the pipe, and a table parsed as 
 in a confusing way.
 
 `--fields id,name` narrows JSON output to the named top-level fields, of an object or of
-every element of an array.
+every element of an array. It never narrows the confirmation envelope: an exit 4 always
+carries the whole of it.
 
 ## Exit codes
 
@@ -62,8 +63,9 @@ On stderr, whenever a command fails:
 
 ### Codes the CLI raises itself
 
-Prefixed `CLI_`, which is how you tell them apart: a code with the prefix means the request
-was never sent.
+Prefixed `CLI_`, which is how you tell them apart from the server's. Most of them mean the
+request was never sent. Two do not: `CLI_OUTCOME_UNKNOWN` says outright that it may have
+been carried out, and `CLI_CANCELLED` can interrupt a request already on its way.
 
 | Code | Exit | Meaning |
 | --- | --- | --- |
@@ -71,12 +73,13 @@ was never sent.
 | `CLI_AUTH_EXPIRED` | 2 | Credentials existed but could not be refreshed. |
 | `CLI_AUTH_FAILED` | 2 | The identity server refused to issue a token. |
 | `CLI_INVALID_INPUT` | 3 | Arguments rejected before any request. |
-| `CLI_USAGE` | 3 | The command line did not parse. |
+| `CLI_USAGE` | 3 | The command line did not parse -- including an amount not written as `12.50` (a `.` decimal point, no thousands separators). |
 | `CLI_SERVER_NOT_CONFIGURED` | 3 | No server URL by flag, environment or config file. |
 | `CLI_SERVER_UNREACHABLE` | 1 | DNS, TLS or connection failure. Nothing was sent. |
+| `CLI_OUTCOME_UNKNOWN` | 1 | The request may have reached the server and no answer came back: the connection broke after it was sent, or the server took too long. **It may have been carried out.** A read is safe to repeat; before repeating a change, look for it (list or show what it would have changed), or it may be recorded twice. |
 | `CLI_SERVER_ERROR` | 1 | The server answered with nothing interpretable. |
 | `CLI_CONFIG_ERROR` | 1 | The config file is unreadable. |
-| `CLI_CANCELLED` | 1 | Interrupted, or a confirmation declined. |
+| `CLI_CANCELLED` | 1 | Interrupted, or a confirmation declined. An interrupt during a change may not have stopped it: check before repeating. |
 | `CLI_INTERNAL_ERROR` | 1 | **Always a defect in the CLI**, not a usage mistake. |
 
 ### Codes from the server
@@ -93,14 +96,18 @@ ones worth handling by name:
 | `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The `--split` figures do not add up to the amount. |
 | `SPLIT_USER_NOT_IN_GROUP`, `RULE_USERS_NOT_IN_GROUP`, `TRANSACTION_PAYER_NOT_IN_GROUP` | A user id names somebody who is not in that group. |
 | `GROUP_MEMBER_NOT_SETTLED`, `ACCOUNT_NOT_SETTLED` | Leaving or deleting is blocked until balances are square. |
+| `ACCOUNT_DELETED` | Exit 2. The signed-in account was deleted (`users delete` deletes its sign-in too). Nothing will work as it again: `groupsplit auth logout`, and do not retry. |
 | `TRANSACTION_MOVES_DEPARTED_BALANCE` | The change would move what somebody who has left paid or owed. Rename, re-date or re-file freely; to change the amount, keep their share in `--split`. It cannot be deleted. `userIds` names them. |
 | `GROUP_REJOIN_NEEDS_NEW_INVITATION` | The user left this group after the link was issued. Only a link or invitation issued since will bring them back. |
-| `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined or withdrawn -- possibly a moment ago, by somebody else. |
-| `CURRENCY_MISMATCH` | The amount is not in the group's currency. |
+| `GROUP_INVITATION_NOT_FOUND` | The personal link was claimed, declined, withdrawn or replaced -- possibly a moment ago, by somebody else -- or it expired (30 days after being issued). A member can issue a new one with `groups guest-link create`. |
+| `CURRENCY_MISMATCH` | The money is not in the group's currency: recording it there (`--currency`), filing a bank row into it, or moving an expense into it with `transactions update --group`. Nothing converts, and an expense keeps its currency for good. It can stay personal, or go to a group in that currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
+| `IDENTITY_EMAIL_IN_USE` | Exit code 2, on every command: the server refuses this sign-in because its email belongs to another account (somebody deleted and recreated in Keycloak). Running `auth login` again as the same person will not fix it. Stop and tell your user to contact support with the `traceId`. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense with no group cannot be divided. |
 | `SPLIT_RULE_NOT_EDITABLE` | The rule is one the group was given per member -- all of it is for them -- and nothing renames, restates or deletes one. Create a rule of your own instead. |
 | `SPLIT_RULE_NOT_IN_GROUP` | The `--split-rule` id belongs to another group, or the expense has no group for a rule to divide. |
+| `MERCHANT_EDIT_FORBIDDEN` | Exit code 2, but not about who is signed in: no account may rename, relogo or delete a merchant. Do not retry or re-authenticate. Point the expense at another merchant instead. |
+| `MERCHANT_SEARCH_TOO_SHORT`, `MERCHANT_LOGO_NOT_ALLOWED` | `merchants list --search` needs 2+ characters; `--logo-url` must be on the bank provider's logo hosts -- leave it out. |
 | `SPLIT_RULE_KIND_FIXED` | The update would change the rule's shape -- shares to percentages, or either to "all on one person". Change the numbers, or create a rule for the new shape. |
 
 ## The confirmation envelope
@@ -120,6 +127,21 @@ Written to stdout with exit code 4, in place of the result:
 `action` is a stable slug you can branch on. `confirmCommand` is the exact string that
 performs the action, so a caller with no terminal does not have to reconstruct the
 invocation from its own history.
+
+It is written back out of the invocation that was refused, not by hand, so it carries
+every option that was given -- `--profile` and `--server` included, so it acts on the same
+account -- and adds only `--yes`. On the way:
+
+- A file is named by its absolute path, so it reads the same file from any directory.
+- Each word is quoted for a POSIX shell (single quotes) when it needs to be. Run it in
+  bash, zsh or `sh -c`. PowerShell reads it the same way unless a value contains a `'`.
+- A figure the command worked out rather than was given is stated: `settle pay` without
+  `--amount` comes back with the amount the prompt named, so confirming after the balance
+  moved still pays that amount.
+
+What the server holds can still change between the prompt and the confirmation -- a member
+pays, somebody edits the expense -- and the confirmed run acts on what is there then.
+`settle-up` and `receipts divide` work their figures out again when confirmed.
 
 Nothing ever blocks on a prompt that nobody can answer. That is the reason exit code 4
 exists, and the reason `--yes` should be something a user asked for rather than something

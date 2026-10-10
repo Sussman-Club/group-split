@@ -39,8 +39,8 @@ public interface IGuestService
     Task<IReadOnlyList<GroupGuestResponse>> ForGroup(Guid groupId, CancellationToken ct = default);
 
     /// <summary>
-    /// The guest's link: the one already out, or a new one when there is none or
-    /// <paramref name="replace"/> asks for it.
+    /// The guest's link: the one already out, or a new one when there is none, when the one
+    /// out has expired, or when <paramref name="replace"/> asks for it.
     /// </summary>
     Task<GroupGuestResponse> IssueLink(Guid groupId, Guid userId, bool replace,
         CancellationToken ct = default);
@@ -53,7 +53,8 @@ public sealed class GuestService(
     ICurrentUser userContext,
     AppDbContext context,
     IGroupParticipants participants,
-    IMemberSplitRules memberRules)
+    IMemberSplitRules memberRules,
+    TimeProvider clock)
     : IGuestService
 {
     /// <summary>
@@ -85,7 +86,7 @@ public sealed class GuestService(
             throw new ValidationException(ErrorCodes.GroupInvitationNoName,
                 "A guest needs a name.");
 
-        var addedAt = DateTimeOffset.UtcNow;
+        var addedAt = clock.GetUtcNow();
         var added = new List<Guid>();
 
         // Every name or none. Each one's rule is saved before the next is named, so the batch
@@ -145,7 +146,8 @@ public sealed class GuestService(
 
         var rows = await Project(
                 context.Set<GroupGuest>()
-                    .Where(guest => guest.GroupId == groupId && added.Contains(guest.ParticipantUserId)))
+                    .Where(guest => guest.GroupId == groupId && added.Contains(guest.ParticipantUserId)),
+                clock.GetUtcNow())
             .ToListAsync(ct);
 
         return rows.OrderBy(row => added.IndexOf(row.UserId)).ToList();
@@ -160,7 +162,8 @@ public sealed class GuestService(
                 from guest in context.Set<GroupGuest>()
                 where guest.GroupId == groupId
                 orderby guest.Name, guest.AddedAt
-                select guest)
+                select guest,
+                clock.GetUtcNow())
             .ToListAsync(ct);
     }
 
@@ -168,17 +171,25 @@ public sealed class GuestService(
         CancellationToken ct = default)
     {
         var guest = await Guest(groupId, userId, ct);
+        var now = clock.GetUtcNow();
 
-        if (guest.Token is not null && !replace)
+        // The link already out, unless it has run out. "Send link" means a link that works:
+        // copying one that has expired would hand somebody a dead URL with nothing to say
+        // so, and issuing again is what a member would do next anyway.
+        if (guest.HasWorkingLink(now) && !replace)
             return await Read(guest.Id, ct);
 
         // Replacing ends the old link properly -- the people who opened it are forgotten too,
-        // so they are not handed this one -- and then issues the new.
+        // so they are not handed this one -- and then issues the new. An expired link is
+        // ended the same way, for the same reason.
         if (guest.Token is not null)
             await context.EndLink(guest, ct);
 
+        // Issued now, so the new link's expiry and the rejoin rule both count from here:
+        // somebody who left the group after the old link went out, and before this one,
+        // may come back by this one.
         guest.Token = NewToken();
-        guest.LinkIssuedAt = DateTimeOffset.UtcNow;
+        guest.LinkIssuedAt = now;
         guest.LinkIssuedBy = userContext.User;
 
         try
@@ -192,13 +203,13 @@ public sealed class GuestService(
             // is the answer -- the link that won, or that there is no guest to issue one for.
             context.StartOver(userContext.User);
 
-            var now = await Guest(groupId, userId, ct);
+            var current = await Guest(groupId, userId, ct);
 
-            if (now.Token is null)
+            if (!current.HasWorkingLink(clock.GetUtcNow()))
                 throw new ConflictException(ErrorCodes.GroupGuestChanged,
                     "Somebody else changed this guest at the same moment. Try again.");
 
-            return await Read(now.Id, ct);
+            return await Read(current.Id, ct);
         }
 
         return await Read(guest.Id, ct);
@@ -240,24 +251,40 @@ public sealed class GuestService(
     }
 
     private Task<GroupGuestResponse> Read(Guid guestId, CancellationToken ct) =>
-        Project(context.Set<GroupGuest>().Where(guest => guest.Id == guestId)).FirstAsync(ct);
+        Project(context.Set<GroupGuest>().Where(guest => guest.Id == guestId), clock.GetUtcNow())
+            .FirstAsync(ct);
 
     private Task<Group> MemberGroup(Guid groupId, CancellationToken ct) =>
         context.GroupOfMember(groupId, userContext.User.Id, ct);
 
-    private static IQueryable<GroupGuestResponse> Project(IQueryable<GroupGuest> guests) =>
-        from guest in guests
-        select new GroupGuestResponse(
-            guest.ParticipantUserId,
-            guest.GroupId,
-            guest.Group.Name,
-            guest.Name,
-            guest.AddedBy == null ? null : guest.AddedBy.FirstName + " " + guest.AddedBy.LastName,
-            guest.AddedAt,
-            guest.Token != null,
-            guest.Token,
-            guest.LinkIssuedBy == null ? null : guest.LinkIssuedBy.FirstName + " " + guest.LinkIssuedBy.LastName,
-            guest.LinkIssuedAt);
+    /// <summary>
+    /// The wire shape, as of <paramref name="now"/>: a link that has run out is reported as
+    /// expired, with no token, rather than as a link somebody could copy.
+    /// </summary>
+    /// <remarks>
+    /// The expiry is compared as a cutoff on <see cref="GroupGuest.LinkIssuedAt"/>, which
+    /// translates anywhere; the moment it ends is added on in the projection.
+    /// </remarks>
+    private static IQueryable<GroupGuestResponse> Project(IQueryable<GroupGuest> guests, DateTimeOffset now)
+    {
+        var issuedSince = GroupGuest.IssuedSince(now);
+
+        return from guest in guests
+            let works = guest.Token != null && guest.LinkIssuedAt > issuedSince
+            select new GroupGuestResponse(
+                guest.ParticipantUserId,
+                guest.GroupId,
+                guest.Group.Name,
+                guest.Name,
+                guest.AddedBy == null ? null : guest.AddedBy.FirstName + " " + guest.AddedBy.LastName,
+                guest.AddedAt,
+                works,
+                works ? guest.Token : null,
+                guest.LinkIssuedBy == null ? null : guest.LinkIssuedBy.FirstName + " " + guest.LinkIssuedBy.LastName,
+                guest.LinkIssuedAt,
+                guest.LinkIssuedAt + GroupGuest.LinkLifetime,
+                guest.Token != null && !works);
+    }
 
     /// <summary>
     /// A URL-safe token from the cryptographic generator, never from <c>Guid.NewGuid</c>:

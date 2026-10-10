@@ -10,8 +10,8 @@ using Microsoft.Extensions.Options;
 namespace GroupSplit.Keycloak;
 
 /// <summary>
-/// The slice of Keycloak's Admin REST API the app needs: sign in as the bootstrap admin,
-/// look a user up, create one, delete one, and reconcile realm-level settings.
+/// The slice of Keycloak's Admin REST API the app needs: sign in, look a user up, create one,
+/// delete one, and reconcile realm-level settings.
 /// </summary>
 /// <remarks>
 /// Hand-rolled rather than taken from a package: four calls against a documented, stable API
@@ -21,7 +21,7 @@ namespace GroupSplit.Keycloak;
 public sealed class KeycloakAdminClient(
     HttpClient http,
     IOptions<KeycloakAdminOptions> options,
-    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient, IKeycloakRealmAdminClient
+    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient, IKeycloakRealmAdminClient, IKeycloakUserRemoval
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -79,6 +79,110 @@ public sealed class KeycloakAdminClient(
 
         await ThrowOnFailure(response, $"update client {client["clientId"]} on realm {Realm}", ct);
     }
+
+    public Task CreateClientAsync(JsonObject client, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/clients", client,
+            $"create client {client["clientId"]} on realm {Realm}", ct);
+
+    public Task CreateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/clients/{clientId}/protocol-mappers/models", mapper,
+            $"add protocol mapper {mapper["name"]} to client {clientId} on realm {Realm}", ct);
+
+    public Task UpdateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+    {
+        var id = mapper["id"]?.GetValue<string>()
+                 ?? throw new ArgumentException("The protocol mapper representation carries no id.", nameof(mapper));
+
+        return SendAsync(HttpMethod.Put, $"admin/realms/{Realm}/clients/{clientId}/protocol-mappers/models/{id}", mapper,
+            $"update protocol mapper {mapper["name"]} of client {clientId} on realm {Realm}", ct);
+    }
+
+    public async Task<string?> GetClientSecretAsync(string id, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}/clients/{id}/client-secret", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the secret of client {id} on realm {Realm}", ct);
+
+        var credential = await response.Content.ReadFromJsonAsync<JsonObject>(Json, ct);
+
+        return credential?["value"]?.GetValue<string>();
+    }
+
+    public async Task<IReadOnlyList<string>> GetServiceAccountRolesAsync(
+        string id, string roleClientId, CancellationToken ct = default)
+    {
+        var mappings = await ServiceAccountMappingsAsync(id, roleClientId, ct);
+
+        using var request = await AuthorizedAsync(HttpMethod.Get, mappings, ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the {roleClientId} roles of client {id}'s service account", ct);
+
+        var roles = await response.Content.ReadFromJsonAsync<List<KeycloakRole>>(Json, ct) ?? [];
+
+        return roles.Select(role => role.Name).ToList();
+    }
+
+    public Task GrantServiceAccountRolesAsync(
+        string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default) =>
+        MapServiceAccountRolesAsync(HttpMethod.Post, id, roleClientId, roles, "grant", ct);
+
+    public Task RevokeServiceAccountRolesAsync(
+        string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default) =>
+        MapServiceAccountRolesAsync(HttpMethod.Delete, id, roleClientId, roles, "revoke", ct);
+
+    /// <summary>
+    /// Adds or removes client roles on a service account. Keycloak takes whole role
+    /// representations rather than names, so each named role is read first -- and a name the
+    /// role client does not have fails here, saying which, rather than being silently skipped.
+    /// </summary>
+    private async Task MapServiceAccountRolesAsync(
+        HttpMethod method, string id, string roleClientId, IReadOnlyList<string> names, string verb, CancellationToken ct)
+    {
+        if (names.Count == 0) return;
+
+        var roleClient = await ClientUuidAsync(roleClientId, ct);
+        var roles = new List<KeycloakRole>();
+
+        foreach (var name in names)
+        {
+            using var read = await AuthorizedAsync(
+                HttpMethod.Get, $"admin/realms/{Realm}/clients/{roleClient}/roles/{Uri.EscapeDataString(name)}", ct);
+            using var found = await http.SendAsync(read, ct);
+
+            await ThrowOnFailure(found, $"read role {roleClientId}/{name} on realm {Realm}", ct);
+
+            roles.Add(await found.Content.ReadFromJsonAsync<KeycloakRole>(Json, ct)
+                      ?? throw new InvalidOperationException($"Keycloak returned no role {roleClientId}/{name}."));
+        }
+
+        using var request = await AuthorizedAsync(method, await ServiceAccountMappingsAsync(id, roleClientId, ct), ct);
+        request.Content = JsonContent.Create<IReadOnlyList<KeycloakRole>>(roles, options: Json);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response,
+            $"{verb} {string.Join(", ", names)} on client {id}'s service account on realm {Realm}", ct);
+    }
+
+    /// <summary>Where a client's service account keeps its mappings to another client's roles.</summary>
+    private async Task<string> ServiceAccountMappingsAsync(string id, string roleClientId, CancellationToken ct)
+    {
+        using var request = await AuthorizedAsync(
+            HttpMethod.Get, $"admin/realms/{Realm}/clients/{id}/service-account-user", ct);
+        using var response = await http.SendAsync(request, ct);
+
+        await ThrowOnFailure(response, $"read the service account of client {id} on realm {Realm}", ct);
+
+        var account = await response.Content.ReadFromJsonAsync<KeycloakUserSummary>(Json, ct)
+                      ?? throw new InvalidOperationException($"Keycloak returned no service account for client {id}.");
+
+        return $"admin/realms/{Realm}/users/{account.Id}/role-mappings/clients/{await ClientUuidAsync(roleClientId, ct)}";
+    }
+
+    private async Task<string> ClientUuidAsync(string clientId, CancellationToken ct) =>
+        (await GetClientAsync(clientId, ct))?["id"]?.GetValue<string>()
+        ?? throw new InvalidOperationException($"Keycloak realm {Realm} has no client '{clientId}'.");
 
     public async Task<JsonObject?> GetIdentityProviderAsync(string alias, CancellationToken ct = default)
     {
@@ -197,15 +301,15 @@ public sealed class KeycloakAdminClient(
     }
 
     /// <summary>
-    /// Signs in as the bootstrap admin, confirming the credentials work before any user is
-    /// touched. A failure here is worth reporting on its own: it means the AppHost did not
-    /// pass the credentials through, not that a particular account is wrong.
+    /// Signs in, confirming the credentials work before any user is touched. A failure here is
+    /// worth reporting on its own: it means the AppHost did not pass the credentials through,
+    /// not that a particular account is wrong.
     /// </summary>
     public async Task SignInAsync(CancellationToken ct = default)
     {
         await EnsureTokenAsync(force: true, ct);
         logger.LogInformation("Signed in to Keycloak as {AdminUser} on realm {AdminRealm}.",
-            _options.AdminUser, _options.AdminRealm);
+            _options.UsesClientCredentials ? _options.AdminClientId : _options.AdminUser, _options.AdminRealm);
     }
 
     /// <summary>The user with this id, or null when the realm has none.</summary>
@@ -336,6 +440,29 @@ public sealed class KeycloakAdminClient(
     }
 
     /// <summary>
+    /// Ends every session the user holds, then deletes them. Done when there is no such user,
+    /// whichever step finds that out.
+    /// </summary>
+    /// <remarks>
+    /// Keycloak drops a user's sessions when it deletes the user, so the sign-out is the belt
+    /// to that brace rather than the thing that does the work: it is the documented way to end
+    /// sessions, and it is what tells the clients that hold them. Sign-out first, because a
+    /// sign-out after the delete only ever answers 404.
+    /// </remarks>
+    public async Task RemoveUserAsync(string id, CancellationToken ct = default)
+    {
+        using (var request = await AuthorizedAsync(HttpMethod.Post, $"admin/realms/{Realm}/users/{id}/logout", ct))
+        using (var response = await http.SendAsync(request, ct))
+        {
+            if (response.StatusCode == HttpStatusCode.NotFound) return;
+
+            await ThrowOnFailure(response, $"end the sessions of user {id}", ct);
+        }
+
+        await DeleteAsync(id, ct);
+    }
+
+    /// <summary>
     /// The realm's default role. Read from the realm rather than assembled as
     /// <c>default-roles-{realm}</c>: that is only Keycloak's naming convention, and a realm
     /// is free to point its default at a role called something else.
@@ -380,15 +507,24 @@ public sealed class KeycloakAdminClient(
                 "Keycloak admin credentials are not configured.");
         }
 
-        using var response = await http.PostAsync(
-            $"realms/{_options.AdminRealm}/protocol/openid-connect/token",
-            new FormUrlEncodedContent(new Dictionary<string, string>
+        var grant = _options.UsesClientCredentials
+            ? new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _options.AdminClientId,
+                ["client_secret"] = _options.AdminClientSecret!
+            }
+            : new Dictionary<string, string>
             {
                 ["grant_type"] = "password",
                 ["client_id"] = _options.AdminClientId,
                 ["username"] = _options.AdminUser!,
                 ["password"] = _options.AdminPassword!
-            }),
+            };
+
+        using var response = await http.PostAsync(
+            $"realms/{_options.AdminRealm}/protocol/openid-connect/token",
+            new FormUrlEncodedContent(grant),
             ct);
 
         await ThrowOnFailure(response, "sign in to Keycloak", ct);

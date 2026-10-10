@@ -42,6 +42,10 @@ public static partial class KeycloakPlaceholders
         return expanded;
     }
 
+    /// <summary>Whether <paramref name="node"/> is a string that holds a placeholder.</summary>
+    public static bool IsPlaceholder(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) && Placeholder().IsMatch(text);
+
     private static JsonNode? Expand(JsonNode? node, Func<string, string?> lookup, ISet<string> missing) =>
         node switch
         {

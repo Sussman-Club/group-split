@@ -863,4 +863,66 @@ public class TransactionsPageTest : ComponentTest
 
         Assert.Null(_viewed);
     }
+
+    // ---- more than one currency (#320) ----------------------------------------------------
+
+    private void PaidSummaryIs(TransactionSummaryResponse summary) =>
+        _client
+            .Setup(client => client.GetTransactionsSummaryAsync(
+                It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
+                It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(summary);
+
+    /// <summary>
+    /// A personal expense can be in euros now, and a total is in one currency: twenty
+    /// dollars and twenty euros are not forty of anything. The card shows the API's total
+    /// and names what it left out, rather than reading as everything the list holds.
+    /// </summary>
+    [Fact]
+    public void Money_in_another_currency_is_named_beside_the_total_and_not_added_to_it()
+    {
+        PaidSummaryIs(new TransactionSummaryResponse(3, 10m)
+        {
+            Currency = "USD",
+            OtherCurrencies = [new CurrencyTotalResponse("EUR", 1, 20m)]
+        });
+
+        var page = RenderView("paid");
+
+        Assert.Equal(("3", "$10.00"), Cards(page));
+        Assert.Contains("plus €20.00 not in this total", page.Markup);
+    }
+
+    [Fact]
+    public void A_total_in_another_currency_is_shown_in_it()
+    {
+        PaidSummaryIs(new TransactionSummaryResponse(2, 27m) { Currency = "EUR" });
+
+        var page = RenderView("paid");
+
+        Assert.Equal(("2", "€27.00"), Cards(page));
+        Assert.DoesNotContain("not in this total", page.Markup);
+    }
+
+    [Fact]
+    public void A_row_in_euros_is_shown_in_euros()
+    {
+        _client
+            .Setup(client => client.GetTransactionsAsync(
+                It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
+                It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PagedResponseOfTransactionResponse(
+            [
+                new TransactionResponse
+                {
+                    Id = Guid.NewGuid(), Name = "Dinner in Lisbon", Amount = 20m, Currency = "EUR",
+                    DateTime = DateTimeOffset.UtcNow, PaidByUserName = "Ana"
+                }
+            ], 1, 10, 1));
+
+        var page = RenderView("paid");
+
+        page.WaitForAssertion(() => Assert.Contains("€20.00", page.Find(".gs-grid").TextContent));
+    }
 }

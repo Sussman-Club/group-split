@@ -91,6 +91,11 @@ Members are equal: there are no roles. A departure is remembered rather than del
 shared before somebody left does not bring them back, and nothing may change what they paid or
 owed once they have gone.
 
+Deleting an account anonymises its row -- the ledger keeps it, because everybody else's
+balances are made of it -- and deletes its Keycloak login, so nobody can sign in as it again.
+What goes, what stays and what happens when Keycloak cannot be reached is in
+[docs/account-deletion.md](docs/account-deletion.md).
+
 ## Errors
 
 Every non-2xx API response is RFC 9457 problem details carrying a stable `code`, a `traceId`
@@ -202,6 +207,18 @@ configuration fail before anything is built. The AppHost's `validate-smtp` pipel
 still checks the cross-field rule once the parameters are resolved, so a publish from a
 laptop gets the same validation.
 
+`SMTP_ENABLED` also decides whether the sign-in page offers **Forgot your password?**
+(`resetPasswordAllowed` in `realms.json` is `${SMTP_ENABLED}`). A reset is a mail, so
+without a relay the form would accept an address and nothing would ever arrive: a way back
+into the account that cannot work. With mail off the link is not shown, and somebody who
+has forgotten their password signs in with Google, if it is on, or asks an operator to set
+a new one in the admin console. The alternative, refusing to deploy password accounts
+without mail, would block a deployment that otherwise works for the sake of one link, so
+the link follows the mail instead. The realm worker is given the same switch and applies it
+to the existing realm on every deploy, so turning mail on or off takes effect without a
+realm reset. Locally the relay is Mailpit, so the link is there and the mail lands in its
+inbox.
+
 The realm does not require registrations to verify their address. Having a relay is not
 the same as trusting it: a sender domain part way through verification at the provider
 has every send rejected, and a verification requirement then strands users at their next
@@ -235,8 +252,16 @@ even when mail is disabled.
 The `realm-settings` worker starts after Keycloak is ready, in development and in a
 deployment. It reads `realms.json`, compares the managed realm-level settings, and updates
 only the values that differ. That includes the realm's display and theme, registration and
-login switches, password and brute-force policy, token lifetimes, and SSO timeouts. A
-second run with no changes makes no API update. If Keycloak never becomes ready, the worker
+login switches (the password reset link among them, following `SMTP_ENABLED`, which the
+worker is given as well), password and brute-force policy, token lifetimes, and SSO timeouts. It also
+includes the flow bindings: which flow runs a browser sign-in, a registration, a direct grant,
+a password reset, a client's authentication, and a brokered first sign-in. `realms.json`
+names Keycloak's built-in flows for each, so a binding re-pointed at another flow, by hand or
+by a mistaken import, is pointed back. The built-in flows themselves are not managed. And it
+includes the event settings: user and admin events on, kept for 90 days, admin events without
+the representation that was sent. See
+[Sign-in and admin events](docs/development-and-deployment.md#sign-in-and-admin-events) for
+where to read them. A second run with no changes makes no API update. If Keycloak never becomes ready, the worker
 fails and the deployment does not silently skip reconciliation.
 
 It also manages where the `web-app` client may send a browser back to. The client's
@@ -251,6 +276,15 @@ endpoint. Keycloak refuses a sign-in from any other origin, including the web ap
 endpoint locally. If the variable is missing, the worker fails rather than store the
 placeholder.
 
+It also manages the `cli` client that `groupsplit auth login` signs in through: the device
+authorization grant on and every other grant off (authorization code, implicit, password,
+service account and CIBA), public, and an audience mapper that puts `api` in its tokens.
+Unlike `web-app`, a missing `cli` client is created, from its definition in `realms.json`.
+A realm imported before the CLI existed has none, and nothing in the client depends on the
+environment, so creating it writes exactly what an import would have. A missing `web-app`
+client still fails the run and points at the realm reset, because its redirect URIs are the
+environment's.
+
 It also manages which account a first Google sign-in may land in. The `google` provider's
 `trustEmail`, its first broker login flow, and its essential-claim filter are reconciled,
 and so is that flow. The flow is rebuilt whole if it differs at all. It runs exactly two
@@ -261,8 +295,16 @@ refuse any Google ID token whose `email_verified` is not `true`, so an address G
 checked cannot match an account either. The provider's switch, client ID and secret stay
 with the container. A realm without a `google` provider is not given one.
 
+It owns one client whole: `account-deletion`, which the API deletes a deleted account's login
+through. Unlike `web-app` it is created when the realm lacks it -- every realm imported before
+it existed does -- and on every run it is held to client credentials only, to the secret in
+`KEYCLOAK_ACCOUNT_DELETION_SECRET`, and to exactly the `realm-management` roles `realms.json`
+gives its service account (`manage-users`), revoking anything added by hand. See
+[docs/account-deletion.md](docs/account-deletion.md).
+
 The worker deliberately does not manage SMTP settings, the rest of each client and provider,
-protocol mappers, other authentication flows, roles, or users. Those remain governed by
+protocol mappers other than the `cli` audience, the built-in authentication flows, roles, or
+users. Those remain governed by
 realm import and their existing seeders. This boundary is explicit in
 [`KeycloakRealmDefinition`](src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs).
 
@@ -291,7 +333,8 @@ runs when the app asks for one and a daily sweep catches the rest.
 The access tokens are encrypted with ASP.NET Data Protection, whose key ring is itself
 encrypted with a certificate the deployment holds as a secret. A key ring sitting in the
 same database as the ciphertext would protect it from a leak of one table and from nothing
-else, so a deployment with bank sync on and no certificate is refused at publish time. See
+else, so a deployment with bank sync on and no certificate is refused at publish time, and
+outside Development the API refuses to start with Plaid configured and no certificate. See
 [the key ring](docs/development-and-deployment.md#the-bank-access-token-key-ring).
 
 How it is put together, and what was deliberately left out, is in

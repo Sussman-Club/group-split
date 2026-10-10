@@ -62,6 +62,88 @@ public class ReceiptEndpointTest : IAsyncLifetime
             .GetProperty("id").GetGuid();
     }
 
+    private async Task<Guid> IdOf(HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct)).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// The route <c>groupsplit receipts rule</c> calls, completing a bill that divides its
+    /// expense. The web's dialog saves the whole bill and got the ledger back that way; this
+    /// route never did, so the CLI left the ledger behind the bill for good.
+    /// </summary>
+    [Fact]
+    public async Task Completing_a_bill_through_the_line_rule_route_divides_the_expense_again()
+    {
+        var group = await IdOf(await Client.PostAsJsonAsync("/groups", new CreateGroupRequest { Name = "Flat" }, Json, Ct));
+        var added = await Client.PostAsJsonAsync($"/groups/{group}/guests",
+            new AddGuestsRequest { Names = ["Pat"] }, Json, Ct);
+        added.EnsureSuccessStatusCode();
+        var pat = Assert.Single((await added.Content.ReadFromJsonAsync<GroupGuestResponse[]>(Json, Ct))!).UserId;
+
+        var together = (await (await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
+                { GroupId = group, Name = "Together", Definition = new EvenSplitRuleDto() }, Json, Ct))
+            .Content.ReadFromJsonAsync<SplitRuleDetailsResponse>(Json, Ct))!.VersionId;
+        var patOnly = (await (await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
+                { GroupId = group, Name = "Pat only", Definition = new SoleSplitRuleDto(pat) }, Json, Ct))
+            .Content.ReadFromJsonAsync<SplitRuleDetailsResponse>(Json, Ct))!.VersionId;
+        var bill = (await Client.GetFromJsonAsync<SplitRuleResponse[]>($"/split-rules?groupId={group}", Json, Ct))!
+            .Single(rule => rule.DividesByBill).Id;
+        var food = await IdOf(await Client.PostAsJsonAsync("/categories", new CreateCategoryRequest
+            { GroupId = group, Name = "Food", DefaultSplitRuleId = bill }, Json, Ct));
+
+        // Who "me" is, read off an expense of mine, so the real one can state its first shares.
+        var probe = await (await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+                { Name = "Probe", Amount = 1m, DateTime = DateTimeOffset.UtcNow, GroupId = group }, Json, Ct))
+            .Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        var me = probe.GetProperty("paidByUserId").GetGuid();
+        var expense = await IdOf(await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+        {
+            Name = "Dinner", Amount = 30m, DateTime = DateTimeOffset.UtcNow, GroupId = group, CategoryId = food,
+            Splits = [new SplitInput { UserId = me, Amount = 30m }]
+        }, Json, Ct));
+
+        var saved = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new SaveReceiptRequest
+        {
+            Subtotal = 30m, Total = 30m,
+            Items =
+            [
+                new ReceiptItemInput { Name = "Pizza", TotalPrice = 20m, SplitRuleVersionId = together },
+                new ReceiptItemInput { Name = "Wine", TotalPrice = 10m, SplitRuleVersionId = patOnly }
+            ]
+        }, Json, Ct);
+        var lines = (await saved.Content.ReadFromJsonAsync<ReceiptResponse>(Json, Ct))!.Items;
+        (await Client.PostAsync($"/transactions/{expense}/receipt/divide", null, Ct)).EnsureSuccessStatusCode();
+
+        // The wine was a glass each, and only one of them was Pat's alone.
+        var split = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new SaveReceiptRequest
+        {
+            Subtotal = 30m, Total = 30m,
+            Items =
+            [
+                new ReceiptItemInput { Id = lines[0].Id, Name = "Pizza", TotalPrice = 20m, SplitRuleVersionId = together },
+                new ReceiptItemInput { Id = lines[1].Id, Name = "Wine", TotalPrice = 5m, SplitRuleVersionId = patOnly },
+                new ReceiptItemInput { Name = "Second glass", TotalPrice = 5m }
+            ]
+        }, Json, Ct);
+        var glass = (await split.Content.ReadFromJsonAsync<ReceiptResponse>(Json, Ct))!.Items
+            .Single(item => item.Name == "Second glass").Id;
+
+        Assert.Equal(20m, await Owed(expense, pat));
+
+        var ruled = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt/items/{glass}/rule",
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = together }, Json, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, ruled.StatusCode);
+        Assert.Equal(17.5m, await Owed(expense, pat));
+        Assert.Equal(12.5m, await Owed(expense, me));
+    }
+
+    private async Task<decimal> Owed(Guid expense, Guid user) =>
+        (await Client.GetFromJsonAsync<TransactionDetailsResponse>($"/transactions/{expense}", Json, Ct))!
+        .Splits.Single(split => split.UserId == user).Amount;
+
     [Theory]
     [InlineData("/transactions/{0}/receipt")]
     [InlineData("/transactions/{0}/receipt/preview")]

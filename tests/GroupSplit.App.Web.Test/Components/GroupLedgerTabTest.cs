@@ -50,6 +50,12 @@ public class GroupLedgerTabTest : ComponentTest
 
     private List<GroupLedgerEntryResponse> _entries = [];
 
+    /// <summary>
+    /// When set, the next read of the rows waits on it -- a reload still in flight while the
+    /// test does something else.
+    /// </summary>
+    private TaskCompletionSource? _holdNextRead;
+
     /// <summary>What the confirmation dialog comes back with. Yes, unless a test says otherwise.</summary>
     private DialogResult _confirmation = DialogResult.Ok(true);
 
@@ -79,12 +85,22 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, string _,
+            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, string _,
                 bool? _, int? _, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
 
-                return new PagedResponseOfGroupLedgerEntryResponse(_entries, 1, 10, _entries.Count);
+                // What the server holds at the moment it is asked, which is not necessarily
+                // what it holds by the time the answer arrives.
+                var rows = _entries.ToList();
+
+                if (_holdNextRead is { } held)
+                {
+                    _holdNextRead = null;
+                    await held.Task;
+                }
+
+                return new PagedResponseOfGroupLedgerEntryResponse(rows, 1, 10, rows.Count);
             });
 
         // The caller's own share of the same set: the second line under the total. Not what
@@ -415,6 +431,81 @@ public class GroupLedgerTabTest : ComponentTest
 
         Assert.Single(_asks);
         Assert.Equal((int)ActivityKind.Expense, _kinds.Last());
+    }
+
+    /// <summary>
+    /// A kind chosen while the rows are reloading is applied once that reload lands (#323).
+    /// </summary>
+    /// <remarks>
+    /// Only one reload runs at a time, and one asked for meanwhile used to be dropped -- so
+    /// the chip said Settlements over the rows of everything, until something else happened
+    /// to reload them.
+    /// </remarks>
+    [Fact]
+    public async Task A_kind_chosen_during_a_reload_is_applied_once_it_lands()
+    {
+        _entries = [Expense(Guid.NewGuid()), Transfer(Guid.NewGuid())];
+
+        var tab = Render();
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _holdNextRead = held;
+
+        // A write somewhere reloads the rows, and the read is still out...
+        var reloading = tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+
+        // ...when Settlements is chosen.
+        var choosing = ClickChipAsync(tab, "Settlements");
+
+        held.SetResult();
+        await reloading;
+        await choosing;
+
+        tab.WaitForAssertion(() => Assert.Equal((int)ActivityKind.Transfer, _kinds.Last()));
+    }
+
+    /// <summary>
+    /// A row deleted while an earlier delete's reload is still out does not stay on screen
+    /// (#323).
+    /// </summary>
+    /// <remarks>
+    /// The second delete's reload was dropped because the first's was running -- and the
+    /// first's read had been answered before the second delete reached the server, so it
+    /// still had the row in it.
+    /// </remarks>
+    [Fact]
+    public async Task A_second_delete_during_a_reload_does_not_leave_its_row_on_screen()
+    {
+        var dinner = Expense(Guid.NewGuid(), "Dinner");
+        var taxi = Expense(Guid.NewGuid(), "Taxi");
+        var lunch = Expense(Guid.NewGuid(), "Lunch");
+
+        _entries = [dinner, taxi, lunch];
+
+        var tab = Render();
+        tab.WaitForAssertion(() => Assert.Contains("Taxi", tab.Markup, StringComparison.Ordinal));
+
+        // The first delete lands, and its reload asks before the second one does.
+        _entries = [taxi, lunch];
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _holdNextRead = held;
+
+        var firstReload = tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+
+        // The second delete lands while that read is still out.
+        _entries = [lunch];
+        var secondReload = tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+
+        held.SetResult();
+        await firstReload;
+        await secondReload;
+
+        tab.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain("Taxi", tab.Markup, StringComparison.Ordinal);
+            Assert.Contains("Lunch", tab.Markup, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>

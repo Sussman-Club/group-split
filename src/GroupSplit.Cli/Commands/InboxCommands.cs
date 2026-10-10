@@ -184,8 +184,7 @@ public static class InboxCommands
                 context,
                 action: "inbox.attachments.delete",
                 summary: $"Delete receipt file '{attachment.FileName}'?",
-                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this bank row."],
-                confirmCommand: $"groupsplit inbox attachments delete {rowId} {attachmentId} --yes");
+                changes: [$"The file ({attachment.Length:N0} bytes) is removed from this bank row."]);
 
             await new Api.InboxClient(context.ApiHttpClient)
                 .DeleteBankReceiptAttachmentAsync(rowId, attachmentId, ct);
@@ -269,7 +268,7 @@ public static class InboxCommands
                         row.Id.ToString(),
                         row.SpentOn.ToString("yyyy-MM-dd"),
                         Title(row),
-                        Tables.Money(row.Amount),
+                        Tables.Money(row.Amount, row.Currency),
                         Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
                 }
 
@@ -555,7 +554,7 @@ public static class InboxCommands
                 .FileBankTransactionAsync(parse.GetValue(RowId), request, ct);
 
             context.Output.Write(expense, value => new Markup(
-                $"[green]Filed[/] {Markup.Escape(value.Name)} ({value.Amount:N2}) "
+                $"[green]Filed[/] {Markup.Escape(value.Name)} ({Tables.Amount(value.Amount, value.Currency)}) "
                 + $"in {Markup.Escape(value.GroupName ?? "your own ledger")} [grey]{value.Id}[/]\n"));
 
             return ExitCodes.Success;

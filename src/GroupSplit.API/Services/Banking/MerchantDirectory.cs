@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services.Banking;
@@ -52,6 +53,11 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
         var display = Clip(name.Trim(), 128);
         var normalized = display.ToLowerInvariant();
 
+        // A logo from anywhere but the provider's own image hosts is dropped rather than
+        // stored, and the row is kept: the place is real even when the address is not one
+        // every viewer's browser should be sent to. See MerchantLogos.
+        logoUrl = MerchantLogos.Usable(Clip(logoUrl, 512));
+
         if (_seen.TryGetValue(normalized, out var cached))
             return Freshen(cached, logoUrl);
 
@@ -68,7 +74,7 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
         {
             Name = display,
             NormalizedName = normalized,
-            LogoUrl = Clip(logoUrl, 512),
+            LogoUrl = logoUrl,
             FirstSeenAt = clock.GetUtcNow()
         };
 
@@ -90,8 +96,8 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
     /// </remarks>
     private static Merchant Freshen(Merchant merchant, string? logoUrl)
     {
-        if (merchant.LogoUrl is null && !string.IsNullOrWhiteSpace(logoUrl))
-            merchant.LogoUrl = Clip(logoUrl, 512);
+        if (merchant.LogoUrl is null && logoUrl is not null)
+            merchant.LogoUrl = logoUrl;
 
         return merchant;
     }

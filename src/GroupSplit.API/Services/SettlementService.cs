@@ -32,11 +32,12 @@ namespace GroupSplit.API.Services;
 /// It settles the caller's whole outstanding position, or the position through a day, and it
 /// keeps no bookkeeping of its own either way. Balances are cumulative and self-correcting:
 /// pay what the balance says, and it goes to zero. Through a day the balance counts the
-/// expenses dated up to it and every settlement whatever its date, so paying it zeroes that
-/// period and a second settling-up of the same period has nothing left to write. The day is
-/// remembered on the payments as <see cref="Transfer.CoversThrough"/>, as a statement of
-/// what they were for -- never as a list of expenses they paid, which an edit, a deletion
-/// or a back-dated expense would quietly make untrue.
+/// expenses dated up to it and the settlements made for it, and later ones only as far as
+/// they pay it down, so paying it zeroes that period and a second settling-up of the same
+/// period has nothing left to write. The day is remembered on the payments as
+/// <see cref="Transfer.CoversThrough"/>, as a statement of what they were for -- never as a
+/// list of expenses they paid, which an edit, a deletion or a back-dated expense would
+/// quietly make untrue.
 /// </para>
 /// </remarks>
 public interface ISettlementService
@@ -117,8 +118,8 @@ public interface ISettlementService
     /// or null when the group is not one of theirs.
     /// </summary>
     /// <remarks>
-    /// Through a day, each payment is capped at what the whole balance says between the same
-    /// two people; see <see cref="IDebtCalculationService.GetUserBalanceThrough"/>.
+    /// Through a day, settlements made for after it count only as far as they pay down what
+    /// the period left; see <see cref="IDebtCalculationService.GetUserBalanceThrough"/>.
     /// </remarks>
     Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
         CancellationToken cancellationToken = default);
@@ -396,20 +397,72 @@ public class SettlementService(
     public async Task<UserGroupBalanceResponse?> GetPosition(Guid groupId, Cutoff? cutoff,
         CancellationToken cancellationToken = default)
     {
-        var whole = await (await groups.GetGroupNetBalance(groupId, cancellationToken))
+        var rows = await (await groups.GetGroupNetBalance(groupId, cutoff, cancellationToken))
             .ToArrayAsync(cancellationToken);
 
         // Every group has at least the caller, so no rows means it is not one of theirs.
-        if (whole.Length == 0)
+        if (rows.Length == 0)
             return null;
 
         if (cutoff is null)
-            return await debtCalculator.GetUserBalance(whole);
+            return await debtCalculator.GetUserBalance(rows);
 
-        var throughDay = await (await groups.GetGroupNetBalance(groupId, cutoff, cancellationToken))
-            .ToArrayAsync(cancellationToken);
+        var later = await LaterPayments([groupId], cutoff, cancellationToken);
 
-        return await debtCalculator.GetUserBalanceThrough(throughDay, whole);
+        var period = await debtCalculator.GetUserBalanceThrough(rows, later[groupId]);
+
+        // The latest later period anybody has since settled. Its plan may have routed this
+        // one's debts through a third member, so what it leaves is the most this period can
+        // still ask for; see IDebtCalculationService.CappedAt. Ends, since nothing is settled
+        // through a day later than the latest one.
+        var settledLater = await context.Set<Transfer>()
+            .Where(transfer => transfer.GroupId == groupId && transfer.CoversThrough > cutoff.Through)
+            .MaxAsync(transfer => transfer.CoversThrough, cancellationToken);
+
+        if (settledLater is not { } day)
+            return period;
+
+        var closed = await GetPosition(groupId, cutoff with { Through = day }, cancellationToken);
+
+        return closed is null ? period : debtCalculator.CappedAt(period, closed);
+    }
+
+    /// <summary>
+    /// The settlements in these groups made for after the cutoff, oldest first, by group.
+    /// </summary>
+    /// <remarks>
+    /// For after it means covering through a later day, or claiming no period and dated after
+    /// the day ends. A settlement that says what it was for is taken at its word whatever its
+    /// date: September's, paid on 9 October, is September's.
+    /// </remarks>
+    private async Task<ILookup<Guid, SettlementPayment>> LaterPayments(IReadOnlyCollection<Guid> groupIds,
+        Cutoff cutoff, CancellationToken cancellationToken)
+    {
+        var through = cutoff.Through;
+        var end = cutoff.End;
+
+        var later = await context.Set<Transfer>()
+            .Where(transfer => groupIds.Contains(transfer.GroupId!.Value) &&
+                               (transfer.CoversThrough != null
+                                   ? transfer.CoversThrough > through
+                                   : transfer.DateTime >= end))
+            .OrderBy(transfer => transfer.DateTime)
+            .ThenBy(transfer => transfer.Id)
+            .Select(transfer => new
+            {
+                GroupId = transfer.GroupId!.Value,
+                transfer.UserId,
+                RecipientId = transfer.Splits.Select(split => split.UserId).FirstOrDefault(),
+                transfer.Amount
+            })
+            .ToListAsync(cancellationToken);
+
+        return later.ToLookup(transfer => transfer.GroupId, transfer => new SettlementPayment
+        {
+            FromUserId = transfer.UserId,
+            ToUserId = transfer.RecipientId,
+            Amount = transfer.Amount
+        });
     }
 
     /// <summary>
@@ -428,11 +481,6 @@ public class SettlementService(
         var rows = await (await groups.GetAllGroupNetBalances(cutoff, cancellationToken))
             .ToListAsync(cancellationToken);
 
-        // Through a day, the whole balances too: each group's payments are capped at them.
-        var wholeRows = cutoff is null
-            ? rows
-            : await (await groups.GetAllGroupNetBalances(cancellationToken)).ToListAsync(cancellationToken);
-
         var youPay = new Dictionary<Guid, PersonBuilder>();
         var owedToYou = new Dictionary<Guid, PersonBuilder>();
 
@@ -445,10 +493,14 @@ public class SettlementService(
             if (balances.TrueForAll(balance => balance.Balance == 0))
                 continue;
 
+            // Through a day, the group's position exactly as its own balances read it: the
+            // repayments made for later, and any later period since settled, are its business.
             var position = cutoff is null
                 ? await debtCalculator.GetUserBalance(balances)
-                : await debtCalculator.GetUserBalanceThrough(balances,
-                    Balances(wholeRows.Where(row => row.GroupId == inGroup.Key.GroupId)));
+                : await GetPosition(inGroup.Key.GroupId, cutoff, cancellationToken);
+
+            if (position is null)
+                continue;
 
             var guests = balances.Where(balance => balance.IsGuest).Select(balance => balance.UserId).ToHashSet();
 

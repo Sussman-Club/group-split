@@ -177,43 +177,10 @@ public static class TransactionApi
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
-                    var user = currentUser.User;
                     var expenses = (await transactionService.List(ct)).ApplyFilter(filter);
                     var shares = await transactionService.Shares(ct);
 
-                    var paid = await expenses
-                        .Where(expense => expense.UserId == user.Id)
-                        .GroupBy(expense => new { expense.DateTime.Year, expense.DateTime.Month })
-                        .Select(month => new
-                        {
-                            month.Key.Year,
-                            month.Key.Month,
-                            Total = month.Sum(expense => expense.Amount)
-                        })
-                        .ToListAsync(ct);
-
-                    var owed = await (from split in shares
-                                      join expense in expenses on split.TransactionId equals expense.Id
-                                      group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month }
-                                      into month
-                                      select new
-                                      {
-                                          month.Key.Year,
-                                          month.Key.Month,
-                                          Total = month.Sum()
-                                      })
-                        .ToListAsync(ct);
-
-                    var months = paid.Select(row => (row.Year, row.Month))
-                        .Union(owed.Select(row => (row.Year, row.Month)))
-                        .OrderBy(month => month)
-                        .Select(month => new MonthlyExposureResponse(
-                            new DateOnly(month.Year, month.Month, 1),
-                            paid.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m,
-                            owed.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m))
-                        .ToList();
-
-                    return Results.Ok(months);
+                    return Results.Ok(await expenses.ToMonthlyExposureAsync(shares, currentUser.User.Id, ct));
                 })
                 .WithName("GetMonthlyExposure")
                 .Produces<MonthlyExposureResponse[]>();
@@ -563,6 +530,68 @@ public static class TransactionApi
         }
 
         /// <summary>
+        /// What the caller paid and what their share came to, month by month, over these
+        /// expenses: the series behind <c>GET /transactions/monthly</c>.
+        /// </summary>
+        /// <remarks>
+        /// A currency to a row as well as a month, so the series can be drawn in one of
+        /// them: a line that added euros to dollars would plot a number that is not an
+        /// amount of anything. Its own method rather than the endpoint's body so the real
+        /// database can be asked to translate it.
+        /// </remarks>
+        internal async Task<List<MonthlyExposureResponse>> ToMonthlyExposureAsync(
+            IQueryable<TransactionSplit> shares, Guid userId, CancellationToken ct)
+        {
+            var paid = await transactions
+                .Where(expense => expense.UserId == userId)
+                .GroupBy(expense => new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency })
+                .Select(month => new
+                {
+                    month.Key.Year,
+                    month.Key.Month,
+                    month.Key.Currency,
+                    Count = month.Count(),
+                    Total = month.Sum(expense => expense.Amount)
+                })
+                .ToListAsync(ct);
+
+            var owed = await (from split in shares
+                              join expense in transactions on split.TransactionId equals expense.Id
+                              group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency }
+                              into month
+                              select new
+                              {
+                                  month.Key.Year,
+                                  month.Key.Month,
+                                  month.Key.Currency,
+                                  Count = month.Count(),
+                                  Total = month.Sum()
+                              })
+                .ToListAsync(ct);
+
+            var currency = HeadlineCurrency(
+                paid.Select(row => (row.Currency, row.Count))
+                    .Concat(owed.Select(row => (row.Currency, row.Count)))
+                    .GroupBy(row => row.Currency)
+                    .Select(rows => (rows.Key, rows.Sum(row => row.Count))));
+
+            paid = [.. paid.Where(row => row.Currency == currency)];
+            owed = [.. owed.Where(row => row.Currency == currency)];
+
+            return paid.Select(row => (row.Year, row.Month))
+                .Union(owed.Select(row => (row.Year, row.Month)))
+                .OrderBy(month => month)
+                .Select(month => new MonthlyExposureResponse(
+                    new DateOnly(month.Year, month.Month, 1),
+                    paid.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m,
+                    owed.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m)
+                {
+                    Currency = currency
+                })
+                .ToList();
+        }
+
+        /// <summary>
         /// The filter, the order and the page, in that order. Both listings go through here
         /// so neither can drift from the other, or from the summary below.
         /// </summary>
@@ -571,14 +600,38 @@ public static class TransactionApi
             transactions.ApplyFilter(filter).ApplySort(sort, Sort).SelectDto().ToPageAsync(page, ct);
 
         /// <summary>The same filter, counted and totalled instead of paged.</summary>
+        /// <remarks>
+        /// Totalled a currency at a time, in one grouped read. It was a single sum, which
+        /// was right while every expense was in dollars and stopped being right the moment
+        /// a personal one could be in euros: twenty of each is not forty of anything.
+        /// </remarks>
         internal async Task<TransactionSummaryResponse> ToSummaryAsync(
             TransactionFilter filter, CancellationToken ct)
         {
-            var matches = transactions.ApplyFilter(filter);
+            var byCurrency = await transactions.ApplyFilter(filter)
+                .GroupBy(transaction => transaction.Currency)
+                .Select(currency => new
+                {
+                    Currency = currency.Key,
+                    Count = currency.Count(),
+                    Total = currency.Sum(transaction => transaction.Amount)
+                })
+                .ToListAsync(ct);
 
-            return new TransactionSummaryResponse(
-                await matches.CountAsync(ct),
-                await matches.SumAsync(transaction => transaction.Amount, ct));
+            var headline = HeadlineCurrency(byCurrency.Select(row => (row.Currency, row.Count)));
+            var main = byCurrency.FirstOrDefault(row => row.Currency == headline);
+
+            return new TransactionSummaryResponse(byCurrency.Sum(row => row.Count), main?.Total ?? 0m)
+            {
+                Currency = headline,
+                OtherCurrencies =
+                [
+                    .. byCurrency
+                        .Where(row => row.Currency != headline)
+                        .OrderBy(row => row.Currency, StringComparer.Ordinal)
+                        .Select(row => new CurrencyTotalResponse(row.Currency, row.Count, row.Total))
+                ]
+            };
         }
     }
 
@@ -617,6 +670,9 @@ public static class TransactionApi
                 {
                     Id = expense.Id,
                     Amount = expense.Amount,
+                    // Both figures are in it. Left out, every row said the record's default,
+                    // and a euro expense listed itself as the same number of dollars.
+                    Currency = expense.Currency,
                     // The stored split, not the amount divided by anything. It is the row
                     // every balance is summed from, so a listing that re-derived it could
                     // disagree with the figure the group page shows.
@@ -652,11 +708,12 @@ public static class TransactionApi
 
         /// <summary>The same filter, counted and totalled instead of paged.</summary>
         /// <remarks>
-        /// Four figures and four queries. One <c>GROUP BY</c> would answer them together,
-        /// and a conditional sum inside it is the kind of thing that translates on one
-        /// provider and not the other -- the tests run in memory and production runs on
-        /// Npgsql, so a translation failure would first be seen by a person. Three extra
-        /// aggregates over an indexed join is not worth taking that risk for.
+        /// Two grouped reads, a currency to a row, rather than one sum per figure: twenty
+        /// dollars and twenty euros are not forty of anything, and a personal expense may be
+        /// in either. What is owed is its own read rather than a conditional sum inside the
+        /// first, because that is the kind of thing that translates on one provider and not
+        /// the other -- the tests run in memory and production runs on Npgsql, so a
+        /// translation failure would first be seen by a person.
         /// </remarks>
         internal async Task<ExpenseShareSummaryResponse> ToShareSummaryAsync(
             IQueryable<Expense> expenses, TransactionFilter filter, Guid userId, bool owedOnly,
@@ -664,16 +721,74 @@ public static class TransactionApi
         {
             var matches = shares.SelectDto(expenses.ApplyFilter(filter), userId).OwedOnly(owedOnly);
 
+            var byCurrency = await matches
+                .GroupBy(row => row.Currency)
+                .Select(currency => new
+                {
+                    Currency = currency.Key,
+                    Count = currency.Count(),
+                    Total = currency.Sum(row => row.Amount),
+                    Share = currency.Sum(row => row.Share)
+                })
+                .ToListAsync(ct);
+
+            // What is actually owed. A share of an expense the caller paid for is money they
+            // already have -- they are owed the rest of it -- so counting it here would put
+            // every personal expense and every dinner they picked up on the wrong side of the
+            // same figure the home page reads.
+            var owed = await matches
+                .Where(row => !row.PaidByYou)
+                .GroupBy(row => row.Currency)
+                .Select(currency => new { Currency = currency.Key, Total = currency.Sum(row => row.Share) })
+                .ToListAsync(ct);
+
+            decimal OwedIn(string currency) =>
+                owed.FirstOrDefault(row => row.Currency == currency)?.Total ?? 0m;
+
+            var headline = HeadlineCurrency(byCurrency.Select(row => (row.Currency, row.Count)));
+            var main = byCurrency.FirstOrDefault(row => row.Currency == headline);
+
             return new ExpenseShareSummaryResponse(
-                await matches.CountAsync(ct),
-                await matches.SumAsync(row => row.Amount, ct),
-                await matches.SumAsync(row => row.Share, ct),
-                // What is actually owed. A share of an expense the caller paid for is money
-                // they already have -- they are owed the rest of it -- so counting it here
-                // would put every personal expense and every dinner they picked up on the
-                // wrong side of the same figure the home page reads.
-                await matches.Where(row => !row.PaidByYou).SumAsync(row => row.Share, ct));
+                byCurrency.Sum(row => row.Count),
+                main?.Total ?? 0m,
+                main?.Share ?? 0m,
+                OwedIn(headline))
+            {
+                Currency = headline,
+                OtherCurrencies =
+                [
+                    .. byCurrency
+                        .Where(row => row.Currency != headline)
+                        .OrderBy(row => row.Currency, StringComparer.Ordinal)
+                        .Select(row => new CurrencyShareTotalResponse(
+                            row.Currency, row.Count, row.Total, row.Share, OwedIn(row.Currency)))
+                ]
+            };
         }
+    }
+
+    /// <summary>
+    /// The one currency a total is given in, out of the currencies a match holds.
+    /// </summary>
+    /// <remarks>
+    /// The default wherever anything is in it, which is every group today and most of what
+    /// anybody records. Otherwise the currency most of the matches are in -- a listing of a
+    /// euro group, or of a month spent abroad, reads in euros rather than as zero dollars
+    /// beside a list of exceptions. Ties go to the alphabet, so the same set of rows always
+    /// answers the same way.
+    /// </remarks>
+    internal static string HeadlineCurrency(IEnumerable<(string Currency, int Count)> present)
+    {
+        var currencies = present.ToList();
+
+        if (currencies.Count == 0 || currencies.Any(row => row.Currency == Currencies.Default))
+            return Currencies.Default;
+
+        return currencies
+            .OrderByDescending(row => row.Count)
+            .ThenBy(row => row.Currency, StringComparer.Ordinal)
+            .First()
+            .Currency;
     }
 
     /// <summary>

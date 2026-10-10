@@ -340,6 +340,172 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Contains("dividing an expense by its own bill", refused.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// An expense divided by its bill, 30 of it the payer's and 18 the other member's.
+    /// </summary>
+    private async Task<(Expense Expense, Guid Other)> DividedByItsBill()
+    {
+        var (expense, other, _, _) = await Setup();
+        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+        await Receipts.SaveForExpense(expense.Id, Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
+        await Receipts.Divide(expense.Id, Ct);
+        return (expense, other);
+    }
+
+    private async Task<Dictionary<Guid, decimal>> SharesOf(Guid expense) =>
+        await DbContext.Set<TransactionSplit>().AsNoTracking()
+            .Where(split => split.TransactionId == expense)
+            .ToDictionaryAsync(split => split.UserId, split => split.Amount, Ct);
+
+    private Task<Receipt> StoredBill(Guid expense) =>
+        DbContext.Set<Receipt>().AsNoTracking().SingleAsync(receipt => receipt.ExpenseId == expense, Ct);
+
+    /// <summary>
+    /// Somebody forgot the tip. The amount could not move because the bill no longer came to
+    /// it, and the bill could not move because it had to come to the amount; now the amount
+    /// moves and the bill follows, the difference on its tip, spread over the lines by price.
+    /// </summary>
+    [Fact]
+    public async Task Changing_the_amount_puts_the_difference_on_the_tip_and_divides_again()
+    {
+        var (expense, other) = await DividedByItsBill();
+        var edit = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        edit.Amount = 58m;
+
+        // The preview says what the save will do, and changes nothing on the way.
+        var preview = await Transactions.PreviewUpdate(expense.Id, edit, ct: Ct);
+        Assert.Equal(36.25m, preview.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(21.75m, preview.Splits.Single(split => split.UserId == other).Amount);
+        Assert.Equal(0m, (await StoredBill(expense.Id)).Tip);
+        Assert.Equal(0m, (await Receipts.ForExpense(expense.Id, Ct)).Tip);
+
+        await Transactions.Update(expense.Id, edit, Ct);
+
+        var bill = await StoredBill(expense.Id);
+        Assert.Equal(10m, bill.Tip);
+        Assert.Equal(58m, bill.Total);
+        var shares = await SharesOf(expense.Id);
+        Assert.Equal(36.25m, shares[Self]);
+        Assert.Equal(21.75m, shares[other]);
+        Assert.True((await Receipts.ResponseFor(await Receipts.ForExpense(expense.Id, Ct), ct: Ct)).CanDivide);
+    }
+
+    /// <summary>
+    /// A tip below nothing is not one any bill has, so taking off more than the tip is
+    /// refused by name -- and refused before anything moved.
+    /// </summary>
+    [Fact]
+    public async Task Lowering_the_amount_by_more_than_the_tip_is_refused_and_moves_nothing()
+    {
+        var (expense, other) = await DividedByItsBill();
+        var edit = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        edit.Amount = 40m;
+
+        var previewed = await Assert.ThrowsAsync<UnprocessableException>(
+            () => Transactions.PreviewUpdate(expense.Id, edit, ct: Ct));
+        Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, previewed.Code);
+
+        var refused = await Assert.ThrowsAsync<UnprocessableException>(
+            () => Transactions.Update(expense.Id, edit, Ct).AsTask());
+        Assert.Equal(ErrorCodes.ReceiptDoesNotAddUp, refused.Code);
+
+        var bill = await StoredBill(expense.Id);
+        Assert.Equal(48m, bill.Total);
+        Assert.Equal(0m, bill.Tip);
+        Assert.Equal(48m, await DbContext.Set<Expense>().AsNoTracking().Where(e => e.Id == expense.Id)
+            .Select(e => e.Amount).SingleAsync(Ct));
+        Assert.Equal(18m, (await SharesOf(expense.Id))[other]);
+    }
+
+    /// <summary>
+    /// Shares somebody stated are not the bill's to restate: the amount alone is still
+    /// refused on them, exactly as it is on any expense split by hand, and the bill is left
+    /// as it was.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_split_by_hand_keeps_refusing_the_amount_alone_and_its_bill_stays()
+    {
+        var (expense, other, _, _) = await Setup();
+        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+        await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, theirs.Id)), Ct);
+
+        var edit = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        edit.Amount = 58m;
+
+        var refused = await Assert.ThrowsAsync<UnprocessableException>(
+            () => Transactions.Update(expense.Id, edit, Ct).AsTask());
+        Assert.Equal(ErrorCodes.SplitsDoNotSumToAmount, refused.Code);
+
+        var bill = await StoredBill(expense.Id);
+        Assert.Equal(48m, bill.Total);
+        Assert.Equal(0m, bill.Tip);
+        Assert.Equal(48m, (await SharesOf(expense.Id))[Self]);
+    }
+
+    /// <summary>
+    /// A line's rule is the group's rule, naming the group's people. Moving the expense takes
+    /// them off its bill, so the new group never reads the old one's rules.
+    /// </summary>
+    [Fact]
+    public async Task Moving_the_expense_to_another_group_clears_its_bills_line_rules()
+    {
+        var (expense, _) = await DividedByItsBill();
+        var elsewhere = await GetService<IGroupService>()
+            .CreateGroup(new CreateGroupRequest { Name = "Trip" }, Ct);
+        var edit = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        edit.GroupId = elsewhere.Id;
+        edit.CategoryId = null;
+        edit.Splits = null;
+
+        var preview = await Transactions.PreviewUpdate(expense.Id, edit, ct: Ct);
+        Assert.Equal(48m, Assert.Single(preview.Splits).Amount);
+        Assert.All(await DbContext.Set<ReceiptItem>().AsNoTracking().ToListAsync(Ct),
+            item => Assert.NotNull(item.SplitRuleVersionId));
+
+        await Transactions.Update(expense.Id, edit, Ct);
+
+        Assert.All(await DbContext.Set<ReceiptItem>().AsNoTracking().ToListAsync(Ct),
+            item => Assert.Null(item.SplitRuleVersionId));
+        var response = await Receipts.ResponseFor(await Receipts.ForExpense(expense.Id, Ct), ct: Ct);
+        Assert.Equal(2, response.MissingRuleItemCount);
+        Assert.All(response.Items, item =>
+        {
+            Assert.Null(item.SplitRuleName);
+            Assert.Null(item.SplitRule);
+        });
+    }
+
+    /// <summary>
+    /// A bill moved before moves cleared its rules still holds them. They are never shown:
+    /// a line holding another group's rule reads as a line with no rule.
+    /// </summary>
+    [Fact]
+    public async Task A_line_still_holding_another_groups_rule_is_shown_without_it()
+    {
+        var (expense, _) = await DividedByItsBill();
+        var elsewhere = await GetService<IGroupService>()
+            .CreateGroup(new CreateGroupRequest { Name = "Trip" }, Ct);
+        var stored = await DbContext.Set<Expense>().Include(e => e.Group).SingleAsync(e => e.Id == expense.Id, Ct);
+        stored.Group = await DbContext.Set<GroupSplit.Data.Entities.Group>().SingleAsync(group => group.Id == elsewhere.Id, Ct);
+        stored.GroupId = elsewhere.Id;
+        stored.CategoryId = null;
+        await DbContext.SaveChangesAsync(Ct);
+
+        var bill = await Receipts.ForExpense(expense.Id, Ct);
+        Assert.All(bill.Items, item => Assert.NotNull(item.SplitRuleVersionId));
+        var response = await Receipts.ResponseFor(bill, ct: Ct);
+
+        Assert.Equal(2, response.MissingRuleItemCount);
+        Assert.All(response.Items, item =>
+        {
+            Assert.Null(item.SplitRuleVersionId);
+            Assert.Null(item.SplitRuleName);
+            Assert.Null(item.SplitRule);
+        });
+    }
+
+
     [Fact]
     public async Task Model_enforces_one_expense_per_bank_row_and_restricts_rule_version_deletion()
     {

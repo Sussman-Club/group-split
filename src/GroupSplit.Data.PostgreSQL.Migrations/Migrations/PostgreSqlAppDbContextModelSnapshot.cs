@@ -604,6 +604,31 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("PendingBankLink");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.PendingLoginDeletion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IdentityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityId")
+                        .IsUnique();
+
+                    b.ToTable("PendingLoginDeletion");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
                 {
                     b.Property<Guid>("Id")

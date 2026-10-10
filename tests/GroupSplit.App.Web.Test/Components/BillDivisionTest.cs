@@ -101,6 +101,44 @@ public class BillDivisionTest : ComponentTest
         Assert.Contains("$8.00", page.Markup);
     }
 
+    /// <summary>
+    /// An edit to the amount of an expense whose bill came to the saved amount is one the
+    /// save carries out, the difference on the tip -- so the screen says that, and not that
+    /// the two have to match.
+    /// </summary>
+    [Fact]
+    public void An_edited_amount_says_the_bill_follows_it_on_the_tip()
+    {
+        var page = Render<BillDivision>(p => p
+            .Add(c => c.Receipt, Bill(Line("Bacalhau", 22, Guid.NewGuid(), "Everyone evenly")))
+            .Add(c => c.TransactionId, _expense)
+            .Add(c => c.GroupId, _group)
+            .Add(c => c.Amount, 25m)
+            .Add(c => c.SavedAmount, 22m));
+
+        page.WaitForAssertion(() => Assert.Contains("Saving changes the bill's tip from", page.Markup));
+        Assert.Contains("$3.00", page.Markup);
+        Assert.Contains("$25.00", page.Markup);
+        Assert.DoesNotContain("They have to match", page.Markup);
+    }
+
+    /// <summary>
+    /// Lowering it by more than the tip is refused by the save, and said before it.
+    /// </summary>
+    [Fact]
+    public void A_lowered_amount_beyond_the_tip_says_to_edit_the_items()
+    {
+        var page = Render<BillDivision>(p => p
+            .Add(c => c.Receipt, Bill(Line("Bacalhau", 22, Guid.NewGuid(), "Everyone evenly")))
+            .Add(c => c.TransactionId, _expense)
+            .Add(c => c.GroupId, _group)
+            .Add(c => c.Amount, 20m)
+            .Add(c => c.SavedAmount, 22m));
+
+        page.WaitForAssertion(() => Assert.Contains("Edit the receipt's items instead.", page.Markup));
+        Assert.DoesNotContain("Saving changes the bill's tip", page.Markup);
+    }
+
     [Fact]
     public void A_bill_that_matches_the_expense_says_nothing_about_it()
     {

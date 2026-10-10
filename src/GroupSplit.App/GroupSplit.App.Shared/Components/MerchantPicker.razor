@@ -6,9 +6,12 @@
 @*
     Where an expense was spent, on the two dialogs that write one.
 
-    A type-ahead rather than a select, because the list is every place anybody has ever
-    shopped and is shared across groups -- a dropdown of it would be unusable by the second
-    month of bank sync.
+    A type-ahead rather than a select, and one that waits for two letters. What it searches
+    is the caller's own places -- the ones an expense they can read or a row their own bank
+    imported already names, never somebody else's -- and it is offered twenty at a time,
+    so a single letter would mostly return the first twenty alphabetically rather than the
+    place being typed. The debounce is for the same server: one search per pause, not one
+    per keystroke.
 
     It can add one, and that is not a convenience. The sync writes this table on its own
     from what a provider says, so a group with no bank linked has nothing in it at all: a
@@ -28,20 +31,21 @@
                  Clearable="true"
                  ResetValueOnEmptyText="true"
                  CoerceText="true"
-                 MinCharacters="0"
+                 MinCharacters="@MinimumSearchLength"
+                 DebounceInterval="300"
                  Placeholder="Anywhere in particular?">
     <ItemTemplate Context="merchant">
         <div class="gs-inline" style="gap: 10px">
-            @if (!string.IsNullOrWhiteSpace(merchant.LogoUrl))
+            @if (MerchantLogos.Usable(merchant.LogoUrl) is { } logo)
             {
-                <img class="gs-mark-inline" src="@merchant.LogoUrl" alt="" width="20" height="20" loading="lazy"/>
+                <img class="gs-mark-inline" src="@logo" alt="" width="20" height="20" loading="lazy"/>
             }
             <span>@merchant.Name</span>
         </div>
     </ItemTemplate>
 
     <NoItemsTemplate>
-        @if (_searched is { Length: > 0 } name)
+        @if (_searched is { Length: >= MinimumSearchLength } name)
         {
             <MudButton Variant="Variant.Text"
                        Color="Color.Primary"
@@ -65,6 +69,12 @@
     [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
 
     [Parameter] public string Label { get; set; } = "Where";
+
+    /// <summary>
+    /// The API refuses a shorter search (<c>MERCHANT_SEARCH_TOO_SHORT</c>), so the field
+    /// does not send one.
+    /// </summary>
+    private const int MinimumSearchLength = 2;
 
     private MerchantResponse? _selected;
 
@@ -95,6 +105,10 @@
     private async Task<IEnumerable<MerchantResponse>> SearchAsync(string? value, CancellationToken ct)
     {
         _searched = value?.Trim();
+
+        // MinCharacters counts what was typed, spaces and all, so "a " gets this far.
+        if (_searched is not { Length: >= MinimumSearchLength })
+            return [];
 
         return await Merchants.SearchAsync(_searched, ct);
     }

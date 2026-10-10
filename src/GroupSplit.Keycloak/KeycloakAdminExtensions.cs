@@ -37,6 +37,8 @@ public static class KeycloakAdminExtensions
                 services => services.GetRequiredService<KeycloakAdminClient>());
             builder.Services.AddTransient<IKeycloakRealmAdminClient>(
                 services => services.GetRequiredService<KeycloakAdminClient>());
+            builder.Services.AddTransient<IKeycloakUserRemoval>(
+                services => services.GetRequiredService<KeycloakAdminClient>());
 
             return builder;
         }

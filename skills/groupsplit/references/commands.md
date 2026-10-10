@@ -35,6 +35,14 @@ list` and `groupsplit groups list --json` both work.
 | `--no-color` | Disable colour. `NO_COLOR` set to anything does the same. |
 | `--yes`, `-y` | Skip the confirmation gate. Read the rule in SKILL.md before you reach for it. |
 
+## Amounts
+
+Every amount -- an `<amount>` argument, `--amount`, `--subtotal`, `--tax`, `--tip`, `--total`,
+the value in a `--split` or `--percent` pair, and the numbers in a receipt `--item` -- is
+`12.50`: a `.` decimal point, no thousands separators, at most two decimal places (a receipt
+quantity may have three). The same on every machine. Anything else is exit code 3 before any
+request: `12,50`, `1,234.56`, `1.234,56` and `12.555` are all refused, never rounded.
+
 
 ### auth
 
@@ -69,8 +77,8 @@ Groups you belong to, their members and their balances.
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
 | `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link issued after you left. |
 | `groups add-guest <group-id> <name>... [--link]` | Add people the group shares costs with as guests. No link unless `--link`. Answers with each guest's user id. |
-| `groups guests <group-id>` | List a group's guests by user id, with whether each has a link out. |
-| `groups guest-link create <group-id> <user-id> [--new]` | Print the guest's link, issuing one if there is none. `--new` replaces it (confirmation required): the old one stops working. |
+| `groups guests <group-id>` | List a group's guests by user id, with whether each has a link out and until when. A link that ran out unclaimed shows as expired (`linkExpired` true, `hasLink` false, no `token`; `linkExpiresAt` says when). |
+| `groups guest-link create <group-id> <user-id> [--new]` | Print the guest's link and when it expires, issuing one if there is none or the one out has expired. `--new` replaces a working one (confirmation required): the old one stops working. Replacing an expired one asks nothing. |
 | `groups guest-link revoke <group-id> <user-id>` | Stop the guest's link. Confirmation required. The guest stays. |
 | `groups invite <group-id> <name>...` | Deprecated: `add-guest --link`. |
 | `groups invitations <group-id>` | Deprecated: lists the guests with a link out, by their old invitation id. |
@@ -87,14 +95,14 @@ Expenses and settlements.
 | --- | --- |
 | `transactions list` | The expenses **you** paid for, newest first. With `--group`, the group's whole ledger. |
 | `transactions show <transaction-id>` | Show one transaction and how it was split. |
-| `transactions create <name> <amount>` | Record an expense. |
+| `transactions create <name> <amount>` | Record an expense. `--currency <ISO>` for a personal one in another currency (`EUR`); in a group only the group's own is accepted, so omit it there. |
 | `transactions update <transaction-id>` | Change an expense or a settlement. Only what moved is sent; `--redivide` asks for a fresh division, `--preview` shows the result without changing anything. On a settlement, `--covers-through <day>` and `--no-covers-through` set or clear the period it was for. |
-| `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. |
-| `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. |
+| `transactions summary` | Total the expenses **you** paid for. With `--group`, the group's whole ledger. One currency per total (`currency`); anything in another is in `otherCurrencies`, never added in. |
+| `transactions monthly` | What **you** paid and what **your** share came to, month by month. Gross: no transfers. One currency for the whole series; others are left out. |
 | `transactions shares list` | List the expenses you owe a share of, newest first. |
 | `transactions shares summary` | Total the shares matching a filter. |
 | `transactions bank-matches <transaction-id>` | List imported bank rows that could be this expense arriving a second time. |
-| `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. |
+| `transactions delete <transaction-id>` | Delete a transaction: an expense, or a settlement. The only command under `transactions` that takes a settlement's id — get it from `groups activity`, since the listings here read the expenses and cannot see one. An expense filed from a bank row puts the row back in the inbox, with the receipt files it had there; the confirmation says so. |
 
 ### users
 
@@ -104,7 +112,7 @@ The signed-in account and what it is owed.
 | --- | --- |
 | `users me` | Show the account this CLI is acting as. |
 | `users position` | Show your overall balance across every group. |
-| `users delete` | Delete the account you are signed in as. Permanent. |
+| `users delete` | Delete the account you are signed in as, and its sign-in with it: the Keycloak login, any linked Google account and every session. Permanent; nobody can sign in as it again, from the CLI or the web app. Refused with `ACCOUNT_NOT_SETTLED` while any group balance is not zero. Clears the stored credentials on success. |
 
 ### settle
 
@@ -134,22 +142,31 @@ Expense categories and their default split rules.
 ### merchants
 
 Places money gets spent, shared across every group, and their logos. A bank sync fills this
-table on its own; these are the by-hand way in -- cash at the same shop every week, a group
-with no bank linked, or a provider that named a place badly.
+table on its own; these are the by-hand way in -- cash at the same shop every week, or a
+group with no bank linked.
 
-A merchant belongs to no group, so none of these take `--group`, and a rename is felt by
-every group that has spent there. `merchants update --name` therefore asks first and its
-confirmation carries the count of transactions behind the row; `--logo-url` alone does not
-ask. `merchants delete` is refused while anything still points at the row, including a bank
-row still waiting in an inbox.
+A merchant belongs to no group, so none of these take `--group`. What you can read is your
+own places only: the ones an expense you can see, or a row your own bank imported, already
+names. A listing returns at most 20, alphabetically, and `--search` needs at least 2
+characters (`MERCHANT_SEARCH_TOO_SHORT`) -- narrow the search rather than paging.
+`transactionCount` is how many of *your* transactions point at the place.
+
+**Renaming, relogoing and deleting a merchant is refused for every account**
+(`MERCHANT_EDIT_FORBIDDEN`, exit code 2). A rename would change what every group that has
+spent there sees, so do not retry it, and do not sign in again over it. To fix where one
+expense was spent, point that expense at another merchant: `transactions update
+<transaction-id> --merchant-id <merchant-id>`, after `merchants create` if the place is new.
+`merchants create` with a name that already exists hands back that merchant as it is.
+`--logo-url` is accepted only on the bank provider's logo hosts
+(`MERCHANT_LOGO_NOT_ALLOWED`); leave it out and the place renders as initials.
 
 | Command | |
 | --- | --- |
-| `merchants list` | List merchants, alphabetically. `--search` narrows on the name. |
-| `merchants show <merchant-id>` | Show one merchant, with how many transactions point at it. |
-| `merchants create <name>` | Add a place. `--logo-url` gives it a mark; without one it renders as initials. |
-| `merchants update <merchant-id>` | Rename it, or change its logo. `--no-logo` clears the logo. |
-| `merchants delete <merchant-id>` | Delete a merchant. |
+| `merchants list` | Your merchants, alphabetically, at most 20. `--search` (2+ characters) narrows on the name. |
+| `merchants show <merchant-id>` | Show one of your merchants, with how many of your transactions point at it. |
+| `merchants create <name>` | Add a place, or get back the one already called that. `--logo-url` must be a provider logo URL; without one it renders as initials. |
+| `merchants update <merchant-id>` | Refused for every account (`MERCHANT_EDIT_FORBIDDEN`). |
+| `merchants delete <merchant-id>` | Refused for every account (`MERCHANT_EDIT_FORBIDDEN`). |
 
 ### receipts
 
@@ -180,7 +197,7 @@ remain in place until the bill is valid again.
 | `receipts attachments transcribe <transaction-id> <attachment-id>` | Read an attached source file into an editable draft. Saves no itemised bill. |
 | `receipts attachments delete <transaction-id> <attachment-id>` | Delete an expense's source file. Confirmation required. |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tax`, `--tip`. `--subtotal` and `--total` default to the lines added up and the extras added on. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. |
 | `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
@@ -190,10 +207,10 @@ A line is `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`
 the `@` comes exactly one split rule version id:
 
 ```bash
-groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
-  --item "Steak=22.00@<ana-only-version>" \
-  --item "Wine=18.00@<ana-and-omar-version>" \
-  --item "Beers=9.00x3@<omar-twice-as-much-version>"
+groupsplit receipts set 7c1e... --tip 6.00 \
+  --item "Steak=22.00/tax1.80@<ana-only-version>" \
+  --item "Wine=18.00/tax1.35@<ana-and-omar-version>" \
+  --item "Beers=27.00x3/tax1.05@<omar-twice-as-much-version>"
 ```
 
 The number before `x` is the total printed for the whole line, not a unit price. For
@@ -224,6 +241,13 @@ groupsplit receipts set 7c1e... --item "a1b2c3d4-...#Steak=24.00@<version>" --it
 
 Only text before a `#` that parses as an id is read as one, so `Table #4` is still a name. A
 line with no id is a new line. An id from another bill, or the same id twice, is refused.
+
+What `set` has no flag for is kept: it reads the saved bill first and sends back the merchant,
+the purchase date and the tip (unless `--tip`), and each line named by its id keeps its tax
+amount, rate and taxable flag unless that line states `/tax` or `/notax`. So a corrected price
+on a taxed bill needs only the price. If a correction leaves a line without a rule, the
+stored shares stay as they were, and the `set` or `rule` call that gives it one divides the
+expense again.
 
 **Tax is per line and the tip is spread over the lines by price**, so each line is divided by
 its own rule as one amount -- price, plus its tax, plus its share of the tip. It is one
@@ -305,8 +329,8 @@ Guest links and group join links you were sent.
 
 | Command | |
 | --- | --- |
-| `invitations list` | The guest links you have opened that still work, with their tokens. Not "sent to me" -- there is no address to match. |
-| `invitations show <link>` | Show what a guest's link leads to, without claiming it. Says nothing about the money. |
+| `invitations list` | The guest links you have opened that still work, with their tokens and when each expires. Not "sent to me" -- there is no address to match. |
+| `invitations show <link>` | Show what a guest's link leads to, and until when it works, without claiming it. Says nothing about the money. |
 | `invitations claim <link>` | Claim it: join the group in the guest's place, taking on the shares recorded for them, their places in the group's split rules and their "all for them" rule. Repayments recorded between you and that guest are deleted (they would be self-payments) and counted. If two people claim one link at once, one gets in and the other gets GROUP_INVITATION_NOT_FOUND. Confirmation required. |
 | `invitations decline <link>` | "This isn't me": the link stops working. The group keeps the guest; nothing moves. Confirmation required. |
 | `invitations link <link>` | Show which group a *join* link leads to, without joining. |
@@ -321,7 +345,9 @@ accept the whole URL as readily as the token inside it.
 
 Linked banks: what is connected, syncing it, and unlinking.
 
-A connection's status is `active`, `login required`, `revoked`, or one of two that still
+A connection's status is `active`, `login required` (the bank needs the person: a new
+sign-in, a locked account, a password reset, something to finish on the bank's own site, no
+account shared -- each ends in signing in again through update mode), `revoked`, or one of two that still
 sync: `account not shared` (the bank has an account this connection is not importing --
 sign in again with it ticked, then `bank refresh`) and `sign-in expiring` (it works, but
 not for much longer). An account's `Access` reads `withdrawn` when that one account was
@@ -334,7 +360,7 @@ revoked at the bank and the rest of the connection is fine.
 | `bank link <public-token>` | Finish linking a bank with the token its UI returned. |
 | `bank refresh <connection-id>` | Re-read the bank's accounts and queue a sync. Run after an update-mode sign-in that shared another account: nothing else tells the app about it. |
 | `bank sync <connection-id>` | Ask for a fresh pull of transactions from a bank. |
-| `bank unlink <connection-id>` | Unlink a bank and stop syncing it. |
+| `bank unlink <connection-id>` | Unlink a bank and stop syncing it. Receipt files still waiting on its inbox rows are deleted; expenses keep theirs. Succeeds when the provider has already let go of the item. |
 
 ### inbox
 
@@ -490,6 +516,8 @@ expenses. What it does with a division *nobody* typed depends on what the edit t
 | typed by somebody | the amount | **refused** (`SPLITS_DO_NOT_SUM_TO_AMOUNT`): those shares no longer add up |
 | worked out by a rule (or evenly, under none) | the name, note, date or merchant | kept exactly as they are |
 | worked out by a rule (or evenly, under none) | the amount, payer, category or group | worked out again at the new values |
+| worked out by its itemised bill | the amount | the bill is re-totalled, the difference on its tip, and the expense divided by it again; lowering it by more than the tip is **refused** (`RECEIPT_DOES_NOT_ADD_UP`) |
+| worked out by its itemised bill | the group | every bill line's rule is cleared (they are the old group's); give them the new group's with `receipts rule` |
 
 Two consequences worth holding on to:
 
@@ -497,7 +525,7 @@ Two consequences worth holding on to:
   somebody split by hand, because the old shares do not add up to the new total. Either pass
   `--split` for every member alongside `--amount` (read the current shares from
   `transactions show` first), or pass `--redivide`. On an expense a rule divided it simply
-  works.
+  works -- including one divided by its bill, whose tip takes the difference.
 - Changing the category re-divides an expense a rule divided, by the new category's rule, and
   leaves a hand-typed division alone.
 
@@ -609,8 +637,9 @@ whoever follows it in **as themselves**, claiming nothing. On the receiving side
 
 A **guest's link** comes from `groups guest-link create <group-id> <user-id>`, one per
 guest. It hands over a *position in the group's ledger*: the shares recorded for that guest
-become the claimer's. So it works once, it says nothing about the money until claimed, and
-`invitations claim <link>` is gated by the confirmation protocol. Never suggest forwarding
+become the claimer's. So it works once and for 30 days from being issued, it says nothing
+about the money until claimed, and `invitations claim <link>` is gated by the confirmation
+protocol. Never suggest forwarding
 one, and never paste one where the group's join link would do.
 
 ### Guests
@@ -645,6 +674,12 @@ new money, and the group's join link is untouched.
 already out), `--new` replaces it, `revoke` stops it. Declining a link only stops it; the
 guest stays.
 
+**A link expires 30 days after it was issued**, claimed or not. An expired link answers
+`GROUP_INVITATION_NOT_FOUND`, the same 404 as a claimed or mistyped one, and `groups guests`
+shows it as expired. `groups guest-link create` (no `--new` needed) issues a fresh one, which
+also counts as issued now for the rejoin rule. Tell the user the old URL is dead and the new
+one has to be sent again.
+
 **If the user has lost their own link**, `invitations list` has it -- provided they opened
 it at least once. If they never did, a member can print it again with `groups guest-link
 create`.
@@ -673,11 +708,13 @@ the repayments themselves, and `--dry-run` shows that list without writing anyth
 already square is success, not a refusal: it says so and writes nothing.
 
 `--through <day>` narrows it to a period: "settle August" is `--through 2026-08-31`. What is
-owed through a day counts the expenses dated up to the end of it and **every repayment
-whatever its date** -- money paid goes against the oldest debt first -- so a payment made in
-September for August is never asked for twice, and settling a period that is already square
-says so and writes nothing. Each payment is capped at what the pair owes on the whole balance,
-so a period never asks for more than is owed overall, and can ask for less. Do not try to work out a month's figure by filtering expenses
+owed through a day counts the expenses dated up to the end of it and the repayments made for
+it; **repayments made for later count only as far as they pay down what the period left** --
+money paid goes against the oldest debt first -- so a payment made in September for August is
+never asked for twice, one made for September never reads as owed back for August, and
+settling a period that is already square says so and writes nothing. Expenses after the day
+never move the figure, except that once a later period has been settled a period never asks
+for more than that one leaves owing. Do not try to work out a month's figure by filtering expenses
 and subtracting; that leaves out repayments and is the mistake this flag exists to prevent.
 The repayments it records remember the day, and `transactions show <settlement-id>` reports
 the period they covered and anything still owed for it -- an expense dated inside the period

@@ -93,6 +93,28 @@ public class SettleWithPersonDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task More_than_is_outstanding_is_recorded_as_typed()
+    {
+        var (provider, dialog) = await Open();
+
+        var field = provider.FindComponents<MudNumericField<decimal>>()
+            .Single(candidate => candidate.Instance.Label == "Amount they paid");
+        await provider.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync(100m));
+
+        provider.WaitForAssertion(() => Assert.Contains("more than is outstanding", provider.Markup));
+
+        await ConfirmAsync(provider);
+
+        var request = await dialog.GetReturnValueAsync<SettleWithPersonRequest>();
+
+        Assert.Equal(100m, request!.Amount);
+    }
+
+    /// <summary>
+    /// Still refused here, unlike inside a group: with nothing between them in that
+    /// direction the server has no group to write the transfer in, and says so.
+    /// </summary>
+    [Fact]
     public async Task A_period_with_nothing_between_them_cannot_be_confirmed()
     {
         PlanThroughAugust(omar: null);

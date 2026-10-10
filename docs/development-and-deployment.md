@@ -97,22 +97,23 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
 | `web-hostname` | variable `WEB_HOSTNAME` | yes | Public origin of the web app, scheme included. Keycloak is served under it at `/idp`, both apps validate tokens against that issuer, and it is the address bank providers are told to deliver webhooks to. Changing it leaves already-linked items pointing at the old one until each is relinked. |
-| `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the published Aspire dashboard on port 18888. |
+| `dashboard-token` | secret `DASHBOARD_TOKEN` | yes | Browser token for the Aspire dashboard, which is published on the host's loopback port 18888 and reached through an SSH tunnel. See [Reaching the deployed dashboard](#reaching-the-deployed-dashboard). |
 | `cache-password` | secret `CACHE_PASSWORD` | yes | Password for the Redis session cache. Aspire would generate one per publish, which would not match the password the running container was started with. |
 | `db-server-password` | secret `DB_SERVER_PASSWORD` | yes | Postgres superuser password, shared by the app and Keycloak databases. |
 | `storage-accessKey`, `storage-secretKey` | secrets `STORAGE_ACCESSKEY`, `STORAGE_SECRETKEY` | yes | Root credentials of the RustFS receipt store, which the API signs its S3 requests with. Pinned for the same reason as `cache-password`: generated per publish, they recreated the storage container with new root credentials on every deploy, and everything that depends on it waited on its healthcheck each time. Nothing outside the stack ever sees them, so any two random strings will do. |
 | `keycloak-password` | secret `KEYCLOAK_PASSWORD` | yes | Keycloak bootstrap admin password. Only used when Keycloak first creates its master realm. |
 | `keycloak-admin-user`, `keycloak-admin-password` | variable `KEYCLOAK_ADMIN_USER`; secret `KEYCLOAK_ADMIN_PASSWORD` | yes | An existing master-realm admin, which the `realm-settings` worker signs in as on every deploy. Not the bootstrap admin, which need not exist once somebody has replaced it. Wrong or missing, the worker fails and the API does not start. |
+| `keycloak-account-deletion-secret` | secret `KEYCLOAK_ACCOUNT_DELETION_SECRET` | yes | Secret of `account-deletion`, the `group-split` client whose service account holds only `manage-users`, which the API deletes a deleted account's login through. Any long random string (`openssl rand -hex 32`). The `realm-settings` worker creates the client on a realm that lacks it and sets its secret to this value on every deploy, so there is no step to take in Keycloak, and rotating it is changing this secret and deploying. Missing, the publish fails; see [Deleting an account](account-deletion.md). |
 | `google-sign-in-enabled` | variable `GOOGLE_SIGN_IN_ENABLED` | no, defaults to `false` | Whether the login page offers Google. |
 | `google-client-id`, `google-client-secret` | secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | when Google is enabled | The OAuth client. Missing while enabled fails the publish. |
-| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail. See [Email](../README.md#email). |
+| `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail, and so whether the sign-in page offers a password reset. See [Email](../README.md#email). |
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
-| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. |
+| `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. They reach the API whatever `plaid-enabled` says, and the API links banks whenever it has both, so leave them empty to switch bank sync off. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
-| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | no | Optional. PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Empty leaves the development ring unwrapped. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
+| `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled, or whenever both Plaid credentials are set | PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Missing then fails the publish, and outside Development the API refuses to start with Plaid configured and no certificate. Empty is only for local development. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
 | `receipt-transcription-provider` | secret `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
 | `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
 | `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
@@ -132,7 +133,7 @@ every image build waits on.
 | GitHub entry | Required | Purpose |
 | --- | --- | --- |
 | secrets `KOMODO_URL`, `KOMODO_API_KEY`, `KOMODO_API_SECRET` | yes | Where Komodo's API is and the key the workflow calls it with. |
-| variable `KOMODO_REGISTRY_ACCOUNT` | yes | The name of the `ghcr.io` account in Komodo's registry providers (Settings -> Providers) that Komodo logs in with before it pulls the images. Its token is a classic personal access token with `read:packages` on an account that can read the organisation's packages. When that token expires, every deploy fails at Komodo's "Login to Registry" stage; renewing it is a change in Komodo, and moving to somebody else's account is that plus this variable. |
+| variable `KOMODO_REGISTRY_ACCOUNT` | yes | The name of the `ghcr.io` account in Komodo's registry providers (Settings -> Providers) that Komodo logs in with before it pulls the images. Its token is a classic personal access token with `read:packages` on an account that can read the organisation's packages. When that token expires, every deploy fails at Komodo's "Login to Registry" stage; renewing it is a change in Komodo, and moving to somebody else's account is that plus this variable. See [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). |
 | variable `KOMODO_STACK` | no, defaults to `group-split` | The Komodo stack the Compose file is written into. |
 
 Run mode uses AppHost parameters from user secrets or environment variables. The passwords
@@ -172,6 +173,11 @@ and gives the API that model reference. Aspire then injects
 deliberately does not receive those values as separate environment variables. The API's
 `AddReceiptTranscription` binds the selector options through the .NET options pattern and resolves
 the selected provider from DI when the request scope is created.
+A reading is one attempt with a two-minute budget (`ReceiptTranscription:Timeout`), whichever
+provider it goes to: Veryfi's HTTP client runs its own resilience pipeline in place of the
+standard handler the service defaults add, which would retry the POST and give up after 30 s,
+and the OpenAI client's own retries are turned off. Running out of time answers the retryable
+`RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` 502.
 The deployment workflow uses the corresponding `AZURE_OPENAI_*` production variables/secrets shown
 in the table above; add them to the `production` environment, and set the switch to `false`
 when the feature is not used.
@@ -248,9 +254,98 @@ stored token unreadable — and an item whose token is gone can be neither synce
 repaired in update mode, nor removed at the provider, because all three need the token.
 
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
-ordinary development posture. A deployment should provide one for protection at rest, but
-it remains optional so the AppHost does not block when bank sync or certificate wrapping is
-not being used.
+ordinary development posture and is logged as a warning at startup. Anywhere else it fails
+closed, three times over:
+
+- The deploy workflow refuses `PLAID_ENABLED=true` without `BANK_KEY_CERTIFICATE`, before
+  anything is built.
+- The AppHost's `validate-plaid` step refuses the same publish, for anyone publishing
+  without the workflow.
+- The API refuses to start outside Development when Plaid is configured and the ring is not
+  wrapped (`BankKeyRingVerifier`).
+
+The API links banks whenever it has both Plaid credentials, whatever `plaid-enabled` says,
+so all three also refuse credentials left in place behind a switch that is off. A
+deployment with no Plaid credentials at all starts without a certificate: nothing it stores
+is worth one.
+
+### A ring that was stored unwrapped
+
+For a while this did not fail closed (#328): a deployment could link banks with no
+certificate, and the ring was then written unwrapped beside the tokens. Setting the
+certificate afterwards does **not** fix that by itself. `ProtectKeysWithCertificate` only
+wraps keys created from then on; Data Protection never rewrites a key it has already
+stored, and never deletes one. The old key stays in the table in the clear, stays the
+default key until it expires (90 days after it was made), and keeps opening every token it
+protected. And every database backup taken while it was there holds the key and the tokens
+together -- that is, live read access to those banks -- however the live database is fixed
+later.
+
+So "rewrapping" here means making the exposed tokens worthless, not re-encrypting the key.
+
+**1. Find out whether it happened.** On the database server, in the `groupsplit` database:
+
+```sql
+-- One row per Data Protection key. Only the bank ring lives in this table; the web
+-- app's sign-in ring is in a volume.
+SELECT "Id",
+       "FriendlyName",
+       "Xml" LIKE '%<encryptedSecret%'                     AS wrapped,
+       "Xml" LIKE '%the key below is in an unencrypted form%' AS unwrapped,
+       substring("Xml" FROM '<creationDate>([^<]+)</creationDate>')     AS created,
+       substring("Xml" FROM '<expirationDate>([^<]+)</expirationDate>') AS expires
+FROM "DataProtectionKeys"
+ORDER BY "Id";
+
+SELECT "Id", "UserId", "InstitutionName", "LinkedAt", "Status"
+FROM "BankConnection"
+ORDER BY "LinkedAt";
+```
+
+Every key `wrapped` and none `unwrapped`: the ring was never stored in the clear, and there
+is nothing to do. Any key `unwrapped`: it was, from that key's `created` date on. If there
+are no `BankConnection` rows either, nothing the key opens is stored any more (unlinking
+removes the item at Plaid, which kills its token); go straight to step 4.
+
+**2. Deploy with a certificate.** Generate one as above, set `BANK_KEY_CERTIFICATE` on the
+`production` environment, and deploy. Keys made from now on are wrapped; the old one is
+still there and still readable, which the next step needs.
+
+**3. Retire every token the unwrapped key protected.** Each person unlinks each of their
+banks -- **Unlink** on the linked-banks card, or `groupsplit bank unlink <connection-id>`.
+Unlinking hands the token to Plaid's `/item/remove` first, so the token a backup holds stops
+working at Plaid. File or skip anything still in the inbox first: unlinking deletes the
+connection's imported rows, though expenses already filed from them keep everything but the
+link. A connection the API cannot read the token of is unlinked locally only and logged as
+an error naming the item; remove that item in the Plaid dashboard by hand.
+
+(Keeping the connections instead means rotating each token in place -- Plaid's
+`/item/access_token/invalidate` returns a new token and kills the old one -- and protecting
+the new one with a wrapped key. Nothing in the repository does that yet; at this size,
+relinking is cheaper than writing it.)
+
+**4. Delete the unwrapped keys, then restart the API.**
+
+```sql
+DELETE FROM "DataProtectionKeys"
+WHERE "Xml" NOT LIKE '%<encryptedSecret%';
+```
+
+Only once `BankConnection` is empty: a token protected with a deleted key can never be
+read again, and until the unwrapped key is gone it is still the default, so anything linked
+in the meantime is protected with it too. Nobody links a bank between steps 2 and 5. The
+API caches the ring, so restart it (redeploy, or restart the `api` container); the first
+link after that mints a key wrapped with the certificate. Re-run step 1: no row should
+read `unwrapped`.
+
+**5. People link their banks again.** Then re-run step 1 once more: the new key is
+`wrapped`.
+
+**6. Treat the old backups as bank credentials.** Any backup of the app database taken
+while an unwrapped key and a token sat in it held both. Once step 3 is done, the tokens in
+it are dead at Plaid -- but until then, and for any connection that could not be removed at
+Plaid, keep those backups as tightly held as the Plaid secret itself, and delete the ones
+nobody needs.
 
 Webhooks need an address the provider can reach: a deployment is served on one, and locally a
 dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs
@@ -426,13 +521,18 @@ rows in the session table for longer than they are worth.
 
 Realm import only creates a realm that does not exist yet. The `realm-settings` worker
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
-in both run and publish modes. It does the same for the `web-app` client's redirect URIs, web
-origins and post-logout redirect URIs, resolving `${WEB_HOSTNAME}` from its environment.
+in both run and publish modes, the flow bindings among them. It does the same for the
+`web-app` client's redirect URIs, web origins and post-logout redirect URIs, resolving
+`${WEB_HOSTNAME}` from its environment, and for the `cli` client's grants and `api` audience
+mapper, creating the `cli` client when the realm has none.
 It also reconciles the `google` provider's `trustEmail`, its essential-claim filter on
 `email_verified`, and the first broker login flow it names, which is rebuilt whole when it
-differs. See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
-It leaves SMTP configuration, the rest of each client and provider, protocol mappers, other
-authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
+differs. It creates the `account-deletion` client when the realm lacks it, and holds it to
+the secret in `KEYCLOAK_ACCOUNT_DELETION_SECRET` and to its `manage-users` role; see
+[Deleting an account](account-deletion.md).
+See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
+It leaves SMTP configuration, the rest of each client and provider, other protocol mappers,
+the built-in authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
 restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
 retroactive either:
 sessions created while it was on keep their extended lifetime until they expire
@@ -495,6 +595,85 @@ docker compose exec keycloak /opt/keycloak/bin/kcadm.sh get realms/group-split/c
 Settings that belong to the repository still go in `realms.json`, where the realm worker applies
 them on the next deploy. The admin console and CLI are for one-off inspection and for what the
 worker deliberately leaves alone.
+
+## Reaching the deployed dashboard
+
+The deployed stack runs the Aspire dashboard as the `compose-dashboard` service, and every service
+sends it traces, logs and metrics. It is reachable the same way as the Keycloak admin console:
+from the host only, through an SSH tunnel. Its port is published on the host's loopback address
+alone (`127.0.0.1:18888`).
+
+```bash
+ssh -L 18888:127.0.0.1:18888 <deploy-host>
+```
+
+With the tunnel open, browse to `http://localhost:18888` and paste the `DASHBOARD_TOKEN` value when
+the dashboard asks for its browser token. Use a different local port on the left of `-L` if 18888
+is taken on your machine. The host port is `DeploymentExtensions.DashboardPort`.
+
+The dashboard is published on loopback only for two reasons:
+
+- **It shows what the services record.** Traces and structured logs carry request details and
+  error text, and anything a service writes to them by mistake. Treat it as able to show secrets.
+- **It speaks plain HTTP.** On a port published on every interface, the browser token and
+  everything the dashboard shows crossed the LAN unencrypted. Docker publishes ports past the
+  host firewall, so ufw would not have stopped it either. Through the tunnel, SSH provides the
+  encryption and the authentication. The token is still required, as a second lock for anyone
+  who already has a shell on the host.
+
+[`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs) writes
+the mapping, and `PublishedDashboardTest` reads it back from a generated Compose file.
+
+### What telemetry leaves out
+
+Some routes are addressed by a secret rather than an id. Whoever has the URL has the access it
+grants:
+
+- the invitation claim link: `/invitations/claims/{token}` on the API, `/claim/{token}` on the web;
+- the join link: `/invitations/links/{token}` on the API, `/join/{token}` on the web.
+
+Instrumentation records paths as they were requested. Without redaction, every one of these
+tokens would reach the dashboard in `url.path` on server spans, in `url.full` on `HttpClient`
+spans (including the web app's forwarders), and in the request URIs that ASP.NET Core and
+`HttpClient` log. [`TokenRedaction`](../src/GroupSplit.ServiceDefaults/TokenRedaction.cs) in
+the service defaults replaces the token segment with `Redacted` before anything is exported, so
+`/join/abc` is recorded as `/join/Redacted`. `http.route` keeps the template, `{token}` included.
+OpenTelemetry already redacts query-string values the same way.
+
+A new route that carries a secret in its path has to be added to the pattern in
+`TokenRedaction`, with a case in `TokenRedactionTest`.
+
+## Sign-in and admin events
+
+The `group-split` realm records user events and admin events, so there is something to read
+after the fact: who signed in or failed to, who linked or unlinked a Google account, who asked
+for or completed a password reset, who changed their email or profile or deleted their account,
+and which admin changed a client, a flow or a user. `realms.json` sets this and the realm worker
+applies it on every start, so a realm imported before it said so records them too:
+
+- **User events** are on and kept for 90 days (`eventsExpiration`, in seconds). They cover the
+  types in `enabledEventTypes`: signing in and out, registering, the Google first sign-in, link
+  and unlink, password and credential changes, password reset, email verification and change,
+  profile change, account deletion, and the CLI's device sign-in, each with its `_ERROR` twin.
+- **Admin events** are on, without their details (`adminEventsDetailsEnabled` is `false`). The
+  details are the representation that was sent, and that can carry a secret: a client or
+  identity provider secret, or a user's initial password. The event still says who did what to
+  which resource, and when.
+
+Where to read them:
+
+- **The admin console**: *Events* in the `group-split` realm, with a tab for user events and
+  one for admin events, filterable by type, user, client and date. Deployed, the console is
+  reached through the SSH tunnel described above.
+- **The container log**, through the realm's `jboss-logging` listener. Failures are logged at
+  `WARN` by default; the AppHost sets `KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL=info`
+  so that successful ones are logged too, as lines starting `type="LOGIN"` and so on. Locally
+  that is the `keycloak` resource's console log in the Aspire dashboard; deployed, it is
+  `docker compose logs keycloak` on the host, which keeps them only as long as Docker keeps the
+  log. Keycloak's OTLP export carries its traces, not its log, so these lines do not reach the
+  deployed dashboard; that would take Keycloak's preview `opentelemetry-logs` feature.
+
+The event store is Keycloak's own database, so the 90 days survive restarts and deploys.
 
 ## Sessions across a deploy
 
@@ -646,7 +825,7 @@ never touches the deployed stack.
 | The `production` environment allows `main` | The job runs `environment: production`, and the run happens at `refs/heads/main`, so the environment needs a deployment **branch** policy for `main`. |
 | Every required secret and variable on that environment | See [Deployment parameters](#deployment-parameters). Checked before anything is built. |
 | A Komodo stack named `group-split` (or `KOMODO_STACK`) in `file_contents` mode | The workflow writes the generated Compose file into it. It does not create the stack. |
-| The `KOMODO_REGISTRY_ACCOUNT` account in Komodo's registry providers | Komodo logs in to `ghcr.io` with it before pulling, and the images are private. |
+| The `KOMODO_REGISTRY_ACCOUNT` account in Komodo's registry providers, with a token that has not expired | Komodo logs in to `ghcr.io` with it before pulling, and the images are private. See [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). |
 
 ### What the workflow does
 
@@ -682,7 +861,8 @@ never touches the deployed stack.
    When the deploy fails, the job prints the failed Compose stages and fetches the log of
    every service Compose names, whether it exited non-zero or its healthcheck never
    passed, before it rolls the stack back -- the rollback recreates the container, and
-   with it the only copy of that log.
+   with it the only copy of that log. What else it does is in
+   [When a deploy fails](#when-a-deploy-fails).
 10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
     completed Komodo update proves the stack operation finished, not that the release is
     being served.
@@ -696,9 +876,92 @@ Only one deploy runs at a time. Two concurrent runs would push different image t
 same Komodo stack and race each other, so a second merge waits rather than cancelling the
 first.
 
+### When a deploy fails
+
+When Komodo's update fails, the job prints the failed stages with their errors, and the
+log of any service that did not complete or never became healthy. What it does next
+depends on whether the failure was the registry login, which
+[`classify-komodo-failure.sh`](../.github/scripts/classify-komodo-failure.sh) reads from
+the stages the update records:
+
+| Failed at | Production touched | What the job does |
+| --- | --- | --- |
+| "Login to Registry" | No. Komodo stops at the login, before it pulls or restarts anything, so production still runs the previous release. | Puts the previous configuration back into Komodo's stack without deploying it, and says to renew the registry token: see [The registry account Komodo pulls with](#the-registry-account-komodo-pulls-with). It does not roll back: a redeploy starts with the same login and would fail the same way. |
+| Any other stage | Possibly. Compose recreates the api and web containers before it finds out that a service they wait for has failed, so the site may be down. | Puts the previous configuration back and deploys it again. If that fails too, production is probably down. |
+
+Putting the configuration back even when nothing was redeployed keeps Komodo honest: what
+its stack shows, and what a deploy started from Komodo's own UI would run, is what
+production runs.
+
+Only the registry login is singled out, because it is the one failure seen for real and
+known to leave production as it was. Other stages that probably run before any container
+changes, such as pulling the images, are rolled back like everything else: their stage
+names have not been seen in a real update, and guessing them wrong would skip a rollback
+that was needed. The script's samples are the real updates from run
+[37843928725](https://github.com/Sussman-Club/group-split/actions/runs/37843928725), and
+CI runs its test (`bash .github/scripts/classify-komodo-failure.test.sh`, which needs
+`jq`).
+
+Every failed deploy writes a job summary naming the release, the Komodo update, the stage
+it failed at, whether production was touched, and the outcome. A deploy still running
+after five minutes, or a request to Komodo that failed outright, is summarised the same
+way, with "unknown" when the job cannot tell whether production was touched.
+
+### The registry account Komodo pulls with
+
+The images in `ghcr.io/sussman-club/group-split` are private, so Komodo logs in to GHCR
+before it pulls them. It logs in as the account the workflow writes into the stack's
+`registry_account`, which is the `KOMODO_REGISTRY_ACCOUNT` variable on the `production`
+environment; today that is a person's own GitHub account. Komodo keeps that account's
+token under Settings -> Providers, next to the account name.
+
+The token must be a **classic** personal access token with the **`read:packages`** scope
+and nothing else. GHCR does not accept fine-grained tokens for pulling, and a classic token
+cannot be narrowed to one organisation, so `read:packages` lets it read every package its
+account can see -- one more reason to keep it to that scope. The account itself needs read
+access to the organisation's `group-split` packages.
+
+When the token expires or is revoked, every deploy fails at "Login to Registry" with
+`Error response from daemon: Get "https://ghcr.io/v2/": denied`, and the job summary says
+so. Production is unaffected; only deploys stop. To rotate it:
+
+1. Signed in as the registry account, open GitHub's Settings -> Developer settings ->
+   Personal access tokens -> Tokens (classic) -> Generate new token (classic). Tick only
+   `read:packages`, and choose an expiry (see below).
+2. Optionally check it before Komodo does:
+   `docker login ghcr.io -u <account> --password-stdin` with the token on standard input
+   should print `Login Succeeded`.
+3. In Komodo, Settings -> Providers, edit the `ghcr.io` account of that name and replace
+   its token. Nothing in the repository or in GitHub's environment changes.
+4. Re-run the failed deploy job (the run's "Re-run failed jobs"). The release tag is already
+   on `HEAD`, so it deploys the same version again rather than claiming a new one.
+5. Delete the old token if it has not simply expired.
+
+Moving to a different account is the same, plus adding that account under Komodo's
+providers and changing `KOMODO_REGISTRY_ACCOUNT`; the next deploy writes the new name into
+the stack.
+
+**One person's token is a weak dependency.** It expires on that person's schedule, GitHub
+mails its expiry warning to that person only, and it stops working if they leave the
+organisation. Two ways out, not exclusive:
+
+- **A dedicated machine account** (GitHub's terms allow one free machine account per
+  person or organisation), a member of the organisation with read access to the
+  `group-split` packages and nothing else. Its token then reads only those packages, its
+  expiry reminders can go to a shared inbox, and nobody's personal account is in the deploy
+  path. It takes a seat on a paid plan and is one more account to look after. This is the
+  recommended option, with a one-year expiry and the renewal date on the team's calendar.
+- **A much longer expiry**, up to no expiry at all. It removes the routine failure, but the
+  token then lives for as long as nobody revokes it, and a classic token reads every
+  package its account can see. If it is chosen, put the expiry date somewhere the team will
+  see it before then.
+
+Making the packages public would remove the login altogether, but it publishes the images
+of a private repository; that is not done.
+
 ### What this does not do
 
-There is no rollback. The smoke test runs after Komodo has deployed, so a release that
+The smoke test does not roll back. It runs after Komodo has deployed, so a release that
 fails it is already the one being served; recovering means deploying a known-good version,
 and the digest-pinned manifest from an earlier run is what names one. Nothing backs the
 database up before the migration container runs either, and migrations are forward-only --
@@ -708,5 +971,6 @@ Nothing on the runner starts a container. `aspire deploy` would, which is why th
 workflow uses `aspire do` instead.
 
 On the host, the web app joins the shared `internal` network as `group-split-web`, where
-Caddy routes the public hostname to it. Nothing else publishes a port except the
-dashboard, on 18888, behind its token.
+Caddy routes the public hostname to it. Nothing else publishes a port beyond the host's
+loopback address: the dashboard is on `127.0.0.1:18888` and the Keycloak admin console on
+`127.0.0.1:8180`, both reached through an SSH tunnel.

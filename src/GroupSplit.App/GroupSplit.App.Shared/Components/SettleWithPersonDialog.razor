@@ -64,23 +64,20 @@
                     </MudText>
                 }
 
-                <MudNumericField @bind-Value="_model.Amount"
-                                 For="@(() => _model.Amount)"
-                                 Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                 AdornmentColor="Color.Primary"
-                                 HideSpinButtons="true"
-                                 Format="N2"
-                                 Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
+                <DecimalField @bind-Value="_model.Amount"
+                              For="@(() => _model.Amount)"
+                              Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              AdornmentColor="Color.Primary"
+                              HideSpinButtons="true"
+                              Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
 
-                <MudText Typo="Typo.caption">
-                    Remaining after this: @((Shown.Amount - _model.Amount).ToMoney())
-                </MudText>
+                <MudText Typo="Typo.caption">@Remaining</MudText>
 
                 @* A month at a time, as in SettleDialog: what activity dated up to the day
-                   left owing between the two of them, after every repayment already made.
+                   left owing between the two of them, after the repayments made for it.
                    It changes the figure and the groups it lands in, so both are read again. *@
                 @if (_choosingPeriod)
                 {
@@ -165,7 +162,7 @@
 
     private string PeriodHelp => _through is { } day && Shown.Amount <= 0
         ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
-        : "Repayments already made count, whatever their date. Clear it to settle everything.";
+        : "Repayments for later count only as far as they pay it down. Clear it to settle everything.";
 
     protected override void OnInitialized()
     {
@@ -242,12 +239,20 @@
         }
     }
 
+    /// <summary>
+    /// What is left after this payment, or how far past the figure it goes -- which is
+    /// allowed, as in SettleDialog. The excess lands on the largest group.
+    /// </summary>
+    private string Remaining => (Shown.Amount - _model.Amount) switch
+    {
+        >= 0 and var left => $"Remaining after this: {left.ToMoney()}",
+        var over => $"{(-over).ToMoney()} more than {(_through is null ? "is outstanding" : "that period left owing")}. It stays in the balance between you."
+    };
+
     private IEnumerable<string> ValidateAmount(decimal amount)
     {
-        if (amount > Shown.Amount)
-            yield return _through is null
-                ? $"Amount cannot exceed what is outstanding ({Person.Amount.ToMoney()})."
-                : $"Amount cannot exceed what that period left owing ({Shown.Amount.ToMoney()}).";
+        if (amount <= 0)
+            yield return "Amount must be greater than 0.";
     }
 
     private async Task Submit()

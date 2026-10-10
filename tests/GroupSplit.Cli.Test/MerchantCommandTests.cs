@@ -9,9 +9,10 @@ namespace GroupSplit.Cli.Test;
 /// </summary>
 /// <remarks>
 /// A sync fills this table on its own, so these commands are the by-hand way in -- and the
-/// two that change a shared row are the interesting ones. A merchant belongs to no group,
-/// so a rename is felt in every group that has spent there, and neither the rename nor the
-/// delete may happen without the caller having been told so.
+/// two that would change a shared row are the interesting ones. A merchant belongs to no
+/// group, so a rename would be felt in every group that has spent there; the server refuses
+/// both for every account, and what is pinned here is that the CLI carries that refusal
+/// through cleanly.
 /// </remarks>
 [Collection(EnvironmentCollection.Name)]
 public sealed class MerchantCommandTests : IDisposable
@@ -43,7 +44,7 @@ public sealed class MerchantCommandTests : IDisposable
     [Fact]
     public async Task Listing_shows_what_came_back()
     {
-        _api.Returns("/api/merchants", new[] { Merchant(Guid.NewGuid(), "Lidl", "https://logos/lidl.png", 12) });
+        _api.Returns("/api/merchants", new[] { Merchant(Guid.NewGuid(), "Lidl", "https://plaid-merchant-logos.plaid.com/lidl.png", 12) });
 
         var result = await Cli.RunAsync("merchants", "list");
 
@@ -67,16 +68,16 @@ public sealed class MerchantCommandTests : IDisposable
     public async Task Creating_sends_the_name_and_the_logo()
     {
         var id = Guid.NewGuid();
-        _api.Returns("/api/merchants", Merchant(id, "Lidl", "https://logos/lidl.png"), method: "POST");
+        _api.Returns("/api/merchants", Merchant(id, "Lidl", "https://plaid-merchant-logos.plaid.com/lidl.png"), method: "POST");
 
         var result = await Cli.RunAsync(
-            "merchants", "create", "Lidl", "--logo-url", "https://logos/lidl.png");
+            "merchants", "create", "Lidl", "--logo-url", "https://plaid-merchant-logos.plaid.com/lidl.png");
 
         Assert.Equal(ExitCodes.Success, result.ExitCode);
 
         var written = Assert.Single(_api.Requests, request => request.Method == "POST");
         Assert.Equal("Lidl", written.Json.GetProperty("name").GetString());
-        Assert.Equal("https://logos/lidl.png", written.Json.GetProperty("logoUrl").GetString());
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", written.Json.GetProperty("logoUrl").GetString());
     }
 
     [Fact]
@@ -97,79 +98,67 @@ public sealed class MerchantCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A rename reaches every group that has spent here, so it is gated like a delete is --
-    /// and the prompt has to carry the count, which is the only thing that says whether this
-    /// is a tidy-up or a rewrite of somebody's history.
+    /// The server refuses every rename, relogo and delete of a merchant, so the CLI asks
+    /// nobody to confirm one -- it sends it, and the refusal arrives with its code and with
+    /// a remediation that does not send the caller off to sign in again.
     /// </summary>
     [Fact]
-    public async Task Renaming_asks_first_and_says_how_much_it_reaches()
+    public async Task A_rename_is_sent_without_asking_and_the_refusal_says_why()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "LIDL GmbH", used: 412));
+        _api.Returns($"/api/merchants/{id}", Merchant(id, "LIDL GmbH", used: 412), method: "GET");
+        _api.Problem($"/api/merchants/{id}", 403, "MERCHANT_EDIT_FORBIDDEN",
+            "A merchant is shared by every group that has spent there.", method: "PUT");
 
         var result = await Cli.RunAsync("merchants", "update", id.ToString(), "--name", "Lidl");
 
-        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
+        Assert.Equal(ExitCodes.AuthRequired, result.ExitCode);
+        Assert.Equal("MERCHANT_EDIT_FORBIDDEN", result.Error.GetProperty("code").GetString());
 
-        var envelope = result.Json;
-        Assert.Equal("merchants.update", envelope.GetProperty("action").GetString());
+        var remediation = result.Error.GetProperty("remediation").GetString();
+        Assert.Contains("transactions update", remediation);
+        Assert.DoesNotContain("auth status", remediation);
 
-        var changes = envelope.GetProperty("changes").EnumerateArray()
-            .Select(change => change.GetString() ?? "")
-            .ToList();
-
-        Assert.Contains(changes, change => change.Contains("412"));
-
-        Assert.DoesNotContain(_api.Requests, request => request.Method == "PUT");
+        // Sent, not stopped at a confirmation nobody could usefully give.
+        Assert.Single(_api.Requests, request => request.Method == "PUT");
     }
 
     [Fact]
-    public async Task Renaming_goes_through_once_confirmed_and_keeps_the_logo_it_had()
+    public async Task A_delete_is_sent_without_asking_and_the_refusal_says_why()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "LIDL GmbH", "https://logos/lidl.png", 412));
+        _api.Problem($"/api/merchants/{id}", 403, "MERCHANT_EDIT_FORBIDDEN",
+            "A merchant is shared by every group that has spent there.", method: "DELETE");
 
-        var result = await Cli.RunAsync(
-            "merchants", "update", id.ToString(), "--name", "Lidl", "--yes");
+        var result = await Cli.RunAsync("merchants", "delete", id.ToString());
 
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Equal(ExitCodes.AuthRequired, result.ExitCode);
+        Assert.Equal("MERCHANT_EDIT_FORBIDDEN", result.Error.GetProperty("code").GetString());
+        Assert.Single(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task An_update_about_the_name_does_not_clear_the_logo_on_its_way_past()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/merchants/{id}", Merchant(id, "LIDL GmbH", "https://plaid-merchant-logos.plaid.com/lidl.png", 412));
+
+        await Cli.RunAsync("merchants", "update", id.ToString(), "--name", "Lidl");
 
         // A PUT requires the whole row, so anything not named is read back off the merchant
-        // first: an update about the name must not clear the logo on its way past.
+        // first: an update about the name must not send the logo as blank.
         var written = Assert.Single(_api.Requests, request => request.Method == "PUT");
         Assert.Equal("Lidl", written.Json.GetProperty("name").GetString());
-        Assert.Equal("https://logos/lidl.png", written.Json.GetProperty("logoUrl").GetString());
-    }
-
-    /// <summary>
-    /// Only the name is shared enough to gate. Setting a logo on a place that had none is
-    /// not something anybody needs to be talked out of.
-    /// </summary>
-    [Fact]
-    public async Task Setting_only_the_logo_needs_no_confirmation()
-    {
-        var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl", used: 12));
-
-        var result = await Cli.RunAsync(
-            "merchants", "update", id.ToString(), "--logo-url", "https://logos/lidl.png");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-
-        var written = Assert.Single(_api.Requests, request => request.Method == "PUT");
-        Assert.Equal("Lidl", written.Json.GetProperty("name").GetString());
-        Assert.Equal("https://logos/lidl.png", written.Json.GetProperty("logoUrl").GetString());
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/lidl.png", written.Json.GetProperty("logoUrl").GetString());
     }
 
     [Fact]
     public async Task Clearing_the_logo_sends_null_rather_than_the_one_it_had()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl", "https://logos/lidl.png", 12));
+        _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl", "https://plaid-merchant-logos.plaid.com/lidl.png", 12));
 
-        var result = await Cli.RunAsync("merchants", "update", id.ToString(), "--no-logo");
-
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        await Cli.RunAsync("merchants", "update", id.ToString(), "--no-logo");
 
         var written = Assert.Single(_api.Requests, request => request.Method == "PUT");
         Assert.Null(written.Json.GetProperty("logoUrl").GetString());
@@ -182,7 +171,7 @@ public sealed class MerchantCommandTests : IDisposable
         _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl"));
 
         var result = await Cli.RunAsync(
-            "merchants", "update", id.ToString(), "--logo-url", "https://logos/lidl.png", "--no-logo");
+            "merchants", "update", id.ToString(), "--logo-url", "https://plaid-merchant-logos.plaid.com/lidl.png", "--no-logo");
 
         Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
 
@@ -191,28 +180,30 @@ public sealed class MerchantCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Deleting_asks_first_and_names_what_it_would_take()
+    public async Task A_one_letter_search_is_refused_with_a_way_forward()
     {
-        var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl", used: 12));
+        _api.Problem("/api/merchants", 400, "MERCHANT_SEARCH_TOO_SHORT",
+            "Search for at least 2 characters, or leave the search out.");
 
-        var result = await Cli.RunAsync("merchants", "delete", id.ToString());
+        var result = await Cli.RunAsync("merchants", "list", "--search", "l");
 
-        Assert.Equal(ExitCodes.ConfirmationRequired, result.ExitCode);
-        Assert.Equal("merchants.delete", result.Json.GetProperty("action").GetString());
-        Assert.DoesNotContain(_api.Requests, request => request.Method == "DELETE");
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal("MERCHANT_SEARCH_TOO_SHORT", result.Error.GetProperty("code").GetString());
+        Assert.Contains("--search", result.Error.GetProperty("remediation").GetString());
     }
 
     [Fact]
-    public async Task Deleting_goes_through_once_confirmed()
+    public async Task A_logo_off_the_providers_hosts_is_refused_with_a_way_forward()
     {
-        var id = Guid.NewGuid();
-        _api.Returns($"/api/merchants/{id}", Merchant(id, "Lidl"));
+        _api.Problem("/api/merchants", 400, "MERCHANT_LOGO_NOT_ALLOWED",
+            "A merchant's logo has to come from the bank provider's image hosts.", method: "POST");
 
-        var result = await Cli.RunAsync("merchants", "delete", id.ToString(), "--yes");
+        var result = await Cli.RunAsync(
+            "merchants", "create", "Lidl", "--logo-url", "https://tracker.example.com/pixel.png");
 
-        Assert.Equal(ExitCodes.Success, result.ExitCode);
-        Assert.Contains(_api.Requests, request => request.Method == "DELETE");
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Equal("MERCHANT_LOGO_NOT_ALLOWED", result.Error.GetProperty("code").GetString());
+        Assert.Contains("--logo-url", result.Error.GetProperty("remediation").GetString());
     }
 
     // ---- naming a shop when recording an expense -------------------------------------

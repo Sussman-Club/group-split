@@ -60,6 +60,11 @@ public static class Extensions
             builder.AddSeeder<MemberSplitRuleSeeder>();
             builder.AddSeeder<BillSplitRuleSeeder>();
 
+            // And the "Even" rule, which the API gives a group as it is created and makes
+            // its default split: what an expense filed under no category divides by.
+            builder.Services.AddScoped<IEvenSplitRule, EvenSplitRule>();
+            builder.AddSeeder<EvenSplitRuleSeeder>();
+
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
 

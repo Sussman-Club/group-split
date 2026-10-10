@@ -1,0 +1,64 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.App.Shared.Services.Users
+
+@*
+    Shown in place of the whole app when the API refuses the signed-in person on every
+    request: today, a sign-in whose email another account already holds (somebody deleted
+    and recreated in Keycloak). Nothing on this side can fix that -- signing in again brings
+    back the same sign-in -- so the page says who can, gives them the reference support
+    finds the log line by, and offers the two things that do something: signing out, to use
+    another account, and trying again, for once support has sorted it out.
+
+    It makes no API call of its own, so it cannot be refused into a loop.
+*@
+
+<div style="flex: 1; display: flex; align-items: center; justify-content: center">
+    <div class="gs-auth-card" style="width: 100%; max-width: 30rem; padding: 40px 32px 32px">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
+
+            <BrandMark Class="gs-auth-mark" Size="64" />
+
+            <div>
+                <div class="gs-eyebrow" style="color: var(--gs-teal)">Group Split</div>
+                <h1 style="margin: 8px 0 6px; font-size: 1.75rem; font-weight: 800">We could not open your account</h1>
+                <p class="gs-muted" style="margin: 0; font-size: .9375rem">@ErrorMessages.For(Refusal.Code)</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Refusal.TraceId))
+            {
+                <div style="width: 100%">
+                    <div class="gs-eyebrow">Reference to quote to support</div>
+                    <code style="display: block; margin-top: 6px; font-size: .75rem; word-break: break-all">@Refusal.TraceId</code>
+                </div>
+            }
+
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       FullWidth
+                       Size="Size.Large"
+                       Class="gs-btn-pill"
+                       StartIcon="@Icons.Material.Rounded.Logout"
+                       OnClick="SignOutAsync">
+                Sign out
+            </MudButton>
+
+            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="TryAgain">
+                Try again
+            </MudButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private IAuthService AuthService { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    [Parameter, EditorRequired] public SignInRefusal Refusal { get; set; } = default!;
+
+    private Task SignOutAsync() => AuthService.Logout();
+
+    // A full load, because the answer is persisted with the page: anything less would show
+    // this again without asking.
+    private void TryAgain() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
+}

@@ -165,6 +165,9 @@
 
     private async Task RevokeAsync()
     {
+        // The group the question is about, kept for the answer (#323).
+        var groupId = GroupId;
+
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, "Turn this link off? Anybody you have already sent it to will not be able to join with it. People already in the group stay in." },
@@ -181,7 +184,7 @@
 
         _busy = true;
 
-        if (await GroupsService.RevokeGroupJoinLinkAsync())
+        if (await GroupsService.RevokeGroupJoinLinkAsync(groupId))
             _link = null;
 
         _busy = false;

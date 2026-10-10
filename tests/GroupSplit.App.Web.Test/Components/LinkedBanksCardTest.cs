@@ -97,6 +97,21 @@ public class LinkedBanksCardTest : ComponentTest
         Assert.Contains("Sign in again", buttons);
     }
 
+    /// <summary>
+    /// The state is not only a changed password any more: a locked account, an agreement
+    /// waiting at the bank, no account shared all land here (issue 319). The line says the
+    /// bank needs the person and where the way out is, without claiming which it was.
+    /// </summary>
+    [Fact]
+    public void A_connection_the_bank_has_stopped_says_it_needs_the_person_and_where_to_go()
+    {
+        var text = Text(Render(Connection(status: BankConnectionState.LoginRequired)));
+
+        Assert.Contains("Needs attention", text);
+        Assert.Contains("your bank needs you", text);
+        Assert.Contains("Sign in again to see what it is asking for", text);
+    }
+
     [Fact]
     public void An_account_whose_access_was_withdrawn_is_named_and_the_rest_carries_on()
     {

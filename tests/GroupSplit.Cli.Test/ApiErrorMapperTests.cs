@@ -113,6 +113,24 @@ public sealed class ApiErrorMapperTests
     }
 
     /// <summary>
+    /// A deleted account's session is refused for good. Signing in again cannot help -- the
+    /// login is deleted too -- so the hint is to throw the stored session away.
+    /// </summary>
+    [Fact]
+    public void A_deleted_account_is_told_to_clear_its_session_rather_than_sign_in_again()
+    {
+        var error = ApiErrorMapper.Map(Exception(403, new
+        {
+            title = "Forbidden",
+            code = SharedErrorCodes.AccountDeleted
+        }));
+
+        Assert.Equal(ExitCodes.AuthRequired, error.ExitCode);
+        Assert.Contains("auth logout", error.Error.Remediation);
+        Assert.DoesNotContain("auth status", error.Error.Remediation);
+    }
+
+    /// <summary>
     /// One code answers a stale join link and a stale invitation alike, so the way back
     /// names the command for each rather than assuming the join link.
     /// </summary>
@@ -147,6 +165,31 @@ public sealed class ApiErrorMapperTests
         Assert.Contains("groups settle", remediation);
         Assert.Contains("settle-between", remediation);
         Assert.DoesNotContain("them", remediation);
+    }
+
+    /// <summary>
+    /// Somebody recreated in Keycloak: the server refuses the sign-in itself, on every
+    /// command. A 409, but not something the arguments can fix, so it exits as an identity
+    /// problem -- and says that signing in again as the same person is not the way out, the
+    /// one thing an agent seeing exit code 2 would otherwise try first.
+    /// </summary>
+    [Fact]
+    public void A_sign_in_whose_email_another_account_holds_is_an_identity_problem_that_names_support()
+    {
+        var mapped = ApiErrorMapper.Map(Exception(409, new
+        {
+            title = "Conflict",
+            detail = "A detail for developers.",
+            code = SharedErrorCodes.IdentityEmailInUse,
+            traceId = "00-abc-def-01"
+        }));
+
+        Assert.Equal(SharedErrorCodes.IdentityEmailInUse, mapped.Error.Code);
+        Assert.Equal(ExitCodes.AuthRequired, mapped.ExitCode);
+        Assert.Equal(ApiErrorMapper.IdentityEmailInUseMessage, mapped.Error.Message);
+        Assert.Equal("00-abc-def-01", mapped.Error.TraceId);
+        Assert.Contains("will not help", mapped.Error.Remediation);
+        Assert.Contains("support", mapped.Error.Remediation);
     }
 
     [Fact]

@@ -92,8 +92,10 @@ is worth a one-time certificate.
 
 Locally there is usually no certificate and the ring is unwrapped, which is the ordinary
 development posture; the publish refuses a deployment that has bank sync on and no
+certificate, and outside Development the API refuses to start with Plaid configured and no
 certificate, because that deployment looks exactly like a correct one until somebody reads
-the database.
+the database. For a while it did not (#328); undoing a ring that was stored unwrapped is in
+[A ring that was stored unwrapped](development-and-deployment.md#a-ring-that-was-stored-unwrapped).
 
 **Statuses are strings in the database.** The first enums in the data layer, and the
 precedent that gets set. `BankTransactionStatus` and `BankConnectionStatus` are stored
@@ -111,14 +113,18 @@ pending -> posted as a new row in `added` whose `pending_transaction_id` names t
 one, and then a `removed` entry for the old one. The posted row takes `ReplacesId`, and
 takes over the pending row's status: `New` stays `New` under the new row, `Ignored`
 stays ignored, and `Filed` moves the ledger link -- the `Transaction` now points at the
-posted row. The pending row becomes `Superseded`, which no listing shows and no sync
-touches again. That keeps the history the roadmap wanted `ReplacesId` for, and keeps the
-inbox from showing the same coffee twice.
+posted row. Receipt files attached to the pending row move with it. The pending row
+becomes `Superseded`, which no listing shows and no sync touches again. That keeps the
+history the roadmap wanted `ReplacesId` for, and keeps the inbox from showing the same
+coffee twice.
 
 **A `removed` entry deletes a row nobody has acted on.** `New` and `Ignored` rows are
-deleted; a `Filed` row is kept and stamped `RemovedAt`, because the expense it became is
-somebody's spending history and the inbox needs to be able to say "the bank withdrew
-this". `Superseded` rows are left alone -- the replacement holds the story.
+deleted, with any receipt file attached to them in the inbox and its stored object; a
+`Filed` row is kept and stamped `RemovedAt`, because the expense it became is somebody's
+spending history and the inbox needs to be able to say "the bank withdrew this".
+`Superseded` rows are left alone -- the replacement holds the story. Deleting the expense
+of a stamped row deletes the row too; deleting the expense of any other filed row puts the
+row back in the inbox.
 
 **Rows are saved per page; the cursor only when the page run is complete.** Plaid's
 guidance is to persist `next_cursor` only once `has_more` is false, and on any error
@@ -126,7 +132,10 @@ during pagination to restart the loop from the cursor the run began with. So eac
 rows are written as they arrive -- every write is an upsert keyed on the provider's id,
 so a replay changes nothing -- and `Cursor` moves only at the end. A crash mid-run
 leaves the rows and the old cursor, and the next run walks the same pages over the
-same rows and lands in the same place.
+same rows and lands in the same place. A restart from the starting cursor
+(`TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION`) remembers the rows the abandoned walk
+inserted; one the walk that finishes never reports again, and nobody has filed, is deleted
+before the cursor moves -- otherwise it would sit in the inbox as money nobody spent.
 
 **One sync per connection at a time, in process.** A `SemaphoreSlim` per connection id,
 held by a singleton. That is correct for one API instance, which is what runs today and
@@ -158,8 +167,10 @@ enqueues a sync; `ERROR` with `ITEM_LOGIN_REQUIRED` marks the connection
 marks it `Revoked`. Everything else is acknowledged and logged at debug.
 
 **Sandbox locally, a switch in production.** The deployment configuration explicitly
-supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, and the redirect
-URI. When the switch is `true`, the credentials must be valid; when it is `false`, the
+supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, the redirect
+URI and `bank-key-certificate`. When the switch is `true`, the credentials must be valid
+and the certificate present -- the `validate-plaid` step and the deploy workflow's
+`require_when` line both refuse it otherwise; when it is `false`, the
 API still starts and `GET /bank-connections` answers an empty list with `enabled: false`
 in the envelope, so the client hides the Link button. Locally the credentials come from
 user secrets, and Link runs against the sandbox where
@@ -231,6 +242,16 @@ provider enrichment and should not start. A row per place fixes both: the sync r
 provider's `merchant_name` to one, filing copies the link onto the expense the way it copies
 the amount, and a logo the provider only supplies later arrives on every expense at that
 place at once.
+
+Shared is not the same as everybody's (#329). A caller reads only the merchants they already
+have something at -- an expense they can see, or a row their own bank imported -- at most 20
+to a listing and only for a search of two characters or more, because the table also holds
+places only one person's card has paid. Nobody renames, relogos or deletes a merchant
+(`MERCHANT_EDIT_FORBIDDEN`): it would change what every group that has spent there sees, and
+there is no role entitled to decide that. And `LogoUrl` only ever holds an address on
+Plaid's image hosts or one of the marks the app ships (`MerchantLogos`): a hand-typed one
+is refused, a provider's from anywhere else is dropped by the sync, and the app renders
+initials for any stored one that slipped through, since every viewer's browser loads it.
 
 ```csharp
 public class Merchant : Entity
@@ -364,6 +385,12 @@ the host calls `WithoutDefaults()` to remove the in-process workers and schedule
 Failure has no retry scheme of its own: the transport redelivers by its rules, or the
 sweep catches it tomorrow.
 
+Nobody waits on a sync, so its failure would have nowhere to go but the job's handle, which
+every caller drops. The worker logs it instead: every job that throws is logged at error with
+its type and inputs (the record's `ToString`, which is why jobs carry ids and nothing
+secret), and a job cancelled while the host is still running -- an HTTP timeout, usually --
+is logged as the failure it is, apart from one stopped by shutdown, which is only noted.
+
 ## The API
 
 Two groups, and the anonymous route.
@@ -374,7 +401,7 @@ Two groups, and the anonymous route.
 | `POST /bank-connections/link-token` | `CreateLinkToken` | `LinkTokenResponse { token, expiresAt }`; body may name a connection for update mode |
 | `POST /bank-connections` | `LinkBankConnection` | `BankConnectionResponse`, 201; exchanges the public token, stores the item and its accounts, enqueues a sync |
 | `POST /bank-connections/{id}/sync` | `SyncBankConnection` | 202 |
-| `DELETE /bank-connections/{id}` | `UnlinkBankConnection` | 204; removes the item at the provider, deletes the connection; filed expenses lose their link and keep everything else |
+| `DELETE /bank-connections/{id}` | `UnlinkBankConnection` | 204; removes the item at the provider (one it no longer knows counts as removed), deletes the connection; filed expenses lose their link and keep everything else; receipt files still waiting in the inbox are deleted with their stored objects |
 | `GET /inbox` | `GetInbox` | `PagedResponse<BankTransactionResponse>`, `status` filter defaulting to `New`, sorted by date descending |
 | `GET /inbox/summary` | `GetInboxSummary` | `{ newCount }` for the badge |
 | `POST /inbox/{id}/file` | `FileBankTransaction` | `TransactionResponse`, 201 |

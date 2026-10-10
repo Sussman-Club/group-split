@@ -9,20 +9,29 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Test.Merchants;
 
 /// <summary>
-/// Adding and correcting a place by hand. The sync writes this table on its own; this is
-/// the other way in, for cash at the same shop every week or a group with no bank linked.
+/// Adding a place by hand, and reading the places that are yours. The sync writes this
+/// table on its own; this is the other way in, for cash at the same shop every week or a
+/// group with no bank linked.
 /// </summary>
 /// <remarks>
-/// What is worth pinning is the shared-ness. One row per place is the whole point of the
-/// table, so the folding that the sync's resolver uses has to be the same folding this uses
-/// -- otherwise somebody types "lidl", a sync later reports "Lidl", and the app has two of
-/// them with the logo on one.
+/// Two things are worth pinning. The shared-ness: one row per place is the whole point of
+/// the table, so the folding the sync's resolver uses has to be the same folding this uses.
+/// And the limits of it: a row being shared does not make it everybody's to read or to
+/// change -- a caller sees the places they already have something at, and nobody renames,
+/// relogos or deletes one.
 /// </remarks>
 public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    private const string PlaidLogo = "https://plaid-merchant-logos.plaid.com/";
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IMerchantService Merchants => GetService<IMerchantService>();
+
+    private Task<Merchant> Stored(Guid id) =>
+        DbContext.Set<Merchant>().AsNoTracking().FirstAsync(merchant => merchant.Id == id, Ct);
+
+    // ---- adding one ----------------------------------------------------------------------
 
     [Fact]
     public async Task A_place_added_by_hand_is_folded_the_way_a_synced_one_is()
@@ -30,12 +39,12 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var merchant = await Merchants.Create(new CreateMerchantRequest
         {
             Name = "  Blue Bottle Coffee ",
-            LogoUrl = "https://logos/bb.png"
+            LogoUrl = PlaidLogo + "bb.png"
         }, Ct);
 
         Assert.Equal("Blue Bottle Coffee", merchant.Name);
-        Assert.Equal("blue bottle coffee", merchant.NormalizedName);
-        Assert.Equal("https://logos/bb.png", merchant.LogoUrl);
+        Assert.Equal("blue bottle coffee", (await Stored(merchant.Id)).NormalizedName);
+        Assert.Equal(PlaidLogo + "bb.png", merchant.LogoUrl);
     }
 
     [Fact]
@@ -53,110 +62,101 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task The_same_place_cannot_be_added_twice_under_a_different_casing()
-    {
-        await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Merchants.Create(new CreateMerchantRequest { Name = "LIDL" }, Ct));
-
-        Assert.Equal(ErrorCodes.MerchantNameTaken, refusal.Code);
-        Assert.Single(await DbContext.Set<Merchant>().ToListAsync(Ct));
-    }
-
-    [Fact]
-    public async Task Renaming_a_place_re_folds_its_key_so_the_next_sync_still_finds_it()
-    {
-        var merchant = await Merchants.Create(new CreateMerchantRequest { Name = "LIDL GmbH" }, Ct);
-
-        var renamed = await Merchants.Update(merchant.Id, new UpdateMerchantRequest { Name = "Lidl" }, Ct);
-
-        Assert.Equal("Lidl", renamed.Name);
-
-        // The column the unique index is on, and the one the resolver looks up. Left stale
-        // it would be a row nothing could ever find again -- and a second Lidl next sync.
-        Assert.Equal("lidl", renamed.NormalizedName);
-    }
-
-    [Fact]
-    public async Task An_update_that_omits_the_logo_clears_it()
+    public async Task A_place_can_carry_one_of_the_marks_the_app_ships()
     {
         var merchant = await Merchants.Create(new CreateMerchantRequest
         {
             Name = "Lidl",
-            LogoUrl = "https://logos/lidl.png"
+            LogoUrl = MerchantLogos.BundledPath + "lidl.svg"
         }, Ct);
 
-        await Merchants.Update(merchant.Id, new UpdateMerchantRequest { Name = "Lidl" }, Ct);
-
-        // Deliberately unlike the sync, which only ever fills a missing logo in: a provider
-        // that stops sending one is having a bad afternoon, and a person who clears the
-        // field means it.
-        Assert.Null((await Merchants.Get(merchant.Id, Ct)).LogoUrl);
+        Assert.Equal("/_content/GroupSplit.App.Shared/merchants/lidl.svg", merchant.LogoUrl);
     }
 
+    /// <summary>
+    /// Every viewer of every ledger that shows this place loads its logo, so an address
+    /// anybody can type is a tracking pixel on other people's screens.
+    /// </summary>
     [Fact]
-    public async Task Renaming_onto_a_name_another_place_already_has_is_refused()
+    public async Task A_logo_on_a_host_that_is_not_the_providers_is_refused()
     {
-        await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-        var other = await Merchants.Create(new CreateMerchantRequest { Name = "Aldi" }, Ct);
+        var refusal = await Assert.ThrowsAsync<ValidationException>(() =>
+            Merchants.Create(new CreateMerchantRequest
+            {
+                Name = "Lidl",
+                LogoUrl = "https://tracker.example.com/pixel.png"
+            }, Ct));
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Merchants.Update(other.Id, new UpdateMerchantRequest { Name = "lidl" }, Ct));
-
-        Assert.Equal(ErrorCodes.MerchantNameTaken, refusal.Code);
-    }
-
-    [Fact]
-    public async Task A_place_keeps_its_own_name_through_an_update_that_does_not_change_it()
-    {
-        var merchant = await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-
-        // The excluding clause: without it a row would collide with itself and no merchant
-        // could ever be given a logo.
-        var updated = await Merchants.Update(merchant.Id, new UpdateMerchantRequest
-        {
-            Name = "Lidl",
-            LogoUrl = "https://logos/lidl.png"
-        }, Ct);
-
-        Assert.Equal("https://logos/lidl.png", updated.LogoUrl);
-    }
-
-    [Fact]
-    public async Task A_place_nothing_points_at_can_be_deleted()
-    {
-        var merchant = await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-
-        await Merchants.Delete(merchant.Id, Ct);
-
+        Assert.Equal(ErrorCodes.MerchantLogoNotAllowed, refusal.Code);
         Assert.Empty(await DbContext.Set<Merchant>().ToListAsync(Ct));
     }
 
+    /// <summary>
+    /// The caller cannot see a place they have nothing at, so "already there" is not
+    /// something they could have known. Handing back the row is what the resolver does
+    /// with the same name; refusing would leave them unable to name it at all.
+    /// </summary>
     [Fact]
-    public async Task A_place_an_expense_points_at_cannot_be_deleted()
+    public async Task Adding_a_place_that_is_already_there_hands_back_the_one_there_is()
     {
-        var merchant = await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-        await ExpenseAt(merchant);
+        var first = await Merchants.Create(new CreateMerchantRequest { Name = "Lidl", LogoUrl = PlaidLogo + "lidl.png" }, Ct);
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() => Merchants.Delete(merchant.Id, Ct));
+        var second = await Merchants.Create(new CreateMerchantRequest { Name = "LIDL", LogoUrl = PlaidLogo + "other.png" }, Ct);
 
-        Assert.Equal(ErrorCodes.MerchantInUse, refusal.Code);
+        Assert.Equal(first.Id, second.Id);
+        Assert.Single(await DbContext.Set<Merchant>().ToListAsync(Ct));
+
+        // Not a relogo by the back door.
+        Assert.Equal(PlaidLogo + "lidl.png", (await Stored(first.Id)).LogoUrl);
+    }
+
+    // ---- changing one ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Another_user_cannot_rename_or_relogo_a_place()
+    {
+        var merchant = await SomebodyElsesPlace("Lidl", PlaidLogo + "lidl.png");
+
+        var refusal = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Merchants.Update(merchant.Id, new UpdateMerchantRequest
+            {
+                Name = "Somewhere rude",
+                LogoUrl = PlaidLogo + "other.png"
+            }, Ct));
+
+        Assert.Equal(ErrorCodes.MerchantEditForbidden, refusal.Code);
+
+        var stored = await Stored(merchant.Id);
+        Assert.Equal("Lidl", stored.Name);
+        Assert.Equal("lidl", stored.NormalizedName);
+        Assert.Equal(PlaidLogo + "lidl.png", stored.LogoUrl);
+    }
+
+    [Fact]
+    public async Task Another_user_cannot_delete_a_place()
+    {
+        var merchant = await SomebodyElsesPlace("Lidl");
+
+        var refusal = await Assert.ThrowsAsync<ForbiddenException>(() => Merchants.Delete(merchant.Id, Ct));
+
+        Assert.Equal(ErrorCodes.MerchantEditForbidden, refusal.Code);
         Assert.Single(await DbContext.Set<Merchant>().ToListAsync(Ct));
     }
 
+    /// <summary>
+    /// The same answer for a merchant that does not exist, so the refusal cannot be used to
+    /// find out which ids are real.
+    /// </summary>
     [Fact]
-    public async Task A_place_only_a_waiting_bank_row_points_at_cannot_be_deleted_either()
+    public async Task Changing_a_place_that_is_not_there_is_refused_the_same_way()
     {
-        var merchant = await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-        await ImportedRowAt(merchant);
+        var refusal = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Merchants.Update(Guid.NewGuid(), new UpdateMerchantRequest { Name = "Lidl" }, Ct));
 
-        // A row still waiting in an inbox points here too, and deleting under it would
-        // leave the inbox unable to render what it is offering.
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() => Merchants.Delete(merchant.Id, Ct));
-
-        Assert.Equal(ErrorCodes.MerchantInUse, refusal.Code);
+        Assert.Equal(ErrorCodes.MerchantEditForbidden, refusal.Code);
     }
+
+    // ---- reading them ----------------------------------------------------------------------
 
     [Fact]
     public async Task A_place_that_is_not_there_is_a_not_found_rather_than_a_null()
@@ -166,11 +166,85 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(ErrorCodes.MerchantNotFound, missing.Code);
     }
 
+    /// <summary>
+    /// The privacy half of the issue: a place only somebody else's card has paid -- a
+    /// clinic, a lawyer -- says something about them, and is not in anybody else's list.
+    /// </summary>
+    [Fact]
+    public async Task A_place_only_another_user_has_been_is_not_listed()
+    {
+        await SomebodyElsesPlace("Dr. Ruiz Psychiatry");
+
+        Assert.Empty(await (await Merchants.List(null, Ct)).ToListAsync(Ct));
+        Assert.Empty(await (await Merchants.List("ruiz", Ct)).ToListAsync(Ct));
+    }
+
+    [Fact]
+    public async Task A_place_only_another_user_has_been_cannot_be_read_by_id()
+    {
+        var merchant = await SomebodyElsesPlace("Dr. Ruiz Psychiatry");
+
+        var missing = await Assert.ThrowsAsync<NotFoundException>(() => Merchants.Get(merchant.Id, Ct));
+
+        Assert.Equal(ErrorCodes.MerchantNotFound, missing.Code);
+    }
+
+    [Fact]
+    public async Task A_place_somebody_in_my_group_spent_at_is_mine_to_see()
+    {
+        var me = GetService<ICurrentUser>().User;
+        var friend = await CreateNewUser();
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Flat" }, Ct);
+        await JoinGroup(group.Id, friend);
+
+        var merchant = await Place("Lidl");
+        await ExpenseAt(merchant, friend, group.Id);
+
+        // Their expense is on my ledger already, so its place is not news to me.
+        var listed = Assert.Single(await (await Merchants.List("lid", Ct)).ToListAsync(Ct));
+        Assert.Equal(merchant.Id, listed.Id);
+        Assert.NotEqual(me.Id, friend.Id);
+    }
+
+    [Fact]
+    public async Task A_place_my_own_bank_imported_is_mine_to_see()
+    {
+        var merchant = await Place("Lidl");
+        await ImportedRowAt(merchant, GetService<ICurrentUser>().User);
+
+        Assert.Equal(merchant.Id, (await Merchants.Get(merchant.Id, Ct)).Id);
+    }
+
+    [Fact]
+    public async Task A_place_another_users_bank_imported_is_not()
+    {
+        var merchant = await Place("Dr. Ruiz Psychiatry");
+        await ImportedRowAt(merchant, await CreateNewUser());
+
+        Assert.Empty(await (await Merchants.List(null, Ct)).ToListAsync(Ct));
+    }
+
+    /// <summary>
+    /// How much other people spend at a place is no more the caller's to learn than which
+    /// places those are.
+    /// </summary>
+    [Fact]
+    public async Task The_count_is_of_my_own_transactions_there_not_everybodys()
+    {
+        var merchant = await Place("Lidl");
+        await ExpenseAt(merchant, GetService<ICurrentUser>().User);
+        var stranger = await CreateNewUser();
+        await ExpenseAt(merchant, stranger);
+        await ExpenseAt(merchant, stranger);
+
+        Assert.Equal(1, (await Merchants.Get(merchant.Id, Ct)).TransactionCount);
+    }
+
     [Fact]
     public async Task The_listing_narrows_on_the_folded_name()
     {
-        await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-        await Merchants.Create(new CreateMerchantRequest { Name = "Aldi" }, Ct);
+        await Mine("Lidl");
+        await Mine("Aldi");
 
         // Upper-cased on the way in, to prove the search folds rather than matching what
         // the caller happened to type.
@@ -180,37 +254,38 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_listing_with_no_search_is_everything()
+    public async Task A_listing_with_no_search_is_every_place_of_mine()
     {
-        await Merchants.Create(new CreateMerchantRequest { Name = "Lidl" }, Ct);
-        await Merchants.Create(new CreateMerchantRequest { Name = "Aldi" }, Ct);
+        await Mine("Lidl");
+        await Mine("Aldi");
+        await SomebodyElsesPlace("Costco");
 
-        Assert.Equal(2, (await (await Merchants.List(null, Ct)).ToListAsync(Ct)).Count);
+        var names = (await (await Merchants.List(null, Ct)).ToListAsync(Ct)).Select(merchant => merchant.Name);
+
+        Assert.Equal(["Aldi", "Lidl"], names);
     }
 
-    /// <summary>
-    /// A place is not a group's, so every caller sees every one of them.
-    /// </summary>
-    /// <remarks>
-    /// The one unscoped read in the app, and worth a test saying so on purpose rather than
-    /// leaving it to look like an oversight. Nothing leaks: a name and a logo are what a
-    /// bank would have told either group anyway, and the row says nothing about who spent
-    /// what.
-    /// </remarks>
     [Fact]
-    public async Task A_place_somebody_else_added_is_visible_here_too()
+    public async Task A_listing_stops_at_twenty()
     {
-        var merchant = new Merchant
-        {
-            Name = "Lidl",
-            NormalizedName = "lidl",
-            FirstSeenAt = DateTimeOffset.UtcNow
-        };
+        for (var i = 0; i < 25; i++)
+            await Mine($"Shop {i:00}");
 
-        DbContext.Add(merchant);
-        await DbContext.SaveChangesAsync(Ct);
+        var listed = await (await Merchants.List("shop", Ct)).ToListAsync(Ct);
 
-        Assert.Equal(merchant.Id, (await Merchants.Get(merchant.Id, Ct)).Id);
+        Assert.Equal(MerchantService.PageSize, listed.Count);
+        Assert.Equal(20, listed.Count);
+        Assert.Equal("Shop 00", listed[0].Name);
+    }
+
+    [Theory]
+    [InlineData("l")]
+    [InlineData(" l ")]
+    public async Task A_one_letter_search_is_refused(string search)
+    {
+        var refusal = await Assert.ThrowsAsync<ValidationException>(() => Merchants.List(search, Ct));
+
+        Assert.Equal(ErrorCodes.MerchantSearchTooShort, refusal.Code);
     }
 
     // ---- naming a shop when recording an expense -------------------------------------
@@ -229,6 +304,10 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, Ct);
 
         Assert.Equal(merchant.Id, expense.MerchantId);
+
+        // And that is what makes it the caller's: a place they have just named is in their
+        // listing from the expense on.
+        Assert.Equal(merchant.Id, (await Merchants.Get(merchant.Id, Ct)).Id);
     }
 
     [Fact]
@@ -302,13 +381,47 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Null((await transactions.Update(expense.Id, model, Ct)).MerchantId);
     }
 
-    private async Task ExpenseAt(Merchant merchant)
-    {
-        var user = GetService<ICurrentUser>().User;
+    // ---- helpers -----------------------------------------------------------------------------
 
+    /// <summary>A merchant row nobody points at yet, written straight to the table.</summary>
+    private async Task<Merchant> Place(string name, string? logo = null)
+    {
+        var merchant = new Merchant
+        {
+            Name = name,
+            NormalizedName = name.ToLowerInvariant(),
+            LogoUrl = logo,
+            FirstSeenAt = DateTimeOffset.UtcNow
+        };
+
+        DbContext.Add(merchant);
+        await DbContext.SaveChangesAsync(Ct);
+
+        return merchant;
+    }
+
+    /// <summary>A place the caller has a personal expense at.</summary>
+    private async Task<Merchant> Mine(string name)
+    {
+        var merchant = await Place(name);
+        await ExpenseAt(merchant, GetService<ICurrentUser>().User);
+        return merchant;
+    }
+
+    /// <summary>A place only a stranger -- somebody sharing no group with the caller -- has paid.</summary>
+    private async Task<Merchant> SomebodyElsesPlace(string name, string? logo = null)
+    {
+        var merchant = await Place(name, logo);
+        await ExpenseAt(merchant, await CreateNewUser());
+        return merchant;
+    }
+
+    private async Task ExpenseAt(Merchant merchant, Data.Entities.User payer, Guid? groupId = null)
+    {
         var expense = new Expense
         {
-            User = user,
+            UserId = payer.Id,
+            GroupId = groupId,
             Amount = 12.50m,
             Currency = "USD",
             Name = "Weekly shop",
@@ -316,19 +429,17 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             MerchantId = merchant.Id
         };
 
-        expense.Splits.Add(new TransactionSplit { User = user, Amount = 12.50m });
+        expense.Splits.Add(new TransactionSplit { UserId = payer.Id, Amount = 12.50m });
 
         DbContext.Add(expense);
         await DbContext.SaveChangesAsync(Ct);
     }
 
-    private async Task ImportedRowAt(Merchant merchant)
+    private async Task ImportedRowAt(Merchant merchant, Data.Entities.User owner)
     {
-        var user = GetService<ICurrentUser>().User;
-
         var connection = new BankConnection
         {
-            User = user,
+            UserId = owner.Id,
             Provider = "seed",
             ProviderItemId = $"item-{Guid.NewGuid():N}",
             InstitutionName = "Probe Bank",
@@ -345,11 +456,11 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         account.Transactions.Add(new BankTransaction
         {
-            ProviderTransactionId = "t1",
+            ProviderTransactionId = $"t-{Guid.NewGuid():N}",
             Date = new DateOnly(2026, 9, 1),
             Amount = 12.50m,
             Description = "LIDL 1234",
-            MerchantName = "Lidl",
+            MerchantName = merchant.Name,
             MerchantId = merchant.Id,
             RawJson = "{}",
             ImportedAt = DateTimeOffset.UtcNow

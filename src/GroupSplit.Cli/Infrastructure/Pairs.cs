@@ -20,25 +20,33 @@ public static class Pairs
             .Select(pair => new SplitInput { UserId = pair.Key, Amount = pair.Value })
             .ToList();
 
+    /// <summary>
+    /// Shares and percentages, both in hundredths and both in the one amount format: a
+    /// <c>.</c> decimal point and no thousands separators. It used to be read with
+    /// <see cref="NumberStyles.Number"/>, which takes a comma as grouping -- so
+    /// <c>--split a=6,25</c> was 625, and two such shares still "added up" to an expense
+    /// typed as 12,50 and misread the same way (#313).
+    /// </summary>
     public static Dictionary<Guid, decimal> Decimals(string option, IEnumerable<string> values)
         => Parse<decimal>(option, values, "21.25", text =>
-            decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : null);
+            Amounts.TryRead(text, DecimalText.MoneyPlaces, out var parsed, out var problem)
+                ? (parsed, null)
+                : (null, problem));
 
     public static Dictionary<Guid, int> Ints(string option, IEnumerable<string> values)
         => Parse<int>(option, values, "2", text =>
             int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : null);
+                ? (parsed, null)
+                : (null, null));
 
     /// <param name="sample">
     /// A value of the right shape, for the remediation line. It is what makes the error
     /// actionable without reading the help: "not a number" says what is wrong, and this
     /// says what to type instead.
     /// </param>
+    /// <param name="read">The value, or why it is not one when there is more to say.</param>
     private static Dictionary<Guid, T> Parse<T>(
-        string option, IEnumerable<string> values, string sample, Func<string, T?> read)
+        string option, IEnumerable<string> values, string sample, Func<string, (T? Value, string? Problem)> read)
         where T : struct
     {
         var parsed = new Dictionary<Guid, T>();
@@ -57,9 +65,13 @@ public static class Pairs
                 throw Invalid(option, value, sample, "the part before '=' is not a user id");
             }
 
-            if (read(value[(separator + 1)..].Trim()) is not { } amount)
+            var (number, problem) = read(value[(separator + 1)..].Trim());
+
+            if (number is not { } amount)
             {
-                throw Invalid(option, value, sample, $"the part after '=' should look like {sample}");
+                throw Invalid(option, value, sample,
+                    $"the part after '=' should look like {sample}"
+                    + (problem is null ? "" : $". {problem.TrimEnd('.')}"));
             }
 
             // Last-one-wins would silently drop one of two values for the same person, and

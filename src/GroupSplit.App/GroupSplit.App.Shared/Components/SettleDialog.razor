@@ -31,7 +31,7 @@
 
                 <MudText Typo="Typo.subtitle2">@Standing</MudText>
 
-                <MudNumericField
+                <DecimalField
                     @bind-Value="_model.Amount"
                     For="@(() => _model.Amount)"
                     Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
@@ -40,15 +40,12 @@
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                     AdornmentColor="Color.Primary"
                     HideSpinButtons="true"
-                    Format="N2"
                     Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
 
-                <MudText Typo="Typo.caption">
-                    Remaining @(_through is null ? "balance" : "for that period"): @((Owed - _model.Amount).ToMoney())
-                </MudText>
+                <MudText Typo="Typo.caption">@Remaining</MudText>
 
                 @* A month at a time, for groups that settle that way: what activity dated up
-                   to the day left owing, after every repayment already made -- so a payment
+                   to the day left owing, after the repayments made for it -- so a payment
                    made since for that month is never asked for again. Tucked away, because
                    settling the whole of it is still what most people want. *@
                 @if (_choosingPeriod)
@@ -93,7 +90,7 @@
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit"
-                   Disabled="@(_readingPeriod || Owed <= 0)">
+                   Disabled="@_readingPeriod">
             Confirm
         </MudButton>
     </DialogActions>
@@ -148,7 +145,7 @@
 
     private string PeriodHelp => _through is { } day && Owed <= 0
         ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
-        : "Repayments already made count, whatever their date. Clear it to settle everything.";
+        : "Repayments for later count only as far as they pay it down. Clear it to settle everything.";
 
     protected override void OnInitialized()
     {
@@ -179,8 +176,9 @@
     /// through the day on this viewer's calendar.
     /// </summary>
     /// <remarks>
-    /// Read here, not worked out: the balance through a day counts every repayment whatever
-    /// its date, which is the half a client summing its own expenses would leave out. The day
+    /// Read here, not worked out: the balance through a day counts the repayments made for it
+    /// and later ones as far as they pay it down, which is the half a client summing its own
+    /// expenses would leave out. The day
     /// goes onto the request as well, so the repayment remembers what it was for.
     /// </remarks>
     private async Task ThroughChanged(DateTime? through)
@@ -225,12 +223,24 @@
         }
     }
 
+    /// <summary>
+    /// What is left after this payment, or how far past the figure it goes.
+    /// </summary>
+    /// <remarks>
+    /// Past it is allowed. The figure is a suggestion; a repayment is whatever money
+    /// actually moved -- rounding up, paying ahead -- and the difference simply stays in the
+    /// balance.
+    /// </remarks>
+    private string Remaining => (Owed - _model.Amount) switch
+    {
+        >= 0 and var left => $"Remaining {(_through is null ? "balance" : "for that period")}: {left.ToMoney()}",
+        var over => $"{(-over).ToMoney()} more than {(_through is null ? "is owed" : "that period left owing")}. It stays in the balance between you."
+    };
+
     IEnumerable<string> ValidateAmount(decimal amount)
     {
-        if (amount > Owed)
-            yield return _through is null
-                ? $"Amount cannot exceed the total debt ({TotalDebt.ToMoney()})"
-                : $"Amount cannot exceed what that period left owing ({Owed.ToMoney()})";
+        if (amount <= 0)
+            yield return "Amount must be greater than 0.";
     }
 
     private async Task Submit()

@@ -52,7 +52,8 @@ public class WaitingOnYouTest : ComponentTest
             .ReturnsAsync(invitations);
 
     private static GroupInvitationResponse Invitation(string name, string token) =>
-        new(Guid.NewGuid(), Group, "The flat", name, token, "Anabel", DateTimeOffset.UtcNow, Guid.NewGuid());
+        new(Guid.NewGuid(), Group, "The flat", name, token, "Anabel", DateTimeOffset.UtcNow, Guid.NewGuid(),
+            DateTimeOffset.UtcNow.AddDays(30));
 
     private IRenderedComponent<WaitingOnYou> Render() => base.Render<WaitingOnYou>();
 

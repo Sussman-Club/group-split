@@ -109,8 +109,13 @@ the *sets* rather than on the pair:
 - **The payer is the same person.** A bank row is one person's card charge, so the only
   expenses it can be are ones they are down as having paid. Somebody else's card charge lands
   in somebody else's inbox.
-- **The expense has no bank row already.** An expense carries at most one, and one that has
-  one is not waiting to be matched against another.
+- **The expense has no bank row the bank still stands behind.** An expense carries at most
+  one, and one that has one is not waiting to be matched against another. One whose row the
+  bank *withdrew*, or that a posted row superseded without the link moving, is: a pending
+  row filed as an expense, withdrawn, and re-posted under a new id that does not name it is
+  the same money arriving twice, and used to file with nothing said because the first
+  expense still pointed at the withdrawn row. Linking the new row to it moves the expense
+  across and marks the withdrawn row superseded by it.
 
 Money in another currency is not the same money, and money coming in -- a refund, a deposit
 -- has no expense to be a duplicate of.
@@ -147,8 +152,18 @@ person typed, and is decided by nobody until they say so.
 
 They can both move the same row, so they do not overlap: a superseded row is never listed,
 never filed and never suggested, and supersession takes over the pending row's status --
-including a `Filed` one, whose expense link moves with it. A row that a person attached to an
-expense is `Filed`, so it takes that path and not this one.
+including a `Filed` one, whose expense link moves with it -- and its receipt files, so a
+photograph taken at the till against the pending row is still there on the posted one. A row
+that a person attached to an expense is `Filed`, so it takes that path and not this one.
+
+## Undoing a filing
+
+Deleting an expense that was filed from, or linked to, a bank row puts the row back in the
+inbox as waiting, with the receipt files that were attached to it there before filing. It is
+undoing the filing, not the import. Until [#319](https://github.com/Sussman-Club/group-split/issues/319)
+the row stayed `Filed` with nothing filed from it, and every way out of that refused it. A
+row the bank withdrew after it was filed has nowhere to go back to, and goes with the
+expense, as a sync deletes a withdrawn row nobody acted on.
 
 ## What the clients do with a grade
 

@@ -140,9 +140,9 @@ public interface IGroupService
     /// settlement whatever its date. Null counts everything, as the overload without it does.
     /// </summary>
     /// <remarks>
-    /// What settling up through a day pays, and what a settlement made through one is
-    /// checked against afterwards. See <see cref="Cutoff"/> for why settlements are not cut
-    /// off too.
+    /// The starting point for what settling up through a day pays: the settlement service
+    /// then takes out the settlements made for after the day and counts them back only as
+    /// far as they pay the period down. See <see cref="Cutoff"/>.
     /// </remarks>
     Task<IQueryable<GroupNetBalance>> GetGroupNetBalance(Guid groupId, Cutoff? cutoff,
         CancellationToken cancellationToken = default);

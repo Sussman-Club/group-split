@@ -40,7 +40,13 @@ public sealed class JsonOutputWriter(OutputSettings settings, TextWriter stdout,
     public void WriteMessage(string message, object? payload = null)
         => WriteJson(payload ?? new { message });
 
-    public void WriteConfirmationRequest(ConfirmationRequest request) => WriteJson(request);
+    /// <summary>
+    /// Whole, whatever --fields asked for. The fields named the result the caller wanted,
+    /// and this is not it: a filter meant for a transaction's <c>id</c> left an empty object
+    /// here, with nothing in it to show anybody or to confirm with.
+    /// </summary>
+    public void WriteConfirmationRequest(ConfirmationRequest request)
+        => stdout.WriteLine(JsonSerializer.Serialize(request, Options));
 
     public void WriteError(CliError error)
         => stderr.WriteLine(JsonSerializer.Serialize(error, Options));

@@ -20,6 +20,9 @@ namespace GroupSplit.Seeder.Seeders;
 [DependsOn(typeof(GroupSeeder))]
 [DependsOn(typeof(UserSeeder))]
 [DependsOn(typeof(BillSplitRuleSeeder))]
+// After the group's "Even" rule as well, which the API gives a group before it can have a
+// category: rule names are unique per group, so the two cannot be written at the same time.
+[DependsOn(typeof(EvenSplitRuleSeeder))]
 public class CategorySeeder(
     AppDbContext db,
     ILogger<CategorySeeder> logger,

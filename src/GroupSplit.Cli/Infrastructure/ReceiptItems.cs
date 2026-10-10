@@ -1,4 +1,3 @@
-using System.Globalization;
 using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;
@@ -9,16 +8,31 @@ public static class ReceiptItems
     private const string Sample = "Wine=18.00";
 
     public static IReadOnlyList<ReceiptItemInput> Parse(string option, IEnumerable<string> values)
+        => [.. ParseLines(option, values).Select(line => line.Item)];
+
+    /// <summary>
+    /// The lines, each with whether it said anything about its tax.
+    /// </summary>
+    /// <remarks>
+    /// The difference between "this line carried no tax" and "this line's tax is whatever it
+    /// was": a bare line reads as no tax, which is right for a bill being written out for the
+    /// first time and wrong for a stored line being corrected, whose rate and tax nobody asked
+    /// to change. The command needs to know which it was told.
+    /// </remarks>
+    public static IReadOnlyList<ReceiptLine> ParseLines(string option, IEnumerable<string> values)
     {
-        var items = new List<ReceiptItemInput>();
+        var lines = new List<ReceiptLine>();
 
         foreach (var value in values)
-            items.Add(One(option, value));
+            lines.Add(One(option, value));
 
-        return items;
+        return lines;
     }
 
-    private static ReceiptItemInput One(string option, string value)
+    /// <summary>One parsed line, and whether it carried <c>/tax</c> or <c>/notax</c>.</summary>
+    public sealed record ReceiptLine(ReceiptItemInput Item, bool StatesTax);
+
+    private static ReceiptLine One(string option, string value)
     {
         var separator = value.IndexOf('=');
 
@@ -53,6 +67,7 @@ public static class ReceiptItems
         var rest = value[(separator + 1)..].Trim();
         Guid? ruleVersionId = null;
         var tax = 0m;
+        var statesTax = false;
 
         // Lifted out before anything else is read, and spliced rather than truncated, so it
         // can be written on either side of the rule -- "1.99/notax@<id>" and
@@ -93,6 +108,7 @@ public static class ReceiptItems
                     $"'{written}' is not a flag; the only ones are 'notax' and 'tax<amount>'");
             }
 
+            statesTax = true;
             rest = (rest[..slash] + (ends >= 0 ? after[ends..] : string.Empty)).Trim();
         }
 
@@ -115,7 +131,7 @@ public static class ReceiptItems
         // line has to fit in it.
         if (rest.IndexOf('x', StringComparison.OrdinalIgnoreCase) is var times and >= 0)
         {
-            quantity = Number(option, value, rest[(times + 1)..], "a quantity");
+            quantity = Number(option, value, rest[(times + 1)..], "a quantity", places: 3);
             rest = rest[..times].Trim();
         }
 
@@ -124,7 +140,7 @@ public static class ReceiptItems
         // number here. This is important for a discounted or otherwise adjusted line.
         var totalPrice = Number(option, value, rest, "a line total");
 
-        return new ReceiptItemInput
+        return new ReceiptLine(new ReceiptItemInput
         {
             Id = id,
             Name = name,
@@ -136,13 +152,18 @@ public static class ReceiptItems
             // and never divided by: the division reads TotalPrice, exactly as the bill does.
             UnitPrice = quantity == 0 ? totalPrice : decimal.Round(totalPrice / quantity, 2),
             SplitRuleVersionId = ruleVersionId
-        };
+        }, statesTax);
     }
 
-    private static decimal Number(string option, string value, string text, string what)
-        => decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+    /// <summary>
+    /// In the CLI's one amount format, as every other amount is (#313): <c>Wine=18,00</c>
+    /// was read as 1800 when a comma was taken for grouping. A quantity may hold three
+    /// decimal places, as the bill stores it; everything else here is money.
+    /// </summary>
+    private static decimal Number(string option, string value, string text, string what, int places = DecimalText.MoneyPlaces)
+        => Amounts.TryRead(text, places, out var parsed, out var problem)
             ? parsed
-            : throw Invalid(option, value, $"'{text.Trim()}' is not {what}");
+            : throw Invalid(option, value, $"'{text.Trim()}' is not {what}. {problem.TrimEnd('.')}");
 
     private static CliException Invalid(string option, string value, string why)
         => CliException.Input(

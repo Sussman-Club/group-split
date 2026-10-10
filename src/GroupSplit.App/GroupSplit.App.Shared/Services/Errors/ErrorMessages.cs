@@ -15,6 +15,13 @@ public static class ErrorMessages
 
     public const string SessionExpired = "Your session has expired. Please sign in again.";
 
+    /// <summary>Where deleting an account lands: signed out, with nothing left to sign in to.</summary>
+    public const string AccountDeletedSignedOut =
+        "Your account and your sign-in have been deleted, and you have been signed out.";
+
+    /// <summary>A sign-in with a login whose account was deleted, before the login itself was.</summary>
+    public const string AccountDeleted = "This account has been deleted. Its sign-in is being removed too.";
+
     public const string Generic = "Something went wrong. Please try again.";
 
     private const string ServerPrefix = "Something went wrong on our side. Please try again in a moment.";
@@ -61,9 +68,10 @@ public static class ErrorMessages
                                              + "Choose a rule for each item before dividing it.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
+        [ErrorCodes.AccountDeleted] = AccountDeleted,
         // A guest's link is what reaches this now, and it most often means somebody already
         // used it or a member stopped it -- not that the URL was mistyped.
-        [ErrorCodes.GroupInvitationNotFound] = "That link no longer works. Ask someone in the group for a new one.",
+        [ErrorCodes.GroupInvitationNotFound] = "That link no longer works: it has been used or replaced, or it has expired. Ask someone in the group for a new one.",
         // Somebody else on the People tab got there first: removed the guest, or the guest's
         // link was claimed and they are a member now. Either way the row is out of date.
         [ErrorCodes.GroupGuestNotFound] =
@@ -141,9 +149,16 @@ public static class ErrorMessages
         [ErrorCodes.SplitRuleNotInGroup] =
             "That split rule belongs to another group, so it cannot divide this expense.",
         // "Already" and not "this group already": a merchant is shared, so the one it
-        // collides with may well be a place somebody else's bank reported.
+        // collides with may well be a place somebody else's bank reported. Both retired --
+        // the API no longer sends them -- and kept for a client talking to an older one.
         [ErrorCodes.MerchantNameTaken] = "There is already a merchant with that name.",
         [ErrorCodes.MerchantInUse] = "This merchant still has transactions pointing at it. Move them first.",
+        // The app offers none of these edits, so this reaches somebody only through a
+        // client that did. Says why, since "not allowed" alone reads like a permissions bug.
+        [ErrorCodes.MerchantEditForbidden] =
+            "Places are shared with everyone who has spent there, so they cannot be renamed or deleted.",
+        [ErrorCodes.MerchantLogoNotAllowed] = "A logo can only come from your bank's provider.",
+        [ErrorCodes.MerchantSearchTooShort] = "Type at least two letters to search.",
 
         [ErrorCodes.SplitRuleInvalid] = "The split does not add up. Check it and try again.",
         [ErrorCodes.SplitsInvalid] =
@@ -170,7 +185,13 @@ public static class ErrorMessages
         [ErrorCodes.BankLinkWillBeFinished] = "Your bank approved the connection and we have it safely, but we could not finish setting it up just now. It will appear on its own shortly -- there is nothing you need to do, and no need to link it again.",
         [ErrorCodes.CurrencyMismatch] = "This is in a different currency from the group, and we cannot convert it yet. You can keep it personal instead.",
         [ErrorCodes.PossibleDuplicateExpense] = "This looks like an expense you have already recorded. Check the suggestion on the row before adding it again.",
-        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction."
+        [ErrorCodes.TransactionAlreadyImported] = "That expense already came from a bank transaction.",
+
+        // Nothing the person can do here fixes it -- signing in again brings back the same
+        // sign-in -- so it says who can, and what to quote to them.
+        [ErrorCodes.IdentityEmailInUse] =
+            "The email on this sign-in already belongs to another Group Split account, so we cannot open it. "
+            + "Signing in again will not change that: please contact support."
     };
 
     /// <summary>

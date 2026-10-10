@@ -314,6 +314,11 @@ public class GroupsPageStateService : IGroupsPageStateService
     // gets false instead of an exception it would have had to catch itself. Once the write
     // has landed it is announced rather than applied here by hand, so this page's copy and
     // the expenses page's are re-read from the same source and cannot drift apart.
+    //
+    // A write somebody confirms in a dialog takes the group as an argument rather than
+    // reading the selection: the selection is whatever is selected when they press the
+    // button, which is not necessarily the group they opened the dialog from. Opened on
+    // A, confirmed after going back to B, "remove this member" removed them from B (#323).
 
     public async Task<bool> CreateGroupAsync(CreateGroupRequest request,
         CancellationToken cancellationToken = default)
@@ -361,12 +366,9 @@ public class GroupsPageStateService : IGroupsPageStateService
         return pastMembers;
     }
 
-    public Task<bool> AddGuestsAsync(AddGuestsRequest request, CancellationToken cancellationToken = default)
-    {
-        var group = Selected();
-
-        return _groupCommands.AddGuestsAsync(group.Id, group.Name, request, cancellationToken);
-    }
+    public Task<bool> AddGuestsAsync(Guid groupId, AddGuestsRequest request,
+        CancellationToken cancellationToken = default) =>
+        _groupCommands.AddGuestsAsync(groupId, NameOf(groupId), request, cancellationToken);
 
     public Task<IReadOnlyList<GroupGuestResponse>> GetGroupGuestsAsync(
         CancellationToken cancellationToken = default) =>
@@ -386,13 +388,13 @@ public class GroupsPageStateService : IGroupsPageStateService
         return guests;
     }
 
-    public Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid guestUserId, bool replace,
+    public Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid groupId, Guid guestUserId, bool replace,
         CancellationToken cancellationToken = default) =>
-        _groupCommands.IssueGuestLinkAsync(Selected().Id, guestUserId, replace, cancellationToken);
+        _groupCommands.IssueGuestLinkAsync(groupId, guestUserId, replace, cancellationToken);
 
-    public Task<bool> RevokeGuestLinkAsync(Guid guestUserId, string name,
+    public Task<bool> RevokeGuestLinkAsync(Guid groupId, Guid guestUserId, string name,
         CancellationToken cancellationToken = default) =>
-        _groupCommands.RevokeGuestLinkAsync(Selected().Id, guestUserId, name, cancellationToken);
+        _groupCommands.RevokeGuestLinkAsync(groupId, guestUserId, name, cancellationToken);
 
     public Task<GroupJoinLinkResponse?> GetGroupJoinLinkAsync(CancellationToken cancellationToken = default) =>
         SelectedGroup is null
@@ -420,23 +422,15 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _groupCommands.CreateJoinLinkAsync(group.Id, group.Name, cancellationToken);
     }
 
-    public Task<bool> RevokeGroupJoinLinkAsync(CancellationToken cancellationToken = default)
-    {
-        var group = Selected();
+    public Task<bool> RevokeGroupJoinLinkAsync(Guid groupId, CancellationToken cancellationToken = default) =>
+        _groupCommands.RevokeJoinLinkAsync(groupId, NameOf(groupId), cancellationToken);
 
-        return _groupCommands.RevokeJoinLinkAsync(group.Id, group.Name, cancellationToken);
-    }
-
-    public Task<bool> RemoveGroupMemberAsync(Guid memberUserId, string memberName,
+    public Task<bool> RemoveGroupMemberAsync(Guid groupId, Guid memberUserId, string memberName,
         CancellationToken cancellationToken = default) =>
-        _groupCommands.RemoveMemberAsync(Selected().Id, memberUserId, memberName, cancellationToken);
+        _groupCommands.RemoveMemberAsync(groupId, memberUserId, memberName, cancellationToken);
 
-    public Task<bool> LeaveGroupAsync(CancellationToken cancellationToken = default)
-    {
-        var group = Selected();
-
-        return _groupCommands.LeaveAsync(group.Id, group.Name, cancellationToken);
-    }
+    public Task<bool> LeaveGroupAsync(Guid groupId, CancellationToken cancellationToken = default) =>
+        _groupCommands.LeaveAsync(groupId, NameOf(groupId), cancellationToken);
 
     public Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest,
         CancellationToken cancellationToken = default) =>
@@ -466,6 +460,13 @@ public class GroupsPageStateService : IGroupsPageStateService
     private GroupResponse Selected() =>
         SelectedGroup ?? throw new InvalidOperationException("No group is selected.");
 
+    /// <summary>
+    /// What a group is called, for the message after a write that names it by id. Only ever
+    /// words: the id is what the write acts on.
+    /// </summary>
+    private string NameOf(Guid groupId) =>
+        Groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";
+
     public Task<bool> ArchiveGroupAsync(CancellationToken cancellationToken = default) =>
         SetArchivedAsync(archived: true, cancellationToken);
 
@@ -484,13 +485,13 @@ public class GroupsPageStateService : IGroupsPageStateService
         return _groupCommands.SetArchivedAsync(group.Id, group.Name, archived, cancellationToken);
     }
 
-    public Task<bool> SettleAsync(SettleRequest request, string otherName,
+    public Task<bool> SettleAsync(Guid groupId, SettleRequest request, string otherName,
         CancellationToken cancellationToken = default) =>
-        _groupCommands.SettleAsync(Selected().Id, request, otherName, cancellationToken);
+        _groupCommands.SettleAsync(groupId, request, otherName, cancellationToken);
 
-    public Task<bool> RecordRepaymentAsync(RecordRepaymentRequest request, string fromName, string toName,
-        CancellationToken cancellationToken = default) =>
-        _groupCommands.RecordRepaymentAsync(Selected().Id, request, fromName, toName, cancellationToken);
+    public Task<bool> RecordRepaymentAsync(Guid groupId, RecordRepaymentRequest request, string fromName,
+        string toName, CancellationToken cancellationToken = default) =>
+        _groupCommands.RecordRepaymentAsync(groupId, request, fromName, toName, cancellationToken);
 
     public Task<SettleUpResponse?> SettleUpAsync(SettleUpRequest request,
         CancellationToken cancellationToken = default) =>

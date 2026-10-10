@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services.Banking;
@@ -35,6 +36,13 @@ public interface IBankSyncService
     /// Pulls everything the provider has for one connection since its cursor into the
     /// staging rows. Idempotent: running it twice over the same pages changes nothing.
     /// </summary>
+    /// <remarks>
+    /// Only a <see cref="BankSyncException"/> becomes an outcome. Anything else -- the network
+    /// failing under a connector, the database refusing a page -- propagates with the cursor
+    /// where the run began, and the job worker that ran the sync logs it with the connection's
+    /// id. Catching it here would turn a bug into an <see cref="SyncOutcome.Interrupted"/>
+    /// that the nightly sweep retries for ever without anybody hearing about it.
+    /// </remarks>
     Task<SyncOutcome> SyncAsync(Guid connectionId, CancellationToken ct = default);
 }
 
@@ -49,10 +57,10 @@ public interface IBankSyncService
 /// after a crash finds its rows already here and overwrites them with themselves.</item>
 /// <item>A posted row that names the pending row it settles takes that row's status --
 /// and, when the status is <see cref="BankTransactionStatus.Filed"/>, the expense's link
-/// -- and the pending row becomes <see cref="BankTransactionStatus.Superseded"/>. Both are
-/// kept.</item>
-/// <item>A removal deletes a row nobody acted on, stamps a filed one, and leaves a
-/// superseded one to its replacement.</item>
+/// -- and its receipt files, and the pending row becomes
+/// <see cref="BankTransactionStatus.Superseded"/>. Both are kept.</item>
+/// <item>A removal deletes a row nobody acted on, with any receipt file attached to it in
+/// the inbox; stamps a filed one; and leaves a superseded one to its replacement.</item>
 /// <item>Modifying a row never touches the expense it became. Filing copies, then links.</item>
 /// <item>Rows are saved per page; the cursor moves only once the provider has no more.</item>
 /// </list>
@@ -63,6 +71,7 @@ public sealed class BankSyncService(
     IAccessTokenProtector protector,
     BankSyncLocks locks,
     IMerchantDirectory merchants,
+    IReceiptFiles receiptFiles,
     TimeProvider clock,
     ILogger<BankSyncService> logger) : IBankSyncService
 {
@@ -152,6 +161,11 @@ public sealed class BankSyncService(
         // At most one extra call to the provider per run, however many pages it takes.
         var askedAgain = false;
 
+        // What the current walk from the starting cursor has inserted and reported, and the
+        // rows an abandoned walk inserted. See DropPhantomsAsync.
+        var attempt = new Attempt();
+        var suspects = new HashSet<Guid>();
+
         while (true)
         {
             SyncPage page;
@@ -174,6 +188,8 @@ public sealed class BankSyncService(
                 logger.LogInformation(e, "Bank connection {ConnectionId}: restarting the page run from its starting cursor ({Attempt}/{Max}).",
                     connectionId, restarts, MaxRestarts);
                 cursor = startCursor;
+                suspects.UnionWith(attempt.Inserted);
+                attempt = new Attempt();
                 continue;
             }
             catch (BankSyncException e)
@@ -185,7 +201,7 @@ public sealed class BankSyncService(
             askedAgain = await ShareAccountsAsync(
                 connection, item, connector, accessToken, accounts, page, askedAgain, ct);
 
-            await ApplyAsync(connection, accounts, rekeying, page, ct);
+            await ApplyAsync(connection, accounts, rekeying, attempt, page, ct);
 
             cursor = page.NextCursor;
 
@@ -203,6 +219,8 @@ public sealed class BankSyncService(
             return SyncOutcome.Interrupted;
         }
 
+        var discarded = await DropPhantomsAsync(connection, suspects, attempt, ct);
+
         connection.Cursor = cursor;
         connection.LastSyncedAt = clock.GetUtcNow();
 
@@ -217,7 +235,65 @@ public sealed class BankSyncService(
 
         await dbContext.SaveChangesAsync(ct);
 
+        await receiptFiles.DeleteAsync(discarded,
+            "Could not remove the receipt object of a bank row a restarted sync did not see again.", ct);
+
         return SyncOutcome.Completed;
+    }
+
+    /// <summary>
+    /// One walk of the pages from the starting cursor: the rows it inserted, and every row
+    /// it was told about.
+    /// </summary>
+    private sealed class Attempt
+    {
+        public HashSet<Guid> Inserted { get; } = [];
+
+        public HashSet<Guid> Reported { get; } = [];
+    }
+
+    /// <summary>
+    /// Deletes the rows an abandoned walk inserted that the walk which finished never
+    /// reported, when nobody has acted on them.
+    /// </summary>
+    /// <remarks>
+    /// Rows are saved per page, so a walk the provider restarts part way -- its data moved
+    /// underneath, <c>TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION</c> -- has already stored
+    /// what it read. The provider's own guidance is to discard those pages and start again,
+    /// and the walk that starts again says everything still true. A row the first walk
+    /// inserted and the second never mentions is one that went in between: it would sit in
+    /// the inbox for ever as money nobody spent, and the cursor has moved past anything that
+    /// could withdraw it.
+    /// <para>
+    /// Only a row the first walk inserted, never one it merely touched: a row stored before
+    /// this run is not a suspect because a page left it out. And only one nobody has acted
+    /// on yet, which is the same rule a removal follows.
+    /// </para>
+    /// </remarks>
+    /// <returns>The stored receipt objects to delete once the removal is saved.</returns>
+    private async Task<List<string>> DropPhantomsAsync(
+        BankConnection connection, HashSet<Guid> suspects, Attempt finished, CancellationToken ct)
+    {
+        suspects.ExceptWith(finished.Reported);
+
+        if (suspects.Count == 0)
+            return [];
+
+        var phantoms = await dbContext.Set<BankTransaction>()
+            .Where(row => suspects.Contains(row.Id)
+                          && (row.Status == BankTransactionStatus.New || row.Status == BankTransactionStatus.Ignored))
+            .ToListAsync(ct);
+
+        if (phantoms.Count == 0)
+            return [];
+
+        logger.LogInformation(
+            "Bank connection {ConnectionId}: dropping {Count} row(s) a restarted page run did not report again.",
+            connection.Id, phantoms.Count);
+
+        dbContext.RemoveRange(phantoms);
+
+        return await DiscardReceiptFilesAsync(phantoms, ct);
     }
 
     /// <summary>
@@ -272,7 +348,7 @@ public sealed class BankSyncService(
     }
 
     private async Task ApplyAsync(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
-        Rekeying? rekeying, SyncPage page, CancellationToken ct)
+        Rekeying? rekeying, Attempt attempt, SyncPage page, CancellationToken ct)
     {
         var index = await PageIndex.LoadAsync(dbContext, accounts, page, ct);
 
@@ -292,19 +368,60 @@ public sealed class BankSyncService(
         var now = clock.GetUtcNow();
 
         foreach (var imported in page.Added)
-            await AddAsync(connection, accounts, index, rekeying, imported, now, ct);
+            await AddAsync(connection, accounts, index, rekeying, attempt, imported, now, ct);
 
         foreach (var imported in page.Modified)
-            await ModifyAsync(connection, accounts, index, rekeying, imported, now, ct);
+            await ModifyAsync(connection, accounts, index, rekeying, attempt, imported, now, ct);
+
+        var withdrawn = new List<BankTransaction>();
 
         foreach (var removed in page.Removed)
-            Remove(connection, accounts, index, removed, now);
+        {
+            if (Remove(connection, accounts, index, removed, now) is { } deleted)
+                withdrawn.Add(deleted);
+        }
+
+        var discarded = await DiscardReceiptFilesAsync(withdrawn, ct);
 
         await dbContext.SaveChangesAsync(ct);
+
+        // After the save, as every receipt delete is: the rows naming these are gone, so
+        // nothing can address a file that storage then fails to delete.
+        await receiptFiles.DeleteAsync(discarded,
+            "Could not remove the receipt object of a bank row the provider withdrew.", ct);
+    }
+
+    /// <summary>
+    /// The receipt files somebody attached in the inbox to rows that are being deleted,
+    /// removed with them. Answers the stored objects to delete once the removal is saved.
+    /// </summary>
+    /// <remarks>
+    /// They used to be left behind: the foreign key is SetNull, so the row went and its
+    /// attachment stayed, owned by nothing, unlistable, and pointing at a picture of
+    /// somebody's receipt that nothing would ever delete. A file that went on to an expense
+    /// is the expense's and is not touched.
+    /// </remarks>
+    private async Task<List<string>> DiscardReceiptFilesAsync(List<BankTransaction> rows, CancellationToken ct)
+    {
+        if (rows.Count == 0)
+            return [];
+
+        var ids = rows.Select(row => row.Id).ToList();
+
+        var attachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.BankTransactionId != null
+                                 && ids.Contains(attachment.BankTransactionId.Value)
+                                 && attachment.ExpenseId == null)
+            .ToListAsync(ct);
+
+        dbContext.RemoveRange(attachments);
+
+        return [.. attachments.Select(attachment => attachment.ObjectKey)];
     }
 
     private async Task AddAsync(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
-        PageIndex index, Rekeying? rekeying, ImportedTransaction imported, DateTimeOffset now, CancellationToken ct)
+        PageIndex index, Rekeying? rekeying, Attempt attempt, ImportedTransaction imported, DateTimeOffset now,
+        CancellationToken ct)
     {
         if (!accounts.TryGetValue(imported.ProviderAccountId, out var account))
         {
@@ -317,6 +434,7 @@ public sealed class BankSyncService(
         if (index.Find(account.Id, imported.ProviderTransactionId) is { } existing)
         {
             await OverwriteAsync(existing, imported, ct);
+            attempt.Reported.Add(existing.Id);
             return;
         }
 
@@ -353,10 +471,12 @@ public sealed class BankSyncService(
             };
 
             dbContext.Add(row);
+            attempt.Inserted.Add(row.Id);
         }
 
         await OverwriteAsync(row, imported, ct);
         index.Add(row);
+        attempt.Reported.Add(row.Id);
 
         // Shared by both, and it was not: a re-keyed row used to return before this, so a
         // posted transaction that both claimed a carried row and named the pending row it
@@ -371,7 +491,8 @@ public sealed class BankSyncService(
     }
 
     private async Task ModifyAsync(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
-        PageIndex index, Rekeying? rekeying, ImportedTransaction imported, DateTimeOffset now, CancellationToken ct)
+        PageIndex index, Rekeying? rekeying, Attempt attempt, ImportedTransaction imported, DateTimeOffset now,
+        CancellationToken ct)
     {
         if (!accounts.TryGetValue(imported.ProviderAccountId, out var account))
         {
@@ -385,20 +506,22 @@ public sealed class BankSyncService(
         // one page, or the add was lost. Either way what is wanted is the row as it is now.
         if (row is null)
         {
-            await AddAsync(connection, accounts, index, rekeying, imported, now, ct);
+            await AddAsync(connection, accounts, index, rekeying, attempt, imported, now, ct);
             return;
         }
 
         await OverwriteAsync(row, imported, ct);
+        attempt.Reported.Add(row.Id);
     }
 
-    private void Remove(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
+    /// <returns>The row, when the removal deleted it.</returns>
+    private BankTransaction? Remove(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
         PageIndex index, RemovedTransaction removed, DateTimeOffset now)
     {
         if (!accounts.TryGetValue(removed.ProviderAccountId, out var account))
         {
             SkipUnknownAccount(connection, removed.ProviderAccountId);
-            return;
+            return null;
         }
 
         var row = index.Find(account.Id, removed.ProviderTransactionId);
@@ -407,17 +530,18 @@ public sealed class BankSyncService(
         {
             logger.LogDebug("Bank connection {ConnectionId}: removal of a row never imported ({ProviderTransactionId}).",
                 connection.Id, removed.ProviderTransactionId);
-            return;
+            return null;
         }
 
         switch (row.Status)
         {
             case BankTransactionStatus.New:
             case BankTransactionStatus.Ignored:
-                // Nobody acted on it, so nothing points at it and nothing misses it.
+                // Nobody acted on it, so nothing points at it and nothing misses it -- bar a
+                // receipt file somebody attached while deciding, which goes with it.
                 dbContext.Remove(row);
                 index.Forget(row);
-                break;
+                return row;
 
             case BankTransactionStatus.Filed:
                 // The expense it became is somebody's history. Keep the row, say what
@@ -430,11 +554,14 @@ public sealed class BankSyncService(
                 // posted row holds the story now.
                 break;
         }
+
+        return null;
     }
 
     /// <summary>
-    /// The posted row takes over from the pending one: its status, and when that status is
-    /// filed, the expense's link. The pending row stays, marked, so the chain reads.
+    /// The posted row takes over from the pending one: its status, its receipt files, and
+    /// when that status is filed, the expense's link. The pending row stays, marked, so the
+    /// chain reads.
     /// </summary>
     /// <remarks>
     /// The status the chain ends on is the stronger of the two, never simply the pending
@@ -460,6 +587,9 @@ public sealed class BankSyncService(
 
         // Read before the status moves, because afterwards the two are indistinguishable.
         var postedCarriesItsOwn = posted.Status is BankTransactionStatus.Filed;
+
+        // The expenses whose link this moves, so their receipt files can move with them.
+        var moved = new HashSet<Guid>();
 
         posted.Status = Stronger(pending.Status, posted.Status);
 
@@ -487,10 +617,44 @@ public sealed class BankSyncService(
             {
                 transaction.BankTransaction = posted;
                 transaction.BankTransactionId = posted.Id;
+                moved.Add(transaction.Id);
             }
         }
 
+        await MoveReceiptFilesAsync(pending, posted, moved, ct);
+
         pending.Status = BankTransactionStatus.Superseded;
+    }
+
+    /// <summary>
+    /// The receipt files a person attached to the pending row, onto the row that took over
+    /// from it.
+    /// </summary>
+    /// <remarks>
+    /// Left on the pending row, they were lost to everything that reads them: a superseded
+    /// row is never listed, its files are not the caller's to open, and filing the posted
+    /// row found nothing to carry onto the expense. Somebody photographed the receipt at the
+    /// till, the charge posted overnight, and the photograph was gone.
+    /// <para>
+    /// A file that has already gone on to an expense moves only when that expense's link
+    /// did. The row is where the file came from, and the two should go on agreeing about it.
+    /// </para>
+    /// </remarks>
+    private async Task MoveReceiptFilesAsync(BankTransaction pending, BankTransaction posted,
+        HashSet<Guid> movedExpenses, CancellationToken ct)
+    {
+        var attachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.BankTransactionId == pending.Id)
+            .ToListAsync(ct);
+
+        foreach (var attachment in attachments)
+        {
+            if (attachment.ExpenseId is { } expenseId && !movedExpenses.Contains(expenseId))
+                continue;
+
+            attachment.BankTransaction = posted;
+            attachment.BankTransactionId = posted.Id;
+        }
     }
 
     /// <summary>
@@ -532,7 +696,8 @@ public sealed class BankSyncService(
         row.AuthorizedDate = imported.AuthorizedDate;
         row.PaymentChannel = Clip(imported.PaymentChannel, 32);
         row.City = Clip(imported.City, 64);
-        row.CategoryIconUrl = Clip(imported.CategoryIconUrl, 512);
+        // Rendered in the inbox the same way a merchant's logo is, so held to the same hosts.
+        row.CategoryIconUrl = MerchantLogos.Usable(Clip(imported.CategoryIconUrl, 512));
         row.Pending = imported.Pending;
         row.RawJson = imported.RawJson;
 

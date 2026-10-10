@@ -75,25 +75,26 @@ public interface IGroupsPageStateService
     Task<IReadOnlyList<GroupGuestResponse>> GetGroupGuestsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Adds people to the selected group as guests, by name. Nobody is sent anything.
+    /// Adds people to a group as guests, by name. Nobody is sent anything.
     /// </summary>
-    Task<bool> AddGuestsAsync(AddGuestsRequest request, CancellationToken cancellationToken = default);
+    /// <param name="groupId">
+    /// The group the dialog was opened from. Every write that follows a dialog names its
+    /// group, captured when the dialog opened: the selection at confirm time can be another
+    /// group by then.
+    /// </param>
+    Task<bool> AddGuestsAsync(Guid groupId, AddGuestsRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// A link to take a guest's place: the one already out, or with
     /// <paramref name="replace"/> a new one that stops the old one working. Null when it
     /// did not go through.
     /// </summary>
-    /// <remarks>
-    /// The group is the selected one, like every other write here, rather than a parameter:
-    /// a guest belongs to exactly one group, and the People tab issuing the link is that
-    /// group's.
-    /// </remarks>
-    Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid guestUserId, bool replace,
+    Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid groupId, Guid guestUserId, bool replace,
         CancellationToken cancellationToken = default);
 
     /// <summary>Stops a guest's link working. The guest stays.</summary>
-    Task<bool> RevokeGuestLinkAsync(Guid guestUserId, string name, CancellationToken cancellationToken = default);
+    Task<bool> RevokeGuestLinkAsync(Guid groupId, Guid guestUserId, string name,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The selected group's standing join link, or null when nobody has made one. A group
@@ -105,16 +106,17 @@ public interface IGroupsPageStateService
     /// <summary>Issues a link into the selected group, replacing whatever it had.</summary>
     Task<GroupJoinLinkResponse?> CreateGroupJoinLinkAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Puts the selected group's link out, so the URLs already shared stop working.</summary>
-    Task<bool> RevokeGroupJoinLinkAsync(CancellationToken cancellationToken = default);
+    /// <summary>Puts a group's link out, so the URLs already shared stop working.</summary>
+    Task<bool> RevokeGroupJoinLinkAsync(Guid groupId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Takes a member or a guest out of the selected group. Either has to be square first.
+    /// Takes a member or a guest out of a group. Either has to be square first.
     /// </summary>
-    Task<bool> RemoveGroupMemberAsync(Guid memberUserId, string memberName, CancellationToken cancellationToken = default);
+    Task<bool> RemoveGroupMemberAsync(Guid groupId, Guid memberUserId, string memberName,
+        CancellationToken cancellationToken = default);
 
     /// <summary>The caller taking themselves out, which needs a settled balance.</summary>
-    Task<bool> LeaveGroupAsync(CancellationToken cancellationToken = default);
+    Task<bool> LeaveGroupAsync(Guid groupId, CancellationToken cancellationToken = default);
 
     Task<bool> UpdateGroupAsync(JsonPatchDocument<CreateGroupRequest> updateRequest, CancellationToken cancellationToken = default);
     Task<bool> CreateTransactionAsync(CreateTransactionRequest request, CancellationToken cancellationToken = default);
@@ -125,15 +127,16 @@ public interface IGroupsPageStateService
     /// Records a repayment either way round. <paramref name="otherName"/> is only for the
     /// message that follows: the request already says who and how much.
     /// </summary>
-    Task<bool> SettleAsync(SettleRequest request, string otherName, CancellationToken cancellationToken = default);
+    Task<bool> SettleAsync(Guid groupId, SettleRequest request, string otherName,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Records a repayment between two people in the selected group, neither of whom has to
-    /// be the caller -- how a member writes down what two guests squared up between
-    /// themselves. The names are only for the message that follows.
+    /// Records a repayment between two people in a group, neither of whom has to be the
+    /// caller -- how a member writes down what two guests squared up between themselves.
+    /// The names are only for the message that follows.
     /// </summary>
-    Task<bool> RecordRepaymentAsync(RecordRepaymentRequest request, string fromName, string toName,
-        CancellationToken cancellationToken = default);
+    Task<bool> RecordRepaymentAsync(Guid groupId, RecordRepaymentRequest request, string fromName,
+        string toName, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Settles the caller's own position in the selected group: every repayment between them

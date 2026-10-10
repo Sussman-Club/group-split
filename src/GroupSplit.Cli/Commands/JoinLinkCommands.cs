@@ -94,8 +94,7 @@ public static class JoinLinkCommands
                         "The link you have already shared stops working.",
                         "Anyone who has not used it yet will need the new one.",
                         "People already in the group stay in."
-                    ],
-                    confirmCommand: $"groupsplit groups link create {id} --yes");
+                    ]);
             }
 
             var link = await context.Groups.CreateGroupJoinLinkAsync(id, ct);
@@ -129,8 +128,7 @@ public static class JoinLinkCommands
                 [
                     "Anyone you have already sent it to will not be able to join with it.",
                     "People already in the group stay in."
-                ],
-                confirmCommand: $"groupsplit groups link revoke {id} --yes");
+                ]);
 
             await context.Groups.RevokeGroupJoinLinksAsync(id, ct);
 

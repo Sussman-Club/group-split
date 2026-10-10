@@ -5,8 +5,9 @@ namespace GroupSplit.RealmWorker;
 
 /// <summary>
 /// Brings the allowlisted realm, client and identity provider settings, and the first broker
-/// login flow, back to the checked-in realm export, and, when an admin console address is
-/// configured, points the admin realm at it.
+/// login flow, back to the checked-in realm export; makes the confidential clients the
+/// application signs in as exist with the secret it was given; and, when an admin console
+/// address is configured, points the admin realm at it.
 /// </summary>
 /// <param name="environment">
 /// Resolves the <c>${...}</c> placeholders the export carries, from the same variables the
@@ -34,6 +35,11 @@ public sealed class RealmSettingsReconciler(
         foreach (var managed in KeycloakRealmDefinition.ManagedClients)
         {
             await ReconcileClientAsync(desired, managed, ct);
+        }
+
+        foreach (var service in KeycloakRealmDefinition.ServiceClients)
+        {
+            await ReconcileServiceClientAsync(desired, service, ct);
         }
 
         foreach (var managed in KeycloakRealmDefinition.ManagedIdentityProviders)
@@ -87,9 +93,10 @@ public sealed class RealmSettingsReconciler(
     /// written, and names every variable that is missing rather than the first.
     /// </summary>
     /// <remarks>
-    /// Only what is managed is resolved. The export also carries placeholders for SMTP and
-    /// Google sign-in, which the Keycloak container is given and this worker is not; resolving
-    /// the whole file would demand those secrets for no reason.
+    /// Only what is managed is resolved. The export also carries placeholders for the SMTP
+    /// relay and Google sign-in, which the Keycloak container is given and this worker is not;
+    /// resolving the whole file would demand those secrets for no reason. The worker is given
+    /// only the switches a managed setting follows, such as <c>SMTP_ENABLED</c>.
     /// </remarks>
     private JsonObject Desired()
     {
@@ -100,14 +107,44 @@ public sealed class RealmSettingsReconciler(
         foreach (var client in KeycloakRealmDefinition.ManagedClients)
         {
             var source = KeycloakRealmDefinition.Client(definition, client.ClientId)!;
+
+            // A client that may be created is wanted whole, since creating it writes all of it.
+            // Only a client with nothing environment-specific in it is allowed to be.
+            if (client.CreateWhenMissing)
+            {
+                clients.Add(source.DeepClone());
+                continue;
+            }
+
             var picked = Pick(source, client.Properties);
 
             picked["clientId"] = client.ClientId;
             picked["attributes"] = Pick((JsonObject)source["attributes"]!, client.Attributes);
+            picked["protocolMappers"] = new JsonArray(client.ProtocolMappers
+                .Select(name => KeycloakRealmDefinition.ProtocolMapper(source, name)!.DeepClone())
+                .ToArray());
             clients.Add(picked);
         }
 
         managed["clients"] = clients;
+
+        // Whole clients rather than a few properties of one, because these may have to be
+        // created -- and with their secret, which is a placeholder the deployment fills.
+        var serviceClients = new JsonArray();
+
+        foreach (var service in KeycloakRealmDefinition.ServiceClients)
+        {
+            var source = KeycloakRealmDefinition.Client(definition, service.ClientId)!;
+            var picked = Pick(source,
+                [.. KeycloakRealmDefinition.ServiceClientProperties, "name", "description", "protocol", "secret"]);
+
+            picked["clientId"] = service.ClientId;
+            picked["roles"] = new JsonArray(KeycloakRealmDefinition.ServiceAccountRoles(definition, service.ClientId)
+                .Select(role => (JsonNode?)JsonValue.Create(role)).ToArray());
+            serviceClients.Add(picked);
+        }
+
+        managed["serviceClients"] = serviceClients;
 
         var providers = new JsonArray();
         var flows = new JsonArray();
@@ -128,7 +165,24 @@ public sealed class RealmSettingsReconciler(
         managed["identityProviders"] = providers;
         managed["authenticationFlows"] = flows;
 
-        return (JsonObject)KeycloakPlaceholders.Expand(managed, environment)!;
+        var expanded = (JsonObject)KeycloakPlaceholders.Expand(managed, environment)!;
+
+        // A switch written as a placeholder -- "resetPasswordAllowed": "${SMTP_ENABLED}" --
+        // resolves to the string "true", while Keycloak stores a boolean and hands one back.
+        // Compared as written it would differ on every run, and the realm would be rewritten
+        // every time; it is compared, and written, as the boolean Keycloak's import makes of it.
+        foreach (var name in KeycloakRealmDefinition.ManagedSettings)
+        {
+            if (KeycloakPlaceholders.IsPlaceholder(definition[name])
+                && expanded[name] is JsonValue resolved
+                && resolved.TryGetValue<string>(out var text)
+                && bool.TryParse(text, out var value))
+            {
+                expanded[name] = value;
+            }
+        }
+
+        return expanded;
 
         static JsonObject Pick(JsonObject source, IEnumerable<string> names) =>
             new(names.Select(name => KeyValuePair.Create(name, source[name]?.DeepClone())));
@@ -154,14 +208,31 @@ public sealed class RealmSettingsReconciler(
     private async Task ReconcileClientAsync(JsonObject desired, ManagedClient managed, CancellationToken ct)
     {
         var wanted = KeycloakRealmDefinition.Client(desired, managed.ClientId)!;
+        var current = await keycloak.GetClientAsync(managed.ClientId, ct);
 
-        // A realm without the client is one the import never finished, or one somebody
-        // edited by hand. Creating it here would make this a second importer, so it is
-        // reported instead and the run fails.
-        var current = await keycloak.GetClientAsync(managed.ClientId, ct)
-            ?? throw new InvalidOperationException(
+        if (current is null && managed.CreateWhenMissing)
+        {
+            // A realm imported before the client existed. Nothing in it depends on where the
+            // app runs, so the file's definition is the client an import would have created.
+            await keycloak.CreateClientAsync((JsonObject)wanted.DeepClone(), ct);
+            logger.LogWarning(
+                "Keycloak realm {Realm} had no client {ClientId}; created it from the repository definition.",
+                keycloak.Realm, managed.ClientId);
+
+            current = await keycloak.GetClientAsync(managed.ClientId, ct)
+                ?? throw new InvalidOperationException(
+                    $"Created client '{managed.ClientId}' on Keycloak realm {keycloak.Realm}, but it cannot be read back.");
+        }
+
+        // Otherwise a realm without the client is one the import never finished, or one
+        // somebody edited by hand. Creating a client that depends on the environment here would
+        // make this a second importer, so it is reported instead and the run fails.
+        if (current is null)
+        {
+            throw new InvalidOperationException(
                 $"Keycloak realm {keycloak.Realm} has no client '{managed.ClientId}'. "
                 + "Reset the realm so it is imported again, or create the client from realms.json.");
+        }
 
         var changed = Apply(current, wanted, managed.Properties);
 
@@ -176,18 +247,170 @@ public sealed class RealmSettingsReconciler(
                 .Select(name => $"attributes.{name}"));
         }
 
-        if (changed.Count == 0)
+        // The client first, written back with the mappers it was read with, and the mappers
+        // after it through their own calls.
+        if (changed.Count > 0)
+        {
+            await keycloak.UpdateClientAsync(current, ct);
+            logger.LogInformation(
+                "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
+                changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+        }
+
+        var mappers = await ReconcileProtocolMappersAsync(current, wanted, managed, ct);
+
+        if (changed.Count == 0 && mappers == 0)
         {
             logger.LogInformation(
                 "Client {ClientId} on Keycloak realm {Realm} already matches the repository settings.",
                 managed.ClientId, keycloak.Realm);
-            return;
+        }
+    }
+
+    /// <summary>
+    /// Gives each managed protocol mapper the file's type and config values, creating it when
+    /// the client has none by that name.
+    /// </summary>
+    /// <remarks>
+    /// Only the config entries the file names are compared. Keycloak adds entries of its own
+    /// to a mapper over time -- a migration gave every mapper <c>introspection.token.claim</c>
+    /// -- and those are kept rather than fought over on every run.
+    /// </remarks>
+    /// <returns>How many mappers were written.</returns>
+    private async Task<int> ReconcileProtocolMappersAsync(
+        JsonObject current, JsonObject wanted, ManagedClient managed, CancellationToken ct)
+    {
+        var clientId = current["id"]!.GetValue<string>();
+        var written = 0;
+
+        foreach (var name in managed.ProtocolMappers)
+        {
+            var desired = KeycloakRealmDefinition.ProtocolMapper(wanted, name)!;
+            var existing = KeycloakRealmDefinition.ProtocolMapper(current, name);
+
+            if (existing is null)
+            {
+                await keycloak.CreateProtocolMapperAsync(clientId, (JsonObject)desired.DeepClone(), ct);
+                logger.LogInformation(
+                    "Added protocol mapper {Mapper} to client {ClientId} of Keycloak realm {Realm}.",
+                    name, managed.ClientId, keycloak.Realm);
+                written++;
+                continue;
+            }
+
+            var changed = Apply(existing, desired, ["protocol", "protocolMapper"]);
+
+            if (existing["config"] is not JsonObject config)
+            {
+                existing["config"] = config = new JsonObject();
+            }
+
+            var desiredConfig = (JsonObject)desired["config"]!;
+
+            changed.AddRange(Apply(config, desiredConfig, desiredConfig.Select(entry => entry.Key).ToList())
+                .Select(key => $"config.{key}"));
+
+            if (changed.Count == 0) continue;
+
+            await keycloak.UpdateProtocolMapperAsync(clientId, existing, ct);
+            logger.LogInformation(
+                "Updated protocol mapper {Mapper} of client {ClientId} on Keycloak realm {Realm}: {Settings}.",
+                name, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+            written++;
         }
 
-        await keycloak.UpdateClientAsync(current, ct);
-        logger.LogInformation(
-            "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
-            changed.Count, managed.ClientId, keycloak.Realm, string.Join(", ", changed));
+        return written;
+    }
+
+    /// <summary>
+    /// Makes a client the application signs in as exist, and hold exactly what the file says:
+    /// its flows, the secret the deployment gives it, and its service account's roles.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Created when missing, unlike <c>web-app</c>. The realm every deployment so far runs on
+    /// was imported before this client existed, and import never runs again on a realm that
+    /// has data -- so without this the client would be a manual step on every existing realm,
+    /// production's and every developer's, and a forgotten one would leave every deleted
+    /// account's login standing.
+    /// </para>
+    /// <para>
+    /// The secret is compared rather than written blind, so a second run changes nothing; it
+    /// is never logged. Rotating it is changing the deploy secret: the next run writes it here,
+    /// and the API, given the same value, signs in with it.
+    /// </para>
+    /// </remarks>
+    private async Task ReconcileServiceClientAsync(JsonObject desired, ServiceClient service, CancellationToken ct)
+    {
+        var wanted = desired["serviceClients"]!.AsArray().OfType<JsonObject>()
+            .Single(client => client["clientId"]!.GetValue<string>() == service.ClientId);
+        var secret = wanted["secret"]!.GetValue<string>();
+        var roles = wanted["roles"]!.AsArray().Select(role => role!.GetValue<string>()).ToList();
+
+        var current = await keycloak.GetClientAsync(service.ClientId, ct);
+
+        if (current is null)
+        {
+            var created = (JsonObject)wanted.DeepClone();
+            created.Remove("roles");
+
+            await keycloak.CreateClientAsync(created, ct);
+            logger.LogInformation("Created client {ClientId} on Keycloak realm {Realm}.", service.ClientId, keycloak.Realm);
+
+            current = await keycloak.GetClientAsync(service.ClientId, ct)
+                ?? throw new InvalidOperationException(
+                    $"Created client '{service.ClientId}' on Keycloak realm {keycloak.Realm}, but it does not read back.");
+        }
+        else
+        {
+            var changed = Apply(current, wanted, KeycloakRealmDefinition.ServiceClientProperties);
+
+            if (await keycloak.GetClientSecretAsync(Id(current), ct) != secret)
+            {
+                current["secret"] = secret;
+                changed.Add("secret");
+            }
+
+            if (changed.Count > 0)
+            {
+                await keycloak.UpdateClientAsync(current, ct);
+                logger.LogInformation(
+                    "Updated {Count} settings on client {ClientId} of Keycloak realm {Realm}: {Settings}.",
+                    changed.Count, service.ClientId, keycloak.Realm, string.Join(", ", changed));
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Client {ClientId} on Keycloak realm {Realm} already matches the repository settings.",
+                    service.ClientId, keycloak.Realm);
+            }
+        }
+
+        var held = await keycloak.GetServiceAccountRolesAsync(
+            Id(current), KeycloakRealmDefinition.RealmManagementClientId, ct);
+        var missing = roles.Except(held, StringComparer.Ordinal).ToList();
+        var extra = held.Except(roles, StringComparer.Ordinal).ToList();
+
+        if (missing.Count > 0)
+        {
+            await keycloak.GrantServiceAccountRolesAsync(
+                Id(current), KeycloakRealmDefinition.RealmManagementClientId, missing, ct);
+        }
+
+        if (extra.Count > 0)
+        {
+            await keycloak.RevokeServiceAccountRolesAsync(
+                Id(current), KeycloakRealmDefinition.RealmManagementClientId, extra, ct);
+        }
+
+        if (missing.Count > 0 || extra.Count > 0)
+        {
+            logger.LogInformation(
+                "Service account of client {ClientId} on Keycloak realm {Realm}: granted [{Granted}], revoked [{Revoked}].",
+                service.ClientId, keycloak.Realm, string.Join(", ", missing), string.Join(", ", extra));
+        }
+
+        static string Id(JsonObject client) => client["id"]!.GetValue<string>();
     }
 
     private async Task ReconcileIdentityProviderAsync(

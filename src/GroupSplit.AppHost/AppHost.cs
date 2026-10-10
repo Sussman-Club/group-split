@@ -53,18 +53,31 @@ var cache = builder.AddRedis("cache")
     .WithPersistence(TimeSpan.FromSeconds(30))
     .WithOtlpExporter();
 
+// What the API deletes a deleted account's Keycloak login with. Keycloak imports it into a fresh
+// realm, the worker below holds an existing realm to it, and the API signs in with it.
+var accountDeletionSecret = builder.AddAccountDeletionSecret();
+
 var keycloak = builder.AddKeycloak("keycloak")
     .WithGoogleSignIn()
+    .WithAccountDeletionSecret(accountDeletionSecret)
     .WithPostgres(keycloakDb)
     .WaitFor(keycloakDb)
-    .WithOtlpExporter();
+    .WithOtlpExporter()
+    // The realm records sign-in and admin events (realms.json), and its jboss-logging listener
+    // writes each one to the container log as well. It logs a successful one at debug unless
+    // told otherwise, which would leave only the failures there.
+    .WithEnvironment("KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL", "info");
 
 // Reconciles the allowlisted realm settings after Keycloak is ready. The same worker runs as
 // a one-shot Compose service in deployment, and does not seed demo accounts or touch the app DB.
 // Its admin credentials differ by mode, so each branch below gives it its own.
 var realmSettings = builder.AddDotnetProject("realm-settings", "../GroupSplit.RealmWorker")
     .WithEnvironment("Realm__Operation", "reconcile")
+    .WithAccountDeletionSecret(accountDeletionSecret)
     .WithReference(keycloak)
+    // The switches realms.json's managed settings follow, e.g. SMTP_ENABLED for the password
+    // reset link, with the values Keycloak's own import was given.
+    .WithRealmVariablesOf(keycloak)
     .WaitFor(keycloak);
 
 var migrations = db
@@ -94,7 +107,11 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WithPlaid()
     .WithVeryfiReceiptTranscription()
     .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
-    // Do not serve traffic until the realm settings have been reconciled successfully.
+    // Deleting an account deletes its Keycloak login, through a client that can manage users
+    // in the app's realm and do nothing else.
+    .WithAccountDeletionClient(accountDeletionSecret)
+    // Do not serve traffic until the realm settings have been reconciled successfully -- which
+    // includes the client above existing, with the secret just given to the API.
     .WaitForCompletion(realmSettings);
 
 var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
@@ -185,7 +202,7 @@ else
 
     var dashboardToken = builder
         .AddParameter("dashboard-token", secret: true)
-        .WithDescription("Browser token for the published Aspire dashboard on port 18888.");
+        .WithDescription("Browser token for the Aspire dashboard, published on the host's loopback port 18888.");
 
     var compose = builder.AddDockerComposeEnvironment("compose")
         .WithProtectedDashboard(dashboardToken);
@@ -258,6 +275,9 @@ else
     // It still validates browser-issued tokens, so it needs the same public issuer.
     api
         .WithKeycloakAuthority(authority)
+        // Its admin calls go to Keycloak on the Compose network, which answers only below its
+        // relative path -- the same reason the realm worker is told it.
+        .WithEnvironment("Keycloak__RelativePath", KeycloakDeploymentExtensions.RelativePath)
         // Where bank providers are told to deliver webhooks: the same public origin, whose
         // /webhooks path the web app forwards here.
         .WithBankingOrigin(hostname)

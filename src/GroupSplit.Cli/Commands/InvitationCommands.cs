@@ -74,7 +74,7 @@ public static class InvitationCommands
 
                 // The token, because it is what every other command here takes -- and
                 // because getting back to a link is the whole reason this exists.
-                var table = Tables.Grid("Group", "Invited as", "Invited by", "When", "Link token");
+                var table = Tables.Grid("Group", "Invited as", "Invited by", "When", "Expires", "Link token");
 
                 foreach (var invitation in value)
                 {
@@ -83,6 +83,7 @@ public static class InvitationCommands
                         Markup.Escape(invitation.Name),
                         Markup.Escape(invitation.InvitedByUserName ?? "-"),
                         invitation.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"),
+                        invitation.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd"),
                         Markup.Escape(invitation.Token));
                 }
 
@@ -124,6 +125,7 @@ public static class InvitationCommands
                 table.AddRow("Invited as", Markup.Escape(value.Name));
                 table.AddRow("Invited by", Markup.Escape(value.InvitedByUserName ?? "-"));
                 table.AddRow("When", value.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"));
+                table.AddRow("Expires", value.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
                 table.AddRow("You", value.AlreadyAMember ? "already a member" : "not a member yet");
 
                 return table;
@@ -176,8 +178,7 @@ public static class InvitationCommands
                     $"Any repayment recorded between you and {invitation.Name} is deleted: " +
                     "it would read as you paying yourself.",
                     "The link stops working afterwards."
-                ],
-                confirmCommand: $"groupsplit invitations claim {token} --yes");
+                ]);
 
             var claimed = await client.ClaimInvitationAsync(token, ct);
 
@@ -255,8 +256,7 @@ public static class InvitationCommands
                     $"{invitation.GroupName} keeps {invitation.Name} as a guest, with everything " +
                     "recorded for them. Nothing moves.",
                     "A member can send a new link."
-                ],
-                confirmCommand: $"groupsplit invitations decline {token} --yes");
+                ]);
 
             var closed = await client.DeclineInvitationAsync(token, ct);
 

@@ -271,11 +271,15 @@ else if (NotFound)
 
     private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
     {
+        // The group the dialog is about, kept for its answer: the route can move on to
+        // another group while it is open, and the repayment belongs to this one (#323).
+        var groupId = GroupId;
+
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
 
         var parameters = new DialogParameters<SettleDialog>
         {
-            { x => x.GroupId, GroupId },
+            { x => x.GroupId, groupId },
             { x => x.UserId, debt.UserId },
             { x => x.Username, debt.UserName },
             { x => x.TotalDebt, debt.Amount },
@@ -287,7 +291,7 @@ else if (NotFound)
         var request = await dialog.GetReturnValueAsync<SettleRequest>();
 
         if (request is not null)
-            await GroupsService.SettleAsync(request, debt.UserName, CancellationToken);
+            await GroupsService.SettleAsync(groupId, request, debt.UserName, CancellationToken);
     }
 
     private async Task AddExpenseAsync()

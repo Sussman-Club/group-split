@@ -803,6 +803,23 @@ public sealed class MutationCommandTests : IDisposable
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.Contains("Omar", result.Stdout);
         Assert.Contains("token-omar", result.Stdout);
+
+        // And until when it works: a guest's link runs out, and the list is where somebody
+        // looks before deciding whether to claim it now.
+        Assert.Contains("Expires", result.Stdout);
+        Assert.Contains(LinkExpiry.ToLocalTime().ToString("yyyy-MM-dd"), result.Stdout);
+    }
+
+    [Fact]
+    public async Task Invitations_show_says_when_the_link_expires()
+    {
+        _api.Returns("/api/invitations/claims/token-omar", Claim());
+
+        var result = await Cli.RunAsync("invitations", "show", "token-omar", "--output", "text");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+        Assert.Contains("Expires", result.Stdout);
+        Assert.Contains(LinkExpiry.ToLocalTime().ToString("yyyy-MM-dd"), result.Stdout);
     }
 
     [Fact]
@@ -842,8 +859,12 @@ public sealed class MutationCommandTests : IDisposable
         name = "Omar",
         invitedByUserName = "Anabel",
         invitedAt = DateTimeOffset.UtcNow,
-        alreadyAMember = false
+        alreadyAMember = false,
+        expiresAt = LinkExpiry
     };
+
+    /// <summary>When the stubbed guest links run out: a date the output can be searched for.</summary>
+    private static readonly DateTimeOffset LinkExpiry = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
 
     private static object Invitation(Guid groupId, string name, Guid? id = null) => new
     {
@@ -854,7 +875,8 @@ public sealed class MutationCommandTests : IDisposable
         token = $"token-{name.ToLowerInvariant()}",
         invitedByUserName = "Anabel",
         invitedAt = DateTimeOffset.UtcNow,
-        participantUserId = Guid.NewGuid()
+        participantUserId = Guid.NewGuid(),
+        expiresAt = LinkExpiry
     };
 
     [Fact]
@@ -1530,6 +1552,25 @@ public sealed class MutationCommandTests : IDisposable
             change => change!.Contains("cannot be undone"));
 
         Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
+    }
+
+    /// <summary>
+    /// The login goes with the account, so the prompt says so: somebody deleting an account
+    /// from a terminal is also deleting the sign-in their web app uses.
+    /// </summary>
+    [Fact]
+    public async Task Users_delete_says_the_sign_in_is_deleted_too()
+    {
+        _api.Returns("/api/users/me", new
+        {
+            id = Guid.NewGuid(), fullName = "Anabel Benitez", email = "anabel@example.com"
+        });
+
+        var result = await Cli.RunAsync("users", "delete");
+
+        Assert.Contains(
+            result.Json.GetProperty("changes").EnumerateArray().Select(change => change.GetString()),
+            change => change!.Contains("sign-in is deleted"));
     }
 
     [Fact]

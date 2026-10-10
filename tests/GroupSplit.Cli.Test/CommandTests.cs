@@ -155,6 +155,46 @@ public sealed class CommandTests : IDisposable
         Assert.Equal(ErrorCodes.ServerUnreachable, result.Error.GetProperty("code").GetString());
     }
 
+    /// <summary>
+    /// The request arrived and no answer came back, so nobody can say it was not carried
+    /// out. Reported as "unreachable" -- documented as "nothing was sent" -- an agent would
+    /// retry a create that had landed.
+    /// </summary>
+    [Fact]
+    public async Task A_connection_cut_after_the_request_arrived_is_an_unknown_outcome()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", Transaction("Dinner"), method: "GET");
+        using var cutter = new ConnectionCutter(_api, "DELETE", $"/api/transactions/{id}");
+        _environment.Set(EnvironmentVariables.ApiUrl, cutter.BaseAddress);
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
+
+        Assert.Equal(ExitCodes.Error, result.ExitCode);
+        Assert.Equal(ErrorCodes.OutcomeUnknown, result.Error.GetProperty("code").GetString());
+        Assert.Contains("may have been carried out", result.Error.GetProperty("remediation").GetString());
+        Assert.Contains(_api.Requests, request => request.Method == "DELETE");
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.NameResolutionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ConnectionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.SecureConnectionError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ProxyTunnelError, ErrorCodes.ServerUnreachable)]
+    [InlineData(HttpRequestError.ResponseEnded, ErrorCodes.OutcomeUnknown)]
+    [InlineData(HttpRequestError.InvalidResponse, ErrorCodes.OutcomeUnknown)]
+    [InlineData(HttpRequestError.Unknown, ErrorCodes.OutcomeUnknown)]
+    public void Only_a_failure_before_sending_is_called_unreachable(HttpRequestError error, string code)
+    {
+        Assert.Equal(code, TransportFailure.From(new HttpRequestException(error, "failed")).Code);
+    }
+
+    [Fact]
+    public void A_timeout_is_an_unknown_outcome()
+    {
+        Assert.Equal(ErrorCodes.OutcomeUnknown, TransportFailure.TimedOut().Code);
+    }
+
     // ---- auth ------------------------------------------------------------------------
 
     [Fact]
@@ -235,6 +275,34 @@ public sealed class CommandTests : IDisposable
 
         // Nothing was deleted -- only the read happened.
         Assert.DoesNotContain(_api.Requests, r => r.Method == "DELETE");
+    }
+
+    /// <summary>
+    /// Deleting an expense filed from a bank row puts the row back in the inbox (issue 319).
+    /// Somebody deciding whether to delete is told, because it is the difference between
+    /// undoing a filing and losing the bank's record of the payment.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Deleting_an_expense_from_a_bank_row_says_the_row_goes_back_to_the_inbox(bool fromBank)
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id, name = "Lidl", description = (string?)null, amount = 12.50m,
+            dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
+            paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
+            categoryId = (Guid?)null, category = (string?)null, splits = Array.Empty<object>(),
+            hasBankTransaction = fromBank
+        });
+
+        var result = await Cli.RunAsync("transactions", "delete", id.ToString());
+
+        var changes = result.Json.GetProperty("changes").EnumerateArray()
+            .Select(change => change.GetString() ?? "").ToList();
+
+        Assert.Equal(fromBank, changes.Any(change => change.Contains("goes back to the inbox", StringComparison.Ordinal)));
     }
 
     [Fact]

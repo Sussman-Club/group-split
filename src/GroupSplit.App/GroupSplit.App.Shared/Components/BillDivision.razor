@@ -42,7 +42,27 @@
             so they are not one message: a line nobody has given a rule, and paper that does
             not come to what the expense says was spent.
         *@
-        @if (Mismatch is { } gap)
+        @if (Mismatch is { } moved && FollowsTheAmount)
+        {
+            @* The amount was edited on a bill that came to the saved one, and the save puts
+               the difference on the tip -- see BillRetotal in the API. Said before Save,
+               because it changes what the bill says as well as what people owe. *@
+            @if (Receipt.Tip - moved >= 0)
+            {
+                @* Each sentence on one source line: Razor prints a line break inside one. *@
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    <span>Saving changes the bill's tip from <strong>@Receipt.Tip.ToMoney()</strong> to <strong>@((Receipt.Tip - moved).ToMoney())</strong>, so the bill comes to <strong>@Amount.ToMoney()</strong> and is divided again.</span>
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    <span>The bill's tip is <strong>@Receipt.Tip.ToMoney()</strong>, so the amount cannot come down by <strong>@moved.ToMoney()</strong> on its own.</span>
+                    <span>Edit the receipt's items instead.</span>
+                </MudAlert>
+            }
+        }
+        else if (Mismatch is { } gap)
         {
             <MudAlert Severity="Severity.Warning" Dense="true">
                 The bill comes to <strong>@Receipt.Total.ToMoney()</strong> and the expense says
@@ -211,6 +231,17 @@
     [Parameter] public decimal Amount { get; set; }
 
     /// <summary>
+    /// The amount the expense is saved with, for an expense being edited; null for one being
+    /// created.
+    /// </summary>
+    /// <remarks>
+    /// A bill that comes to the saved amount follows an edit to it: the save puts the
+    /// difference on the bill's tip and divides again. Without this the screen went on
+    /// saying the two had to match, about an edit the save would carry out.
+    /// </remarks>
+    [Parameter] public decimal? SavedAmount { get; set; }
+
+    /// <summary>
     /// The bill as it stands after a line was pointed somewhere else.
     /// </summary>
     /// <remarks>
@@ -234,6 +265,9 @@
     /// What the bill is over or under the expense by, or null when they agree.
     /// </summary>
     private decimal? Mismatch => Receipt.Total == Amount ? null : Receipt.Total - Amount;
+
+    /// <summary>Whether saving re-totals the bill to the edited amount.</summary>
+    private bool FollowsTheAmount => SavedAmount is { } saved && Receipt.Total == saved;
 
     /// <summary>
     /// The lines being worked on: the bill, narrowed by whatever the tools are set to.

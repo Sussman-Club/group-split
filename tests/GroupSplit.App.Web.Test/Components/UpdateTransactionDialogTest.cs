@@ -19,6 +19,7 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static readonly Guid FoodCategoryId = Guid.NewGuid();
     private static readonly Guid RentCategoryId = Guid.NewGuid();
     private static readonly Guid MeId = Guid.NewGuid();
+    private static readonly Guid DanielId = Guid.NewGuid();
 
     private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<ITransactionsClient> _transactions = new();
@@ -44,7 +45,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"),
-                new UserInfo(Guid.NewGuid(), "Daniel", "Jones", "daniel@example.com")
+                new UserInfo(DanielId, "Daniel", "Jones", "daniel@example.com")
             ]);
 
         _groups
@@ -52,7 +53,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Returns(() => new[]
             {
                 new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"),
-                new UserInfo(Guid.NewGuid(), "Daniel", "Jones", "daniel@example.com")
+                new UserInfo(DanielId, "Daniel", "Jones", "daniel@example.com")
             }.ToAsyncEnumerable());
 
         _categories
@@ -247,6 +248,205 @@ public class UpdateTransactionDialogTest : ComponentTest
         // the name can be put back.
         Assert.NotEmpty(provider.FindComponents<UpdateTransactionDialog>());
         Assert.False(dialogRef.Result.IsCompleted);
+    }
+
+    /// <summary>
+    /// The same failure for the shares, which the name test above did not cover: a
+    /// hand-split 70/30 on 100, corrected to 120 (#323).
+    /// </summary>
+    /// <remarks>
+    /// The shares summed to the old amount and not to the new one, Save closed the dialog,
+    /// and the API refused the patch -- taking the rename and the note with it.
+    /// </remarks>
+    [Fact]
+    public async Task Hand_typed_shares_that_no_longer_add_up_are_refused_without_closing()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = MeId,
+                CategoryId = FoodCategoryId,
+                Category = "Food",
+                // No rule version: the shares are the expense's own, so it opens on them.
+                Splits =
+                [
+                    new TransactionSplitResponse(MeId, "Ana Benitez", 70m),
+                    new TransactionSplitResponse(DanielId, "Daniel Jones", 30m)
+                ]
+            });
+
+        var (provider, dialogRef) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food"
+        });
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        var amount = provider.FindComponents<DecimalField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner with the cousins"));
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
+
+        await provider.FindAll("button")
+            .First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        Assert.False(dialogRef.Result.IsCompleted);
+
+        var remaining = provider.Find(".gs-split-remaining");
+        Assert.Contains("Not saved", remaining.TextContent, StringComparison.Ordinal);
+        Assert.Contains("$20.00 still to assign.", remaining.TextContent, StringComparison.Ordinal);
+
+        Assert.Equal("Dinner with the cousins", name.Instance.Value);
+        Assert.Equal(120m, amount.Instance.Value);
+    }
+
+    /// <summary>
+    /// And once they add up again, Save goes through.
+    /// </summary>
+    [Fact]
+    public async Task Hand_typed_shares_that_add_up_again_are_saved()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = MeId,
+                CategoryId = FoodCategoryId,
+                Category = "Food",
+                Splits =
+                [
+                    new TransactionSplitResponse(MeId, "Ana Benitez", 70m),
+                    new TransactionSplitResponse(DanielId, "Daniel Jones", 30m)
+                ]
+            });
+
+        var (provider, dialogRef) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food"
+        });
+
+        var amount = provider.FindComponents<DecimalField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?");
+
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
+
+        var save = () => provider.FindAll("button")
+            .First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        await save();
+        Assert.False(dialogRef.Result.IsCompleted);
+
+        var editor = provider.FindComponent<SplitEditor>();
+        await provider.InvokeAsync(() => editor.Instance.ValueChanged.InvokeAsync(
+        [
+            new SplitInput { UserId = MeId, Amount = 84m },
+            new SplitInput { UserId = DanielId, Amount = 36m }
+        ]));
+
+        await save();
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        Assert.NotNull(patch);
+        Assert.Contains(patch!.Operations, operation => operation.path == "/Amount");
+    }
+
+    /// <summary>
+    /// Moving the expense to a group and then to another before the first one's people have
+    /// arrived leaves it with the second group's (#323).
+    /// </summary>
+    [Fact]
+    public async Task A_group_moved_to_while_the_last_one_loads_keeps_its_own_people()
+    {
+        var transactionId = Guid.NewGuid();
+        var flat = new GroupResponse(Guid.NewGuid(), "Flat", 2);
+        var trip = new GroupResponse(Guid.NewGuid(), "Lisbon", 2);
+        var flatmate = new UserInfo(Guid.NewGuid(), "Flat", "Mate", null);
+        var traveller = new UserInfo(MeId, "Ana", "Benitez", "ana@example.com");
+        var flatMembers = new TaskCompletionSource<ICollection<UserInfo>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _groups
+            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2), flat, trip]);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))
+            .Returns(flatMembers.Task);
+        _groups
+            .Setup(g => g.GetGroupMembersAsync(trip.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([traveller]);
+        _categories
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(flat.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => new[] { new CategoryResponse(Guid.NewGuid(), flat.Id, "Rent", null, null) }.ToAsyncEnumerable());
+        _categories
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(trip.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => new[] { new CategoryResponse(Guid.NewGuid(), trip.Id, "Fuel", null, null) }.ToAsyncEnumerable());
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = GroupId,
+                PaidByUserId = MeId,
+                Splits = []
+            });
+
+        var (provider, _) = await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId
+        });
+
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+
+        var movingToFlat = provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(flat.Id));
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(trip.Id));
+
+        flatMembers.SetResult([flatmate]);
+        await movingToFlat;
+
+        var editor = provider.FindComponent<SplitEditor>();
+        Assert.Equal([traveller.Id], editor.Instance.Members.Select(member => member.Id));
+        Assert.Equal(["Fuel"], decisions.Instance.Categories.Select(category => category.Name));
     }
 
     /// <summary>
@@ -1052,5 +1252,110 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         // The dialog markup should still render the preserved category name
         Assert.Contains("Archived Food", provider.Markup);
+    }
+
+    // ---- Moving an expense in another currency (#320) -----------------------------------
+
+    /// <summary>A personal expense in euros, the way a bank row kept personal now lands.</summary>
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenEuroDinnerAsync()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = transactionId,
+                Name = "Dinner in Lisbon",
+                Amount = 20m,
+                Currency = "EUR",
+                DateTime = DateTimeOffset.UtcNow,
+                GroupId = null,
+                PaidByUserId = MeId,
+                Splits = []
+            });
+
+        return await OpenAsync(new TransactionResponse
+        {
+            Id = transactionId,
+            Name = "Dinner in Lisbon",
+            Amount = 20m,
+            Currency = "EUR",
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = null,
+            PaidByUserId = MeId
+        });
+    }
+
+    private static Task PickGroupAsync(IRenderedComponent<MudDialogProvider> provider, Guid? groupId) =>
+        provider.InvokeAsync(() =>
+            provider.FindComponent<ExpenseDecisions>().Instance.GroupIdChanged.InvokeAsync(groupId));
+
+    /// <summary>
+    /// The API refuses to put a euro expense into a dollar group, and the dialog closes on
+    /// Save -- so a refusal learned from the save would arrive over a screen that is gone,
+    /// with every other change in the edit gone with it. It is said beside the group picker
+    /// instead, and the dialog stays open holding the edit.
+    /// </summary>
+    [Fact]
+    public async Task Moving_a_euro_expense_into_a_dollar_group_is_refused_in_the_dialog_without_losing_the_edit()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner at Ramiro"));
+
+        await PickGroupAsync(provider, GroupId);
+
+        var refusal = provider.WaitForElement("[data-testid=currency-refusal]");
+        Assert.Contains("This expense is in EUR and Trip keeps its balances in USD", refusal.TextContent);
+
+        var save = provider.FindAll("button").First(button => button.TextContent.Trim() == "Save");
+        Assert.True(save.HasAttribute("disabled"));
+
+        await save.ClickAsync(new MouseEventArgs());
+
+        Assert.False(dialogRef.Result.IsCompleted);
+        Assert.Equal("Dinner at Ramiro", provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?").Instance.Value);
+
+        // And no division asked for a move that cannot happen: that is the API refusing
+        // the same thing a second time, in a snackbar.
+        _commands.Verify(c => c.PreviewUpdateAsync(It.IsAny<Guid>(),
+            It.Is<UpdateTransactionRequest>(request => request.GroupId == GroupId),
+            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Taking_the_group_back_off_clears_the_refusal_and_saving_works_again()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+
+        await PickGroupAsync(provider, GroupId);
+        provider.WaitForElement("[data-testid=currency-refusal]");
+
+        await PickGroupAsync(provider, null);
+
+        Assert.Empty(provider.FindAll("[data-testid=currency-refusal]"));
+
+        var name = provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner at Ramiro"));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        Assert.NotNull(patch);
+        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "groupId"));
+    }
+
+    [Fact]
+    public async Task The_amount_field_shows_the_currency_the_expense_is_in()
+    {
+        var (provider, _) = await OpenEuroDinnerAsync();
+
+        provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
     }
 }

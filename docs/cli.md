@@ -15,7 +15,9 @@ a nicety for the second kind is load-bearing.
 - [Pointing it at a server](#pointing-it-at-a-server)
 - [Signing in](#signing-in)
 - [Bank sync](#bank-sync)
+- [An expense in another currency](#an-expense-in-another-currency)
 - [Editing an expense](#editing-an-expense)
+- [Amounts](#amounts)
 - [Output](#output)
 - [Exit codes](#exit-codes)
 - [Errors](#errors)
@@ -52,16 +54,22 @@ arguments, so this table can go stale and that one cannot.
 
 Two commands read the group's roster or listing before writing, so a confirmation can name
 what it is about to change rather than echo a guid back: `groups remove-member`,
-`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`,
-`merchants delete` and `receipts delete` do the same. The roster read also lets
+`groups settle`. `bank unlink`, `categories delete`, `split-rules delete`
+and `receipts delete` do the same. The roster read also lets
 `groups remove-member` refuse before asking: somebody not on it is an error
 straight away rather than a confirmation the server would then refuse. `receipts divide` goes further and
 reads the division itself, so the prompt lists what each person ends up owing rather than
 saying the shares will change -- it is money moving between people's balances, and the
-figures are the thing worth reading before agreeing to them. `merchants update` is the one command whose confirmation is
-conditional on which field is being changed: a merchant belongs to no group, so renaming one
-is felt by every group that has spent there and the prompt carries the count, while giving
-one a logo needs no agreement from anybody.
+figures are the thing worth reading before agreeing to them.
+`merchants update` and `merchants delete` ask nothing: a merchant belongs to no group, so a
+rename, a new logo or a deletion would change what every group that has spent there sees,
+and the server refuses all three for every account (`MERCHANT_EDIT_FORBIDDEN`, exit code 2,
+with a remediation that says so rather than pointing at `auth status`). The commands stay so
+that the refusal comes back with its code. `merchants list` and `merchants show` see only the
+places you already have an expense or an imported bank row at, at most 20 to a listing, and
+`--search` needs at least 2 characters (`MERCHANT_SEARCH_TOO_SHORT`). `merchants create`
+hands back the existing merchant when the name is already taken, and its `--logo-url` has to
+be on the bank provider's logo hosts (`MERCHANT_LOGO_NOT_ALLOWED`).
 `groups settle-up` reads the balances for the same reason, so its confirmation lists the
 repayments it is about to write rather than describing them. `settle pay` reads the
 cross-group plan for the same reason and one more: the payment it records can span two
@@ -128,14 +136,18 @@ groupsplit groups balances <group-id> --through 2026-08-31
 groupsplit groups settle-up <group-id> --through 2026-08-31 --dry-run
 ```
 
-Through a day, what is owed counts the expenses dated up to the end of it and **every
-repayment, whatever its date**. Money paid goes against the oldest debt first, so somebody
-who paid August's share in mid-September is not asked for it again when August is settled in
-October, and settling the same period twice finds nothing the second time. Each payment is
-also capped at what the two people owe each other on the whole balance, so a period never asks
-for money that is not owed overall -- paying a September expense in September does not turn
-into being owed it back for August. The day ends at midnight on this machine's calendar: the
-CLI sends its current UTC offset beside the day, as the web app does.
+Through a day, what is owed counts the expenses dated up to the end of it and the
+repayments made for it -- covering through that day or an earlier one, or claiming no period
+and dated by then. **Repayments made for later count only as far as they pay down what the
+period left.** Money paid goes against the oldest debt first, so somebody who paid August's
+share in mid-September is not asked for it again when August is settled in October, and
+settling the same period twice finds nothing the second time; but paying a September expense
+in September never turns into being owed it back for August. Nothing else after the day
+moves the figure: being ahead in October does not shrink what September left. Once a later
+period has been settled, though, a period never asks for more than that one leaves owing --
+settling September can route August's debts through somebody else. The day ends
+at midnight on this machine's calendar: the CLI sends its current UTC offset beside the day,
+as the web app does.
 
 The repayments it records remember the day. `settle history` shows it on the row, and
 `transactions show <settlement-id>` says what period the settlement covered and whether that
@@ -222,7 +234,13 @@ groupsplit groups add-guest <group-id> Carlos --link              # add and issu
 ```
 
 `create` without `--new` is idempotent: asking again prints the link already out, so it is
-safe to run whenever somebody needs it re-sent. The link is `<web-app>/claim/<token>`; the
+safe to run whenever somebody needs it re-sent.
+
+A guest's link **expires 30 days after it was issued**. `groups guests` says until when each
+link works, and marks one that ran out unclaimed as expired (in JSON: `linkExpired` true,
+`hasLink` false, no `token`, and `linkExpiresAt` the moment it lapsed). `create` on an expired
+link issues a new one, with or without `--new`, and does not ask first -- nothing that works
+is lost. The new link counts as issued now, for its own expiry and for the rejoin rule. The link is `<web-app>/claim/<token>`; the
 text output prints that URL when the CLI knows the server origin, and the JSON carries the
 token. Nobody is notified: sending the link is the group's job. Replacing a link kills the
 old one *and* forgets who had opened it, so a link that leaked is not handed on.
@@ -237,7 +255,7 @@ groupsplit invitations decline <link>  # "this isn't me": the link stops working
 ```
 
 `list` is every guest link this account has **opened** and that still works, which the API
-writes down as it happens, and it carries the tokens. That makes it the way back to a link
+writes down as it happens, and it carries the tokens and when each expires. That makes it the way back to a link
 when the message it arrived in is gone. The same list is the "Waiting on you" row on the web
 app's home page.
 
@@ -252,7 +270,8 @@ they were down as having paid for and their places in the rules become the claim
 amount changes, and the claimer's balance does. If the claimer is already a member and had
 recorded repayments with that guest -- the same person, twice -- those repayments are
 deleted, because they would read as paying yourself; the answer counts them. Afterwards the
-link is spent, so a forwarded copy gets the same 404 a mistyped URL does.
+link is spent, so a forwarded copy gets the same 404 a mistyped URL does -- and so does a
+link that has expired.
 
 `decline` only stops the link. The group keeps the guest and everything recorded for them,
 and a member can send a new link. Nothing moves, so there is no money to report:
@@ -564,6 +583,20 @@ GROUPSPLIT_TOKEN=$(...) groupsplit groups list
 `groupsplit auth token` prints the current access token for piping into other tools. It is a
 secret; treat it like one.
 
+### Deleting the account
+
+`groupsplit users delete` deletes the account you are signed in as, and its sign-in with it:
+the Keycloak login, its password, any linked Google account and every session it holds, the
+web app's included. Nobody can sign in as it again. It is refused with `ACCOUNT_NOT_SETTLED`
+while any group balance is not zero, and asks for confirmation like any other destructive
+command. On success the CLI throws away its stored credentials, since the login they belong
+to is gone.
+
+A token issued before the deletion stays valid until it expires, a few minutes at most, and
+the API refuses it with `ACCOUNT_DELETED` (exit code 2) rather than treating it as a new
+sign-in. Run `groupsplit auth logout` if a stored session still answers that way. What
+deletion keeps and removes, and why, is in [account deletion](account-deletion.md).
+
 ## Bank sync
 
 Two halves, and only one of them can happen in a terminal.
@@ -579,7 +612,10 @@ groupsplit bank link <public-token>        # exchange what it gave back
 
 `--connection <id>` on `link-token` asks for an *update* token, which reopens an existing
 connection rather than adding a second copy of the same bank. That is what a connection
-showing `login required` needs; `groupsplit bank list` says which ones do.
+showing `login required` needs; `groupsplit bank list` says which ones do. The state covers
+everything the bank needs the person for, not only a changed password: a locked account, a
+password it wants reset, an agreement waiting on its own site, no account shared. Whatever
+it is, the person deals with it at the bank and then signs in again here.
 
 Update mode is also how somebody shares an account they did not share when they linked. It
 mints no new item and hands back no usable public token, so nothing on the linking path
@@ -606,12 +642,24 @@ groupsplit inbox file <row-id> --group <group-id> --category-id <category-id>
 groupsplit inbox ignore <row-id>           # undone by: inbox restore
 ```
 
+Filing is undone by deleting the expense: `groupsplit transactions delete <transaction-id>`
+puts the row back in the inbox as waiting, with the receipt files it had there, and its
+confirmation says so. A row the bank has withdrawn since goes with the expense instead.
+
+`bank unlink` deletes the receipt files still waiting on that bank's inbox rows, stored
+objects included; files already on an expense stay with it. It succeeds when the provider no
+longer knows the item -- removed at its end, or by an earlier unlink that failed after
+telling it.
+
 `bank sync` answers as soon as the pull is queued, because nothing waits on a bank inside a
 request. `groupsplit inbox summary` is the cheap way to poll for it -- it is one count, not a
 page of rows.
 
 Filing copies what the bank said. The date, the amount and the currency have no flags on
 `inbox file` for that reason: correcting the bank is an edit to the expense afterwards.
+Keeping a row personal -- `inbox file` with no `--group` -- keeps the bank's currency too,
+so a 20.00 EUR charge is a 20.00 EUR expense; filing it into a group in another currency is
+refused. See [an expense in another currency](#an-expense-in-another-currency).
 
 When the deployment has no provider configured, `bank list` says so rather than answering
 with an empty list -- "no banks linked" and "bank sync is off here" are different answers.
@@ -772,6 +820,45 @@ so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a trans
 than an expense, so nothing here has been paid back yet. Where you actually stand is
 `groupsplit users position`.
 
+## An expense in another currency
+
+A group keeps its balances in one currency, and nothing in GroupSplit converts between
+currencies. Your own ledger is different: nothing adds a personal expense to anybody
+else's money, so it may be in any currency.
+
+```bash
+groupsplit tx create "Dinner in Lisbon" 20 --currency EUR     # personal, in euros
+groupsplit inbox file <row-id>                                # kept personal, in the row's currency
+```
+
+`--currency` takes any three-letter ISO 4217 code. Leave it off in a group: the expense takes
+the group's own, and any other is refused. Once recorded, an expense keeps its currency --
+there is no flag that changes it, because changing it would relabel the amount rather than
+convert it.
+
+`CURRENCY_MISMATCH`, exit code 3, is the answer wherever money would cross into a group in
+another currency: `tx create --group` with a different `--currency`, `inbox file --group`
+for a row in another currency, and `tx update --group` moving an expense into one -- or
+between two groups in different currencies. Nothing is written. The way out is to keep it
+personal, or to put it in a group that uses that currency.
+
+In text output an amount names its currency only when it is not the default, so a column of
+dollars stays a column of numbers and the one row in euros reads `20.00 EUR`; `tx show`
+always names it. JSON always carries `currency`.
+
+Totals are one currency each. `tx summary` and `tx shares summary` total the matches in
+`currency` -- the default unless nothing that matched is in it -- and list every other one on
+a line of its own, never added in:
+
+```bash
+groupsplit tx summary
+# 3 expenses totalling 25.00
+# Not in that total: 1 in EUR totalling 20.00 EUR
+```
+
+With `--json` those are `otherCurrencies`. `tx monthly` is a series, so it is drawn in one
+currency and leaves the others out; it says which under the table.
+
 ## Splitting a bill by its items
 
 For the dinner where nobody ate the same thing. An even split is wrong for it, a percentage
@@ -785,15 +872,14 @@ a rule naming Ana, a rule naming Ana and Omar, a payer rule for the thing the pa
 standing. `groupsplit split-rules list --group <id>` prints the rules and their current
 version ids, which is what a line names after its `@`.
 
-Transcribe the bill first. The subtotal and the total default to the lines added up and the
-extras added on, so on an ordinary receipt you type the lines and the two figures at the
-bottom:
+Transcribe the bill first. The subtotal, the tax and the total default to the lines added up
+and the extras added on, so on an ordinary receipt you type the lines and the tip:
 
 ```bash
-groupsplit receipts set 7c1e... --tax 4.20 --tip 6.00 \
-  --item "Steak=22.00@3f25c1a8-...-444455556666" \
-  --item "Risotto=16.50@9ab77d10-...-111122223333" \
-  --item "Wine=18.00@5c0ffee0-...-777788889999"
+groupsplit receipts set 7c1e... --tip 6.00 \
+  --item "Steak=22.00/tax1.80@3f25c1a8-...-444455556666" \
+  --item "Risotto=16.50/tax1.35@9ab77d10-...-111122223333" \
+  --item "Wine=18.00/tax1.05@5c0ffee0-...-777788889999"
 ```
 
 A line reads `[<id>#]<name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]`. The number
@@ -835,6 +921,14 @@ still a line called `Table #4`. A line with no id is a new line, which is what w
 out for the first time looks like. An id that names a line of some other bill, or the same
 line twice, is refused rather than guessed at.
 
+What the command has no flag for is **kept**. `receipts set` reads the saved bill first and
+sends back the merchant and purchase date it was read with, and the tip unless `--tip` says
+otherwise. A line named by its id keeps its tax amount, rate and taxable flag unless the line
+states `/tax` or `/notax`, and keeps the normalized reading of its name while the name is
+unchanged. So correcting one price on a taxed supermarket bill is the price and nothing else;
+it used to drop the merchant, the date and every line's rate, and the bill then refused to
+add up until every line was given its tax again.
+
 `/tax8.05` says 8.05 of the bill's tax was charged on that line. An amount rather than a
 rate, because an amount is what the till prints -- and rather than a flag, which is what this
 used to be: one tax total was then weighed over the flagged lines by price, which is exact
@@ -852,8 +946,10 @@ checks. Either side of the `@` reads the same: `Bread=4.00/tax0.92@<version>` an
 For a new bill, or one on an expense whose stored shares were not produced by the bill,
 `preview` says what the division would be and `divide` is what stores it. If the bill already
 drives the expense's stored ledger, a valid `set` or `rule` correction automatically
-recalculates those shares. If a correction makes the bill incomplete, the bill remains
-editable and the last valid shares remain in place until the bill is valid again:
+recalculates those shares. If a correction makes the bill incomplete -- a line split in two,
+the new half with no rule yet -- the bill remains editable and the last valid shares remain in
+place until the bill is valid again, and whichever call completes it, `set` or `rule`,
+recalculates them:
 
 ```bash
 groupsplit receipts preview 7c1e...
@@ -1023,6 +1119,17 @@ rule. It is the only way to ask for that on an expense somebody split by hand: s
 about those shares keeps them, which is what stops a rename or a merchant fix from quietly
 restating a division somebody made. The two contradict each other and passing both is
 refused.
+
+On an expense divided by its bill the bill follows too: `--amount` alone re-totals the bill,
+the difference on its tip, and divides by it again -- the tip added on the card after the
+bill was typed in is one command. The tip cannot go below nothing, so lowering the amount by
+more than the bill's tip is refused with `RECEIPT_DOES_NOT_ADD_UP`; correct the bill's lines
+with `receipts set` instead. Moving such an expense with `--group` clears every line's rule,
+since they are the old group's rules; give the lines the new group's with `receipts rule`.
+
+```bash
+groupsplit tx update <id> --amount 58.00 --preview   # a 48.00 bill plus 10.00 of tip
+```
 
 On an expense a rule divided, `--amount` alone is accepted and the shares follow it, so
 `--redivide` is not needed for that -- what it is still for there is discarding a division
@@ -1210,6 +1317,38 @@ never divided them. Nothing records which rule a category named in 2023, so the 
 not tell the two cases apart, and the expenses it was most useful on were the ones it was
 most likely to be wrong about.
 
+## Amounts
+
+Every amount on the command line is written one way, on every machine: digits, a `.` for the
+decimal point, **no thousands separators**, at most two decimal places. That covers the
+arguments (`transactions create <name> <amount>`, `groups settle ... <amount>`), the options
+(`--amount`, `--subtotal`, `--tax`, `--tip`, `--total`), the `--split` and `--percent` pairs,
+and the numbers inside a receipt `--item` -- where a quantity may have three places.
+
+| Typed | Read as |
+| --- | --- |
+| `12.50`, `12.5`, `12` | 12.50 |
+| `12,50` | Refused, exit code 3 |
+| `1,234.56` | Refused, exit code 3 |
+| `1.234,56` | Refused, exit code 3 |
+| `12.555` | Refused, exit code 3 -- not rounded |
+
+A refusal comes before any request, says which value it could not read, and says what to
+type instead:
+
+```text
+Could not read amount '12,50'. Use '.' for the decimal point and no thousands separators, as in 1234.56.
+```
+
+The format does not follow the machine's language settings, and that is the point. The
+parser used to: on an en-US machine `12,50` was read as 1250, and on an es-ES one `12.50`
+was -- and shares misread the same way still added up to the misread total, so a $12.50
+dinner could be recorded as a $1,250 one with nothing refusing it (#313). A script now means
+the same amount wherever it runs.
+
+The web app reads either a `.` or a `,` as the decimal point, because a phone keypad in many
+languages offers only the comma; it refuses grouping and a third decimal place the same way.
+
 ## Output
 
 Two renderings of the same data, chosen automatically:
@@ -1237,6 +1376,9 @@ of an array:
 ```bash
 groupsplit groups list --json --fields id,name
 ```
+
+It narrows results, and the [confirmation envelope](#confirming-changes) is not one: an exit 4
+always carries all of it, whatever `--fields` named.
 
 ## Exit codes
 
@@ -1269,8 +1411,24 @@ Failures print an envelope on stderr. In JSON:
 `code` is stable and is what a caller should branch on; `error` is prose and may be reworded.
 When the failure came from the API, `code` is that response's code verbatim, from the catalog
 in [errors.md](errors.md) -- the CLI does not invent a second vocabulary for conditions the
-API already names. Codes the CLI raises before any request was made are prefixed `CLI_`, so
-the prefix tells you whether the server ever saw the request.
+API already names. Codes the CLI raises itself are prefixed `CLI_`. Most of them mean the
+request was never sent. These three are about whether it was:
+
+| Code | Meaning |
+| --- | --- |
+| `CLI_SERVER_UNREACHABLE` | The name did not resolve, the connection was refused, or TLS failed. Nothing was sent. |
+| `CLI_OUTCOME_UNKNOWN` | The request may have reached the server and no answer came back: the connection broke after it was sent, or the server took longer than the client waits. **It may have been carried out.** A read is safe to repeat; before repeating a change, look for it, or it may be recorded twice. |
+| `CLI_CANCELLED` | Interrupted (Ctrl+C), or a confirmation declined. An interrupt during a change may not have stopped it. |
+
+The full list of `CLI_` codes is in the agent skill's
+[protocol reference](../skills/groupsplit/references/protocol.md#codes-the-cli-raises-itself).
+
+The exit code follows the HTTP status (a 409 is `3`), with one exception:
+`IDENTITY_EMAIL_IN_USE` is a 409 that exits `2`. The server refuses the sign-in itself, on
+every command, because its email already belongs to another account -- somebody deleted and
+recreated in Keycloak. Signing in again as the same person brings back the same refusal; the
+remediation says to contact support with the `traceId`, and support resolves it as
+[identities.md](identities.md) describes.
 
 `traceId` is the API's own, and matches its log line.
 
@@ -1294,6 +1452,18 @@ code 4 and a description of what would have happened on stdout:
 `confirmCommand` is the exact string that performs the action, so a caller with no terminal
 does not have to reconstruct the invocation -- it re-runs that, or shows it to a human first.
 `--yes` skips the gate.
+
+It is read back out of the parsed invocation rather than written per command, so it carries
+every option that was given -- `--profile` and `--server` too, so it acts on the same account
+-- and adds only `--yes`. On the way, a file is named by its absolute path, each word is
+quoted for a POSIX shell when it needs to be, and a value beginning with `-` or `@` is joined
+to its option with `=`. A figure the command worked out rather than was given is stated:
+`settle pay` without `--amount` comes back with `--amount` set to what the prompt named.
+`ConfirmCommandTests` runs every gated command both ways -- with `--yes`, and by re-running
+its `confirmCommand` from another directory -- and requires the same writes from each.
+
+The server can still change between the prompt and the confirmation, and the confirmed run
+acts on what is there then: `settle-up` and `receipts divide` work their figures out again.
 
 Nothing ever blocks on a prompt that nobody can answer.
 
@@ -1380,20 +1550,12 @@ It lives in `src/GroupSplit.AppHost/Assets/keycloak/realms.json`: public, device
 and carrying the same `api` audience mapper as `web-app` -- without that mapper the API
 rejects its tokens for the wrong audience.
 
-**A realm that already exists will not pick it up.** Keycloak imports a realm on first start
-only, and both the local Keycloak (`WithDataVolume`) and the deployed one keep theirs, so
-adding a client to this file does nothing for an environment that has already run. Either add
-the client through the admin console, or -- locally, where the data is disposable -- drop the
-volume and let the realm be imported again:
+Keycloak imports a realm on first start only, and both the local Keycloak (`WithDataVolume`)
+and the deployed one keep theirs, so a realm imported before the CLI existed has no `cli`
+client. The `realm-settings` worker takes care of that: on every start, locally and on every
+deploy, it creates the client from this file when it is missing, and otherwise puts back its
+grants (device grant on, every other grant off) and its `api` audience mapper. Nothing in the
+client depends on the environment, so creating it writes exactly what an import would have.
+See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
 
-```bash
-aspire stop
-podman volume ls | grep keycloak     # confirm the name before removing anything
-podman volume rm <the keycloak data volume>
-aspire run
-```
-
-That loses locally signed-up accounts; `groupsplit auth login` works afterwards, and the
-seeder's **Reset databases and seed** command puts the demo accounts back.
-
-Until then, `GROUPSPLIT_TOKEN` needs no realm change at all.
+`GROUPSPLIT_TOKEN` needs no realm change at all.

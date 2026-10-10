@@ -119,6 +119,41 @@ public class GroupSelectionTest
         _groupsClient.Invocations.Count(i =>
             i.Method.Name == nameof(IGroupsClient.GetGroupTransactionsAsync) && (Guid)i.Arguments[0] == groupId);
 
+    // ---- A confirmed write names its group -----------------------------------------------------
+
+    /// <summary>
+    /// A write confirmed after the selection moved acts on the group it was given -- the one
+    /// the dialog was opened on -- and says that group's name (#323).
+    /// </summary>
+    /// <remarks>
+    /// Every one of these read the selection at the moment of the write, so a question asked
+    /// about the flat and answered once the trip was open left the trip.
+    /// </remarks>
+    [Fact]
+    public async Task A_confirmed_write_acts_on_the_group_it_names_and_not_the_one_selected()
+    {
+        var commands = new Mock<IGroupCommands>();
+
+        var page = new GroupsPageStateService(new GroupsTracker(), _groupsClient.Object, _usersClient.Object,
+            _guard, new ApiErrorPresenter(new Mock<NavigationManager>().Object, Mock.Of<ISnackbar>()),
+            _changes, commands.Object, Mock.Of<ITransactionCommands>());
+
+        await page.IsReadyTask;
+
+        page.SelectedGroup = Trip;
+
+        await page.LeaveGroupAsync(Flat.Id);
+        await page.RemoveGroupMemberAsync(Flat.Id, Me, "Me");
+        await page.SettleAsync(Flat.Id, new SettleRequest(), "Omar");
+
+        commands.Verify(c => c.LeaveAsync(Flat.Id, Flat.Name, It.IsAny<CancellationToken>()), Times.Once);
+        commands.Verify(c => c.RemoveMemberAsync(Flat.Id, Me, "Me", It.IsAny<CancellationToken>()), Times.Once);
+        commands.Verify(c => c.SettleAsync(Flat.Id, It.IsAny<SettleRequest>(), "Omar", It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        Assert.DoesNotContain(commands.Invocations, invocation => invocation.Arguments.Contains(Trip.Id));
+    }
+
     // ---- Two selections, answered in the other order -----------------------------------------
 
     [Fact]

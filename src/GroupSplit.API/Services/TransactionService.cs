@@ -102,6 +102,11 @@ public interface ITransactionService
     /// reads <c>Set&lt;Expense&gt;()</c> on purpose, so a transfer is invisible to it; a
     /// settlement entered wrongly still has to be retractable, and there is no second
     /// delete path for it to use.
+    /// <para>
+    /// Deleting an expense filed from a bank row undoes the filing, not the import: the row
+    /// goes back to the inbox as waiting, with the receipt files it carried there. A row the
+    /// bank has since withdrawn has no inbox to go back to, and goes with the expense.
+    /// </para>
     /// </remarks>
     /// <exception cref="NotFoundException">
     /// No transaction of any kind with that id is the caller's to remove.
@@ -222,6 +227,7 @@ public class TransactionService(
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         var group = await GroupFor(request.GroupId, ct);
+        var currency = CurrencyFor(group, request.Currency);
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
@@ -236,7 +242,7 @@ public class TransactionService(
         var expense = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            Currency = currency,
             // Stored as UTC, whatever offset the client wrote it with. The column has no
             // zone, so this only makes explicit what the store does anyway -- and it means
             // an instant reads back exactly as it was sent, never re-expressed.
@@ -270,6 +276,7 @@ public class TransactionService(
         var paidByUserId = request.PaidByUserId ?? currentUser.Id;
 
         var group = await GroupFor(request.GroupId, ct);
+        var currency = CurrencyFor(group, request.Currency);
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
@@ -287,7 +294,7 @@ public class TransactionService(
         var draft = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            Currency = currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group?.Id,
@@ -366,6 +373,10 @@ public class TransactionService(
 
         var groupMoved = group?.Id != existing.GroupId;
 
+        // Before anything is divided, as the save refuses it: a preview that showed the
+        // shares of a move the save will not make is a promise nobody can keep.
+        RefuseCurrencyMove(existing, group);
+
         // And the payer asked about only when it changes, as the save asks it.
         var payerId = request.PaidByUserId == existing.UserId && !groupMoved
             ? existing.UserId
@@ -424,7 +435,9 @@ public class TransactionService(
         var draft = new Expense
         {
             Amount = request.Amount,
-            Currency = group?.Currency ?? Currencies.Default,
+            // Its own, wherever the edit puts it: a move into a group in another currency
+            // was refused above, and a move out of one keeps what the money was spent in.
+            Currency = existing.Currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group?.Id,
@@ -441,9 +454,25 @@ public class TransactionService(
             // The stored bill, which an edit never changes: a line's rule is written to the
             // receipt as it is picked, and the fields on this draft are the ones that are
             // still being typed. The itemized rule reads it off the context and refuses
-            // without it.
-            Receipt = existing.Receipt
+            // without it. A copy with no line rules on a move, which is what the save leaves.
+            Receipt = groupMoved && existing.Receipt is { } moving
+                ? BillRetotal.Copy(moving, withoutRules: true)
+                : existing.Receipt
         };
+
+        // And re-totalled to the new amount where the save would re-total it -- see Update --
+        // on a copy, so the bill the context is tracking is never the one that moves.
+        if (request.Amount != existing.Amount
+            && (request.SplitRuleId is not null || stated is null)
+            && draft.Receipt is { } bill
+            && bill.Total == existing.Amount
+            && await DividesByItsBill(draft, request.SplitRuleId is not null ? version : null, ct))
+        {
+            draft.Receipt = ReferenceEquals(bill, existing.Receipt)
+                ? BillRetotal.Copy(bill, withoutRules: false)
+                : bill;
+            BillRetotal.To(draft.Receipt, request.Amount);
+        }
 
         // What it is divided into today, so the splitter can tell a division that changed
         // from one merely carried forward -- the difference between an edit that loses the
@@ -717,6 +746,7 @@ public class TransactionService(
         var inputsMoved = InputsMoved(expense, request);
         var saysNothingNew = SaysNothingNew(expense.Splits, request.Splits);
         var amountMoved = expense.Amount != request.Amount;
+        var previousAmount = expense.Amount;
         var groupMoved = expense.GroupId != request.GroupId;
         var payerMoved = expense.UserId != request.PaidByUserId;
 
@@ -739,6 +769,12 @@ public class TransactionService(
             ? expense.Group
             : await GroupFor(request.GroupId, ct);
 
+        // Refused before a single field moves. The expense keeps the currency it was
+        // recorded in, so a group in another one cannot take it: its balances are one
+        // currency, and adding these figures to them would relabel the money rather than
+        // convert it.
+        RefuseCurrencyMove(expense, group);
+
         // Which division the expense holds from here on, asked while it still holds the
         // category and the group the question is about: the one it was written under, a rule
         // the request names instead, or none where the edit hands it back to its category.
@@ -748,7 +784,8 @@ public class TransactionService(
         {
             expense.Group = group;
             expense.GroupId = group?.Id;
-            expense.Currency = group?.Currency ?? Currencies.Default;
+            // The currency stays. Into a group it already matches -- anything else was
+            // refused above -- and out of one it is still what the money was spent in.
 
             if (group == null)
             {
@@ -760,6 +797,11 @@ public class TransactionService(
             // in a group they were never in.
             dbContext.RemoveRange(expense.Splits);
             expense.Splits.Clear();
+
+            // And so do the rules on its bill's lines, for the same reason one level down:
+            // they are the old group's rules, and the new group can read the bill.
+            if (await BillOf(expense, ct) is { } moved)
+                BillRetotal.ClearRules(moved);
         }
 
         // Asked of the payer only when it is changing. The person who paid for a dinner a
@@ -797,6 +839,17 @@ public class TransactionService(
             expense.SplitRuleVersionId = division;
         }
 
+        // An expense divided by its bill is divided again by that bill below, and the bill
+        // has to come to the new amount for that to work -- so it is re-totalled first,
+        // the difference on its tip. Only on the branches that divide by a rule: shares
+        // somebody stated are their own answer, and leave the bill as it was.
+        if (amountMoved
+            && (request.SplitRuleId is not null || (cameFromRule && saysNothingNew) || request.Splits is null)
+            && await DividesByItsBill(expense, request.SplitRuleId is not null ? division : null, ct)
+            && await BillOf(expense, ct) is { } bill
+            && bill.Total == previousAmount)
+            BillRetotal.To(bill, expense.Amount);
+
         // The amount, the payer and the category can all have changed, and each of them
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
         // edit for which keeping the old split would be right -- unless the caller stated
@@ -825,6 +878,34 @@ public class TransactionService(
 
         return expense;
     }
+
+    /// <summary>
+    /// The expense's bill, with its lines and the rules on them, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// Put on the expense as well as returned, so the splitter divides by this tracked copy
+    /// -- the one an edit has just changed -- rather than reading the bill again.
+    /// </remarks>
+    private async Task<Receipt?> BillOf(Expense expense, CancellationToken ct) =>
+        expense.Receipt ??= await dbContext.Set<Receipt>()
+            .Include(receipt => receipt.Items)
+            .ThenInclude(item => item.SplitRuleVersion)
+            .ThenInclude(version => (version as WeightedSplitRuleVersion)!.Participants)
+            .Include(receipt => receipt.Items)
+            .ThenInclude(item => item.SplitRuleVersion)
+            .ThenInclude(version => version!.SplitRule)
+            .ThenInclude(rule => rule.Group)
+            .FirstOrDefaultAsync(receipt => receipt.ExpenseId == expense.Id, ct);
+
+    /// <summary>
+    /// Whether the division about to be written is the expense's bill: the version a request
+    /// names, when it names one, and otherwise whatever the splitter would divide it by.
+    /// </summary>
+    private async Task<bool> DividesByItsBill(Expense expense, Guid? named, CancellationToken ct) =>
+        named is { } version
+            ? await dbContext.Set<SplitRuleVersion>().OfType<ItemizedSplitRuleVersion>()
+                .AnyAsync(candidate => candidate.Id == version, ct)
+            : await splitter.DividesByItsBill(expense, ct);
 
     /// <summary>
     /// Whether the edit changes something the division was worked out from: the amount, the
@@ -935,12 +1016,48 @@ public class TransactionService(
         if (moved.Count > 0)
             throw DepartedPositions.Refusal(moved);
 
+        var row = transaction is Expense ? await FiledFrom(transaction, ct) : null;
+
+        // Returning only while the bank still stands behind the row. One it has withdrawn
+        // would come back as a payment that no longer exists.
+        var returning = row is { RemovedAt: null } ? row : null;
+
         if (transaction is Expense)
-            await receiptAttachments.DeleteForExpense(id, ct);
+            await receiptAttachments.DeleteForExpense(id, returning?.Id, ct);
+
+        // Saved with the delete rather than before it, so a delete that fails leaves the row
+        // filed against the expense that is still there.
+        if (returning is not null)
+            returning.Status = BankTransactionStatus.New;
+        else if (row is not null)
+            dbContext.Remove(row);
 
         dbContext.Remove(transaction);
 
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// The bank row this expense was filed from, while it is still the row's filing.
+    /// </summary>
+    /// <remarks>
+    /// The foreign key is SetNull, which used to be the whole of what deleting an expense
+    /// did to its row: the expense went, and the row stayed <c>Filed</c> with nothing filed
+    /// from it. Filing and linking then refused it as already an expense, and ignoring it
+    /// said to delete the expense -- the step that had just trapped it.
+    /// <para>
+    /// Only a row whose status is still <see cref="BankTransactionStatus.Filed"/>. One a
+    /// posted row has superseded keeps that status, because the posted row holds the story
+    /// now; the expense still pointing at it is the one a supersede could not move.
+    /// </para>
+    /// </remarks>
+    private async Task<BankTransaction?> FiledFrom(Transaction transaction, CancellationToken ct)
+    {
+        if (transaction.BankTransactionId is not { } rowId)
+            return null;
+
+        return await dbContext.Set<BankTransaction>()
+            .FirstOrDefaultAsync(row => row.Id == rowId && row.Status == BankTransactionStatus.Filed, ct);
     }
 
     /// <summary>
@@ -958,6 +1075,55 @@ public class TransactionService(
                    .FirstOrDefaultAsync(@group => @group.Id == groupId, ct)
                ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
     }
+
+    /// <summary>
+    /// The currency a new expense is recorded in: the one it was stated in, or the group's
+    /// when nothing was said.
+    /// </summary>
+    /// <remarks>
+    /// A personal expense may be in any currency, because nothing sums it with anybody
+    /// else's. It used to be stamped with the default whatever it was given, so a euro row
+    /// kept personal became the same number of dollars -- a different amount of money,
+    /// written down as though it were the one the bank reported. A group's balances are in
+    /// one currency and conversion is out of scope, so there a stated currency has to be
+    /// the group's own.
+    /// </remarks>
+    private static string CurrencyFor(Group? group, string? stated)
+    {
+        var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
+
+        if (group is null)
+            return currency ?? Currencies.Default;
+
+        if (currency is not null && !SameCurrency(currency, group.Currency))
+            throw CurrencyMismatch(currency, group);
+
+        return group.Currency;
+    }
+
+    /// <summary>
+    /// Refuses to put an expense into a group that keeps its balances in another currency.
+    /// </summary>
+    /// <remarks>
+    /// The same refusal filing into the group meets, on the other way in. A move used to
+    /// take the destination's currency, which relabelled the amount rather than converting
+    /// it -- twenty euros became twenty dollars in everybody's balance.
+    /// </remarks>
+    private static void RefuseCurrencyMove(Expense expense, Group? destination)
+    {
+        if (destination is not null && destination.Id != expense.GroupId &&
+            !SameCurrency(expense.Currency, destination.Currency))
+            throw CurrencyMismatch(expense.Currency, destination);
+    }
+
+    private static bool SameCurrency(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+
+    private static DomainException CurrencyMismatch(string currency, Group group) =>
+        new ConflictException(ErrorCodes.CurrencyMismatch,
+                $"This is in {currency} and the group keeps its balances in {group.Currency}.")
+            .WithExtension("transactionCurrency", currency)
+            .WithExtension("groupCurrency", group.Currency);
 
     /// <summary>
     /// Which of a group's participants are its guests, as ids. Empty for no group at all,

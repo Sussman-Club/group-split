@@ -90,8 +90,10 @@ public record TransactionDetailsResponse : TransactionResponse
 /// same two people covered through, or null when there was none -- since the group began.
 /// </param>
 /// <param name="StillOwed">
-/// What the payer still owes the group for activity through <paramref name="Through"/>,
-/// after every settlement made since. Zero means the period is square for them; more than
-/// zero means something dated inside it has been added or changed since it was settled.
+/// What the payer still owes the recipient for activity through <paramref name="Through"/>,
+/// read as the balances through that day read it now: settlements made for later count as
+/// far as they pay the period down. Zero means the period is square between them; more
+/// than zero usually means something dated inside it was added or changed since it was
+/// settled, or it was paid short.
 /// </param>
 public record SettlementCoverage(DateOnly Through, DateOnly? From, decimal StillOwed);

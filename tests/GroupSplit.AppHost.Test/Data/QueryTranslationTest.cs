@@ -281,6 +281,32 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
+    /// The totals, a currency at a time (#320): a <c>GROUP BY</c> over the expenses, one over
+    /// the projected share rows -- a member of a projected record, which is the shape that
+    /// broke <c>GET /invitations</c> -- and the monthly series grouped by month and currency
+    /// across a join.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_totals_by_currency_translate()
+    {
+        var transactions = Service<ITransactionService>();
+        var me = Service<ICurrentUser>().User.Id;
+
+        await (await transactions.List(Ct)).ToSummaryAsync(new TransactionFilter(), Ct);
+        await (await transactions.InGroup(await AGroupOfTheirs(), Ct)).ToSummaryAsync(new TransactionFilter(), Ct);
+
+        foreach (var owedOnly in new[] { false, true })
+        {
+            await (await transactions.Shares(Ct)).ToShareSummaryAsync(
+                await transactions.List(Ct), new TransactionFilter(), me, owedOnly, Ct);
+        }
+
+        var months = await (await transactions.List(Ct)).ToMonthlyExposureAsync(await transactions.Shares(Ct), me, Ct);
+
+        Assert.All(months, month => Assert.Equal(months[0].Currency, month.Currency));
+    }
+
+    /// <summary>
     /// The inbox listing, through the endpoint's own sort and projection. It is the only
     /// read in the app that orders by a <c>DateOnly</c>, projects an enum through a nested
     /// conditional, and reaches two navigations deep for the account and its institution --
@@ -321,6 +347,24 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
                 .SelectDto()
                 .ToPageAsync(new PageRequest(), Ct);
         }
+    }
+
+    /// <summary>
+    /// The merchant reads, scoped to the caller: a place is theirs through an expense they
+    /// can read or a row their bank imported, and the count beside it is of their own
+    /// transactions there -- two correlated subqueries over the group-membership one.
+    /// </summary>
+    [Fact(Timeout = 120_000)]
+    public async Task The_callers_merchants_translate()
+    {
+        var merchants = Service<IMerchantService>();
+
+        var everything = await (await merchants.List(null, Ct)).ToListAsync(Ct);
+        await (await merchants.List("li", Ct)).ToListAsync(Ct);
+
+        // The seeded user has spent at seeded shops, so the single read has a row to find.
+        Assert.NotEmpty(everything);
+        Assert.Equal(everything[0].Id, (await merchants.Get(everything[0].Id, Ct)).Id);
     }
 
     [Fact(Timeout = 120_000)]

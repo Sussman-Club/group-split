@@ -210,6 +210,21 @@ public class ApiErrorsTest
         Assert.Equal(ErrorMessages.Server(null), error.Message);
     }
 
+    /// <summary>
+    /// A receipt reading that ran out of time answers the provider's 502, and the person is
+    /// told to try again rather than handed a reference number for a bug that is not one.
+    /// </summary>
+    [Fact]
+    public void A_receipt_reading_that_timed_out_says_to_try_again()
+    {
+        var error = ApiErrors.Read(Typed(502, Problem(502, ErrorCodes.ReceiptTranscriptionProviderUnavailable)));
+
+        Assert.Equal(ApiErrorKind.Server, error.Kind);
+        Assert.Equal(ErrorMessages.For(ErrorCodes.ReceiptTranscriptionProviderUnavailable), error.Message);
+        Assert.Contains("try again", error.Message);
+        Assert.DoesNotContain(TraceId, error.Message);
+    }
+
     [Fact]
     public void No_connection_is_a_network_error()
     {

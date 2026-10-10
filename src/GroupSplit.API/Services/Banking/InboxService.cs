@@ -186,6 +186,10 @@ public sealed class InboxService(
             Name = Named(request.Name, row),
             Description = request.Description,
             Amount = row.Amount,
+            // What the bank said it was in. Left out, a row kept personal was stamped with
+            // the default currency, so a 20.00 EUR charge became a 20.00 USD expense; a
+            // personal expense may be in any currency, and a group's was checked above.
+            Currency = row.Currency,
             // A statement has a date and not an instant. Midnight UTC keeps it the day the
             // bank said, whichever zone it is later read in.
             DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
@@ -253,7 +257,8 @@ public sealed class InboxService(
 
         var expense = await Mine(request.TransactionId, ct);
 
-        if (expense.BankTransactionId is not null)
+        if (expense.BankTransactionId is not null
+            && await DuplicateMatcher.Holding(dbContext, expense.BankTransactionId).AnyAsync(ct))
         {
             throw new ConflictException(ErrorCodes.TransactionAlreadyImported,
                 "That expense already came from a bank transaction.");
@@ -266,6 +271,8 @@ public sealed class InboxService(
                 .WithExtension("transactionCurrency", row.Currency)
                 .WithExtension("expenseCurrency", expense.Currency);
         }
+
+        await TakeOverFromAsync(expense, row, ct);
 
         // The same link filing makes, and nothing else. The expense keeps the amount, the
         // date and the division it was recorded with: the person wrote those down, and the
@@ -284,6 +291,48 @@ public sealed class InboxService(
         return expense;
     }
 
+    /// <summary>
+    /// Linking a row to an expense whose own row the bank withdrew: the new row takes over
+    /// from the old one, the way a posted row takes over from its pending one.
+    /// </summary>
+    /// <remarks>
+    /// The case the matcher now raises. A pending row filed as an expense, withdrawn, and
+    /// re-posted under a new id without naming it, is the same money arriving twice -- and
+    /// the answer "that is the same payment" has to be one linking can act on. The old row
+    /// is marked superseded rather than left filed with no expense, so it never reads as a
+    /// filing nobody can undo, and the receipt files that came with the expense now name
+    /// the row the expense points at.
+    /// </remarks>
+    private async Task TakeOverFromAsync(Expense expense, BankTransaction row, CancellationToken ct)
+    {
+        if (expense.BankTransactionId is not { } previousId)
+            return;
+
+        var previous = await dbContext.Set<BankTransaction>().FirstOrDefaultAsync(old => old.Id == previousId, ct);
+
+        if (previous is null)
+            return;
+
+        if (previous.Status is BankTransactionStatus.Filed)
+            previous.Status = BankTransactionStatus.Superseded;
+
+        if (row.ReplacesId is null)
+        {
+            row.Replaces = previous;
+            row.ReplacesId = previous.Id;
+        }
+
+        var attachments = await dbContext.Set<ReceiptAttachment>()
+            .Where(attachment => attachment.BankTransactionId == previous.Id && attachment.ExpenseId == expense.Id)
+            .ToListAsync(ct);
+
+        foreach (var attachment in attachments)
+        {
+            attachment.BankTransaction = row;
+            attachment.BankTransactionId = row.Id;
+        }
+    }
+
     public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)
     {
         var row = await Existing(id, ct);
@@ -299,7 +348,7 @@ public sealed class InboxService(
         if (row.Status == BankTransactionStatus.Filed)
         {
             throw new ConflictException(ErrorCodes.BankTransactionAlreadyFiled,
-                "This one is already an expense. Delete the expense to undo that.");
+                "This one is already an expense. Delete the expense and it comes back here.");
         }
 
         row.Status = BankTransactionStatus.Ignored;

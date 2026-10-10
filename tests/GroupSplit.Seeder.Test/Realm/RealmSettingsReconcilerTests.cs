@@ -9,16 +9,42 @@ public sealed class RealmSettingsReconcilerTests
 {
     private const string Origin = "https://groupsplit.example";
 
-    private static string? Environment(string name) =>
-        name == "WEB_HOSTNAME" ? Origin : null;
+    private const string DeletionSecret = "the-deploy-secret";
+
+    private const string SecretVariable = "KEYCLOAK_ACCOUNT_DELETION_SECRET";
+
+    private static string? Environment(string name) => name switch
+    {
+        "WEB_HOSTNAME" => Origin,
+        SecretVariable => DeletionSecret,
+        "SMTP_ENABLED" => "true",
+        _ => null
+    };
+
+    /// <summary>The worker's environment on a deployment that sends no mail.</summary>
+    private static string? WithoutMail(string name) => name == "SMTP_ENABLED" ? "false" : Environment(name);
 
     /// <summary>
     /// The realm as a first-boot import with <see cref="Origin"/> would have written it. The
-    /// container gets the SMTP and Google values as well, which the worker does not.
+    /// container gets the SMTP relay and Google values as well, which the worker does not.
     /// </summary>
-    private static JsonObject Imported() =>
-        (JsonObject)KeycloakPlaceholders.Expand(KeycloakRealmDefinition.Load(),
-            name => Environment(name) ?? "set-for-the-container")!;
+    private static JsonObject Imported(Func<string, string?>? environment = null)
+    {
+        var definition = KeycloakRealmDefinition.Load();
+        var imported = (JsonObject)KeycloakPlaceholders.Expand(definition,
+            name => (environment ?? Environment)(name) ?? "set-for-the-container")!;
+
+        // A boolean setting written as a placeholder is stored as the boolean it resolves to.
+        foreach (var name in KeycloakRealmDefinition.ManagedSettings)
+        {
+            if (KeycloakPlaceholders.IsPlaceholder(definition[name]))
+            {
+                imported[name] = bool.Parse(imported[name]!.GetValue<string>());
+            }
+        }
+
+        return imported;
+    }
 
     private static Task Reconcile(StubRealmAdmin admin, Func<string, string?>? environment = null) =>
         new RealmSettingsReconciler(admin, NullLogger.Instance, environment ?? Environment)
@@ -394,6 +420,352 @@ public sealed class RealmSettingsReconcilerTests
         Assert.Contains("web-app", failure.Message);
     }
 
+    /// <summary>
+    /// Every realm so far offered "Forgot your password?", whether or not Keycloak could send
+    /// the mail. Without a relay it is taken away.
+    /// </summary>
+    [Fact]
+    public async Task Without_mail_the_password_reset_is_no_longer_offered()
+    {
+        var current = Imported();
+        Assert.True(current["resetPasswordAllowed"]!.GetValue<bool>());
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin, WithoutMail);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.False(admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task With_mail_the_password_reset_is_offered_again()
+    {
+        var admin = new StubRealmAdmin(Imported(WithoutMail));
+
+        await Reconcile(admin);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.True(admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// The switch resolves to the string "false", and Keycloak hands back the boolean. Compared
+    /// as written, every run would rewrite the realm.
+    /// </summary>
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("False")]
+    public async Task The_mail_switch_is_compared_as_the_boolean_keycloak_stores(string smtpEnabled)
+    {
+        string? Mail(string name) => name == "SMTP_ENABLED" ? smtpEnabled : Environment(name);
+        var admin = new StubRealmAdmin(Imported(Mail));
+
+        await Reconcile(admin, Mail);
+
+        Assert.Equal(0, admin.RealmUpdates);
+        Assert.Equal(bool.Parse(smtpEnabled), admin.RealmData["resetPasswordAllowed"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task A_worker_not_told_whether_there_is_mail_fails_before_anything_is_written()
+    {
+        var current = Imported();
+        current["displayName"] = "Old name";
+        var admin = new StubRealmAdmin(current);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Reconcile(admin, name => name == "SMTP_ENABLED" ? null : Environment(name)));
+
+        Assert.Contains("SMTP_ENABLED", failure.Message);
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
+    /// <summary>
+    /// The realm every deployment so far was created with: Keycloak's defaults, which record
+    /// nothing. Turned on, with the retention, listener and event types the file names.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_recording_no_events_is_made_to_record_them()
+    {
+        var current = Imported();
+        current["eventsEnabled"] = false;
+        current.Remove("eventsExpiration");
+        current["eventsListeners"] = new JsonArray("jboss-logging");
+        current["enabledEventTypes"] = new JsonArray();
+        current["adminEventsEnabled"] = false;
+        current["adminEventsDetailsEnabled"] = true;
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var realm = admin.RealmData;
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.True(realm["eventsEnabled"]!.GetValue<bool>());
+        Assert.Equal(7776000, realm["eventsExpiration"]!.GetValue<long>());
+        Assert.Contains("LOGIN", Strings(realm["enabledEventTypes"]));
+        Assert.Contains("FEDERATED_IDENTITY_LINK", Strings(realm["enabledEventTypes"]));
+        Assert.True(realm["adminEventsEnabled"]!.GetValue<bool>());
+        Assert.False(realm["adminEventsDetailsEnabled"]!.GetValue<bool>());
+    }
+
+    /// <summary>Keycloak hands the event types back in its own order, which is not a change.</summary>
+    [Fact]
+    public async Task Event_types_in_another_order_are_not_a_change()
+    {
+        var current = Imported();
+        current["enabledEventTypes"] = new JsonArray(Strings(current["enabledEventTypes"])
+            .Reverse().Select(type => (JsonNode?)JsonValue.Create(type)).ToArray());
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
+    /// <summary>
+    /// A browser flow re-pointed at a weaker copy, by hand or by an import, decides how every
+    /// sign-in runs. The binding is what is managed, not the flow it names.
+    /// </summary>
+    [Fact]
+    public async Task A_flow_binding_pointed_elsewhere_is_pointed_back()
+    {
+        var current = Imported();
+        current["browserFlow"] = "browser without the password";
+        current["firstBrokerLoginFlow"] = "creates accounts";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Equal(1, admin.RealmUpdates);
+        Assert.Equal("browser", admin.RealmData["browserFlow"]!.GetValue<string>());
+        Assert.Equal("first broker login", admin.RealmData["firstBrokerLoginFlow"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The realm one developer's machine has: imported before the CLI existed, so
+    /// <c>groupsplit auth login</c> has no client to ask for a token.
+    /// </summary>
+    [Fact]
+    public async Task A_realm_imported_before_the_cli_existed_is_given_the_cli_client()
+    {
+        var current = Imported();
+        current["clients"]!.AsArray().Remove(KeycloakRealmDefinition.Client(current, "cli"));
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var cli = admin.Clients["cli"];
+        Assert.Equal(["create client cli"], admin.Writes);
+        Assert.True(cli["publicClient"]!.GetValue<bool>());
+        Assert.Equal("true", cli["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
+        AssertOnlyTheDeviceGrant(cli);
+        AssertAudienceIsApi(cli);
+    }
+
+    [Fact]
+    public async Task A_cli_client_given_other_grants_is_left_with_the_device_grant_alone()
+    {
+        var current = Imported();
+        var cli = KeycloakRealmDefinition.Client(current, "cli")!;
+        cli["standardFlowEnabled"] = true;
+        cli["implicitFlowEnabled"] = true;
+        cli["directAccessGrantsEnabled"] = true;
+        cli["serviceAccountsEnabled"] = true;
+        cli["publicClient"] = false;
+        cli["attributes"]!["oauth2.device.authorization.grant.enabled"] = "false";
+        cli["attributes"]!["oidc.ciba.grant.enabled"] = "true";
+        cli["description"] = "Edited by hand";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var updated = admin.Clients["cli"];
+        Assert.Equal(1, admin.ClientUpdates);
+        Assert.True(updated["publicClient"]!.GetValue<bool>());
+        Assert.Equal("true", updated["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
+        AssertOnlyTheDeviceGrant(updated);
+        Assert.Equal("Edited by hand", updated["description"]!.GetValue<string>());
+    }
+
+    /// <summary>Without the audience the API refuses every token the CLI brings.</summary>
+    [Fact]
+    public async Task A_cli_client_without_its_audience_mapper_is_given_it_back()
+    {
+        var current = Imported();
+        KeycloakRealmDefinition.Client(current, "cli")!["protocolMappers"] = new JsonArray();
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+        await Reconcile(admin);
+
+        Assert.Equal(["create mapper audience-mapper"], admin.Writes);
+        AssertAudienceIsApi(admin.Clients["cli"]);
+    }
+
+    /// <summary>
+    /// The audience pointed at another client is put back; config Keycloak added on its own,
+    /// such as the introspection claim a migration gave every mapper, is not a difference.
+    /// </summary>
+    [Fact]
+    public async Task An_audience_mapper_pointed_elsewhere_is_put_back_and_keycloaks_own_entries_kept()
+    {
+        var current = Imported();
+        var config = KeycloakRealmDefinition.ProtocolMapper(
+            KeycloakRealmDefinition.Client(current, "cli")!, "audience-mapper")!["config"]!;
+        config["included.client.audience"] = "web-app";
+        config["introspection.token.claim"] = "true";
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+        await Reconcile(admin);
+
+        Assert.Equal(["update mapper audience-mapper"], admin.Writes);
+        AssertAudienceIsApi(admin.Clients["cli"]);
+        Assert.Equal("true", KeycloakRealmDefinition.ProtocolMapper(admin.Clients["cli"], "audience-mapper")!
+            ["config"]!["introspection.token.claim"]!.GetValue<string>());
+    }
+
+    private static void AssertOnlyTheDeviceGrant(JsonNode cli)
+    {
+        Assert.False(cli["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(cli["implicitFlowEnabled"]!.GetValue<bool>());
+        Assert.False(cli["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(cli["serviceAccountsEnabled"]!.GetValue<bool>());
+        Assert.Equal("false", cli["attributes"]!["oidc.ciba.grant.enabled"]!.GetValue<string>());
+    }
+
+    private static void AssertAudienceIsApi(JsonObject cli)
+    {
+        var mapper = KeycloakRealmDefinition.ProtocolMapper(cli, "audience-mapper")!;
+        Assert.Equal("oidc-audience-mapper", mapper["protocolMapper"]!.GetValue<string>());
+        Assert.Equal("api", mapper["config"]!["included.client.audience"]!.GetValue<string>());
+        Assert.Equal("true", mapper["config"]!["access.token.claim"]!.GetValue<string>());
+    }
+
+    // ---- the account-deletion client -------------------------------------------------------
+
+    private const string DeletionClient = "account-deletion";
+
+    /// <summary>
+    /// Every realm deployed so far: imported before the client existed, and never imported
+    /// again. Without the worker creating it, deleting an account could not delete the login.
+    /// </summary>
+    private static JsonObject ImportedBeforeTheDeletionClient()
+    {
+        var realm = Imported();
+
+        realm["clients"] = new JsonArray(realm["clients"]!.AsArray().OfType<JsonObject>()
+            .Where(client => client["clientId"]!.GetValue<string>() != DeletionClient)
+            .Select(client => (JsonNode)client.DeepClone())
+            .ToArray());
+        realm.Remove("users");
+
+        return realm;
+    }
+
+    [Fact]
+    public async Task A_realm_without_the_deletion_client_is_given_one()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheDeletionClient());
+
+        await Reconcile(admin);
+
+        var client = admin.Clients[DeletionClient];
+        Assert.False(client["publicClient"]!.GetValue<bool>());
+        Assert.True(client["serviceAccountsEnabled"]!.GetValue<bool>());
+        Assert.False(client["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(client["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(client["implicitFlowEnabled"]!.GetValue<bool>());
+        Assert.Equal(DeletionSecret, admin.Secrets[DeletionClient]);
+        Assert.Equal(["manage-users"], admin.ServiceAccountRoles[DeletionClient]);
+        Assert.Equal([$"create client {DeletionClient}", "grant manage-users"], admin.Writes);
+    }
+
+    /// <summary>
+    /// The secret is a deploy secret, so rotating it is changing that secret and deploying.
+    /// The worker is what carries the new value into Keycloak.
+    /// </summary>
+    [Fact]
+    public async Task A_rotated_secret_is_written_to_the_existing_client()
+    {
+        var admin = new StubRealmAdmin(Imported());
+
+        await Reconcile(admin, name => name == SecretVariable ? "rotated" : Environment(name));
+
+        Assert.Equal("rotated", admin.Secrets[DeletionClient]);
+        Assert.Equal(1, admin.ClientUpdates);
+    }
+
+    /// <summary>
+    /// A narrow client is only worth having while it stays narrow, so a role somebody granted
+    /// it by hand is taken away again, and a missing one is put back.
+    /// </summary>
+    [Fact]
+    public async Task The_service_account_holds_exactly_the_roles_in_the_file()
+    {
+        var admin = new StubRealmAdmin(Imported());
+        admin.ServiceAccountRoles[DeletionClient] = ["view-realm", "manage-realm"];
+
+        await Reconcile(admin);
+
+        Assert.Equal(["manage-users"], admin.ServiceAccountRoles[DeletionClient]);
+    }
+
+    /// <summary>
+    /// The client must only ever sign in as itself. One that also accepted a browser sign-in or
+    /// a password would be a user-management login anybody could try.
+    /// </summary>
+    [Fact]
+    public async Task A_deletion_client_opened_up_by_hand_is_closed_again()
+    {
+        var current = Imported();
+        var client = KeycloakRealmDefinition.Client(current, DeletionClient)!;
+        client["standardFlowEnabled"] = true;
+        client["directAccessGrantsEnabled"] = true;
+        client["publicClient"] = true;
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        var updated = admin.Clients[DeletionClient];
+        Assert.False(updated["standardFlowEnabled"]!.GetValue<bool>());
+        Assert.False(updated["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.False(updated["publicClient"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Creating_the_deletion_client_twice_is_not_attempted()
+    {
+        var admin = new StubRealmAdmin(ImportedBeforeTheDeletionClient());
+
+        await Reconcile(admin);
+        var writes = admin.Writes.Count;
+        await Reconcile(admin);
+
+        Assert.Equal(writes, admin.Writes.Count);
+        Assert.Equal(0, admin.ClientUpdates);
+    }
+
+    /// <summary>
+    /// Without the secret the client would be created with none, or kept on an old one the API
+    /// is no longer given -- either way every account deletion would leave its login behind.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_secret_fails_the_run_before_anything_is_written()
+    {
+        var current = ImportedBeforeTheDeletionClient();
+        current["displayName"] = "Old name";
+        var admin = new StubRealmAdmin(current);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Reconcile(admin, name => name == SecretVariable ? null : Environment(name)));
+
+        Assert.Contains(SecretVariable, failure.Message);
+        Assert.Empty(admin.Writes);
+        Assert.Equal(0, admin.RealmUpdates);
+    }
+
     private static string[] Strings(JsonNode? node) =>
         node!.AsArray().Select(item => item!.GetValue<string>()).ToArray();
 
@@ -405,9 +777,21 @@ public sealed class RealmSettingsReconcilerTests
 
             foreach (var client in realm["clients"]?.AsArray().OfType<JsonObject>() ?? [])
             {
-                var copy = (JsonObject)client.DeepClone();
-                copy["id"] = Guid.NewGuid().ToString();
-                Clients[copy["clientId"]!.GetValue<string>()] = copy;
+                var copy = Store(client);
+                var clientId = copy["clientId"]!.GetValue<string>();
+
+                // Keycloak keeps the secret apart from the representation it lists.
+                if (copy["secret"]?.GetValue<string>() is { } secret)
+                {
+                    Secrets[clientId] = secret;
+                    copy.Remove("secret");
+                }
+
+                if (copy["serviceAccountsEnabled"]?.GetValue<bool>() == true)
+                {
+                    ServiceAccountRoles[clientId] = KeycloakRealmDefinition
+                        .ServiceAccountRoles(realm, clientId).ToList();
+                }
             }
 
             foreach (var provider in realm["identityProviders"]?.AsArray().OfType<JsonObject>() ?? [])
@@ -589,13 +973,127 @@ public sealed class RealmSettingsReconcilerTests
                 ? (JsonObject?)client.DeepClone()
                 : null);
 
+        /// <summary>Keeps the stored protocol mappers whatever the body says, as Keycloak does.</summary>
         public Task UpdateClientAsync(JsonObject client, CancellationToken ct = default)
         {
             var clientId = client["clientId"]!.GetValue<string>();
             Assert.Equal(Clients[clientId]["id"]!.GetValue<string>(), client["id"]!.GetValue<string>());
 
-            Clients[clientId] = (JsonObject)client.DeepClone();
+            var copy = (JsonObject)client.DeepClone();
+            copy["protocolMappers"] = Clients[clientId]["protocolMappers"]?.DeepClone();
+
+            if (copy["secret"]?.GetValue<string>() is { } secret)
+            {
+                Secrets[clientId] = secret;
+                copy.Remove("secret");
+            }
+
+            Clients[clientId] = copy;
             ClientUpdates++;
+            Writes.Add($"client {clientId}");
+            return Task.CompletedTask;
+        }
+
+        public Dictionary<string, string> Secrets { get; } = [];
+
+        public Dictionary<string, List<string>> ServiceAccountRoles { get; } = [];
+
+        public Task CreateClientAsync(JsonObject client, CancellationToken ct = default)
+        {
+            var clientId = client["clientId"]!.GetValue<string>();
+            Assert.False(Clients.ContainsKey(clientId), $"Client '{clientId}' already exists.");
+
+            Assert.Null(client["roles"]);
+
+            var copy = Store(client);
+
+            // Keycloak keeps the secret apart from the representation it lists.
+            if (copy["secret"]?.GetValue<string>() is { } secret)
+            {
+                Secrets[clientId] = secret;
+                copy.Remove("secret");
+            }
+
+            if (copy["serviceAccountsEnabled"]?.GetValue<bool>() == true)
+            {
+                ServiceAccountRoles[clientId] = [];
+            }
+
+            Writes.Add($"create client {clientId}");
+            return Task.CompletedTask;
+        }
+
+        public Task CreateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+        {
+            var client = Clients.Values.Single(candidate => candidate["id"]!.GetValue<string>() == clientId);
+            var name = mapper["name"]!.GetValue<string>();
+            Assert.Null(KeycloakRealmDefinition.ProtocolMapper(client, name));
+
+            if (client["protocolMappers"] is not JsonArray mappers)
+            {
+                client["protocolMappers"] = mappers = new JsonArray();
+            }
+
+            var copy = (JsonObject)mapper.DeepClone();
+            copy["id"] = Guid.NewGuid().ToString();
+            mappers.Add(copy);
+            Writes.Add($"create mapper {name}");
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateProtocolMapperAsync(string clientId, JsonObject mapper, CancellationToken ct = default)
+        {
+            var client = Clients.Values.Single(candidate => candidate["id"]!.GetValue<string>() == clientId);
+            var mappers = client["protocolMappers"]!.AsArray();
+            var index = mappers.Select((existing, i) => (existing, i))
+                .Single(pair => pair.existing!["id"]!.GetValue<string>() == mapper["id"]!.GetValue<string>()).i;
+
+            mappers[index] = mapper.DeepClone();
+            Writes.Add($"update mapper {mapper["name"]}");
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Stores a client the way Keycloak does: with internal ids on it and its mappers.</summary>
+        private JsonObject Store(JsonObject client)
+        {
+            var copy = (JsonObject)client.DeepClone();
+            copy["id"] = Guid.NewGuid().ToString();
+
+            foreach (var mapper in copy["protocolMappers"]?.AsArray().OfType<JsonObject>() ?? [])
+            {
+                mapper["id"] = Guid.NewGuid().ToString();
+            }
+
+            Clients[copy["clientId"]!.GetValue<string>()] = copy;
+            return copy;
+        }
+
+        private string ClientIdOf(string id) =>
+            Clients.Single(client => client.Value["id"]!.GetValue<string>() == id).Key;
+
+        public Task<string?> GetClientSecretAsync(string id, CancellationToken ct = default) =>
+            Task.FromResult(Secrets.GetValueOrDefault(ClientIdOf(id)));
+
+        public Task<IReadOnlyList<string>> GetServiceAccountRolesAsync(
+            string id, string roleClientId, CancellationToken ct = default)
+        {
+            Assert.Equal("realm-management", roleClientId);
+            return Task.FromResult<IReadOnlyList<string>>([.. ServiceAccountRoles[ClientIdOf(id)]]);
+        }
+
+        public Task GrantServiceAccountRolesAsync(
+            string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default)
+        {
+            ServiceAccountRoles[ClientIdOf(id)].AddRange(roles);
+            Writes.AddRange(roles.Select(role => $"grant {role}"));
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeServiceAccountRolesAsync(
+            string id, string roleClientId, IReadOnlyList<string> roles, CancellationToken ct = default)
+        {
+            ServiceAccountRoles[ClientIdOf(id)].RemoveAll(roles.Contains);
+            Writes.AddRange(roles.Select(role => $"revoke {role}"));
             return Task.CompletedTask;
         }
 

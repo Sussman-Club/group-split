@@ -18,7 +18,9 @@ public static class ApiErrorMapper
         var status = (HttpStatusCode)exception.StatusCode;
 
         var code = problem?.Code ?? FallbackCode(status);
-        var message = Describe(problem, status);
+        var message = code == Shared.Errors.ErrorCodes.IdentityEmailInUse
+            ? IdentityEmailInUseMessage
+            : Describe(problem, status);
         var details = ValidationMessages(problem, exception.Response);
 
         var error = new CliError(message, code, Remediation(status, code), details)
@@ -26,16 +28,30 @@ public static class ApiErrorMapper
             TraceId = problem?.TraceId
         };
 
-        return new CliException(error, ExitCodeFor(status), exception);
+        return new CliException(error, ExitCodeFor(status, code), exception);
     }
+
+    /// <summary>
+    /// Worded here rather than taken from the API's detail, because it is the one refusal
+    /// whose wording decides what the caller does next: nothing about the command was
+    /// wrong, and nothing the caller can run will fix it.
+    /// </summary>
+    public const string IdentityEmailInUseMessage =
+        "The email on the account you are signed in as already belongs to another GroupSplit account, "
+        + "so the server will not let this sign-in in. Every command will be refused the same way.";
 
     /// <summary>
     /// Status to exit code. 401 and 403 both mean "your identity is the problem", which is
     /// the distinction exit code 2 exists to make; everything a caller could fix by
     /// changing arguments is 3; the rest is a plain failure.
     /// </summary>
-    private static int ExitCodeFor(HttpStatusCode status) => status switch
+    /// <remarks>
+    /// <c>IDENTITY_EMAIL_IN_USE</c> arrives as a 409 and is still 2: it is the sign-in that
+    /// is refused, on every request, and not the arguments of this one.
+    /// </remarks>
+    private static int ExitCodeFor(HttpStatusCode status, string code) => status switch
     {
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse => ExitCodes.AuthRequired,
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => ExitCodes.AuthRequired,
         HttpStatusCode.BadRequest or HttpStatusCode.NotFound
             or HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity => ExitCodes.InvalidInput,
@@ -68,6 +84,16 @@ public static class ApiErrorMapper
         // pointing at auth status sends the caller looking for a problem they do not have.
         HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.GroupCannotRemoveSelf
             => "To leave the group yourself: groupsplit groups leave <group-id>",
+        // Not about who is signed in either: no account may do it, so signing in again as
+        // somebody else is the one thing guaranteed not to help.
+        HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.MerchantEditForbidden
+            => "No account can rename, relogo or delete a merchant: it is shared by every group "
+               + "that has spent there. To change where one expense was spent: "
+               + "groupsplit transactions update <transaction-id> --merchant-id <merchant-id>",
+        // Not fixable by signing in again: the account is gone, and its login is going or
+        // gone. What is left is the stored session, which can only keep being refused.
+        HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.AccountDeleted
+            => "This account was deleted. Clear the stored session with: groupsplit auth logout",
         HttpStatusCode.Forbidden => "The account you are signed in as is not allowed to do this. "
                                     + "Check with: groupsplit auth status",
         // Guest routes take the guest's user id, which is not the old invitation id -- the
@@ -75,6 +101,11 @@ public static class ApiErrorMapper
         HttpStatusCode.NotFound when code == Shared.Errors.ErrorCodes.GroupGuestNotFound
             => "Guest routes take the guest's user id. List them with: groupsplit groups guests <group-id>",
         HttpStatusCode.NotFound => "Check the id. List what you can see with: groupsplit groups list",
+        HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.MerchantSearchTooShort
+            => "Search for at least 2 characters, or leave --search out to list your merchants.",
+        HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.MerchantLogoNotAllowed
+            => "Leave --logo-url out: the place renders as initials, and a bank sync fills the "
+               + "provider's logo in later.",
         HttpStatusCode.BadRequest when code == Shared.Errors.ErrorCodes.ValidationFailed
             => "Fix the values listed above and try again.",
         // The one refusal with two answers rather than a fix. Both are named, because
@@ -100,6 +131,18 @@ public static class ApiErrorMapper
                + "Record a repayment with you on one end: groupsplit groups settle <group-id> <user-id> <amount>   "
                + "or between two other people (a guest included): "
                + "groupsplit groups settle-between <group-id> <from> <to> <amount>",
+        // Signing in again brings back the same sign-in, so the hint says so before the one
+        // thing that would help, and points at the trace id support finds the log line by.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse
+            => "Signing in again as the same person will not help. Contact support and quote the traceId; "
+               + "they resolve it on the server. To use a different account: groupsplit auth login",
+        // Conversion is out of scope, so no flag turns this into a success in that group.
+        // What is left is where else the money can go: your own ledger, which takes any
+        // currency, or a group that keeps its balances in this one.
+        HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.CurrencyMismatch
+            => "Amounts are never converted. Keep it personal (inbox file without --group, or "
+               + "transactions create without --group and with --currency), or record it in a "
+               + "group in the same currency. An expense already recorded keeps its currency.",
         // Lost a race with another member over the same guest; nothing was written.
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.GroupGuestChanged
             => "Look at the guest again, then retry if it still makes sense: groupsplit groups guests <group-id>",

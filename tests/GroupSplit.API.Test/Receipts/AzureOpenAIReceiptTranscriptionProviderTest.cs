@@ -3,6 +3,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.API.Services.ReceiptTranscription.AzureOpenAI;
+using GroupSplit.Shared;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +79,123 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
             TestContext.Current.CancellationToken));
 
         Assert.Equal("RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE", error.Code);
+    }
+
+    /// <summary>
+    /// The prompt has the model work a unit price out from a total and a quantity, so thirds
+    /// of a cent turn up. A bill refuses them, and the review dialog would show the rounded
+    /// figure while sending this one back.
+    /// </summary>
+    [Fact]
+    public async Task Money_comes_back_in_cents_and_quantities_and_rates_to_what_a_bill_keeps()
+    {
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient("{\"subtotal\":10.004,\"tax\":0.8255,\"tip\":1.005,\"total\":11.8345," +
+                "\"items\":[{\"name\":\"Bananas\",\"unitPrice\":3.33333,\"quantity\":3.00049," +
+                "\"totalPrice\":10.004,\"taxAmount\":0.8255,\"taxRate\":8.250049,\"isTaxable\":true}," +
+                "{\"name\":\"Bag\",\"unitPrice\":0.1,\"quantity\":0,\"totalPrice\":0.1,\"taxAmount\":0,\"taxRate\":825}]}"),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+
+        var receipt = await provider.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "market.jpg", "image/jpeg", [1]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(10.00m, receipt.Subtotal);
+        Assert.Equal(0.83m, receipt.Tax);
+        Assert.Equal(1.01m, receipt.Tip);
+        Assert.Equal(11.83m, receipt.Total);
+        var bananas = receipt.Items[0];
+        Assert.Equal(3.33m, bananas.UnitPrice);
+        Assert.Equal(3.000m, bananas.Quantity);
+        Assert.Equal(10.00m, bananas.TotalPrice);
+        Assert.Equal(0.83m, bananas.TaxAmount);
+        Assert.Equal(8.2500m, bananas.TaxRate);
+        // No quantity is one of it, and a rate past 100 % is a misreading, not a rate.
+        Assert.Equal(1m, receipt.Items[1].Quantity);
+        Assert.Null(receipt.Items[1].TaxRate);
+    }
+
+    [Fact]
+    public async Task Null_lists_lines_and_names_are_read_rather_than_answering_a_500()
+    {
+        var noItems = await new AzureOpenAIReceiptTranscriptionProvider(
+                new StubChatClient("{\"merchantName\":null,\"subtotal\":0,\"tax\":0,\"tip\":0,\"total\":0,\"items\":null}"),
+                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
+            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "blank.jpg", "image/jpeg", [1]),
+                TestContext.Current.CancellationToken);
+
+        Assert.Empty(noItems.Items);
+        Assert.Null(noItems.MerchantName);
+
+        var receipt = await new AzureOpenAIReceiptTranscriptionProvider(
+                new StubChatClient("{\"merchantName\":\"   \",\"rawText\":null,\"subtotal\":4,\"tax\":0,\"tip\":0,\"total\":4," +
+                    "\"items\":[null," +
+                    "{\"name\":null,\"unitPrice\":4,\"quantity\":1,\"totalPrice\":4,\"taxAmount\":0}," +
+                    "{\"name\":\" \",\"unitPrice\":0,\"quantity\":1,\"totalPrice\":0,\"taxAmount\":0}]}"),
+                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
+            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "smudged.jpg", "image/jpeg", [1]),
+                TestContext.Current.CancellationToken);
+
+        // The money is real, so the line stays under a name somebody will correct; a line
+        // with neither a name nor any money is nothing to split.
+        var item = Assert.Single(receipt.Items);
+        Assert.Equal("Unnamed item", item.Name);
+        Assert.Equal(4m, item.TotalPrice);
+        Assert.Null(receipt.MerchantName);
+    }
+
+    [Fact]
+    public async Task A_timeout_is_a_retryable_bad_gateway_but_a_caller_cancellation_stays_one()
+    {
+        // What the OpenAI SDK throws when its network timeout runs out.
+        var timingOut = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient(new TaskCanceledException("The operation was cancelled because it exceeded the configured timeout.",
+                new TimeoutException())),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+
+        var error = await Assert.ThrowsAsync<BadGatewayException>(() => timingOut.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1]),
+            TestContext.Current.CancellationToken));
+        Assert.Equal("RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE", error.Code);
+
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await cancelled.CancelAsync();
+        var abandoned = new AzureOpenAIReceiptTranscriptionProvider(
+            new StubChatClient(new OperationCanceledException(cancelled.Token)),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => abandoned.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1]), cancelled.Token));
+    }
+
+    /// <summary>
+    /// The model's free text is the bulk of a long receipt, and a bill keeps 64 KB of
+    /// evidence. Non-Latin text must not be escaped six characters to the letter on the way.
+    /// </summary>
+    [Fact]
+    public async Task The_evidence_kept_fits_the_bill_and_keeps_non_latin_text_readable()
+    {
+        var shortReading = await new AzureOpenAIReceiptTranscriptionProvider(
+                new StubChatClient("{\"rawText\":\"ラーメン\",\"subtotal\":9,\"tax\":0,\"tip\":0,\"total\":9," +
+                    "\"items\":[{\"name\":\"ラーメン\",\"unitPrice\":9,\"quantity\":1,\"totalPrice\":9,\"taxAmount\":0}]}"),
+                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
+            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "ramen.jpg", "image/jpeg", [1]),
+                TestContext.Current.CancellationToken);
+
+        Assert.Contains("ラーメン", shortReading.SourceValues);
+
+        var rawText = new string('ラ', SaveReceiptRequest.SourceValuesMaxLength);
+        var longReading = await new AzureOpenAIReceiptTranscriptionProvider(
+                new StubChatClient("{\"rawText\":\"" + rawText + "\",\"subtotal\":9,\"tax\":0,\"tip\":0,\"total\":9," +
+                    "\"items\":[{\"name\":\"Ramen\",\"unitPrice\":9,\"quantity\":1,\"totalPrice\":9,\"taxAmount\":0}]}"),
+                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
+            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "ramen.jpg", "image/jpeg", [1]),
+                TestContext.Current.CancellationToken);
+
+        Assert.NotNull(longReading.SourceValues);
+        Assert.True(longReading.SourceValues.Length <= SaveReceiptRequest.SourceValuesMaxLength);
+        Assert.DoesNotContain("rawText", longReading.SourceValues);
+        Assert.Contains("Ramen", longReading.SourceValues);
     }
 
     [Fact]

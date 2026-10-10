@@ -22,7 +22,7 @@
         <MudForm @ref="_form" Model="@_editModel">
             <MudStack Spacing="3">
 
-                <MudNumericField
+                <DecimalField
                     @bind-Value="_editModel.Amount"
                     For="@(() => _editModel.Amount)"
                     Label="Amount"

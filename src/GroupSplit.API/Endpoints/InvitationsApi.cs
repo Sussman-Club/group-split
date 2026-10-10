@@ -110,9 +110,10 @@ public static class InvitationsApi
         /// <para>
         /// The link works once. Claiming removes the invitation the token lives on, so a
         /// second holder of a forwarded link gets the same 404 a mistyped one does -- and so
-        /// does the second of two people claiming it at the same moment, who is never let in.
-        /// Somebody who left the group after the invitation was sent gets a 409 instead: it
-        /// was not an invitation to come back.
+        /// does the second of two people claiming it at the same moment, who is never let in,
+        /// and whoever holds it once it has expired, 30 days after it was issued. Somebody
+        /// who left the group after the invitation was sent gets a 409 instead, while the
+        /// link has not expired: it was not an invitation to come back.
         /// </para>
         /// </remarks>
         private RouteHandlerBuilder MapClaim()

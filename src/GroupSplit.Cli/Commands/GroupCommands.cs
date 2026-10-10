@@ -288,8 +288,7 @@ public static class GroupCommands
                 context,
                 action: "groups.remove-member",
                 summary: $"Remove {name} from the group?",
-                changes: changes,
-                confirmCommand: $"groupsplit groups remove-member {id} {member} --yes");
+                changes: changes);
 
             var group = await context.Groups.RemoveGroupMemberAsync(id, member, ct);
 
@@ -371,10 +370,7 @@ public static class GroupCommands
     private static Command Settle()
     {
         var userId = new Argument<Guid>("user-id") { Description = "The other member, or a guest." };
-        var amount = new Argument<decimal>("amount")
-        {
-            Description = "How much changed hands, to two decimal places."
-        };
+        var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
 
         var direction = new Option<SettlementDirection>("--direction")
         {
@@ -423,9 +419,7 @@ public static class GroupCommands
                 summary: side == SettlementDirection.TheyPaidYou
                     ? $"Record that {name} paid you {paid:N2}?"
                     : $"Record that you paid {name} {paid:N2}?",
-                changes: [$"A transfer of {paid:N2} is written, and both balances move by it."],
-                confirmCommand: $"groupsplit groups settle {id} {other} {paid} "
-                                + $"--direction {side.ToString().ToLowerInvariant()}{ThroughOption.Flag(day)} --yes");
+                changes: [$"A transfer of {paid:N2} is written, and both balances move by it."]);
 
             await context.Groups.SettleGroupDebtsAsync(
                 id,
@@ -474,10 +468,7 @@ public static class GroupCommands
         var fromUserId = new Argument<Guid>("from-user-id") { Description = "Who paid: a member or a guest." };
         var toUserId = new Argument<Guid>("to-user-id") { Description = "Who was paid: a member or a guest." };
 
-        var amount = new Argument<decimal>("amount")
-        {
-            Description = "How much changed hands, to two decimal places."
-        };
+        var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
 
         var date = new Option<DateTimeOffset?>("--date")
         {
@@ -519,8 +510,7 @@ public static class GroupCommands
                 [
                     $"A transfer of {paid:N2} is written from {payerName} to {payeeName}.",
                     "Both of their balances move by it, and neither of them recorded it."
-                ],
-                confirmCommand: $"groupsplit groups settle-between {id} {payer} {payee} {paid} --yes");
+                ]);
 
             var recorded = await context.Groups.RecordRepaymentAsync(
                 id,
@@ -635,8 +625,7 @@ public static class GroupCommands
                 action: "groups.settle-up",
                 summary: $"Record {payments.Count} "
                          + $"{(payments.Count == 1 ? "repayment" : "repayments")} and square up?",
-                changes: [.. payments.Select(payment => payment.Line)],
-                confirmCommand: $"groupsplit groups settle-up {id}{ThroughOption.Flag(day)} --yes");
+                changes: [.. payments.Select(payment => payment.Line)]);
 
             var settled = await context.Groups.SettleUpAsync(
                 id,
@@ -827,8 +816,7 @@ public static class GroupCommands
                 context,
                 action: "groups.leave",
                 summary: $"Leave the group '{group.Name}'?",
-                changes: [$"You are removed from '{group.Name}' ({group.MemberCount} members)."],
-                confirmCommand: $"groupsplit groups leave {id} --yes");
+                changes: [$"You are removed from '{group.Name}' ({group.MemberCount} members)."]);
 
             await context.Groups.LeaveGroupAsync(id, ct);
 
@@ -887,7 +875,7 @@ public static class GroupCommands
         return command;
     }
 
-    /// <summary>The group's guests, with whether each has a link out.</summary>
+    /// <summary>The group's guests, with whether each has a link out and until when.</summary>
     private static Command Guests()
     {
         var command = new Command("guests", "List a group's guests.") { GroupId };
@@ -915,25 +903,45 @@ public static class GroupCommands
     /// one is out. Never the bare token: it is a credential on the guest's position, and a
     /// table is what ends up pasted into a chat. JSON carries it for whoever needs it, and
     /// <c>guest-link create</c> prints it on purpose.
+    /// <para>
+    /// A working link says until when it works. One that ran out unclaimed reads "expired"
+    /// in the table and gets a line of its own under it, with the day and what to run: it
+    /// answers nobody, and <c>guest-link create</c> issues a new one. Under the table rather
+    /// than in a column, because a fifth column wraps the user id in an 80-column terminal.
+    /// </para>
     /// </remarks>
     private static IRenderable GuestTable(CliContext context, IEnumerable<GroupGuestResponse> guests)
     {
         var table = Tables.Grid("User id", "Name", "Added", "Link");
+        var notes = new List<IRenderable>();
 
         foreach (var guest in guests)
         {
+            var until = guest.LinkExpiresAt is { } expires
+                ? expires.ToLocalTime().ToString("yyyy-MM-dd")
+                : null;
+
             table.AddRow(
                 guest.UserId.ToString(),
                 Markup.Escape(guest.Name),
                 guest.AddedAt.ToLocalTime().ToString("yyyy-MM-dd"),
                 guest.Token is { } token
                     ? WebLinks.Claim(context, token) is { } url
-                        ? Markup.Escape(url)
-                        : "yes [grey](guest-link create shows it)[/]"
-                    : "[grey]none[/]");
+                        ? $"{Markup.Escape(url)} [grey]until {until}[/]"
+                        : $"yes, until {until} [grey](guest-link create shows it)[/]"
+                    : guest.LinkExpired
+                        ? "[yellow]expired[/]"
+                        : "[grey]none[/]");
+
+            if (guest.LinkExpired)
+            {
+                notes.Add(new Markup(
+                    $"[yellow]{Markup.Escape(guest.Name)}'s link expired on {until}.[/] [grey]For a new one:[/]\n" +
+                    "[grey]  groupsplit groups guest-link create <group-id> <user-id>[/]\n"));
+            }
         }
 
-        return table;
+        return notes.Count == 0 ? table : new Rows([table, new Text(string.Empty), .. notes]);
     }
 
     /// <summary>
@@ -962,7 +970,7 @@ public static class GroupCommands
         };
 
         var command = new Command("create",
-            "Show the guest's link, issuing one if there is none.")
+            "Show the guest's link, issuing one if there is none or it has expired.")
         {
             GroupId, GuestId, replace
         };
@@ -974,7 +982,8 @@ public static class GroupCommands
             var fresh = context.ParseResult.GetValue(replace);
 
             // Read first, so the confirmation is only asked for when something is lost:
-            // issuing a first link, or reading back the one that is out, destroys nothing.
+            // issuing a first link, reading back the one that is out, or replacing one that
+            // has expired destroys nothing.
             var guest = (await context.Groups.GetGroupGuestsAsync(id, ct))
                         .FirstOrDefault(candidate => candidate.UserId == userId)
                         ?? throw NotAGuest(id);
@@ -990,8 +999,7 @@ public static class GroupCommands
                         "The link already sent stops working.",
                         "Whoever opened it is no longer offered it.",
                         $"{guest.Name} stays a guest, with everything recorded for them."
-                    ],
-                    confirmCommand: $"groupsplit groups guest-link create {id} {userId} --new --yes");
+                    ]);
             }
 
             var linked = await context.Groups.IssueGuestLinkAsync(id, userId,
@@ -999,13 +1007,16 @@ public static class GroupCommands
 
             context.Output.Write(
                 new GuestLinkView(linked.UserId, linked.GroupId, linked.Name, linked.Token!,
-                    WebLinks.Claim(context, linked.Token!)),
+                    WebLinks.Claim(context, linked.Token!), linked.LinkExpiresAt),
                 value =>
                 {
                     var table = Tables.KeyValue();
 
                     table.AddRow("Guest", Markup.Escape(value.Name));
                     table.AddRow("Link", Markup.Escape(value.Url ?? value.Token));
+
+                    if (value.ExpiresAt is { } expires)
+                        table.AddRow("Expires", expires.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
 
                     return new Rows(table, new Markup(
                         $"\n[grey]Whoever opens it and claims it takes {Markup.Escape(value.Name)}'s " +
@@ -1043,8 +1054,7 @@ public static class GroupCommands
                     "The link stops working for whoever has it.",
                     $"{guest.Name} stays a guest, with everything recorded for them.",
                     "A new link can be issued at any time."
-                ],
-                confirmCommand: $"groupsplit groups guest-link revoke {id} {userId} --yes");
+                ]);
 
             await context.Groups.RevokeGuestLinkAsync(id, userId, ct);
 
@@ -1065,8 +1075,12 @@ public static class GroupCommands
                 $"List the guests with: groupsplit groups guests {groupId}"),
             ExitCodes.InvalidInput);
 
-    /// <summary>A guest's link as the CLI answers with it: the token, and the URL it goes in.</summary>
-    internal sealed record GuestLinkView(Guid UserId, Guid GroupId, string Name, string Token, string? Url);
+    /// <summary>
+    /// A guest's link as the CLI answers with it: the token, the URL it goes in, and when it
+    /// stops working if nobody claims it.
+    /// </summary>
+    internal sealed record GuestLinkView(Guid UserId, Guid GroupId, string Name, string Token, string? Url,
+        DateTimeOffset? ExpiresAt);
 
     // The three commands below call the routes from before guests, which the API marks
     // deprecated. They are kept as aliases on purpose, for one release.
@@ -1147,7 +1161,7 @@ public static class GroupCommands
                     return new Markup(Tables.Empty("guests with a link") + "\n");
                 }
 
-                var table = Tables.Grid("Id", "Name", "Link sent by", "When");
+                var table = Tables.Grid("Id", "Name", "Link sent by", "When", "Expires");
 
                 foreach (var invitation in value)
                 {
@@ -1155,7 +1169,8 @@ public static class GroupCommands
                         invitation.Id.ToString(),
                         Markup.Escape(invitation.Name),
                         Markup.Escape(invitation.InvitedByUserName ?? "-"),
-                        invitation.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"));
+                        invitation.InvitedAt.ToLocalTime().ToString("yyyy-MM-dd"),
+                        invitation.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd"));
                 }
 
                 return table;
@@ -1202,8 +1217,7 @@ public static class GroupCommands
                     "The link stops working for whoever has it.",
                     $"{name} stays a guest, with everything recorded for them. Nothing moves.",
                     "To take them out of the group, settle with them and use remove-member."
-                ],
-                confirmCommand: $"groupsplit groups withdraw-invitation {id} {invitation} --yes");
+                ]);
 
             var closed = await context.Groups.WithdrawGroupInvitationAsync(id, invitation, ct);
 

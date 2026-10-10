@@ -73,16 +73,35 @@
                 </div>
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
-                <MudNumericField @bind-Value="_model.Amount"
-                                 @bind-Value:after="OnMoneyChangedAsync"
-                                 For="@(() => _model.Amount)"
-                                 Label="How much?"
-                                 Variant="Variant.Outlined"
-                                 Adornment="Adornment.Start"
-                                 AdornmentText="$"
-                                 HideSpinButtons="true"
-                                 Format="N2"
-                                 Class="gs-amount"/>
+                <DecimalField @bind-Value="_model.Amount"
+                              @bind-Value:after="OnMoneyChangedAsync"
+                              For="@(() => _model.Amount)"
+                              Label="How much?"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentText="@MoneyExtensions.CurrencySymbol(Currency)"
+                              HideSpinButtons="true"
+                              Class="gs-amount"/>
+
+                @* Only for a personal expense. A group keeps its balances in one currency and
+                   nothing converts between them, so there the group's is the only answer and
+                   the symbol above already says it; on your own ledger anything goes, and a
+                   dinner abroad is written down in what it cost. *@
+                @if (!IsShared)
+                {
+                    <MudSelect T="string"
+                               Value="@_currency"
+                               ValueChanged="@OnCurrencyPicked"
+                               Label="Currency"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               data-testid="expense-currency">
+                        @foreach (var offered in MoneyExtensions.OfferedCurrencies)
+                        {
+                            <MudSelectItem Value="@offered">@offered</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
 
                 <MudTextField @bind-Value="_model.Name"
                               @bind-Value:after="OnNameChangedAsync"
@@ -139,7 +158,8 @@
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
-                                     Awaiting="@_awaiting"/>
+                                     Awaiting="@_awaiting"
+                                     SaveRefused="@_saveRefused"/>
                     </div>
                 }
                 else
@@ -232,6 +252,9 @@
     /// can be asked about.
     /// </summary>
     private string? _awaiting;
+
+    /// <summary>Whether Save was refused over shares that do not add up.</summary>
+    private bool _saveRefused;
 
     private IBrowserFile? _receiptFile;
     private SaveReceiptRequest? _receipt;
@@ -400,9 +423,22 @@
     /// </summary>
     private bool GroupFixed => SelectedGroupId is not null;
 
-    private string ReceiptCurrency => GroupFixed
+    /// <summary>
+    /// The currency a personal expense is in, which the person picks. Ignored once there is
+    /// a group: the group's own is the only one it will take.
+    /// </summary>
+    private string _currency = "USD";
+
+    /// <summary>What the amount is in, as the field's symbol and the request say it.</summary>
+    private string Currency => IsShared ? GroupCurrency : _currency;
+
+    private string GroupCurrency => GroupFixed
         ? SelectedGroupCurrency ?? "USD"
         : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
+
+    private string ReceiptCurrency => Currency;
+
+    private void OnCurrencyPicked(string currency) => _currency = currency;
 
 
 
@@ -512,7 +548,10 @@
                 async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
                 "Could not load your groups.");
 
-        await LoadGroupDetailsAsync();
+        // Somebody who picked another group while this was out has a load of their own
+        // running, and it does the rest.
+        if (!await LoadGroupDetailsAsync())
+            return;
 
         StateHasChanged();
 
@@ -523,14 +562,37 @@
 
     private async Task OnGroupChangedAsync()
     {
-        await Errors.TryAsync(LoadGroupDetailsAsync, "Could not load the group.");
+        var current = true;
+        await Errors.TryAsync(async () => current = await LoadGroupDetailsAsync(), "Could not load the group.");
+
+        // A later pick has taken over, and its own load will render and preview.
+        if (!current)
+            return;
+
         StateHasChanged();
 
         await RefreshPreviewAsync();
     }
 
-    private async Task LoadGroupDetailsAsync()
+    /// <summary>
+    /// Counts group loads, so the answer about a group somebody has already moved off cannot
+    /// land over the group they moved to.
+    /// </summary>
+    /// <remarks>
+    /// Three reads go out for every pick and nothing about the network says the second
+    /// pick's answers arrive last. Without this, the first group's categories and members
+    /// could land after the second was chosen and be offered under its name (#323).
+    /// </remarks>
+    private int _groupLoad;
+
+    /// <returns>
+    /// Whether what was read is still for the group picked -- false when a later pick has
+    /// started a load of its own, which then does the rendering.
+    /// </returns>
+    private async Task<bool> LoadGroupDetailsAsync()
     {
+        var load = ++_groupLoad;
+
         // A stated division names people, and the people just changed. Kept, it would
         // either name somebody who is not in this group -- which the API refuses -- or
         // quietly leave the new group's members out of their own expense.
@@ -547,7 +609,7 @@
             _members = [];
             _memberRules = [];
             _evenRuleId = null;
-            return;
+            return true;
         }
 
         // Separately, and neither fatal. A category is a label somebody may not want, and
@@ -559,19 +621,31 @@
         // the dialog already on screen, and every one of them lands as a re-render: the
         // empty-state alert, then the members, then the rules. Nothing here reads what the
         // others write, so the only thing the sequence bought was the flicker.
-        var categories = Errors.TryAsync(
-            async () => _categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
+        //
+        // Into locals, and written down only once all three are in and still wanted: a read
+        // that failed leaves this group with none rather than the last group's.
+        IReadOnlyList<CategoryResponse> categories = [];
+        IReadOnlyList<UserInfo> members = [];
+
+        var categoriesRead = Errors.TryAsync(
+            async () => categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
             "Could not load this group's categories.");
 
-        var members = Errors.TryAsync(
-            async () => _members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
+        var membersRead = Errors.TryAsync(
+            async () => members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
             "Could not load who is in this group.");
 
         // Silent on failure, unlike those two: what it costs is one of the three ways to
         // divide, and the command has already said so if it went wrong.
         var rules = SplitRules.ForGroupAsync(groupId);
 
-        await Task.WhenAll(categories, members, rules);
+        await Task.WhenAll(categoriesRead, membersRead, rules);
+
+        if (load != _groupLoad)
+            return false;
+
+        _categories = categories;
+        _members = members;
 
         var listed = await rules;
         _memberRules = MemberRulesOf(listed, _members);
@@ -583,6 +657,8 @@
         // settled choice, which is the app admitting to a gap it does not have.
         if (_members.All(member => member.Id != _model.PaidByUserId) && Login.User is { } me)
             _model.PaidByUserId = _members.Any(member => member.Id == me.Id) ? me.Id : null;
+
+        return true;
     }
 
     /// <summary>
@@ -711,6 +787,10 @@
     {
         _model.GroupId = _groupId;
 
+        // Stated only for a personal expense. In a group the API takes the group's own when
+        // none is named, and naming the one picked while it was personal would be refused.
+        _model.Currency = IsShared ? null : _currency;
+
         // The date is applied here rather than on the way out, because which version of a
         // rule divides an expense depends on when it was spent: a preview built from an
         // unapplied date is a division of a different day, and the save would then differ
@@ -733,6 +813,15 @@
 
         if (!_form.IsValid)
             return;
+
+        // Shares typed by hand that do not add up are refused here, where they can still be
+        // fixed: past this point the dialog is gone, the API refuses the request, and the
+        // name, the note and every pick go with it (#323).
+        if (ShareRounding.Unbalanced(_model.Amount, _model.Splits) is not null)
+        {
+            _saveRefused = true;
+            return;
+        }
 
         if (_receipt is not null && _receiptFile is not null && _receipt.Total != _model.Amount)
         {
