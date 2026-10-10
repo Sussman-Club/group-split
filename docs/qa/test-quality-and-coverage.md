@@ -176,6 +176,15 @@ executes every listing, filter, sort key and projection the app builds. It asser
 about the rows -- executing the query *is* the assertion, since one that does not
 translate throws before returning anything. Add a case to it whenever a listing is added.
 
+**And again, for concurrency (#321).** Filing a bank row twice, settling up twice, two
+members leaving at once and two categories called "Food" and "food" all passed here and
+duplicated money or answered 500 in production, because the provider has no row locks and
+no unique indexes. `DoubleSubmitTest` in the Aspire suite runs each pair against Postgres in
+the one order that races: an interceptor starts the second call just before the first one's
+decisive write, and waits until the second has either finished or is waiting on a lock
+(`pg_stat_activity`). Every test asserts one outcome and that the loser gets a documented
+code. Add a case to it whenever a write decides something from what it has just read.
+
 ### 4. No test reaches an HTTP endpoint
 
 All 66 API tests resolve a service from a container and call it directly. Nothing
