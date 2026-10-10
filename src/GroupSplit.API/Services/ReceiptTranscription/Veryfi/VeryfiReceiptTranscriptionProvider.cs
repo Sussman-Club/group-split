@@ -63,7 +63,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // back as is the only way to tell a provider misreading from a mapping mistake.
             var payload = await response.Content.ReadAsStringAsync(ct);
             if (settings.LogRawResponses)
-                logger.LogInformation("Veryfi returned {Payload} for receipt attachment {AttachmentId}.",
+                logger.LogDebug("Veryfi returned {Payload} for receipt attachment {AttachmentId}.",
                     payload, document.AttachmentId);
 
             var parsed = JsonSerializer.Deserialize<VeryfiDocument>(payload, Json)

@@ -6,6 +6,7 @@ using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.API.Services.ReceiptTranscription.Veryfi;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -229,6 +230,48 @@ public class ReceiptTranscriptionServiceTest
         Assert.DoesNotContain("token=secret", receipt.SourceValues);
         Assert.DoesNotContain("5430", receipt.SourceValues);
         Assert.DoesNotContain("555-0100", receipt.SourceValues);
+    }
+
+    /// <summary>
+    /// The whole response is a person's shopping. Logged at Information it went to the OTLP
+    /// exporter with every other line, so a flag set for one investigation shipped every
+    /// receipt after it; at Debug, the category has to be let through on purpose as well.
+    /// </summary>
+    [Fact]
+    public async Task The_raw_response_is_logged_at_debug_and_no_higher()
+    {
+        const string payload = """{"line_items": [], "vendor": {"name": "Secret Shop"}}""";
+        var server = new VeryfiServer(payload);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var logger = new RecordingLogger<VeryfiReceiptTranscriptionProvider>();
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key",
+            LogRawResponses = true
+        }), logger);
+
+        await provider.Transcribe(
+            new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1, 2, 3]),
+            TestContext.Current.CancellationToken);
+
+        var raw = Assert.Single(logger.Entries, entry => entry.Message.Contains("Secret Shop", StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Debug, raw.Level);
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
     }
 
     [Fact]
