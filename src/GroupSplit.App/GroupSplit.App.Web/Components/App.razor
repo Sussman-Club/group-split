@@ -14,7 +14,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Manrope:wght@400..800&display=swap" rel="stylesheet"/>
     <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet"/>
     <script src="_content/GroupSplit.App.Shared/gs.js"></script>
-    <ImportMap/>
+    @* The page's one inline script, so it carries the nonce the response's policy names.
+       See SecurityHeadersExtensions. *@
+    <ImportMap nonce="@SecurityHeadersExtensions.CspNonce(HttpContext)"/>
     <link rel="icon" type="image/svg+xml" href="_content/GroupSplit.App.Shared/favicon.svg"/>
     <HeadOutlet @rendermode="RenderModeConfig.Current"/>
 </head>
@@ -26,3 +28,7 @@
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+}

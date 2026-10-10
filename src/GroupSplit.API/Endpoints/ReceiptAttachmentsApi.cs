@@ -11,7 +11,7 @@ namespace GroupSplit.API.Endpoints;
 /// <summary>Private source images and documents attached to expenses.</summary>
 public static class ReceiptAttachmentsApi
 {
-    private const long MaximumRequestLength = 11 * 1024 * 1024;
+    internal const long MaximumRequestLength = 11 * 1024 * 1024;
 
     extension(IEndpointRouteBuilder routes)
     {
@@ -102,7 +102,8 @@ public static class ReceiptAttachmentsApi
                 .Produces<ReceiptTranscriptionResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status502BadGateway);
+                .ProducesProblem(StatusCodes.Status502BadGateway)
+                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
         }
 
         private RouteHandlerBuilder MapDelete()

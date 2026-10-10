@@ -122,6 +122,7 @@ public sealed class SelfDescriptionTests
         Assert.Equal(ExitCodes.AuthRequired, codes.GetProperty("authRequired").GetInt32());
         Assert.Equal(ExitCodes.InvalidInput, codes.GetProperty("invalidInput").GetInt32());
         Assert.Equal(ExitCodes.ConfirmationRequired, codes.GetProperty("confirmationRequired").GetInt32());
+        Assert.Equal(ExitCodes.RateLimited, codes.GetProperty("rateLimited").GetInt32());
     }
 
     [Fact]

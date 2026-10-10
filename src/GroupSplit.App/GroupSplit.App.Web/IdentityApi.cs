@@ -1,4 +1,5 @@
 using GroupSplit.App.Shared.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -29,12 +30,29 @@ public static class IdentityApi
                 [OpenIdConnectDefaults.AuthenticationScheme]));
     }
 
+    /// <summary>
+    /// Signs out of this app and of Keycloak.
+    /// </summary>
+    /// <remarks>
+    /// A POST carrying an antiforgery token, never a GET. As a GET, any page anywhere could
+    /// sign a person out with an image tag, and a sibling subdomain could do it with a form
+    /// too, since the cookie is SameSite=Lax and that site is the same site. The app's sign-out
+    /// buttons post it through <c>SignOutForm</c>; a GET is answered 405.
+    /// </remarks>
     private static void MapLogout(this RouteGroupBuilder group)
     {
-        group.MapGet("/logout", () => Results.SignOut(
-            properties: new AuthenticationProperties { RedirectUri = "/" },
-            authenticationSchemes:
-            [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
+        group.MapPost("/logout", (HttpContext context) =>
+                // The middleware validates and records the answer; it refuses nothing itself.
+                // Form binding is what normally reads the answer, and nothing is bound here.
+                context.Features.Get<IAntiforgeryValidationFeature>() is { IsValid: true }
+                    ? Results.SignOut(
+                        properties: new AuthenticationProperties { RedirectUri = "/" },
+                        authenticationSchemes:
+                        [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme])
+                    : Results.BadRequest())
+            // Explicit for the same reason: without a form parameter the middleware would
+            // not validate the token at all.
+            .WithMetadata(new RequireAntiforgeryTokenAttribute());
     }
 
     /// <summary>

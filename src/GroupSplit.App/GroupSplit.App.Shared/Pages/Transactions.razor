@@ -229,8 +229,7 @@
             <Columns>
                 <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
                     <CellTemplate>
-                        <div class="gs-num" style="font-weight: 700; font-size: .875rem">@Clock.Local(context.Item.DateTime).ToString("d MMM yyyy")</div>
-                        <div class="gs-muted gs-num" style="font-size: .75rem">@Clock.Local(context.Item.DateTime).ToString("t")</div>
+                        <TransactionWhen Value="@context.Item.DateTime"/>
                     </CellTemplate>
                 </PropertyColumn>
 

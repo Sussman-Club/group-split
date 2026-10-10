@@ -129,9 +129,9 @@
 
         _coversThrough = CoversThrough?.ToDateTime(TimeOnly.MinValue);
 
-        var shown = Clock.Local(Original.DateTime);
-        _selectedDate = shown.Date;
-        _selectedTime = shown.TimeOfDay;
+        // A repayment whose day was picked in a settle dialog is a date with no time (#252):
+        // it opens on that day with the time left empty.
+        (_selectedDate, _selectedTime) = Clock.Pickers(Original.DateTime);
         _paidToUserId = Original.PaidToUserId;
 
         var loaded = await Errors.TryAsync(async () =>
@@ -176,7 +176,7 @@
         if (!_form.IsValid)
             return;
 
-        _editModel.DateTime = Clock.At(_selectedDate ?? Clock.Today, _selectedTime ?? TimeSpan.Zero);
+        _editModel.DateTime = Clock.Edited(Original.DateTime, _selectedDate, _selectedTime);
         _editModel.Name = "Settlement";
         _editModel.CategoryId = null;
         _editModel.CoversThrough = _coversThrough is { } day ? DateOnly.FromDateTime(day) : null;

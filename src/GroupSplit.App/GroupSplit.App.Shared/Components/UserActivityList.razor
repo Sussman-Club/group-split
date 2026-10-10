@@ -62,7 +62,7 @@
                 </div>
                 <div>
                     <div><Money Value="item.Amount" /></div>
-                    <span class="when">@Relative(item.DateTime)</span>
+                    <span class="when">@Clock.Relative(item.DateTime)</span>
                 </div>
             </a>
         }
@@ -97,24 +97,6 @@
             parts.Add($"your share {share.ToMoney()}");
 
         return string.Join(" · ", parts);
-    }
-
-    // "Today" and "Yesterday" are the person's days, not the server's: both sides of the
-    // comparison come from the same clock.
-    private string Relative(DateTimeOffset when)
-    {
-        var local = Clock.Local(when);
-        var today = Clock.Today;
-        var days = (today - local.Date).Days;
-
-        return days switch
-        {
-            0 => "Today",
-            1 => "Yesterday",
-            < 7 => local.ToString("dddd"),
-            _ when local.Year == today.Year => local.ToString("d MMM"),
-            _ => local.ToString("d MMM yyyy")
-        };
     }
 
     /// <summary>

@@ -25,6 +25,11 @@ namespace GroupSplit.API.Services.Banking.Plaid;
 /// replayed forever. And the body's hash must match, or a valid signature could be moved
 /// onto a different body.
 /// </para>
+/// <para>
+/// And a fifth, because "recent" is five minutes wide: a webhook already accepted is refused
+/// the second time, recognised by its <c>iat</c> and the hash of its body. Without it a
+/// captured request could be replayed as often as it liked inside that window.
+/// </para>
 /// </remarks>
 public sealed class PlaidWebhookVerifier(
     PlaidClient plaid,
@@ -66,6 +71,18 @@ public sealed class PlaidWebhookVerifier(
     /// has in rotation, and small enough that filling it costs nothing worth having.
     /// </summary>
     private const int MaxUnknownKeys = 1024;
+
+    /// <summary>
+    /// The webhooks already accepted, by <c>iat</c> and body hash, with the time each was
+    /// issued.
+    /// </summary>
+    /// <remarks>
+    /// Kept only as long as <see cref="MaxAge"/> would still let the same token through, after
+    /// which the age check refuses it on its own. Nothing reaches this without a valid
+    /// signature, so its size is bounded by what Plaid sends rather than by what a stranger
+    /// can invent. In memory and per instance, which is as many instances as the API runs.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _seen = new(StringComparer.Ordinal);
 
     public async Task<bool> VerifyAsync(IReadOnlyDictionary<string, string> headers, string body,
         CancellationToken ct = default)
@@ -118,7 +135,8 @@ public sealed class PlaidWebhookVerifier(
                 return Refuse("the token has no issued-at");
             }
 
-            var age = clock.GetUtcNow() - DateTimeOffset.FromUnixTimeSeconds(issuedAtSeconds);
+            var issued = DateTimeOffset.FromUnixTimeSeconds(issuedAtSeconds);
+            var age = clock.GetUtcNow() - issued;
 
             if (age > MaxAge || age < -MaxAge)
                 return Refuse("the token was issued {Age} ago", age);
@@ -138,9 +156,31 @@ public sealed class PlaidWebhookVerifier(
             {
                 return Refuse("the body does not match what was signed");
             }
+
+            // Last, so that only a webhook that passed everything else is remembered: a
+            // forgery must not be able to spend the slot a genuine one would need.
+            if (!FirstSighting(issuedAtSeconds, actual, issued))
+                return Refuse("the same webhook was already received");
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Records a verified webhook and answers whether it is new. Two genuine webhooks with
+    /// the same body in the same second are one webhook delivered twice.
+    /// </summary>
+    private bool FirstSighting(long issuedAtSeconds, string bodyHash, DateTimeOffset issued)
+    {
+        var now = clock.GetUtcNow();
+
+        foreach (var (key, at) in _seen)
+        {
+            if (now - at > MaxAge)
+                _seen.TryRemove(key, out _);
+        }
+
+        return _seen.TryAdd($"{issuedAtSeconds}:{bodyHash}", issued);
     }
 
     /// <summary>

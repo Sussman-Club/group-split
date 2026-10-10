@@ -74,6 +74,7 @@ builder.Services.AddOpenApiDocuments();
 
 builder.Services.AddApiValidation();
 builder.Services.AddApiErrorHandling();
+builder.Services.AddApiRateLimiting();
 
 builder.AddReceiptTranscriptionChatClient();
 
@@ -109,6 +110,7 @@ app.UseDefaultHttpsRedirection([WebhooksApi.Prefix]);
 app.UseAuthentication();
 app.UseMiddleware<CurrentUserMiddleware>();
 app.UseAuthorization();
+app.UseApiRateLimiting();
 
 app.MapDomainApi();
 

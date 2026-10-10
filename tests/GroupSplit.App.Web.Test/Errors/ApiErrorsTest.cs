@@ -111,6 +111,35 @@ public class ApiErrorsTest
         Assert.Equal(TraceId, error.TraceId);
     }
 
+    /// <summary>
+    /// A 429 says how long to wait, in words a person can use, and is a refusal rather than a
+    /// fault: nothing is wrong except the timing.
+    /// </summary>
+    [Theory]
+    [InlineData(45, "Please try again in 45 seconds.")]
+    [InlineData(60, "Please try again in a minute.")]
+    [InlineData(61, "Please try again in 2 minutes.")]
+    [InlineData(3412, "Please try again in 57 minutes.")]
+    public void Too_many_requests_says_how_long_to_wait(int retryAfter, string expected)
+    {
+        var error = ApiErrors.Read(Typed(429, Problem(429, ErrorCodes.RateLimited,
+            extensions: (ProblemDetails.RetryAfterExtension, retryAfter))));
+
+        Assert.Equal(ApiErrorKind.Refused, error.Kind);
+        Assert.Equal(ErrorCodes.RateLimited, error.Code);
+        Assert.EndsWith(expected, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Too_many_requests_without_a_wait_or_a_body_still_has_words()
+    {
+        var withoutWait = ApiErrors.Read(Typed(429, Problem(429, ErrorCodes.RateLimited)));
+        var withoutBody = ApiErrors.Read(Untyped(429, "<html>slow down</html>"));
+
+        Assert.Equal(ErrorMessages.For(ErrorCodes.RateLimited), withoutWait.Message);
+        Assert.Equal(ErrorMessages.For(ErrorCodes.RateLimited), withoutBody.Message);
+    }
+
     [Fact]
     public void A_body_that_is_not_json_does_not_break_the_reader()
     {

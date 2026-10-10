@@ -1358,4 +1358,93 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
     }
+
+    // ---- a bank row's date (#252) ---------------------------------------------------------
+
+    /// <summary>How an expense filed from a bank row is stored: the posting date at midnight UTC.</summary>
+    private static readonly DateTimeOffset PostedOnTheNinth = new(2026, 10, 9, 0, 0, 0, TimeSpan.Zero);
+
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenBankRowAsync()
+    {
+        var transactionId = Guid.NewGuid();
+
+        _transactions
+            .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Details(transactionId) with { DateTime = PostedOnTheNinth });
+
+        Render<MudPopoverProvider>();
+
+        return await OpenAsync(Row(transactionId) with { DateTime = PostedOnTheNinth });
+    }
+
+    /// <summary>
+    /// It opens on the bank's day, with the time left empty, in New York as much as in
+    /// Sydney -- not on 19:00 of the 8th, which is what midnight UTC is in New York.
+    /// </summary>
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(10)]
+    public async Task A_bank_row_opens_on_the_banks_day_with_no_time(int hours)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+
+        var (provider, _) = await OpenBankRowAsync();
+
+        await OpenChipAsync(provider, "when");
+
+        var date = provider.FindComponents<MudDatePicker>().Single(picker => picker.Instance.Label == "Date");
+        var time = provider.FindComponents<MudTimePicker>().Single(picker => picker.Instance.Label == "Time");
+
+        Assert.Equal(new DateTime(2026, 10, 9), date.Instance.Date);
+        Assert.Null(time.Instance.Time);
+    }
+
+    /// <summary>
+    /// Saved without a day or a time picked, its date is left exactly as stored. Made into
+    /// a moment it would have become local midnight -- 05:00 UTC in New York -- and every
+    /// list would then show it with a time the bank never gave.
+    /// </summary>
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(10)]
+    public async Task A_bank_row_saved_without_a_new_day_or_time_keeps_its_date(int hours)
+    {
+        ReaderAt(TimeSpan.FromHours(hours));
+
+        var (provider, dialogRef) = await OpenBankRowAsync();
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        Assert.NotNull(patch);
+        Assert.DoesNotContain(patch!.Operations, op => Touches(op, "dateTime"));
+    }
+
+    /// <summary>A time picked for it makes it a moment, where the person is.</summary>
+    [Fact]
+    public async Task A_time_picked_for_a_bank_row_makes_it_a_moment()
+    {
+        var clock = ReaderAt(TimeSpan.FromHours(-5));
+
+        var (provider, dialogRef) = await OpenBankRowAsync();
+
+        await OpenChipAsync(provider, "when");
+
+        var time = provider.FindComponents<MudTimePicker>().Single(picker => picker.Instance.Label == "Time");
+        await provider.InvokeAsync(() => time.Instance.TimeChanged.InvokeAsync(new TimeSpan(14, 15, 0)));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new MouseEventArgs());
+
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+
+        var operation = Assert.Single(patch!.Operations, op => Touches(op, "dateTime"));
+
+        // 14:15 in New York on the 9th.
+        Assert.Equal(new DateTimeOffset(2026, 10, 9, 19, 15, 0, TimeSpan.Zero),
+            Assert.IsType<DateTimeOffset>(operation.value));
+        Assert.Equal(clock.At(new DateTime(2026, 10, 9), new TimeSpan(14, 15, 0)), operation.value);
+    }
 }

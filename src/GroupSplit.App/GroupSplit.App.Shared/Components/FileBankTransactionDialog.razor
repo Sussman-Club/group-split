@@ -102,7 +102,7 @@
                                 <Avatar Name="@searchedExpense.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@searchedExpense.Name</span>
-                                    <span class="meta">@(searchedExpense.GroupName ?? "Personal") · @Clock.Local(searchedExpense.DateTime).ToString("d") · @searchedExpense.PaidByUserName paid</span>
+                                    <span class="meta">@(searchedExpense.GroupName ?? "Personal") · @Clock.Day(searchedExpense.DateTime).ToString("d") · @searchedExpense.PaidByUserName paid</span>
                                     <span class="gs-tag neutral">@(CanAttach(searchedExpense) ? "Selected from search" : WhyNotAttachable(searchedExpense))</span>
                                 </span>
                                 <Money Value="@searchedExpense.Amount" Currency="@searchedExpense.Currency" />
@@ -120,7 +120,7 @@
                                 <Avatar Name="@candidate.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@candidate.Name</span>
-                                    <span class="meta">@candidate.Where · @Clock.Local(candidate.DateTime).ToString("d") · @candidate.PaidByUserName paid</span>
+                                    <span class="meta">@candidate.Where · @Clock.Day(candidate.DateTime).ToString("d") · @candidate.PaidByUserName paid</span>
                                     <span class="gs-tag neutral">@MatchHint(candidate)</span>
                                 </span>
                                 <Money Value="@candidate.Amount" Currency="@candidate.Currency" />

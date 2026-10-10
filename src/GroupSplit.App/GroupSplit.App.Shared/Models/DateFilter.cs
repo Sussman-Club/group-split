@@ -53,12 +53,26 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
     };
 
     /// <summary>
-    /// The span as two instants, sent as UTC. <paramref name="offset"/> is the person's zone
-    /// and <paramref name="today"/> their calendar day, both from <c>LocalClock</c>: the
-    /// first instant is midnight at the start of the first day where they are, the last is
-    /// the very end of the last day, since the filter takes both of its ends and a bound of
-    /// midnight would drop that day.
+    /// The span as two instants, sent as UTC, for listings of transactions.
+    /// <paramref name="offset"/> is the person's zone and <paramref name="today"/> their
+    /// calendar day, both from <c>LocalClock</c>. The last instant is the very end of the last
+    /// day, since the filter takes both of its ends and a bound of midnight would drop that
+    /// day.
     /// </summary>
+    /// <remarks>
+    /// A day starts twice, because <see cref="TransactionDay"/> reads a stored instant two
+    /// ways: a date written as midnight UTC -- a bank row -- belongs to its UTC day, and any
+    /// other instant to the person's local day. Each bound is the earlier of the two starts.
+    /// That keeps every bank row in the span it is dated in and every other one out, in any
+    /// zone: a row posted on the 1st is in that month in New York, where the local month
+    /// starts five hours later, and one posted on the 1st of the next month is not in it in
+    /// Sydney, where the local month ends ten hours earlier. East of Greenwich it is the
+    /// local span exactly. West of it, the span runs on UTC days, so a moment recorded in the
+    /// last hours of a local evening counts with the next day here while it shows on its own
+    /// one. The API takes one interval, so both kinds cannot be exact at once; the bank's
+    /// dates were chosen, because a moment that late is rare and a bank row on the 1st is
+    /// every month's.
+    /// </remarks>
     public DateBounds Bounds(TimeSpan offset, DateTime today)
     {
         var (from, to) = Span(today);
@@ -120,8 +134,18 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
         return (from, to);
     }
 
-    private static DateTimeOffset StartOfDay(DateTime day, TimeSpan offset) =>
-        new DateTimeOffset(DateTime.SpecifyKind(day.Date, DateTimeKind.Unspecified), offset).ToUniversalTime();
+    /// <summary>
+    /// The first instant that belongs to <paramref name="day"/>: the earlier of midnight
+    /// where the person is and the midnight UTC a date is stored at. See <see cref="Bounds"/>.
+    /// </summary>
+    private static DateTimeOffset StartOfDay(DateTime day, TimeSpan offset)
+    {
+        var local = new DateTimeOffset(DateTime.SpecifyKind(day.Date, DateTimeKind.Unspecified), offset)
+            .ToUniversalTime();
+        var date = TransactionDay.Stored(day);
+
+        return local < date ? local : date;
+    }
 
     private string Describe() => (CustomFrom, CustomTo) switch
     {

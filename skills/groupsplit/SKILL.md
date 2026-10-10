@@ -98,6 +98,7 @@ array. Use it: a full expense list is mostly fields you did not ask about.
 | `2` | Not signed in, expired, or refused. | See [setup.md](references/setup.md). Do not retry the same call. |
 | `3` | The invocation was wrong, or no server is configured. | **Retrying will not help.** Fix the arguments. |
 | `4` | A mutation needs confirming. | Surface it. See below. |
+| `5` | Rate limited: too many transcriptions, bank links or syncs, or invitations for now. | Wait `retryAfter` seconds from the envelope, then run the same command once. Do not loop. |
 
 stdout carries the result and nothing else. Progress, warnings and errors are on stderr, so
 capture the two separately -- a warning folded into stdout will break your JSON parse.

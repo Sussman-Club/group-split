@@ -23,9 +23,12 @@ public static class ApiErrorMapper
             : Describe(problem, status);
         var details = ValidationMessages(problem, exception.Response);
 
-        var error = new CliError(message, code, Remediation(status, code), details)
+        var retryAfter = status == HttpStatusCode.TooManyRequests ? RetryAfter(problem, exception) : null;
+
+        var error = new CliError(message, code, Remediation(status, code, retryAfter), details)
         {
-            TraceId = problem?.TraceId
+            TraceId = problem?.TraceId,
+            RetryAfter = retryAfter
         };
 
         return new CliException(error, ExitCodeFor(status, code), exception);
@@ -53,6 +56,7 @@ public static class ApiErrorMapper
     {
         HttpStatusCode.Conflict when code == Shared.Errors.ErrorCodes.IdentityEmailInUse => ExitCodes.AuthRequired,
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => ExitCodes.AuthRequired,
+        HttpStatusCode.TooManyRequests => ExitCodes.RateLimited,
         HttpStatusCode.BadRequest or HttpStatusCode.NotFound
             or HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity => ExitCodes.InvalidInput,
         _ => ExitCodes.Error
@@ -74,12 +78,17 @@ public static class ApiErrorMapper
         HttpStatusCode.NotFound => Shared.Errors.ErrorCodes.NotFound,
         HttpStatusCode.Conflict => Shared.Errors.ErrorCodes.Conflict,
         HttpStatusCode.BadRequest => Shared.Errors.ErrorCodes.BadRequest,
+        HttpStatusCode.TooManyRequests => Shared.Errors.ErrorCodes.RateLimited,
         _ => ErrorCodes.ServerError
     };
 
-    private static string? Remediation(HttpStatusCode status, string code) => status switch
+    private static string? Remediation(HttpStatusCode status, string code, int? retryAfter) => status switch
     {
         HttpStatusCode.Unauthorized => "Run: groupsplit auth login",
+        // Not a fault and not the arguments: the same command works once the wait is over.
+        HttpStatusCode.TooManyRequests when retryAfter is { } seconds
+            => $"Wait {seconds} seconds, then run the same command again.",
+        HttpStatusCode.TooManyRequests => "Wait a few minutes, then run the same command again.",
         // A 403 that is not about who is signed in: removing yourself is called leaving, and
         // pointing at auth status sends the caller looking for a problem they do not have.
         HttpStatusCode.Forbidden when code == Shared.Errors.ErrorCodes.GroupCannotRemoveSelf
@@ -158,6 +167,26 @@ public static class ApiErrorMapper
                + "part of it.",
         _ => null
     };
+
+    /// <summary>
+    /// How long a rate-limited caller should wait: the problem's <c>retryAfter</c>, or the
+    /// <c>Retry-After</c> header when a proxy in front answered without a problem body.
+    /// </summary>
+    private static int? RetryAfter(ProblemDetails? problem, ApiException exception)
+    {
+        if (problem?.GetExtension<int?>(ProblemDetails.RetryAfterExtension, GroupSplitSerializer.Options)
+            is > 0 and var fromProblem)
+        {
+            return fromProblem;
+        }
+
+        return exception.Headers is not null
+               && exception.Headers.TryGetValue("Retry-After", out var values)
+               && int.TryParse(values.FirstOrDefault(), out var seconds)
+               && seconds > 0
+            ? seconds
+            : null;
+    }
 
     /// <summary>
     /// For a status the OpenAPI document declares, the generated client deserializes the

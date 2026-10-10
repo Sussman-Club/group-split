@@ -70,6 +70,14 @@ public static class ErrorCodes
     /// </summary>
     public const string AccountDeleted = "ACCOUNT_DELETED";
 
+    /// <summary>
+    /// A write reached the web app's cookie-authenticated <c>/api</c> route without proof
+    /// that the app's own pages sent it: no <c>Sec-Fetch-Site: same-origin</c>, and no
+    /// custom header in a browser too old to send that. Answered by the web app before the
+    /// API ever sees the request, so nothing was written.
+    /// </summary>
+    public const string CrossSiteRequestRefused = "CROSS_SITE_REQUEST_REFUSED";
+
     // ---- Conflict (409): the request is well formed but the current state refuses it -----
 
     public const string GroupMemberNotSettled = "GROUP_MEMBER_NOT_SETTLED";
@@ -307,6 +315,17 @@ public static class ErrorCodes
     /// </summary>
     public const string ReceiptItemsMissingRule = "RECEIPT_ITEMS_MISSING_RULE";
 
+    // ---- Too many requests (429) ----------------------------------------------------------
+
+    /// <summary>
+    /// The caller has used up their allowance for this kind of request -- transcribing a
+    /// receipt, linking or syncing a bank, inviting somebody -- for now. Counted per
+    /// signed-in person, never per address. Carries <c>retryAfter</c>, in seconds, and the
+    /// same figure in a <c>Retry-After</c> header. Nothing was done; the identical request
+    /// will succeed once the wait is over.
+    /// </summary>
+    public const string RateLimited = "RATE_LIMITED";
+
     // ---- Bad gateway (502): somebody else's service is in the path and did not answer ---
 
     public const string BankProviderUnavailable = "BANK_PROVIDER_UNAVAILABLE";
@@ -348,6 +367,7 @@ public static class ErrorCodes
         404 => NotFound,
         409 => Conflict,
         422 => ValidationFailed,
+        429 => RateLimited,
         >= 500 => InternalError,
         _ => $"HTTP_{status}"
     };

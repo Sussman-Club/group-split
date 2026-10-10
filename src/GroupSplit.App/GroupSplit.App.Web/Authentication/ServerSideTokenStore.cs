@@ -1,7 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Duende.AccessTokenManagement;
 using Duende.AccessTokenManagement.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace GroupSplit.App.Web.Authentication;
@@ -18,11 +20,27 @@ namespace GroupSplit.App.Web.Authentication;
 /// and its response started with the WebSocket handshake -- so the tokens were frozen at
 /// page load and could not be written back. Keyed by principal instead, this is readable
 /// and writable from a request, a static render, or a circuit hours old.
+/// <para>
+/// Encrypted with the web app's Data Protection ring before it is written. The cache is
+/// Redis, which snapshots to its volume every thirty seconds, and what is kept here is a
+/// refresh token: anybody who could read the volume could otherwise act as everybody signed
+/// in. An entry the ring cannot open -- written in plain text before this, or under a key
+/// since lost -- is treated as absent, which signs that session out rather than failing it.
+/// </para>
 /// </remarks>
 internal sealed class ServerSideTokenStore(
     IDistributedCache cache,
+    IDataProtectionProvider dataProtection,
     ILogger<ServerSideTokenStore> logger) : IUserTokenStore
 {
+    /// <summary>
+    /// The purpose the payloads are protected under. Part of key derivation, so changing it
+    /// makes every stored entry unreadable -- which is to say, signs everybody out.
+    /// </summary>
+    internal const string ProtectorPurpose = "GroupSplit.App.Web.SessionTokens.v1";
+
+    private readonly IDataProtector _protector = dataProtection.CreateProtector(ProtectorPurpose);
+
     /// <summary>
     /// As long as the longest session a cookie can name, so tokens never end one.
     /// </summary>
@@ -45,11 +63,29 @@ internal sealed class ServerSideTokenStore(
             return TokenResult.Failure("no_session", "The ticket carries no sign-in session identifier.");
         }
 
-        var payload = await cache.GetStringAsync(key, ct);
+        var protectedPayload = await cache.GetAsync(key, ct);
 
-        if (string.IsNullOrWhiteSpace(payload))
+        if (protectedPayload is not { Length: > 0 })
         {
             return TokenResult.Failure("no_stored_token", "No tokens are stored for this session.");
+        }
+
+        byte[] payload;
+
+        try
+        {
+            payload = _protector.Unprotect(protectedPayload);
+        }
+        catch (CryptographicException)
+        {
+            // Not an error: an entry from before the payloads were protected, or one whose
+            // key is gone. Either way there are no tokens to be had, the same as if nothing
+            // were stored, and the person signs in again.
+            logger.LogInformation("Stored tokens could not be unprotected and are being discarded.");
+
+            await cache.RemoveAsync(key, ct);
+
+            return TokenResult.Failure("no_stored_token", "No readable tokens are stored for this session.");
         }
 
         StoredTokens stored;
@@ -96,9 +132,9 @@ internal sealed class ServerSideTokenStore(
             return;
         }
 
-        await cache.SetStringAsync(
+        await cache.SetAsync(
             key,
-            JsonSerializer.Serialize(Store(token)),
+            _protector.Protect(JsonSerializer.SerializeToUtf8Bytes(Store(token))),
             new DistributedCacheEntryOptions { SlidingExpiration = Lifetime },
             ct);
     }
