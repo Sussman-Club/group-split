@@ -19,18 +19,16 @@ metadata:
 
 # GroupSplit from the command line
 
-`groupsplit` is the terminal client for GroupSplit. It was built to be driven by a program
-as much as by a person: JSON is the default whenever stdout is not a terminal, the exit
-codes are a contract, and destructive commands describe themselves rather than blocking on
-a prompt nobody can answer.
+`groupsplit` is the terminal client for GroupSplit, built to be driven by a program as much
+as by a person. JSON is the default whenever stdout is not a terminal, the exit codes are a
+contract, and a destructive command describes itself instead of blocking on a prompt nobody
+can answer.
 
-Everything below is the protocol around the CLI. The CLI's own surface comes from the
-CLI, not from here.
+This skill is the protocol around the CLI. The command surface comes from the CLI itself.
 
 ## Receipts are two separate flows
 
-The CLI exposes both the source file and the itemised bill. Keep them separate in the same
-way the app does:
+The source file and the itemised bill are separate. Keep them apart, as the app does:
 
 - `groupsplit receipts transcribe <file>` reads a local JPG, PNG, WebP or PDF into an
   editable draft. It saves no expense, receipt, attachment or split.
@@ -41,14 +39,13 @@ way the app does:
   is still waiting in the inbox. Filing or linking the row moves its pending files to the
   expense, but neither upload nor transcription files the row or chooses its group.
 - After reviewing a transcription, use `receipts set` to save the bill and `receipts rule` to
-  assign each line's split rule. `receipts divide` explicitly stores the division when the
-  bill is not already the source of the expense's shares. If an itemised receipt already
-  drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync,
-  so both ask for confirmation first;
-  an incomplete correction remains editable and leaves the last valid shares in place, and
-  the call that completes it divides again. A forgotten tip is `transactions update --amount`:
-  the bill is re-totalled, the difference on its tip.
-  Never imply that OCR has already made those decisions.
+  assign each line's split rule. When the bill is not yet the source of the expense's shares,
+  `receipts divide` stores its division. When the expense is already divided by its bill, a
+  valid `set` or `rule` correction divides it again, so both ask for confirmation first. An
+  incomplete correction stays editable and leaves the last valid shares in place; the call
+  that completes it divides again. A forgotten tip is `transactions update --amount`: the
+  bill is re-totalled, the difference on its tip. Never imply that OCR has already made
+  those decisions.
 
 `attachments delete` is destructive and uses the normal exit-4 confirmation envelope. A
 download writes to a new local path and refuses to overwrite an existing file.
@@ -59,14 +56,13 @@ download writes to a new local path and refuses to overwrite an existing file.
 groupsplit schema --json
 ```
 
-One call returns the whole command tree -- every command, argument, flag, type, arity and
-the exit-code table. It is generated from the same tree that parses the arguments, so it
-cannot describe a CLI that does not exist, and it is right for the version that is actually
-installed.
+One call returns the whole command tree: every command, argument, flag, type, arity and the
+exit-code table. It is generated from the tree that parses the arguments, so it matches the
+version installed.
 
 **Read it once per session and plan from it.** Do not shell out to `--help` per subcommand,
-and do not pass a flag it does not list: this skill was written against one version and the
-schema is the one that is in front of you.
+and do not pass a flag it does not list. This skill was written against one version; the
+schema describes the one in front of you.
 
 If `groupsplit` is not on `PATH`, or no server is configured, see
 [references/setup.md](references/setup.md) before going further.
@@ -74,21 +70,20 @@ If `groupsplit` is not on `PATH`, or no server is configured, see
 ## The loop
 
 1. `groupsplit schema --json` once.
-2. Run each command with `--json`. It is the default when stdout is redirected, but say it
-   anyway -- you are not always the thing holding the pipe.
+2. Run each command with `--json`. It is the default when stdout is redirected, but you are
+   not always the one holding the pipe.
 3. Branch on the **exit code** first, then on the envelope's `code`.
 4. On exit code 4, stop and show the user what would change. Do not decide for them.
 
 ```bash
 groupsplit groups list --json
-# --group means the group's whole ledger, whoever paid. Without it, the caller's own
-# expenses -- which is a different question and, for anybody who is not the household's
-# main payer, a much shorter answer.
+# --group means the group's whole ledger, whoever paid. Without it, only the caller's own
+# expenses: for anybody who is not the household's main payer, a much shorter answer.
 groupsplit transactions list --group <group-id> --json --fields id,name,amount,dateTime
 ```
 
 `--fields` keeps only the named top-level fields, of an object or of every element of an
-array. Use it: a full expense list is mostly fields you did not ask about.
+array. Use it; a full expense list is mostly fields you did not ask about.
 
 ## Exit codes
 
@@ -97,12 +92,12 @@ array. Use it: a full expense list is mostly fields you did not ask about.
 | `0` | Success. stdout is trustworthy. | Parse stdout. |
 | `1` | A general failure. | Read `code`; retrying may help. |
 | `2` | Not signed in, expired, or refused. | See [setup.md](references/setup.md). Do not retry the same call. |
-| `3` | The invocation was wrong, or no server is configured. | **Retrying will not help.** Fix the arguments. |
+| `3` | The invocation was wrong, the server rejected a value, or no server is configured. | **Retrying will not help.** Fix the arguments. |
 | `4` | A mutation needs confirming. | Surface it. See below. |
 | `5` | Rate limited: too many transcriptions, bank links or syncs, or invitations for now. | Wait `retryAfter` seconds from the envelope, then run the same command once. Do not loop. |
 
-stdout carries the result and nothing else. Progress, warnings and errors are on stderr, so
-capture the two separately -- a warning folded into stdout will break your JSON parse.
+stdout carries the result and nothing else. Progress, warnings and errors go to stderr, so
+capture the two separately: a warning folded into stdout breaks your JSON parse.
 
 ## Confirming a destructive change
 
@@ -110,11 +105,11 @@ These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.withdraw-invitation`, `groups.settle`, `groups.settle-between`, `groups.settle-up`,
 `settle.pay`, `groups.link.create` (when a link already exists), `groups.link.revoke`,
 `groups.guest-link.create` (only with `--new` on a guest whose link still works),
-`groups.guest-link.revoke`,
-`invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
-`receipts.set` and `receipts.rule` (only on a bill the expense is divided by), `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
-`categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `bank.unlink` and
-`users.delete`.
+`groups.guest-link.revoke`, `invitations.claim`, `invitations.decline`,
+`transactions.delete`, `receipts.divide`, `receipts.set` and `receipts.rule` (only on a bill
+the expense is divided by), `receipts.delete`, `receipts.attachments.delete`,
+`inbox.attachments.delete`, `categories.delete`, `split-rules.delete`,
+`split-rules.versions.set`, `bank.unlink` and `users.delete`.
 
 With no terminal you get exit code 4 and this on stdout:
 
@@ -129,14 +124,13 @@ With no terminal you get exit code 4 and this on stdout:
 ```
 
 **Show `summary` and every line of `changes` to the user, and wait for them to agree.** Then
-run `confirmCommand` verbatim -- it is the exact invocation, so you never have to
-reconstruct one from your own history. It carries every option you gave, `--profile` and
-`--server` included, names files by absolute path, and is quoted for a POSIX shell.
-`--fields` never narrows this envelope.
+run `confirmCommand` verbatim, not a command rebuilt from your own history. It carries every
+option you gave, `--profile` and `--server` included, names files by absolute path, and is
+quoted for a POSIX shell. `--fields` never narrows this envelope.
 
-Do not put `--yes` on a command yourself. The flag exists for a caller who has already been
-told what it does; reaching for it to avoid a round trip performs a deletion nobody asked
-for. The one exception is a user who has said, in this conversation, to go ahead with that
+Do not put `--yes` on a command yourself. The flag is for a caller who has already been told
+what the command does; adding it to save a round trip performs a deletion nobody asked for.
+The one exception is a user who has said, in this conversation, to go ahead with that
 specific action.
 
 ## Errors
@@ -152,20 +146,20 @@ Failures print an envelope on stderr:
 }
 ```
 
-Branch on `code`, never on `error` -- the prose may be reworded. A `CLI_` prefix means the
-CLI raised it rather than the server; anything else came from the server and means the
-request was understood and refused. Most `CLI_` codes mean nothing was sent, but
-**`CLI_OUTCOME_UNKNOWN` means the request may have been carried out**: the connection broke
-after it left, or the server took too long. Never repeat a change on that code without first
-looking for it -- list or show what it would have changed -- or it may be recorded twice.
-`remediation` is written to be acted on. Pass `traceId` along when reporting a problem.
+Branch on `code`, never on `error`; the prose may be reworded. A `CLI_` prefix means the CLI
+raised it. Any other code came from the server, which understood the request and refused it.
+Most `CLI_` codes mean nothing was sent, but **`CLI_OUTCOME_UNKNOWN` means the request may
+have been carried out**: the connection broke after it left, or the server took too long.
+Never repeat a change on that code without first looking for it (list or show what it would
+have changed), or it may be recorded twice. Act on `remediation`. Pass `traceId` along when
+reporting a problem.
 
 ## Rules
 
 - **Never invent an id.** Every id in this system is a uuid that came from a listing. List
   first, then act on what you were given.
 - **Amounts have two decimal places** and the currency is the group's. Do not round a
-  user's figure to make a split come out even -- `--preview` instead, below.
+  user's figure to make a split come out even; use `--preview` (below).
 - **Write every amount as `12.50`**: a `.` decimal point, no thousands separators, whatever
   the machine's language. `12,50`, `1,234.56`, `1.234,56` and `12.555` are refused with exit
   code 3 (`CLI_USAGE` for an argument or option, `CLI_INVALID_INPUT` inside `--split`,
@@ -176,70 +170,65 @@ looking for it -- list or show what it would have changed -- or it may be record
   categories (`categories create <name> --group <user-id>`). It has no members, rules or
   settlements, and asking for one is `PERSONAL_GROUP_NOT_SHARED`.
 - **Never convert a currency yourself.** A personal expense may be in any currency
-  (`transactions create ... --currency EUR`, no `--group`); a group takes only its own, and
-  an expense never changes currency -- moving one into a group in another is refused with
+  (`transactions create ... --currency EUR`, no `--group`). A group takes only its own, and
+  an expense never changes currency: moving one into a group in another is refused with
   `CURRENCY_MISMATCH`. Totals come back one currency at a time (`currency`, plus
   `otherCurrencies`); report them that way and never add them up.
 - **Preview a split before creating it** when the division matters:
   `groupsplit transactions create "Dinner" 84.20 --group <id> --preview` shows the split the
   server would apply and creates nothing.
-- **Do not print the output of `groupsplit auth token`.** It is a bearer token. It is for
-  piping into another tool, not for a transcript.
+- **Do not print the output of `groupsplit auth token`.** It is a bearer token, for piping
+  into another tool.
 - **A guest counts as a person.** A group names whoever it is sharing costs with
-  (`groups add-guest`) -- there is no email and, by default, no link -- and from that moment
-  they can be given a share, be the payer, and be settled with, so use their user id (the
-  `groups members` row where `isGuest` is true, or `groups guests`) as you would a member's.
-  You record their side of everything: "Carlos paid me back" is `groups settle` with
-  Carlos's id. Removing one is `groups remove-member` once they are square, and they stay in
-  the history as a past guest. A claim moves a guest's position onto the claimer's account
-  and says what moved -- report it.
+  (`groups add-guest`; no email and, by default, no link). From then on they can be given a
+  share, be the payer and be settled with, so use their user id (the `groups members` row
+  where `isGuest` is true, or `groups guests`) as you would a member's. You record their side
+  of everything: "Carlos paid me back" is `groups settle` with Carlos's id. Removing one is
+  `groups remove-member` once they are square, and they stay in the history as a past guest.
+  A claim moves a guest's position onto the claimer's account and says what moved; report it.
 - **Somebody who has left is fixed in place.** They cannot be a payer or a share on anything
   new. On an old expense they were on, renaming, re-dating and re-filing work, and so does a
-  new amount with `--split` keeping their share exactly as it is; deleting it, re-dividing
-  it or any other amount change is refused with `TRANSACTION_MOVES_DEPARTED_BALANCE`, which
-  names them. Report that refusal -- do not work around it. To come back they need a link or
-  invitation issued after they left (`GROUP_REJOIN_NEEDS_NEW_INVITATION` otherwise). Who may
-  do what is one table in `docs/participants.md`.
-- **A lost link is recoverable only if it was opened.** `invitations list` answers the
-  guest links this account has opened -- there is no address to match, so nothing knows
-  about one that was never followed. If the user never opened theirs, a member can print it
-  again with `groups guest-link create`.
+  new amount with `--split` keeping their share as it is. Deleting it, re-dividing it or any
+  other amount change is refused with `TRANSACTION_MOVES_DEPARTED_BALANCE`, which names them.
+  Report that refusal; do not work around it. To come back they need a link or invitation
+  issued after they left (`GROUP_REJOIN_NEEDS_NEW_INVITATION` otherwise). Who may do what is
+  one table in `docs/participants.md`.
+- **A lost link is recoverable only if it was opened.** `invitations list` returns the guest
+  links this account has opened. There is no address to match, so a link never followed is
+  unknown to it. If the user never opened theirs, a member can print it again with
+  `groups guest-link create`.
 - **A guest's link expires 30 days after it is issued.** Expired, it is the same 404
   (`GROUP_INVITATION_NOT_FOUND`) as a claimed one, and `groups guests` marks it expired.
-  `groups guest-link create` issues a new one -- the old URL stays dead, so it has to be sent
-  again.
+  `groups guest-link create` issues a new one. The old URL stays dead, so the new one has to
+  be sent again.
 - **A guest's link is a credential, not an id.** Whoever opens one takes on the shares
   recorded for that guest, so it belongs to the person the user is sending it to and
   nowhere else. Do not paste one into a shared channel, a commit, an issue, or a transcript
   you did not have to write it into, and do not confuse it with `groups link`, which is the
   group's open door and claims nothing.
-- **Settle with a person, not a group.** `groupsplit settle plan` is the answer to "how do
-  I clear this?": it adds every group's balance up per person, so one payment clears a
-  friend you owe in two places. `groups settle` is still right when the user means one
-  group specifically.
+- **Settle with a person, not a group.** `groupsplit settle plan` answers "how do I clear
+  this?" It adds up every group's balance per person, so one payment clears a friend you owe
+  in two places. `groups settle` is still right when the user means one group.
 - **Settling a period is `--through <day>`, not arithmetic.** "Settle August" is
   `settle plan --through 2026-08-31` (or `groups settle-up <group-id> --through ...`). It
-  counts expenses up to the day and the repayments made for it, and later repayments only
-  as far as they pay it down, so nothing already paid is asked for twice. Summing a month's expenses yourself leaves the repayments out --
-  do not present that as what is owed.
+  counts expenses up to the day and the repayments made for it, and later repayments only as
+  far as they pay it down, so nothing already paid is asked for twice. Summing a month's
+  expenses yourself leaves the repayments out; do not present that as what is owed.
 - **`groupsplit config list`** answers what the *next* command will talk to, and says which
-  source each value came from. Run it before wondering why a request went somewhere
-  unexpected.
+  source each value came from. Run it when a request went somewhere unexpected.
 - **Know whose expenses a listing covers before you report a total.** `transactions list`
   and `transactions summary` are the caller's own expenses; `--group` switches both to the
   group's whole ledger, whoever paid. `transactions monthly` and the two
-  `transactions shares` commands stay the caller's whichever way, and there `--group` only
-  narrows. The flag's own description on each command says which it does -- read it in the
-  schema rather than assuming, since one flag name covers both behaviours.
+  `transactions shares` commands stay the caller's either way, and there `--group` only
+  narrows. One flag name covers both behaviours, so read its description in the schema for
+  each command.
 - **Never total a group's spending from an expense listing without saying what is missing.**
   Settlements are a different transaction type and appear in none of these commands, so
   every figure they give is gross. `groupsplit groups activity <group-id>` is everything a
-  group did, transfers included; `groupsplit users position` is where somebody actually
-  stands. Reporting a group's spend as though it were net is the mistake this CLI is
-  shaped to make easy.
+  group did, transfers included; `groupsplit users position` is where somebody stands.
 - Set `GROUPSPLIT_DEBUG=1` to attach a stack trace to an unexpected error. An envelope with
-  code `CLI_INTERNAL_ERROR` is a defect in the CLI, not a usage mistake -- report it rather
-  than working around it.
+  code `CLI_INTERNAL_ERROR` is a defect in the CLI, not a usage mistake: report it; do not
+  work around it.
 
 ## Where to look next
 
