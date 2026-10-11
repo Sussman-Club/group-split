@@ -27,17 +27,17 @@ each mode carries that shape as a pair of extension methods next to the code tha
 
 | Resource | Run mode | Publish mode |
 | --- | --- | --- |
-| Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp(configuration)`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
+| Keycloak | [`AsDevelopmentKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDevelopmentExtensions.cs): realm and theme bind-mounted from the checkout, Mailpit as the relay, a data volume | [`AsDeployedKeycloak`](../src/GroupSplit.AppHost/Extensions/KeycloakDeploymentExtensions.cs): served under the public origin at `/idp` behind the web app's forwarder, realm and theme shipped as Compose configs, a Compose healthcheck; plus [`WithSmtp()`](../src/GroupSplit.AppHost/Extensions/SmtpExtensions.cs) for the relay |
 | Realm settings | `realm-settings` waits for healthy Keycloak, then reconciles the managed settings from the realm export; the API waits for the worker to finish | The same worker runs as a one-shot Compose service and waits for Keycloak's healthcheck; the API starts only after it exits successfully |
 | Postgres | `WithPostgresMcp` on each database (Aspire's own); DBX and a `psql` REPL in the dashboard's terminal dock on the server, as on the Redis cache | [`AsDeployedPostgres`](../src/GroupSplit.AppHost/Extensions/PostgresDeploymentExtensions.cs): the database-creation script the orchestrator would otherwise have run, a Compose healthcheck |
+| Storage | `AddBucket` on the RustFS server; the orchestrator creates the `receipts` bucket once the server is up | [`AsDeployedRustFs`](../src/GroupSplit.AppHost/Extensions/RustFsDeploymentExtensions.cs): wraps the entrypoint in a script, shipped as a Compose config, that creates the bucket over S3, and a healthcheck that passes only once it exists; `WithRustFsConsole` turns the console on, reachable only inside the Compose network |
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithPrepareOnPush`, which makes `aspire do push` also write the Compose artifacts |
 
-Only run mode adds the MAUI head, demo seeder, local realm-reset command, Scalar, and Mailpit
-itself; publish mode adds the deployment-only parameters below, while the shared integration
-parameters are declared in both modes. `PublishAs*` calls,
-which Aspire ignores in run mode, stay on the shared chain where they read as part of the
-resource's definition.
+Only run mode adds the MAUI head, demo seeder, CLI, local realm-reset command, Scalar, and
+Mailpit itself; publish mode adds the deployment-only parameters below, while the shared
+integration parameters are declared in both modes. `PublishAs*` calls, which Aspire ignores
+in run mode, stay on the shared chain where they read as part of the resource's definition.
 
 The rule for adding something new: if a deployment would never run it, it goes in the run
 block; if it only makes sense once there is no AppHost around to orchestrate, it goes in
@@ -46,7 +46,7 @@ either block, give it an `AsDevelopment*` / `AsDeployed*` pair in its own file u
 `Extensions/` rather than growing the block. Files that are shipped into containers, the
 realm, the Keycloak theme and the Postgres init script, live under `Assets/`. The theme
 restates the app's design tokens rather than importing them, so a style change has to be
-made in every view that shows it -- see [design-system.md](design-system.md).
+made in every view that shows it; see [design-system.md](design-system.md).
 
 The generic Compose plumbing those methods lean on is in
 [`Extensions/DeploymentExtensions.cs`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs):
@@ -63,13 +63,12 @@ The page then looks loaded but stays inert, and the browser reports
 because its initial state is smaller.
 
 [`RenderModeConfig.cs`](../src/GroupSplit.App/GroupSplit.App.Web/RenderModeConfig.cs) sets a
-finite **256 KiB** limit on the Blazor hub, preserving prerendered state with headroom over
-the approximately 44 KiB startup message observed in production. Other hubs keep their
-defaults. This is a per-message ceiling, not an unlimited allowance: if tracker state grows
-past this budget, reduce the persisted data rather than removing the limit.
+256 KiB limit on the Blazor hub, which leaves headroom over the startup message of about
+44 KiB seen in production. Other hubs keep their defaults. The limit is per message: if
+tracker state grows past it, reduce the persisted data and keep the limit.
 
 To diagnose this failure, temporarily set `Logging__LogLevel__Microsoft.AspNetCore.SignalR`
-to `Debug` on the **web** container and inspect its logs in the GroupSplit Aspire dashboard.
+to `Debug` on the `web` container and inspect its logs in the GroupSplit Aspire dashboard.
 The size rejection is logged as `The maximum message size of ...B was exceeded` and is not
 visible at the usual production logging level. Restore the logging level after diagnosis.
 Do not log the persisted state, authentication cookies, or circuit secrets. See Microsoft's
@@ -83,16 +82,16 @@ environment's secrets and variables as `Parameters__<lower-cased name>`, the spe
 Aspire documents for CI (dashes in a parameter name are written as underscores), so a
 GitHub entry called `WEB_HOSTNAME` is what the parameter `web-hostname` resolves to.
 
-The allowlist is deliberate: it is what stops a future, unrelated repository secret from
-being forwarded into the AppHost and written into the generated deployment environment.
+The allowlist stops a future, unrelated repository secret from being forwarded into the
+AppHost and written into the generated deployment environment.
 
-The workflow reads each entry from exactly one place -- a variable or a secret, whichever
-the table below names -- so the column is load-bearing. Optional entries fall back to the
-defaults declared by the AppHost when they are absent.
+The workflow reads each entry from the one place the table below names, a variable or a
+secret; the same name stored as the other kind is never read. Optional entries fall back to
+the defaults declared by the AppHost when they are absent.
 
-The cost is that **adding a parameter takes two edits, not one** -- a GitHub entry of the
-matching name, and the same name added to the deploy workflow's allowlist. A GitHub entry
-the workflow does not name is simply never seen by the AppHost and falls back to its default.
+The cost is that adding a parameter takes two edits: a GitHub entry of the matching name,
+and the same name added to the deploy workflow's allowlist. A GitHub entry the workflow
+does not name never reaches the AppHost, which falls back to its default.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |
@@ -123,8 +122,8 @@ the workflow does not name is simply never seen by the AppHost and falls back to
 | `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
 
 Optional values are declared with [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
-which supplies the default when configuration has no value. The switches still control
-whether an integration is active, while validation steps check cross-field rules after
+which supplies the default when configuration has no value. The switches decide whether an
+integration is active, and validation steps check the cross-field rules after
 Aspire's `process-parameters` step has resolved the values and before `build-prereq`, which
 every image build waits on.
 
@@ -170,7 +169,7 @@ The AppHost maps the provider switch and enablement to API configuration. It mod
 and receipt deployment with Aspire's `AddOpenAI("azure-openai")` and `WithModel("receipt-transcription", ...)`
 and gives the API that model reference. Aspire then injects
 `ConnectionStrings__receipt-transcription` containing `Endpoint`, `Key`, and `Model`; the API
-deliberately does not receive those values as separate environment variables. The API's
+does not receive those values as separate environment variables. The API's
 `AddReceiptTranscription` binds the selector options through the .NET options pattern and resolves
 the selected provider from DI when the request scope is created.
 A reading is one attempt with a two-minute budget (`ReceiptTranscription:Timeout`), whichever
@@ -183,9 +182,9 @@ in the table above; add them to the `production` environment, and set the switch
 when the feature is not used.
 
 Whether bank sync is on is not a switch inside the API. The Plaid connector is registered
-when credentials are present, and bank sync is available exactly when a connector answers,
-so `plaid-enabled` exists for the deployment's benefit: off, it sends an empty client id,
-which the API reads as no Plaid at all. The two ends cannot disagree about it.
+when both credentials are present, and bank sync is available when a connector answers. The
+AppHost passes the credentials through whatever `plaid-enabled` says, so the switch only
+decides what the publish checks for; to turn bank sync off, leave the credentials empty.
 
 ## Linking a bank that redirects
 
@@ -200,18 +199,18 @@ For the redirect flow, two addresses have to be the same one:
 1. Register `https://your-origin/bank/oauth` as a redirect URI in the Plaid dashboard.
 2. Set `plaid-redirect-uri` to exactly that.
 
-`/bank/oauth` is served by the web app and is not configurable — it is the page that picks
+`/bank/oauth` is served by the web app and is not configurable. It is the page that picks
 the interrupted session back up, using the token the tab wrote down before Link opened. A
 value pointing anywhere else is refused when the API starts, because the alternative is
 somebody signing in at their bank and landing on a page that cannot finish what they
 started, with the bank believing it is connected.
 
 "Anywhere else" is measured against `Banking:PublicOrigin` where a deployment sets it: the
-redirect has to be on that origin, and end in `/bank/oauth`. Without it — locally, where no
-public origin is given — only the path can be checked, so a value on the wrong host is
-caught by Plaid refusing the link token rather than by the API refusing to start.
+redirect has to be on that origin, and end in `/bank/oauth`. Without it (locally, where no
+public origin is given) only the path can be checked, so a value on the wrong host is
+caught by Plaid refusing the link token instead.
 
-The two ends cannot check each other at runtime: Plaid matches the registered address
+The two ends cannot check each other at runtime. Plaid matches the registered address
 exactly and refuses to mint a link token against one it does not recognise, so a mismatch
 in the dashboard is every OAuth bank failing to link.
 
@@ -250,8 +249,8 @@ base64, a readable PKCS#12 and a private key. It cannot tell whether it is the *
 the ring was wrapped with, so the API checks that itself at startup: it
 unprotects one stored token and refuses to start if it cannot. Deploying a different but
 well-formed certificate would otherwise pass every check, mint a fresh key, and leave every
-stored token unreadable — and an item whose token is gone can be neither synced, nor
-repaired in update mode, nor removed at the provider, because all three need the token.
+stored token unreadable. An item whose token is gone can be neither synced, nor repaired in
+update mode, nor removed at the provider, because all three need the token.
 
 Locally there is usually no certificate and the ring is stored unwrapped, which is the
 ordinary development posture and is logged as a warning at startup. Anywhere else it fails
@@ -273,12 +272,12 @@ is worth one.
 
 For a while this did not fail closed (#328): a deployment could link banks with no
 certificate, and the ring was then written unwrapped beside the tokens. Setting the
-certificate afterwards does **not** fix that by itself. `ProtectKeysWithCertificate` only
+certificate afterwards does not fix that by itself. `ProtectKeysWithCertificate` only
 wraps keys created from then on; Data Protection never rewrites a key it has already
 stored, and never deletes one. The old key stays in the table in the clear, stays the
 default key until it expires (90 days after it was made), and keeps opening every token it
 protected. And every database backup taken while it was there holds the key and the tokens
-together -- that is, live read access to those banks -- however the live database is fixed
+together, which is live read access to those banks, however the live database is fixed
 later.
 
 So "rewrapping" here means making the exposed tokens worthless, not re-encrypting the key.
@@ -312,17 +311,17 @@ removes the item at Plaid, which kills its token); go straight to step 4.
 still there and still readable, which the next step needs.
 
 **3. Retire every token the unwrapped key protected.** Each person unlinks each of their
-banks -- **Unlink** on the linked-banks card, or `groupsplit bank unlink <connection-id>`.
+banks: **Unlink** on the linked-banks card, or `groupsplit bank unlink <connection-id>`.
 Unlinking hands the token to Plaid's `/item/remove` first, so the token a backup holds stops
 working at Plaid. File or skip anything still in the inbox first: unlinking deletes the
 connection's imported rows, though expenses already filed from them keep everything but the
 link. A connection the API cannot read the token of is unlinked locally only and logged as
 an error naming the item; remove that item in the Plaid dashboard by hand.
 
-(Keeping the connections instead means rotating each token in place -- Plaid's
-`/item/access_token/invalidate` returns a new token and kills the old one -- and protecting
-the new one with a wrapped key. Nothing in the repository does that yet; at this size,
-relinking is cheaper than writing it.)
+(Keeping the connections instead means rotating each token in place with Plaid's
+`/item/access_token/invalidate`, which returns a new token and kills the old one, and
+protecting the new one with a wrapped key. Nothing in the repository does that yet; at this
+size, relinking is cheaper than writing it.)
 
 **4. Delete the unwrapped keys, then restart the API.**
 
@@ -343,19 +342,21 @@ read `unwrapped`.
 
 **6. Treat the old backups as bank credentials.** Any backup of the app database taken
 while an unwrapped key and a token sat in it held both. Once step 3 is done, the tokens in
-it are dead at Plaid -- but until then, and for any connection that could not be removed at
+it are dead at Plaid. Until then, and for any connection that could not be removed at
 Plaid, keep those backups as tightly held as the Plaid secret itself, and delete the ones
 nobody needs.
 
+## Bank webhooks
+
 Webhooks need an address the provider can reach: a deployment is served on one, and locally a
-dev tunnel supplies one. With no address at all nothing breaks -- none is sent, a sync runs
+dev tunnel supplies one. With no address at all nothing breaks: none is sent, a sync runs
 when the app asks for one, on linking or through **Sync now**, and the nightly sweep catches
 whatever a missed webhook would have.
 
 The address is `Banking:PublicOrigin` plus `/webhooks/{provider}`, and a deployment gets it
 from `web-hostname`: the same origin everything else is served on, whose `/webhooks` path the
-web app forwards to the API. It is configured rather than read off the request on purpose --
-the request's host is whatever the caller wrote in the `Host` header, and this address is
+web app forwards to the API. It is configured rather than read off the request because the
+request's host is whatever the caller wrote in the `Host` header, and this address is
 handed to a provider as where to deliver somebody's bank activity. A value that is not an
 absolute HTTPS origin fails the start, because a provider refuses such an address and the
 alternative is finding out from the first person who tries to link a bank.
@@ -386,11 +387,11 @@ winget install Microsoft.devtunnel
 devtunnel user login
 ```
 
-The other half is that access has to be anonymous -- a provider has no account here and no
-token, and what stands in for one is its signature over the bytes it sent, which the API
+The other half is that access has to be anonymous. A provider has no account here and no
+token; what stands in for one is its signature over the bytes it sent, which the API
 checks before reading them. That reasoning covers `/webhooks` and only `/webhooks`: the
-tunnel fronts the web app's root, so for as long as the run lasts the whole local app --
-sign-in page, dev data and all -- answers to anybody holding the address. Turn it on while
+tunnel fronts the web app's root, so for as long as the run lasts the whole local app
+(sign-in page, dev data and all) answers to anybody holding the address. Turn it on while
 you are working on webhooks and off again afterwards. Aspire hosts the tunnel only while the
 run lasts, but stopping the run does not delete it: the dev tunnels service keeps it, anonymous
 access and all, until it has gone unhosted for its expiration. The AppHost sets that to a day
@@ -401,23 +402,22 @@ rather than the service's 30, so a tunnel left over from webhook work goes away 
 
 The web app has a second, unrelated key ring. It protects the sign-in cookie, the
 antiforgery token, the OIDC correlation, nonce and state cookies, and the sign-in tickets and
-tokens held in Redis (see [Sessions across a deploy](#sessions-across-a-deploy)) -- none of
-which is stored in the database, so this ring is nothing to do with the one above and the two never
-read each other's keys.
+tokens held in Redis (see [Sessions across a deploy](#sessions-across-a-deploy)). None of
+that is stored in the database, and the two rings never read each other's keys.
 
 It lives in a Docker volume mounted at the container's home directory, and
 `DataProtection:KeyRingPath` points the app at it. Both halves come from the AppHost's
 `WithKeyRingVolume`, so the mount and the path cannot drift apart.
 
-The volume is the whole point. Without it the ring sits in the container's writable layer
-and every deploy takes it: the replacement container cannot decrypt a single cookie its
-predecessor issued, which surfaces as `The key {...} was not found in the key ring` against
+Without the volume the ring sits in the container's writable layer and every deploy takes
+it: the replacement container cannot decrypt a single cookie its predecessor issued, which
+surfaces as `The key {...} was not found in the key ring` against
 an antiforgery token, and `Unable to unprotect the message.State` for anybody who was
 signing in at that moment. Everyone is silently signed out on each release.
 
-Mounted at the home directory rather than at the keys directory itself, and that is not
-cosmetic. Docker seeds a new named volume from the image's contents *and ownership* when
-the mount point exists in the image, and creates it root-owned when it does not. These
+It is mounted at the home directory, not at the keys directory itself. Docker seeds a new
+named volume from the image's contents *and ownership* when the mount point exists in the
+image, and creates it root-owned when it does not. These
 images run as a non-root user and create the keys directory at runtime rather than baking
 it in, so mounting that path directly hands the app a directory it cannot write to. The
 home directory does exist in the image and belongs to that user, so the volume inherits it.
@@ -426,9 +426,9 @@ Missing `DataProtection:KeyRingPath` outside development is refused at startup r
 quietly defaulted, for the same reason the certificate above is: the default is what made
 this invisible in the first place.
 
-Unlike the bank ring, this one is not encrypted at rest. The threat is different -- it sits
-in a volume on the host, and whatever can read the volume can already read the container it
-belongs to -- and what it protects is a session, not a bank token.
+Unlike the bank ring, this one is not encrypted at rest. The threat is different: it sits
+in a volume on the host, whatever can read the volume can already read the container it
+belongs to, and what it protects is a session, not a bank token.
 
 Deleting the volume is harmless: everybody signs in again.
 
@@ -436,15 +436,13 @@ Deleting the volume is harmless: everybody signs in again.
 
 The browser never holds one, and cannot: it holds a cookie, the cookie carries a lookup key
 and nothing else, and every call it makes to the API goes through this app's `/api`
-forwarder, which puts the bearer token on the proxied request. That is the whole point of
-the arrangement.
+forwarder, which puts the bearer token on the proxied request.
 
 `SaveTokens` is off, so the tokens are not in the authentication ticket either. That was the
-default and it works, because the ticket is held server-side by the ticket store -- but the
+default and it works, because the ticket is held server-side by the ticket store. But the
 only thing keeping the tokens out of the cookie would then be that store staying configured,
-which is a load-bearing detail one line away from being changed. They live in
-`ServerSideTokenStore` instead, keyed by the sign-in session, which a cookie cannot carry by
-construction rather than by arrangement.
+one line away from being changed. They live in `ServerSideTokenStore` instead, keyed by the
+sign-in session, which a cookie cannot carry by construction.
 
 Keeping them current is `Duende.AccessTokenManagement.OpenIdConnect` (Apache-2.0, and not
 `Duende.BFF`, which is under Duende's own licence). The OIDC handler saves tokens and has no
@@ -452,7 +450,7 @@ opinion about refreshing them, and the three things that go wrong when you refre
 hand are all things it already handles:
 
 - **The same refresh token exchanged twice.** Keycloak rotates them one-time-use by default,
-  so the second exchange is refused -- and a page load fires several requests at once, every
+  so the second exchange is refused, and a page load fires several requests at once, every
   one of them holding the same token. One request stays signed in and the rest are signed
   out.
 - **A Keycloak restart read as a bad refresh token.** Only `invalid_grant` says the token is
@@ -496,16 +494,16 @@ windows advancing on different events is how one layer comes to expire a session
 still considers live. The period is stated on the sign-in page, so it has to be a number the
 app is willing to say out loud.
 
-The three settings move together or not at all -- `RememberedSessionLifetime` in
+The three settings move together or not at all: `RememberedSessionLifetime` in
 `AuthenticationExtensions`, and the two realm timeouts in `realms.json`. `RememberMeTest`
 reads the realm file and fails if they disagree.
 
 A fourth follows them: `ServerSideTokenStore` holds the tokens beside the ticket rather than
 inside it, so the two expire separately and the shorter one decides. It was twelve hours,
 which was longer than the cookie when the cookie was thirty minutes. Tokens going first is
-the worse way round -- the cookie and the ticket are both still good, so the app believes
+the worse way round: the cookie and the ticket are both still good, so the app believes
 the person is signed in while every call it makes on their behalf has nothing to make it
-with -- so the store keeps them for the remembered lifetime too.
+with. The store keeps them for the remembered lifetime too.
 
 The checkbox is on the app's own hand-off page rather than Keycloak's, which is why that
 page waits for a click instead of redirecting by itself. Keycloak has a "Remember Me" of its
@@ -517,7 +515,7 @@ one checkbox rather than two that disagree.
 
 What this costs: an unticked sign-in still leaves a user session at Keycloak that idles out
 on the same thirty days, because the realm has no way to tell the two apart any more. It
-grants nothing -- both cookies that could reach it are gone with the browser -- but it is
+grants nothing (both cookies that could reach it are gone with the browser), but it is
 rows in the session table for longer than they are worth.
 
 Realm import only creates a realm that does not exist yet. The `realm-settings` worker
@@ -533,10 +531,10 @@ the secret in `KEYCLOAK_ACCOUNT_DELETION_SECRET` and to its `manage-users` role;
 [Deleting an account](account-deletion.md).
 See [Applying this to a realm that already exists](../README.md#applying-this-to-a-realm-that-already-exists).
 It leaves SMTP configuration, the rest of each client and provider, other protocol mappers,
-the built-in authentication flows, roles, and users alone. Use the local **Reset local Keycloak realm** command to delete the realm and
-restart Keycloak when a complete re-import is needed. Turning `rememberMe` off is not
-retroactive either:
-sessions created while it was on keep their extended lifetime until they expire
+the built-in authentication flows, roles, and users alone. Use the local **Reset local
+Keycloak realm** command to delete the realm and restart Keycloak when a complete re-import
+is needed. Turning `rememberMe` off is not retroactive either: sessions created while it was
+on keep their extended lifetime until they expire
 ([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
 so on a realm that had it on, existing sessions have to be ended rather than waited out.
 
@@ -585,17 +583,19 @@ need. If 8180 is taken on the host, change `KeycloakDeploymentExtensions.AdminCo
 
 For one-off commands without a browser, use the admin CLI inside the container. Pass the
 credentials on each call, because each `exec` is a new process and a `config credentials` login
-does not carry over:
+does not carry over. Use the master-realm admin the realm worker signs in as
+(`keycloak-admin-user`), with its name and password set in your shell; the bootstrap `admin`
+need not exist any more:
 
 ```bash
 docker compose exec keycloak /opt/keycloak/bin/kcadm.sh get realms/group-split/clients \
   -q clientId=web-app --no-config --server http://localhost:8080/idp \
-  --realm master --user admin --password "$KEYCLOAK_PASSWORD"
+  --realm master --user "$KEYCLOAK_ADMIN_USER" --password "$KEYCLOAK_ADMIN_PASSWORD"
 ```
 
 Settings that belong to the repository still go in `realms.json`, where the realm worker applies
 them on the next deploy. The admin console and CLI are for one-off inspection and for what the
-worker deliberately leaves alone.
+worker leaves alone.
 
 ## Reaching the deployed dashboard
 
@@ -686,13 +686,13 @@ deploy now leaves people signed in.
 
 It carries a data volume and snapshots every thirty seconds, so the host rebooting or the
 stack being brought fully down costs at most the last few seconds of session writes rather
-than every session. Nothing in there is worth backing up -- the worst case is everybody
+than every session. Nothing in there is worth backing up: the worst case is everybody
 signing in again.
 
 Both are encrypted with [the sign-in key ring](#the-sign-in-key-ring) before they are
 written, because what is in there is every signed-in person's refresh token, and the volume
-is a file on the host. An entry the ring cannot open -- one written in plain text before
-this was done, or under a key that has since been lost -- reads as nothing stored: that
+is a file on the host. An entry the ring cannot open (one written in plain text before
+this was done, or under a key that has since been lost) reads as nothing stored: that
 session is signed out and signs in again, and nothing fails.
 
 `CACHE_PASSWORD` is a required secret for the same reason `DB_SERVER_PASSWORD` is: Aspire
@@ -701,7 +701,7 @@ generates one per publish otherwise, and the container is already running with t
 Two things this does not do. Redis being unreachable stops sign-in and refresh outright,
 which is the price of the sessions surviving anything else. And running more than one `web`
 replica would still race: the refresh concurrency control is in-process, so two replicas
-could exchange one refresh token at once -- and the Data Protection volume above is per-host,
+could exchange one refresh token at once. The Data Protection volume above is per-host too,
 so a second host would need a shared ring as well.
 
 ## Security headers and the cross-site check
@@ -712,8 +712,8 @@ HSTS for a year with subdomains. The policy is in `SecurityHeadersExtensions`, o
 thing a page loads: `'wasm-unsafe-eval'` for the WebAssembly runtime, inline styles for
 MudBlazor, Google Fonts, Plaid Link, Plaid's logo hosts, and this origin's own WebSocket for the
 server-rendered mode. The import map is the page's one inline script and is let in by a nonce.
-Adding a script, a frame or a font from somewhere new means adding it there too -- the browser
-refuses it silently otherwise, with only a line in the console to say so.
+Adding a script, a frame or a font from somewhere new means adding it there too; otherwise the
+browser refuses it with only a line in the console to say so.
 
 Responses under `/idp` are Keycloak's, and keep the headers Keycloak sends.
 
@@ -721,6 +721,14 @@ Writes through the cookie-authenticated `/api` route must show they came from th
 pages: `Sec-Fetch-Site: same-origin`, or the `X-GroupSplit-Request` header the WebAssembly
 client adds. Anything else is answered 403 `CROSS_SITE_REQUEST_REFUSED` and never forwarded.
 Signing out is a form `POST` to `/auth/logout` carrying the page's antiforgery token.
+
+The API limits, per person and per hour, the requests that cost money or invite guessing:
+receipt transcription (30), bank calls (30) and invitations (60). A refusal is 429
+`RATE_LIMITED`; the routes each limit covers, and the `RateLimits` configuration that changes
+them, are in [errors.md](errors.md#too-many-requests-429). The limits are keyed on the token's
+subject and never on the address, because the deployment trusts `X-Forwarded-For` from
+whoever sends it. They are counted in the API's memory, so a deploy resets them, and a second
+API instance would keep its own count.
 
 ## A dashboard for the integration tests
 
@@ -742,23 +750,22 @@ waiting for somebody to fix it from the dashboard. The dashboard goes away with 
 ## What the integration tests take from your user secrets
 
 `GroupSplit.AppHost.Test` runs the same AppHost, so it loads the same user secrets. It keeps
-the ones that describe state your machine already holds -- the Keycloak admin and the
+the ones that describe state your machine already holds: the Keycloak admin and the
 generated database, cache and storage passwords, which have to match the data volumes a
-normal run has initialised. Every provider parameter -- Azure OpenAI, Veryfi, Google sign-in, Plaid -- is set
-by `AppHostFixture.Parameters` and passed on the AppHost's command line, which outranks user
-secrets and `Parameters__…` environment variables, so a local test run never reaches a real
-provider on your key. `FixtureParameterTest` fails, naming the parameter but never its value,
+normal run has initialised. Every provider parameter (Azure OpenAI, Veryfi, Google sign-in,
+Plaid) is set by `AppHostFixture.Parameters` and passed on the AppHost's command line, which
+outranks user secrets and `Parameters__…` environment variables, so a local test run never
+reaches a real provider on your key. `FixtureParameterTest` fails, naming the parameter but never its value,
 if one of them is ever overridden.
 
 ## Building in a sandbox that has no SDK
 
 CI installs .NET with `actions/setup-dotnet`, which fetches it from
-`builds.dotnet.microsoft.com`. Some sandboxes -- Claude Code's remote environment among
-them -- allow only a narrow set of hosts, and that is not one of them: the download fails
+`builds.dotnet.microsoft.com`. Some sandboxes, Claude Code's remote environment among
+them, allow only a narrow set of hosts, and that is not one of them: the download fails
 with a 403 from the egress proxy, and so does `dot.net`, `dotnetcli.azureedge.net` and
-`aka.ms`. There is no need to give up on building there, because Ubuntu ships a .NET 10
-SDK that satisfies `global.json` and `packages.microsoft.com` and `api.nuget.org` are
-usually reachable:
+`aka.ms`. Building there still works, because Ubuntu ships a .NET 10 SDK that satisfies
+`global.json`, and `packages.microsoft.com` and `api.nuget.org` are usually reachable:
 
 ```bash
 apt-get install -y dotnet-sdk-10.0     # 10.0.1xx, which global.json's rollForward accepts
@@ -767,9 +774,9 @@ dotnet tool restore                    # dotnet-ef and nswag, from api.nuget.org
 
 Docker is a likelier casualty: the client is usually present with no daemon behind it, so
 the AppHost, the integration tests and anything using Testcontainers cannot run. The
-three unit test projects in the CI job need none of it. For work that really does need a
-database -- running a migration against real PostgreSQL rather than reasoning about its
-SQL -- a server from the distribution is enough, and needs no daemon:
+five unit test projects in the CI job need none of it. For work that does need a database
+(running a migration against real PostgreSQL rather than reasoning about its SQL), a server
+from the distribution is enough, and needs no daemon:
 
 ```bash
 apt-get install -y postgresql
@@ -779,10 +786,9 @@ su postgres -c "psql -c \"CREATE ROLE my_user LOGIN PASSWORD 'my_password' SUPER
 su postgres -c "psql -c 'CREATE DATABASE my_db OWNER my_user;'"
 ```
 
-Those names are not arbitrary: they are the connection string
-`AppContextPostgreSqlFactory` falls back to when none is configured, so
-`dotnet ef database update --project src/GroupSplit.Data.PostgreSQL.Migrations` finds it
-with no further setup.
+Those names are the connection string `AppContextPostgreSqlFactory` falls back to when none
+is configured, so `dotnet ef database update --project src/GroupSplit.Data.PostgreSQL.Migrations`
+finds it with no further setup.
 
 ## Preview a deployment locally
 
@@ -790,14 +796,20 @@ The workflow is not the only way to see what a deploy would ship. The same step 
 can be run from a checkout, minus the pushes:
 
 ```bash
-Parameters__web_hostname=https://groupsplit.example.com Parameters__dashboard_token=anything Parameters__cache_password=anything aspire do prepare-compose --environment preview --non-interactive
+Deployment__Version=preview \
+Parameters__web_hostname=https://groupsplit.example.com \
+Parameters__dashboard_token=anything Parameters__cache_password=anything \
+Parameters__keycloak_admin_user=anything Parameters__keycloak_admin_password=anything \
+Parameters__keycloak_account_deletion_secret=anything \
+aspire do prepare-compose --environment preview --non-interactive
 ```
 
 The step is named after the Compose environment resource, `compose`, the way the Docker
 integration always names it: `prepare-{resource name}`. This builds the images locally,
 generates the migration bundle, and writes `docker-compose.yaml`, `.env` and
-`.env.preview` to `src/GroupSplit.AppHost/aspire-output`, which is ignored by git. The Compose file is what Komodo receives; the env file is the
-values it would be handed alongside.
+`.env.preview` to `src/GroupSplit.AppHost/aspire-output`, which is ignored by git. The
+Compose file is what Komodo receives; the env file is the values it would be handed
+alongside.
 
 Two things about that command are easy to trip over:
 
@@ -811,8 +823,10 @@ Two things about that command are easy to trip over:
 - **Publish mode does not read user secrets.** The AppHost runs as `Production` there, so
   the Google credentials and passwords you have locally do not carry over. Passwords are
   generated fresh for the environment and cached as above; everything else has to arrive
-  as `Parameters__*` -- which includes `cache-password`, since it is declared rather than
-  generated by an integration, the same as `dashboard-token`.
+  as `Parameters__*`. That includes every required parameter the AppHost declares itself,
+  which no integration generates: `web-hostname`, `dashboard-token`, `cache-password`, the
+  two `keycloak-admin-*` and `keycloak-account-deletion-secret`. Without
+  `Deployment__Version` the AppHost refuses to publish at all.
 
 `aspire publish --list-steps` shows the publish pipeline without running it; the deploy
 pipeline the workflow uses is `aspire do --list-steps` with the same `--environment`.
@@ -830,8 +844,8 @@ identifier behind it.
    conversation resolved, and a green CI run.
 3. Merge it. That push to `main` is the deploy.
 
-Only `dev` may merge into `main`. GitHub cannot express that as a setting -- neither
-branch protection nor rulesets can restrict where a pull request comes from -- so
+Only `dev` may merge into `main`. GitHub cannot express that as a setting (neither
+branch protection nor rulesets can restrict where a pull request comes from), so
 [`main-merge-policy.yml`](../.github/workflows/main-merge-policy.yml) says it as a check,
 and the check is required on `main`. A pull request from anywhere else fails it and
 explains that the change belongs in `dev` first.
@@ -840,15 +854,15 @@ explains that the change belongs in `dev` first.
 
 A merge to `main` raises the **patch**: the job reads the newest `app-v*` tag, adds one,
 and writes the new tag before it builds anything. A minor or major release has to be
-asked for, because nothing in a commit says which it should be -- run the workflow
+asked for, because nothing in a commit says which it should be. Run the workflow
 manually (`Actions` -> `Deploy` -> `Run workflow`) and choose the `bump`. It is the CLI's
 release job in shape, [`release-cli.yml`](../.github/workflows/release-cli.yml), including
 that a tag already on `HEAD` is reused, so re-running a failed deploy ships the same
 version rather than burning a new number.
 
 The version is the image tag and the `Deployment__Version` the AppHost refuses to publish
-without, so a deployed stack, its images and its tag all name the same thing. Note the tag
-is claimed *before* the build: a build that then fails leaves a version number spent and a
+without, so a deployed stack, its images and its tag all name the same thing. The tag is
+claimed before the build, so a build that then fails leaves a version number spent and a
 tag on a commit that never shipped.
 
 `app-v*` is the application. `cli-v*` is the command line, which releases on its own and
@@ -868,9 +882,9 @@ never touches the deployed stack.
 1. Runs CI and waits for it. `deploy.yml` calls
    [`ci.yml`](../.github/workflows/ci.yml) as a reusable workflow and depends on it, so
    unit and integration tests both have to pass before anything is built or pushed. It is a
-   call rather than a `workflow_run` trigger for a specific reason: `workflow_run` reports
-   the run against the default branch, and the environment's `main`-only policy would then
-   refuse every deployment.
+   call rather than a `workflow_run` trigger because `workflow_run` reports the run against
+   the default branch, and the environment's `main`-only policy would then refuse every
+   deployment.
 2. Checks the allowlisted secrets and variables, so a missing value fails in seconds rather
    than after the images exist. A feature switch that is off is a notice; one that is on but
    missing its credentials is a failure.
@@ -892,12 +906,12 @@ never touches the deployed stack.
 9. Hands the Compose file and `.env.production` to Komodo, which owns the stack on the
    Docker host, and redeploys it. `/execute` is asynchronous, so the job polls the update.
    A deploy that is still running after five minutes is reported as still running, not as
-   failed, because the two need different responses. `DeployStack` is deliberately not
-   retried: a retry after a lost response would start a second deploy of the same stack.
+   failed, because the two need different responses. `DeployStack` is not retried: a
+   retry after a lost response would start a second deploy of the same stack.
    When the deploy fails, the job prints the failed Compose stages and fetches the log of
    every service Compose names, whether it exited non-zero or its healthcheck never
-   passed, before it rolls the stack back -- the rollback recreates the container, and
-   with it the only copy of that log. What else it does is in
+   passed, before it rolls the stack back, because the rollback recreates the container
+   and with it the only copy of that log. The rest is in
    [When a deploy fails](#when-a-deploy-fails).
 10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
     completed Komodo update proves the stack operation finished, not that the release is
@@ -914,11 +928,9 @@ first.
 
 ### When a deploy fails
 
-When Komodo's update fails, the job prints the failed stages with their errors, and the
-log of any service that did not complete or never became healthy. What it does next
-depends on whether the failure was the registry login, which
-[`classify-komodo-failure.sh`](../.github/scripts/classify-komodo-failure.sh) reads from
-the stages the update records:
+What the job does after a failed Komodo update depends on whether the failure was the
+registry login, which [`classify-komodo-failure.sh`](../.github/scripts/classify-komodo-failure.sh)
+reads from the stages the update records:
 
 | Failed at | Production touched | What the job does |
 | --- | --- | --- |
@@ -951,11 +963,11 @@ before it pulls them. It logs in as the account the workflow writes into the sta
 environment; today that is a person's own GitHub account. Komodo keeps that account's
 token under Settings -> Providers, next to the account name.
 
-The token must be a **classic** personal access token with the **`read:packages`** scope
-and nothing else. GHCR does not accept fine-grained tokens for pulling, and a classic token
+The token must be a classic personal access token with the `read:packages` scope and
+nothing else. GHCR does not accept fine-grained tokens for pulling, and a classic token
 cannot be narrowed to one organisation, so `read:packages` lets it read every package its
-account can see -- one more reason to keep it to that scope. The account itself needs read
-access to the organisation's `group-split` packages.
+account can see. That is one more reason to keep it to that scope. The account itself
+needs read access to the organisation's `group-split` packages.
 
 When the token expires or is revoked, every deploy fails at "Login to Registry" with
 `Error response from daemon: Get "https://ghcr.io/v2/": denied`, and the job summary says
@@ -1000,8 +1012,9 @@ of a private repository; that is not done.
 The smoke test does not roll back. It runs after Komodo has deployed, so a release that
 fails it is already the one being served; recovering means deploying a known-good version,
 and the digest-pinned manifest from an earlier run is what names one. Nothing backs the
-database up before the migration container runs either, and migrations are forward-only --
-so rolling images back does not roll the schema back with them.
+database up before the migration container runs either, and migrations are forward-only,
+so rolling images back, by hand or by the job after a failed deploy, does not roll the
+schema back with them.
 
 Nothing on the runner starts a container. `aspire deploy` would, which is why the
 workflow uses `aspire do` instead.
