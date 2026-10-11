@@ -7,10 +7,10 @@ product, and none of them can read another's stylesheet.
 
 ## The rule
 
-**A style change is not finished until it is in every view that shows it — the app, the
+**A style change is not finished until it is in every view that shows it: the app, the
 Keycloak login pages, the Keycloak account console, and the mail.** There is no build step
-that fans a token out, and nothing fails when one of them drifts: the app simply starts
-looking newer than the sign-in page in front of it. Changing a colour, a font, a radius or
+that fans a token out, and nothing fails when one of them drifts; the app starts looking
+newer than the sign-in page in front of it. Changing a colour, a font, a radius or
 a shadow means editing every file in the table below that carries it.
 
 ## Where each copy lives
@@ -24,8 +24,8 @@ a shadow means editing every file in the table below that carries it.
 | [`Assets/keycloak/themes/email/messages/messages_en.properties`](../src/GroupSplit.AppHost/Assets/keycloak/themes/email/messages/messages_en.properties) | Password reset, verification and required-action mail | Literal hex and pixel values inline, because a mail has no stylesheet |
 | [`BrandMark.razor`](../src/GroupSplit.App/GroupSplit.App.Shared/Components/BrandMark.razor) and the two `logo.svg` under `Assets/keycloak/themes/*/resources/img/` | The three-arc mark | Literal `fill` attributes, one copy each |
 
-The token names are deliberately identical across the CSS files, so a change is usually the
-same line pasted into each. The two Keycloak stylesheets carry only the subset their pages
+The token names are identical across the CSS files, so a change is usually the same line
+pasted into each. The two Keycloak stylesheets carry only the subset their pages
 can use.
 
 ## Both schemes, every time
@@ -37,29 +37,16 @@ Keycloak override on `prefers-color-scheme`: PatternFly's own dark values sit un
 would darken our tokens on a page PatternFly still believed to be light. Each stylesheet
 carries the reasoning in its header comment.
 
-Two colours legitimately differ between the app and Keycloak's dark scheme, for contrast
+One colour legitimately differs between the app and Keycloak's dark scheme, for contrast
 rather than taste: `--gs-teal-deep` is the *lighter* tint in dark mode, because hover has
 to move away from the background rather than toward it.
 
-## The one exception: data marks
-
-`--gs-mark-paid` and `--gs-mark-share` are defined on `.gs-chart` in
-`wwwroot/css/components/dashboard.css` and nowhere
-else, and that is deliberate rather than an oversight. They are the only tokens the rule
-above does not apply to, because Keycloak draws no charts and a mail has none: there is no
-second copy for them to drift from.
-
-The paid mark is a more chromatic step of the brand teal (`#0f8f83` in light, `#3fbfb2` in
-dark) rather than `--gs-teal` itself. The UI teal is tuned to sit under text and behind
-surfaces, and at that chroma a two-pixel line on a cream ground reads as grey. A colour that
-carries a value has to be legible as a *mark*, which is a different requirement from being
-legible as a *surface*, and using one token for both jobs would mean losing one of them.
-
 ## Checking a change
 
-The app is the easy one — `aspire start` and look. For the Keycloak pages, the theme is
-bind-mounted from the checkout in run mode, so a reload picks up an edited stylesheet
-without rebuilding anything. Keycloak caches theme resources, so start it with
+The app is the easy one: `aspire start` and look. For the Keycloak pages, the theme is
+copied into the container when it starts (`WithContainerFiles` in
+`KeycloakDevelopmentExtensions.cs`), so an edited stylesheet shows once Keycloak is
+restarted, not on a page reload. Keycloak caches theme resources, so start it with
 `KC_SPI_THEME_STATIC_MAX_AGE=-1`, `KC_SPI_THEME_CACHE_THEMES=false` and
 `KC_SPI_THEME_CACHE_TEMPLATES=false` while iterating, or hard-reload. Check both schemes:
 the OS setting is what drives them.
