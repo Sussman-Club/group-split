@@ -245,7 +245,7 @@ are never sent.
 | Adding a guest, issuing and stopping their link | `IGuestService` |
 | Whose balances appear | `GroupService.NetBalances`, `GetAllGroupNetBalances` |
 | Who is in the settlement plan | `DebtCalculationService.MinimizeTransactions` -- everybody |
-| Who a repayment may name | `GroupService.Settle`, `SettlementService.RecordRepayment`, `TransactionService.Update` |
+| Who a repayment may name | `SettlementService.Settle`, `SettlementService.RecordRepayment`, `TransactionService.Update` |
 | Removing a guest | `GroupService.RemoveGroupMember` → `DetachGuest` |
 | What happens when a link is claimed | `InvitationService.Claim`, `IGroupParticipants.HandOver` |
 | What happens when one is declined | `InvitationService.Decline`: the link stops |

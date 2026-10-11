@@ -130,7 +130,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (groupId, self, other) = await GroupOfTwo();
 
-        await GetService<IGroupService>().Settle(groupId,
+        await GetService<ISettlementService>().Settle(groupId,
             new SettleRequest { UserId = other, Amount = 30.00m },
             TestContext.Current.CancellationToken);
 
@@ -173,7 +173,7 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             }, TestContext.Current.CancellationToken);
         }
 
-        await GetService<IGroupService>().Settle(groupId,
+        await GetService<ISettlementService>().Settle(groupId,
             new SettleRequest { UserId = other, Amount = 5.00m },
             TestContext.Current.CancellationToken);
 

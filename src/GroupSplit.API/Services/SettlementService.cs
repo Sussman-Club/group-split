@@ -49,6 +49,13 @@ public interface ISettlementService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Records one repayment between the caller and one other member, in the direction the
+    /// request states.
+    /// </summary>
+    Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Records one repayment between two members, both named, whichever of them the caller
     /// is -- including neither.
     /// </summary>
@@ -183,42 +190,34 @@ public class SettlementService(
         };
     }
 
+    public Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var callerId = userContext.User.Id;
+
+        // Both sides can record one now, and which side this is comes from the request
+        // rather than from the balance. Under "owed to you" the caller is the creditor and
+        // the money moves from the other member to them; under "you owe" they are the
+        // debtor saying they have paid, and it moves the other way. Reading the direction
+        // off the balance instead would get the debtor's case exactly backwards -- they are
+        // acting precisely while the balance still says they owe.
+        //
+        // One row either way, where a settlement used to be a matched pair of a positive
+        // and a negative transaction hung off a pseudo-rule; a pair is two chances to write
+        // half a settlement.
+        var (fromUserId, toUserId) = request.Direction is SettlementDirection.YouPaidThem
+            ? (callerId, request.UserId)
+            : (request.UserId, callerId);
+
+        return Record(groupId, fromUserId, toUserId, request.Amount, request.Date,
+            request.Description, request.Through, cancellationToken);
+    }
+
     public async Task<SettlementPayment> RecordRepayment(Guid groupId,
         RecordRepaymentRequest request, CancellationToken cancellationToken = default)
     {
-        // Scoped to the caller's own groups, as everywhere else: a group they are not in is
-        // not found, rather than one they can write repayments into.
-        var group = await (await groups.GetGroupById(groupId, cancellationToken))
-                        .FirstOrDefaultAsync(cancellationToken)
-                    ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        group.RefuseIfPersonalOf(userContext.User.Id);
-
-        if (request.FromUserId == request.ToUserId)
-            throw new ConflictException(ErrorCodes.SettlementWithSelf,
-                "A settlement needs two different people.");
-
-        // Participants, not only members, at either end: the members record what a guest
-        // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
-        var from = await participants.Find(group.Id, request.FromUserId, cancellationToken)
-                   ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                       "The person who paid is not in this group.");
-
-        var to = await participants.Find(group.Id, request.ToUserId, cancellationToken)
-                 ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                     "The person who was paid is not in this group.");
-
-        // Whatever the caller says, not what a balance implies. Nothing is checked against
-        // what is outstanding: a group entering its history writes repayments for months
-        // whose expenses are already in, and a repayment that overshoots today's balance is
-        // an ordinary thing anyway -- somebody rounding up, or paying ahead.
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
-
-        var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
-
-        context.Add(group.SettlementBetween(from, to, request.Amount, date, description));
-
-        await context.SaveChangesAsync(cancellationToken);
+        var (from, to) = await Record(groupId, request.FromUserId, request.ToUserId, request.Amount,
+            request.Date, request.Description, null, cancellationToken);
 
         return new SettlementPayment
         {
@@ -228,6 +227,52 @@ public class SettlementService(
             ToUserName = $"{to.FirstName} {to.LastName}".Trim(),
             Amount = request.Amount
         };
+    }
+
+    /// <summary>
+    /// Writes one repayment between two participants of a group: what settling with one
+    /// member and recording a repayment between any two both come down to.
+    /// </summary>
+    private async Task<(User From, User To)> Record(Guid groupId, Guid fromUserId, Guid toUserId,
+        decimal amount, DateTimeOffset? date, string? description, DateOnly? coversThrough,
+        CancellationToken cancellationToken)
+    {
+        // Scoped to the caller's own groups, as everywhere else: a group they are not in is
+        // not found, rather than one they can write repayments into.
+        var group = await (await groups.GetGroupById(groupId, cancellationToken))
+                        .FirstOrDefaultAsync(cancellationToken)
+                    ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        group.RefuseIfPersonalOf(userContext.User.Id);
+
+        if (fromUserId == toUserId)
+            throw new ConflictException(ErrorCodes.SettlementWithSelf,
+                "A settlement needs two different people.");
+
+        // Participants, not only members, at either end: the members record what a guest
+        // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
+        var from = await participants.Find(group.Id, fromUserId, cancellationToken)
+                   ?? throw new NotFoundException(ErrorCodes.UserNotFound,
+                       "The person who paid is not in this group.");
+
+        var to = await participants.Find(group.Id, toUserId, cancellationToken)
+                 ?? throw new NotFoundException(ErrorCodes.UserNotFound,
+                     "The person who was paid is not in this group.");
+
+        // Whatever the caller says, not what a balance implies. Nothing is checked against
+        // what is outstanding: a group entering its history writes repayments for months
+        // whose expenses are already in, and a repayment that overshoots today's balance is
+        // an ordinary thing anyway -- somebody rounding up, or paying ahead.
+        //
+        // The stated date, or now. A payment made on the 30th and typed in on the 3rd
+        // belongs to the month it settled, not the one somebody got round to it in.
+        context.Add(group.SettlementBetween(from, to, amount,
+            (date ?? DateTimeOffset.UtcNow).ToUniversalTime(),
+            description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return (from, to);
     }
 
     public Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default) =>

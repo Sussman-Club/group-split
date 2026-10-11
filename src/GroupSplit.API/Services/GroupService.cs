@@ -183,9 +183,6 @@ public interface IGroupService
     Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(Cutoff? cutoff,
         CancellationToken cancellationToken = default);
 
-    Task Settle(Guid groupId, SettleRequest request,
-        CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Takes the caller out of a group they are in.
     /// </summary>
@@ -696,53 +693,6 @@ public class GroupService(
                     };
 
         return groupBalance;
-    }
-
-    public async Task Settle(Guid groupId, SettleRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var currentUser = userContext.User;
-
-        var resultGroup = await (await GetGroupById(groupId, cancellationToken))
-                              .FirstOrDefaultAsync(cancellationToken)
-                          ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        resultGroup.RefuseIfPersonalOf(currentUser.Id);
-
-        // A participant, not only a member: a guest's balance is real and is on the group's
-        // balances page, and the members record what a guest pays and is paid. Somebody who
-        // has gone is not here to settle with.
-        var user = await participants.Find(groupId, request.UserId, cancellationToken)
-                   ?? throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
-
-        if (user.Id == currentUser.Id)
-            throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
-
-        // Both sides can record one now, and which side this is comes from the request
-        // rather than from the balance. Under "owed to you" the caller is the creditor and
-        // the money moves from the other member to them; under "you owe" they are the
-        // debtor saying they have paid, and it moves the other way. Reading the direction
-        // off the balance instead would get the debtor's case exactly backwards -- they are
-        // acting precisely while the balance still says they owe.
-        //
-        // One row either way, where a settlement used to be a matched pair of a positive
-        // and a negative transaction hung off a pseudo-rule; a pair is two chances to write
-        // half a settlement.
-        var (from, to) = request.Direction is SettlementDirection.YouPaidThem
-            ? (currentUser, user)
-            : (user, currentUser);
-
-        // The stated date, or now. A payment made on the 30th and typed in on the 3rd
-        // belongs to the month it settled: without this the recorded moment was the only
-        // moment available, so a group closing September could not put September's payments
-        // in September.
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
-
-        var transfer = resultGroup.SettlementBetween(from, to, request.Amount, date,
-            request.Description?.Trim() is { Length: > 0 } note ? note : null, request.Through);
-
-        context.Add(transfer);
-        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task Leave(Guid groupId, CancellationToken cancellationToken = default)

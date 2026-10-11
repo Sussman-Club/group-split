@@ -187,7 +187,7 @@ public class PersonalGroupTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var other = await CreateNewUser();
         var settlements = GetService<ISettlementService>();
 
-        await RefusedAsPersonal(() => Groups.Settle(Me, new SettleRequest { UserId = other.Id, Amount = 5m }, Ct));
+        await RefusedAsPersonal(() => settlements.Settle(Me, new SettleRequest { UserId = other.Id, Amount = 5m }, Ct));
         await RefusedAsPersonal(() => settlements.SettleUp(Me, new SettleUpRequest(), Ct));
         await RefusedAsPersonal(() => settlements.RecordRepayment(Me, new RecordRepaymentRequest
         {
