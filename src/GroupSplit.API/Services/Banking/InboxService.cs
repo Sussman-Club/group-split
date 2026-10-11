@@ -425,7 +425,7 @@ public sealed class InboxService(
 
     private static string Named(string? requested, BankTransaction row) =>
         string.IsNullOrWhiteSpace(requested)
-            ? Clip(string.IsNullOrWhiteSpace(row.MerchantName) ? row.Description : row.MerchantName, 124)
+            ? Clip(string.IsNullOrWhiteSpace(row.MerchantName) ? row.Description : row.MerchantName, TransactionNames.MaxLength)
             : requested;
 
     private static string Clip(string value, int maxLength) =>

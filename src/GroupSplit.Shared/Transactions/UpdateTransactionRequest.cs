@@ -93,7 +93,7 @@ public record UpdateTransactionRequest
     public IReadOnlyList<SplitInput>? Splits { get; set; }
 
     [Required(ErrorMessage = "Name is required.")]
-    [StringLength(124, ErrorMessage = "Name must be less than 124 characters.")]
+    [StringLength(TransactionNames.MaxLength, ErrorMessage = "Name must be at most {1} characters.")]
     public string Name { get; set; } = null!;
 
     [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]

@@ -380,7 +380,7 @@
             .ToArray();
 
         var suggestion = names.Length == 0 ? "Receipt" : string.Join(", ", names);
-        return suggestion.Length <= 124 ? suggestion : suggestion[..124].TrimEnd();
+        return suggestion.Length <= TransactionNames.MaxLength ? suggestion : suggestion[..TransactionNames.MaxLength].TrimEnd();
     }
 
     private async Task OnCategoryPickedAsync(Guid? id)
