@@ -4,7 +4,7 @@
 @using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
-@inject ICategoriesClient CategoriesClient
+@inject ICategoryCommands Categories
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject IMerchantCommands Merchants
@@ -617,9 +617,8 @@
             IReadOnlyList<CategoryResponse> personal = [];
 
             if (Login.User is { } owner)
-                await Errors.TryAsync(
-                    async () => personal = [.. await CategoriesClient.GetCategoriesAsync(owner.Id)],
-                    "Could not load your categories.");
+                personal = await Categories.ForGroupAsync(owner.Id,
+                    context: "Could not load your categories.") ?? [];
 
             if (load != _groupLoad)
                 return false;
@@ -640,12 +639,10 @@
         //
         // Into locals, and written down only once all three are in and still wanted: a read
         // that failed leaves this group with none rather than the last group's.
-        IReadOnlyList<CategoryResponse> categories = [];
         IReadOnlyList<UserInfo> members = [];
 
-        var categoriesRead = Errors.TryAsync(
-            async () => categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
-            "Could not load this group's categories.");
+        var categoriesRead = Categories.ForGroupAsync(groupId,
+            context: "Could not load this group's categories.");
 
         var membersRead = Errors.TryAsync(
             async () => members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
@@ -660,7 +657,7 @@
         if (load != _groupLoad)
             return false;
 
-        _categories = categories;
+        _categories = await categoriesRead ?? [];
         _members = members;
 
         var listed = await rules;

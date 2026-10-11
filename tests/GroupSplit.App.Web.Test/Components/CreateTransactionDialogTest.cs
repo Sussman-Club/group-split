@@ -67,6 +67,7 @@ public class CreateTransactionDialogTest : ComponentTest
         Services.AddSingleton(_merchants.Object);
         Services.AddSingleton(_login.Object);
         Services.AddSingleton<IMerchantCommands, MerchantCommands>();
+        Services.AddSingleton<ICategoryCommands, CategoryCommands>();
 
         // Scoped, for the reason UpdateTransactionDialogTest gives: the real
         // TransactionCommands takes IDialogService, which MudBlazor registers scoped.

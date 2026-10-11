@@ -3,7 +3,7 @@
 @using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject ISplitRuleCommands Rules
-@inject ICategoriesClient CategoriesClient
+@inject ICategoryCommands Categories
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
@@ -285,10 +285,10 @@
                 .ToDictionary(member => member.Id, member => member.Label());
         });
 
-        await Errors.CaptureAsync(async () =>
-        {
-            var categories = await CategoriesClient.GetCategoriesAsync(history.GroupId);
+        var categories = await Categories.ForGroupQuietlyAsync(history.GroupId);
 
+        if (categories is not null)
+        {
             _usedBy =
             [
                 .. categories
@@ -296,7 +296,7 @@
                     .Select(category => category.Name)
                     .Order()
             ];
-        });
+        }
 
         StateHasChanged();
         MudDialog.StateHasChanged();

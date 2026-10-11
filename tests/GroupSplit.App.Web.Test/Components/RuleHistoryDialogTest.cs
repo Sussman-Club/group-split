@@ -80,6 +80,7 @@ public class RuleHistoryDialogTest : ComponentTest
 
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton<ISplitRuleCommands, SplitRuleCommands>();
+        Services.AddSingleton<ICategoryCommands, CategoryCommands>();
     }
 
     /// <summary>

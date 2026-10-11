@@ -21,11 +21,10 @@ public interface ICategoryCommands
     /// A group's categories, each carrying the name of the rule it divides by.
     /// </summary>
     /// <remarks>
-    /// A read, and it lives here because the dialog that manages categories is the only
-    /// thing that reads them by way of the command layer, and it reads them to write to
-    /// them. Unlike <see cref="ITransactionCommands.PreviewAsync"/> a failure is shown:
-    /// this is asked once, when the dialog opens, and a dialog that opens empty for no
-    /// stated reason is worse than one that says why.
+    /// A read, and it lives here so the dialogs that manage categories and file expenses
+    /// under them read them the same way. Unlike <see cref="ITransactionCommands.PreviewAsync"/>
+    /// a failure is shown: this is asked once, when the dialog opens, and a dialog that
+    /// opens empty for no stated reason is worse than one that says why.
     /// </remarks>
     /// <returns>Null when the read failed, which the caller can take as "do not open".</returns>
     /// <param name="includeArchived">
@@ -33,8 +32,22 @@ public interface ICategoryCommands
     /// in order to offer bringing it back. False -- the default -- is what every picker
     /// wants: the labels the group files under today.
     /// </param>
+    /// <param name="context">
+    /// The sentence in front of the reason when the read fails. The expense dialogs say whose
+    /// categories they were after -- "your", or "this group's".
+    /// </param>
     Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId, bool includeArchived = false,
-        CancellationToken ct = default);
+        string context = "Could not load the categories.", CancellationToken ct = default);
+
+    /// <summary>
+    /// The same, without saying anything when the read fails.
+    /// </summary>
+    /// <remarks>
+    /// For the rule history dialog, which counts the categories behind a rule and says so in
+    /// its own words when it cannot.
+    /// </remarks>
+    /// <returns>Null when the read failed.</returns>
+    Task<IReadOnlyList<CategoryResponse>?> ForGroupQuietlyAsync(Guid groupId, CancellationToken ct = default);
 
     Task<CategoryResponse?> CreateAsync(CreateCategoryRequest request, CancellationToken ct = default);
 

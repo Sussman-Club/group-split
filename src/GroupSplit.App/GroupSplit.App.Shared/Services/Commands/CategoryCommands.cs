@@ -24,16 +24,31 @@ public sealed class CategoryCommands(
     DataChangeNotifier changes) : ICategoryCommands
 {
     public async Task<IReadOnlyList<CategoryResponse>?> ForGroupAsync(Guid groupId,
-        bool includeArchived = false, CancellationToken ct = default)
+        bool includeArchived = false, string context = "Could not load the categories.",
+        CancellationToken ct = default)
     {
         IReadOnlyList<CategoryResponse> loaded = [];
 
         var done = await errors.TryAsync(async () =>
         {
             loaded = [.. await categories.GetCategoriesAsync(groupId, includeArchived, ct)];
-        }, "Could not load the categories.");
+        }, context);
 
         return done ? loaded : null;
+    }
+
+    public async Task<IReadOnlyList<CategoryResponse>?> ForGroupQuietlyAsync(Guid groupId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return [.. await categories.GetCategoriesAsync(groupId, cancellationToken: ct)];
+        }
+        catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
+        {
+            // A bug still throws: the error boundary is for those.
+            return null;
+        }
     }
 
     public async Task<CategoryResponse?> CreateAsync(CreateCategoryRequest request, CancellationToken ct = default)
