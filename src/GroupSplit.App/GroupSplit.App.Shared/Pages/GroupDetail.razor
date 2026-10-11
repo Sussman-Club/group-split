@@ -75,7 +75,7 @@
         @switch (Current)
         {
             case "activity":
-                <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" Kind="@LedgerKind" KindChanged="OnLedgerKindChanged" />
+                <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" Kind="@LedgerKind" QueryChanged="OnLedgerQueryChanged" />
                 break;
 
             case "people":
@@ -181,20 +181,17 @@ else if (NotFound)
         };
 
     /// <summary>
-    /// Puts the chosen filter in the URL without adding a history entry, so the browser's
-    /// back button still leaves the group rather than stepping back through three chips.
+    /// Puts the ledger's narrowing in the URL without adding a history entry, so the browser's
+    /// back button still leaves the group rather than stepping back through every chip.
     /// </summary>
-    private void OnLedgerKindChanged(ActivityKind? kind)
-    {
-        var query = kind switch
-        {
-            ActivityKind.Expense => "?kind=expense",
-            ActivityKind.Transfer => "?kind=settlement",
-            _ => ""
-        };
-
-        Nav.NavigateTo($"/groups/{GroupId}/activity{query}", replace: true);
-    }
+    /// <remarks>
+    /// Written onto the tab's own path rather than the one in the address bar: an old
+    /// <c>/expenses</c> link implies a kind, and leaving it there would bring the kind back the
+    /// moment somebody picked "Everything".
+    /// </remarks>
+    private void OnLedgerQueryChanged(IReadOnlyDictionary<string, object?> query) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(Href("activity")).ToString(), query),
+            replace: true);
 
     private string Href(string key) => key == "balances" || (key == "activity" && Group is { IsPersonal: true })
         ? $"/groups/{GroupId}"

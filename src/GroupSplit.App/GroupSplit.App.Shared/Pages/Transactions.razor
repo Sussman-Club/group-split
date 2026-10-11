@@ -216,10 +216,19 @@
     </div>
 
     <div class="gs-reveal" style="--i: 2">
+        @* Keyed so a URL arriving from outside -- the nav link back to a bare page --
+           rebuilds the grid on the page and sort it asks for: both are only read when a
+           grid starts.
+
+           The page size goes before the page, and the order matters: the grid takes its
+           first page size by resetting to page one, which undid a page from the URL that
+           had already been set. *@
         <MudDataGrid T="TransactionResponse"
+                     @key="_gridGeneration"
                      @ref="_grid"
                      ServerData="LoadPageAsync"
-                     RowsPerPage="10"
+                     @bind-RowsPerPage="_pageSize"
+                     @bind-CurrentPage="_page"
                      SortMode="SortMode.Single"
                      Hover="true"
                      Bordered="false"
@@ -228,13 +237,13 @@
                      RowClass="is-openable"
                      Class="gs-grid">
             <Columns>
-                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="@Initially("dateTime")">
                     <CellTemplate>
                         <TransactionWhen Value="@context.Item.DateTime"/>
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Name" Title="Expense">
+                <PropertyColumn Property="x => x.Name" Title="Expense" InitialDirection="@Initially("name")">
                     <CellTemplate>
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
                             <MerchantMark PaidByUserName="@context.Item.PaidByUserName"
@@ -261,13 +270,13 @@
                    a missing value. *@
                 @* HideSmall: a phone gives every column its own line, and the group and
                    the category are context rather than the point. *@
-                <PropertyColumn Property="x => x.GroupName" Title="Group" HideSmall="true">
+                <PropertyColumn Property="x => x.GroupName" Title="Group" HideSmall="true" InitialDirection="@Initially("group")">
                     <CellTemplate>
                         <span class="gs-tag neutral">@(context.Item.GroupName ?? "Personal")</span>
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Category" Title="Category" HideSmall="true">
+                <PropertyColumn Property="x => x.Category" Title="Category" HideSmall="true" InitialDirection="@Initially("category")">
                     <CellTemplate>
                         @if (!string.IsNullOrWhiteSpace(context.Item.Category))
                         {
@@ -276,7 +285,8 @@
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right"
+                                InitialDirection="@Initially("amount")">
                     <CellTemplate>
                         @* Under "your share" the share is the sort key and the amount is
                            the context, so the amount is the quieter of the two. *@
@@ -290,7 +300,7 @@
                 @if (_view is not ExpenseView.PaidByYou)
                 {
                     <TemplateColumn Title="Your share" SortBy="@(x => (x as ExpenseShareResponse)?.Share ?? 0m)"
-                                    HeaderClass="gs-right" CellClass="gs-right">
+                                    HeaderClass="gs-right" CellClass="gs-right" InitialDirection="@Initially("share")">
                         <CellTemplate>
                             @if (context.Item is ExpenseShareResponse row)
                             {
@@ -381,7 +391,19 @@
         Everything
     }
 
+    // Everything the reader can narrow is in the URL, so a refresh or a shared link shows
+    // the same rows (#398). Strings rather than typed values: a typed one that does not
+    // parse throws, and a mangled link should open the page on its defaults instead.
     [Parameter, SupplyParameterFromQuery(Name = "view")] public string? ViewParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "ledger")] public string? LedgerParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "page")] public string? PageParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "size")] public string? SizeParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "sort")] public string? SortParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "expense")] public string? ExpenseParameter { get; set; }
 
     /// <summary>
     /// The chips, each with the line that says what it counts.
@@ -432,6 +454,10 @@
     private string _where = AllLedgers;
 
     private MudDataGrid<TransactionResponse>? _grid;
+    private int _gridGeneration;
+    private int _page;
+    private int _pageSize = ListingQuery.DefaultPageSize;
+    private (string Key, bool Descending) _sort = ListingQuery.DefaultSort;
 
     private TransactionSummaryResponse? _paidSummary;
     private ExpenseShareSummaryResponse? _shareSummary;
@@ -681,6 +707,15 @@
         GridState<TransactionResponse> state, CancellationToken cancellationToken)
     {
         var sort = state.SortDefinitions.FirstOrDefault();
+
+        await ForgetUnknownGroupAsync();
+
+        // Every narrowing ends up here -- a filter goes back to the first page and reloads,
+        // and the pager and the headers reload by themselves -- so this is where the URL
+        // catches up with what the reader is looking at.
+        _sort = sort is null ? ListingQuery.DefaultSort : (SortKey(sort), sort.Descending);
+        WriteUrl();
+
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
 
         // Two listings behind three views: the expenses where you are the payer, and the
@@ -774,6 +809,8 @@
     {
         var version = ++_figuresVersion;
 
+        await ForgetUnknownGroupAsync();
+
         // Read once, here: both requests below have to describe one narrowing, and the
         // fields can move while they are in flight.
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
@@ -800,6 +837,19 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>
+    /// A group from the URL that the reader is not in reads as every group, rather than as a
+    /// request the server refuses. Waits for the groups, because both reads can start before
+    /// they are in.
+    /// </summary>
+    private async Task ForgetUnknownGroupAsync()
+    {
+        await GroupsService.IsReadyTask;
+
+        if (_groupId is { } id && GroupsService.Groups.All(group => group.Id != id))
+            _where = AllLedgers;
+    }
+
     // ---------------------------------------------------------------- filters --
 
     private async Task SetViewAsync(ExpenseView view)
@@ -813,25 +863,12 @@
         if (_view is ExpenseView.YourShare && _where == PersonalOnly)
             _where = AllLedgers;
 
-        // In the URL, so a view is a place. Replacing rather than pushing keeps the back
-        // button leaving the page instead of stepping back through three chips.
-        Nav.NavigateTo($"/transactions{QueryFor(view)}", replace: true);
+        // In the URL, so a view is a place.
+        WriteUrl();
 
         await ReadFiguresAsync();
         await BackToFirstPageAsync();
     }
-
-    /// <summary>
-    /// The default is the one with no query string, so "All yours" is the bare URL and the
-    /// other two name themselves. <c>?view=everything</c> is still honoured below, because
-    /// it is what the default used to be reached by and bookmarks outlive defaults.
-    /// </summary>
-    private static string QueryFor(ExpenseView view) => view switch
-    {
-        ExpenseView.YourShare => "?view=share",
-        ExpenseView.PaidByYou => "?view=paid",
-        _ => ""
-    };
 
     private async Task OnSearchChangedAsync(string _)
     {
@@ -892,12 +929,64 @@
     /// in the home page's lists.
     /// </para>
     /// </remarks>
-    private async Task ViewAsync(TransactionResponse row)
+    private Task ViewAsync(TransactionResponse row) => ShowExpenseAsync(row.Id);
+
+    /// <summary>The expense whose details are open, which the URL names so it can be linked to.</summary>
+    private Guid? _expense;
+
+    private bool _showingExpense;
+
+    /// <summary>
+    /// Opens an expense's details and names it in the URL until they close, so a refresh
+    /// keeps it open and the address can be sent to somebody.
+    /// </summary>
+    private async Task ShowExpenseAsync(Guid id)
     {
-        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, row.Id } };
+        _showingExpense = true;
+        _expense = id;
+        WriteUrl();
+
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        IDialogReference dialog;
+
+        try
+        {
+            dialog = await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        }
+        catch
+        {
+            ForgetExpense();
+            throw;
+        }
+
+        // Not awaited: the click that opened it would stay unfinished for as long as the
+        // details are open.
+        _ = ForgetExpenseWhenClosedAsync(dialog);
+    }
+
+    private async Task ForgetExpenseWhenClosedAsync(IDialogReference dialog)
+    {
+        await dialog.Result;
+        await InvokeAsync(ForgetExpense);
+    }
+
+    private void ForgetExpense()
+    {
+        _showingExpense = false;
+        _expense = null;
+        WriteUrl();
+    }
+
+    /// <summary>
+    /// An expense named in the URL is opened once the page is interactive: a dialog needs a
+    /// live page to open on, which a prerender is not.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_expense is { } id && !_showingExpense)
+            await ShowExpenseAsync(id);
     }
 
     private async Task EditAsync(TransactionResponse row)
@@ -997,7 +1086,7 @@
     {
         _loadCts = new CancellationTokenSource();
 
-        ResolveView();
+        Apply(Asked);
 
         TransactionsService.OnTransactionsChanged += ReRender;
         GroupsService.OnGroupsChanged += ReRender;
@@ -1009,20 +1098,92 @@
         Changes.GroupsChanged += OnDataChangedAsync;
     }
 
+    /// <summary>The page's narrowing as it is spelled in the query string.</summary>
+    private sealed record Query(string? View, string? Search, string? Range, string? From, string? To,
+        string? Ledger, string? Page, string? Size, string? Sort, string? Expense);
+
     /// <summary>
-    /// Which view the URL asks for, or the one this page has always shown. A stale bookmark
-    /// is not a reason to answer nothing.
+    /// The query this page last read or wrote. A parameter set that brings the same one back
+    /// is the echo of the page's own write, and is not applied: what is typed in the search
+    /// box between a keystroke and its debounce would be overwritten by it.
+    /// </summary>
+    private Query? _settled;
+
+    private Query Asked => new(ViewParameter, SearchParameter, RangeParameter, FromParameter, ToParameter,
+        LedgerParameter, PageParameter, SizeParameter, SortParameter, ExpenseParameter);
+
+    /// <summary>
+    /// What is on the page, spelled for the URL. Whatever the page opens on is left out, so
+    /// an untouched page has no query string at all.
+    /// </summary>
+    private Query Current
+    {
+        get
+        {
+            var (range, from, to) = ListingQuery.FormatRange(_range, OpensOn);
+
+            return new Query(
+                _view switch
+                {
+                    ExpenseView.YourShare => "share",
+                    ExpenseView.PaidByYou => "paid",
+                    _ => null
+                },
+                Search, range, from, to,
+                _where == AllLedgers ? null : _where,
+                ListingQuery.FormatPage(_page),
+                ListingQuery.FormatPageSize(_pageSize),
+                ListingQuery.FormatSort(_sort),
+                _expense?.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Puts what is on the page into the URL. Replacing rather than pushing keeps the back
+    /// button leaving the page instead of stepping back through every chip and keystroke.
+    /// </summary>
+    private void WriteUrl()
+    {
+        var query = Current;
+
+        // Gone already: an expense's details can close after its page has been left, and
+        // writing then would put this page's query on whatever page is open now.
+        if (query == _settled || CancellationToken.IsCancellationRequested)
+            return;
+
+        _settled = query;
+
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["view"] = query.View,
+            ["q"] = query.Search,
+            ["range"] = query.Range,
+            ["from"] = query.From,
+            ["to"] = query.To,
+            ["ledger"] = query.Ledger,
+            ["page"] = query.Page,
+            ["size"] = query.Size,
+            ["sort"] = query.Sort,
+            ["expense"] = query.Expense
+        }), replace: true);
+    }
+
+    /// <summary>
+    /// The view the URL asks for, or the default for anything it does not recognise. A stale
+    /// bookmark is not a reason to answer nothing.
     /// </summary>
     /// <remarks>
-    /// Resolved in <c>OnInitialized</c> as well as on every later parameter set, because the
-    /// first read happens in <c>OnInitializedAsync</c> -- which runs before
-    /// <c>OnParametersSet</c>. Reading the view only there meant arriving straight at
+    /// Read in <c>OnInitialized</c> rather than only on a parameter set, because the first
+    /// read happens in <c>OnInitializedAsync</c> -- which runs before
+    /// <c>OnParametersSet</c>. Reading it only there meant arriving straight at
     /// <c>?view=share</c> asked the server the default view's question and then rendered the
     /// answer under the share view's headings.
     /// </remarks>
-    private void ResolveView()
+    private void Apply(Query query)
     {
-        _view = ViewParameter?.ToLowerInvariant() switch
+        _settled = query;
+
+        _view = query.View?.ToLowerInvariant() switch
         {
             "share" or "yourshare" => ExpenseView.YourShare,
             "paid" or "paidbyyou" => ExpenseView.PaidByYou,
@@ -1031,11 +1192,49 @@
             _ => ExpenseView.Everything
         };
 
+        _searchString = query.Search ?? "";
+        _range = ListingQuery.ParseRange(query.Range, query.From, query.To, OpensOn);
+
+        // A group id is checked against the reader's groups once they are in -- see
+        // LoadPageAsync. Here it only has to be one.
+        _where = query.Ledger?.ToLowerInvariant() switch
+        {
+            SharedOnly => SharedOnly,
+            PersonalOnly => PersonalOnly,
+            var other => Guid.TryParse(other, out var id) ? id.ToString() : AllLedgers
+        };
+
         if (_view is ExpenseView.YourShare && _where == PersonalOnly)
             _where = AllLedgers;
+
+        _page = ListingQuery.ParsePage(query.Page);
+        _pageSize = ListingQuery.ParsePageSize(query.Size);
+        _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "group", "category", "amount", "share");
+        _expense = Guid.TryParse(query.Expense, out var expense) ? expense : null;
     }
 
-    protected override void OnParametersSet() => ResolveView();
+    /// <summary>
+    /// The direction a column starts sorted in: the one the URL asked for, or none. Only read
+    /// when the grid starts, which is why the grid is rebuilt when a new URL arrives.
+    /// </summary>
+    private SortDirection Initially(string key) => _sort.Key != key
+        ? SortDirection.None
+        : _sort.Descending ? SortDirection.Descending : SortDirection.Ascending;
+
+    /// <summary>
+    /// A URL the page did not write -- the nav link back to a bare /transactions, say --
+    /// replaces everything on it, and the figures and the rows are read again.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Asked == _settled)
+            return;
+
+        Apply(Asked);
+        _gridGeneration++;
+
+        await ReadFiguresAsync();
+    }
 
     protected override async Task OnInitializedAsync()
     {
