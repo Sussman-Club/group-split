@@ -87,6 +87,9 @@ Groups you belong to, their members and their balances.
 | `groups link create <group-id>` | Make a join link for a group. Any link the group already had stops working. |
 | `groups link revoke <group-id>` | Turn off a group's join link, so the URL stops working. |
 
+The three deprecated commands last one release, and so does `isPendingInvitee` beside
+`isGuest` in the JSON.
+
 ### transactions
 
 Expenses and settlements.
@@ -246,9 +249,18 @@ on a taxed bill needs only the price. If a correction leaves a line without a ru
 stored shares stay as they were, and the `set` or `rule` call that gives it one divides the
 expense again.
 
+```bash
+groupsplit receipts show 7c1e...            # line ids, rules, whether it divides
+groupsplit receipts rule 7c1e... <line-id> --rule-version <version-id>
+groupsplit receipts rule 7c1e... <line-id>  # back to no rule
+groupsplit receipts preview 7c1e...         # stores nothing
+groupsplit receipts divide 7c1e...          # confirms with the figures
+```
+
 Tax is per line and the tip is spread over the lines by price, so each line is divided by its
 own rule as one amount: price, plus its tax, plus its share of the tip. That is one
-calculation, with a single rounding and a single remainder, as in every other division.
+calculation, with a single rounding and a single remainder, which goes to the largest line,
+as in every other division.
 
 What it refuses, before dividing:
 
@@ -263,6 +275,16 @@ What it refuses, before dividing:
 A bill belongs to an expense: an imported bank row is itemised by filing it first
 (`inbox file`) and typing the bill against the expense it became. One charge files as one
 expense.
+
+A source file is not the bill. Transcribing one gives a draft and saves nothing: review it,
+create the expense if there is none yet, then save the bill with `receipts set`.
+
+```bash
+groupsplit receipts transcribe ./receipt.pdf  # for an expense not yet recorded
+groupsplit receipts attachments upload <transaction-id> ./receipt.pdf
+groupsplit receipts attachments transcribe <transaction-id> <attachment-id>
+groupsplit receipts attachments download <transaction-id> <attachment-id> ./copy.pdf
+```
 
 Every group is given one "divide it by the bill" rule and cannot write a second, since the
 rule holds no settings for a second to differ by. To divide by the bill by default, find it
@@ -303,9 +325,16 @@ Reusable rules describing how an expense is divided.
 Every group also holds one rule per member that puts the whole amount on them, provisioned
 rather than written. `split-rules list` has a column each for the member a rule is **all
 for** and whether it is **built in**. Nothing renames, restates or deletes a built-in one
-(`update` and `delete` refuse before sending): an expense may name one without anybody having
-created it, so what it says has to stay fixed. A group that wants a division of its own in
-that shape creates one with `--sole <user-id>`, and that one is editable like any other.
+(`update` and `delete` refuse before sending, and the API's code is `SPLIT_RULE_NOT_EDITABLE`):
+an expense may name one without anybody having created it, so what it says has to stay
+fixed. A group that wants a division of its own in that shape creates one with
+`--sole <user-id>`, and that one is editable like any other.
+
+```bash
+groupsplit split-rules list --group <group-id>  # "All for" and "Built in"
+groupsplit split-rules create "Ana's gym" --group <group-id> --sole <user-id>
+groupsplit split-rules create "Mine" --group <group-id> --payer
+```
 
 No rule changes kind: `update` with a different shape is refused (`SPLIT_RULE_KIND_FIXED`).
 Change the numbers, or create a rule for the new shape. Writing a history is exempt, since it
@@ -335,6 +364,13 @@ Guest links and group join links you were sent.
 has opened that still works, so it is the way back to one when the user no longer has the
 message. The others take the link, as the whole URL or the token inside it.
 
+```bash
+groupsplit invitations list            # guest links you have opened that still work
+groupsplit invitations show <link>     # what it leads to, claiming nothing
+groupsplit invitations claim <link>    # take the guest's place; asks first
+groupsplit invitations decline <link>  # "this isn't me": the link stops working
+```
+
 ### bank
 
 Linked banks: what is connected, syncing it, and unlinking.
@@ -347,6 +383,20 @@ own site, or no account shared. Each ends in signing in again through update mod
 again with it ticked, then `bank refresh`. `sign-in expiring` works, but not for much longer.
 An account's `Access` reads `withdrawn` when that one account was revoked at the bank and the
 rest of the connection is fine.
+
+Linking happens in the provider's own UI, in a browser; the CLI does the token before it and
+the exchange after. `bank sync` answers once the pull is queued, not when it lands, so poll
+`inbox summary`, which is one count rather than a page. A server with no provider configured
+says so from `bank list` rather than listing nothing.
+
+```bash
+groupsplit bank link-token                                # for the provider's UI
+groupsplit bank link <public-token>                       # exchange what it gave back
+groupsplit bank link-token --connection <connection-id>   # update mode: sign in again
+groupsplit bank refresh <connection-id>                   # after sharing another account
+groupsplit bank sync <connection-id>                      # queued, not awaited
+groupsplit inbox summary                                  # cheap to poll
+```
 
 | Command | |
 | --- | --- |
@@ -376,6 +426,16 @@ Imported bank rows waiting to be filed.
 | `inbox dismiss-match <row-id> <transaction-id>` | Say an imported row and a suggested expense are not the same money. |
 | `inbox ignore <row-id>` | Keep a row out of the inbox without filing it. |
 | `inbox restore <row-id>` | Put an ignored row back in the inbox. |
+
+Filing rows without recording the same money twice, and what to do about a
+`POSSIBLE_DUPLICATE_EXPENSE` refusal, is the groupsplit-inbox skill.
+
+```bash
+groupsplit inbox file <row-id> --group <group-id> --category-id <category-id>
+groupsplit inbox ignore <row-id>                           # undone by inbox restore
+groupsplit inbox link <row-id> <transaction-id>            # it is the same payment
+groupsplit inbox dismiss-match <row-id> <transaction-id>   # not a match at all
+```
 
 ### config
 
@@ -435,6 +495,18 @@ groupsplit split-rules create "Two thirds me" --group $G --percent $ME=66.67 --p
 groupsplit categories create "Rent" --group $G --rule $RULE_ID --json
 ```
 
+An expense under no category, or under one naming no rule, divides by the group's default.
+Every group is given an "Even" rule and starts pointed at it; `groups show` names it under
+"Default split", and `groups set-default-split` moves it, though not onto the group's "divide
+it by the bill" rule (`SPLIT_RULE_INVALID`). Moving it changes the next expense and nothing
+recorded. An expense recorded before the group had a default holds no version, so its first
+edit adopts the default as it is then: on a back catalogue, move the default before editing.
+
+```bash
+groupsplit groups show $G                                  # "Default split", with its id
+groupsplit groups set-default-split $G $RULE_ID
+```
+
 `update` takes the same flags and means "from now on". To answer *how was this expense
 divided*, read `split-rules versions <rule-id>`, not `show`: `show` is what the rule says
 today, and an expense from March may have been divided by an earlier entry.
@@ -458,12 +530,28 @@ the rule divides today**: it is the row every recorded expense already points at
 reused, not replaced. The refusals are `SPLIT_RULE_ALREADY_HAS_HISTORY`,
 `SPLIT_RULE_HISTORY_ENDS_ELSEWHERE` and `SPLIT_RULE_HISTORY_INVALID`.
 
+```bash
+groupsplit split-rules versions <rule-id>
+groupsplit split-rules versions set <rule-id> --file history.json --dry-run  # print the chain
+groupsplit split-rules versions set <rule-id> --file history.json            # exit 4
+```
+
 Writing the history changes no expense: each keeps the version it already records, and the
 open one is backdated, not replaced. To say which version divided a particular expense, use
 `transactions update <id> --divided-by <version-id>` or `--hand-split` (the amounts are the
 expense's own). Those two contradict each other and contradict `--split` and `--redivide`.
 There is no pass that does it for a whole group: guessing each expense's rule from its
 category's *current* pointer is wrong for every group that has re-pointed a category since.
+
+```bash
+groupsplit tx update <id> --hand-split               # these amounts are the expense's own
+groupsplit tx update <id> --divided-by <version-id>  # this version of a rule worked them out
+```
+
+Neither moves a penny; they decide what a later edit does. An expense recorded as a rule's
+follows the rule when its amount or payer changes. One recorded as its own refuses an amount
+edit, unless its shares happen to be an even division, which the app made and would make
+again.
 
 Either one alongside an ordinary edit is two requests, the edit and then the record of what
 divided it, so a failure says which half landed ("the edit was saved, but recording what
@@ -533,6 +621,12 @@ as it reads now.
 `--split` and `--redivide` contradict each other. Prefer `--split` when the user gave you
 per-person figures and `--redivide` when they said "just split it the usual way".
 
+```bash
+groupsplit tx update <id> --amount 120.00 --split $ME=80 --split $YOU=40  # these amounts
+groupsplit tx update <id> --amount 120.00 --redivide                      # the rule decides
+groupsplit tx update <id> --amount 58.00 --preview                        # bill 48, tip 10
+```
+
 ### Changing an expense
 
 `transactions update` sends only what you name; everything else is left alone. The pairs that
@@ -544,7 +638,51 @@ between "leave it" and "clear it":
 | Move it to a group | `--group <group-id>` |
 | Take it out of its group, back onto your own ledger | `--personal` |
 | File it under a category | `--category-id <category-id>` |
-| File it under nothing, so it divides evenly | `--no-category` |
+| File it under nothing, so the group's default divides it | `--no-category` |
+
+A command that names nothing is refused (exit code 3), since the server would take an empty
+patch as a successful no-op. The command reads the expense first and sends the difference, so
+setting a field to the value it holds succeeds and changes nothing, and the same command can
+be run twice. These pairs are refused before anything is sent: `--group` and `--personal`,
+`--category-id` and `--no-category`, `--merchant-id` and `--no-merchant`, and `--split-rule`
+with `--split` or `--redivide`.
+
+```bash
+groupsplit tx update <id> --name "Dinner at Omar's"    # shares kept, whatever divided them
+groupsplit tx update <id> --description ""             # clear the note
+groupsplit tx update <id> --category-id <category-id>  # a rule's division follows the category
+groupsplit tx update <id> --no-category                # back to the group's default
+```
+
+### The personal group and other currencies
+
+Every account has a personal group, listed first by `groups list`, whose id is the user's own.
+An expense with no `--group` (`transactions create`, `inbox file`) goes there, and
+`transactions update --personal` moves one there. It divides nothing: `--split` on a personal
+expense is `SPLIT_ON_A_PERSONAL_EXPENSE`, and anything that needs a second person is
+`PERSONAL_GROUP_NOT_SHARED`. Its balance is always zero, so `users position` and
+`settle plan` leave it out.
+
+A category belongs to one group, so moving an expense filed under one (`--personal` or
+`--group`) is refused with `CATEGORY_NOT_FOUND` unless the same command passes
+`--no-category` or a `--category-id` from the group it is moving to.
+
+```bash
+groupsplit categories create "Groceries" --group <your-user-id>   # a category of your own
+groupsplit tx create "Weekly shop" 64.20 --category-id <category-id>
+groupsplit tx update <id> --personal --no-category
+groupsplit tx list --group <your-user-id>                         # your own spending
+groupsplit tx create "Dinner in Lisbon" 20 --currency EUR         # personal, in euros
+```
+
+A personal expense may be in any ISO 4217 currency; a group takes only its own, so leave
+`--currency` off there. An expense keeps its currency for good: no flag changes it, since that
+would relabel the amount without converting it. Money crossing into a group in another
+currency is `CURRENCY_MISMATCH` on `transactions create --group`, `inbox file --group` and
+`transactions update --group`, and nothing is written. Text output names a currency only when
+it is not the default (`20.00 EUR`); `transactions show` always does, and JSON always carries
+`currency`. `transactions monthly` draws one currency and says under the table what it left
+out.
 
 ### Before writing anything: `--preview`
 
@@ -583,6 +721,17 @@ one person and has no division to show.
 `--owed-only`, which keeps only the rows that are a debt: your share of an expense you paid
 for yourself is not money you owe.
 
+A `shares list` row carries `amount`, what the whole expense came to, and `share`, your part
+of it. An expense you paid for and owe a share of is listed too (`paidByYou`). `shares summary`
+answers `share`, your part of everything, and beside it `owedToOthers`, the part on expenses
+somebody else paid; only that one is a debt.
+
+```bash
+groupsplit tx shares list --sort-by share                   # what is costing you the most
+groupsplit tx shares list --group <group-id> --from 2026-01-01
+groupsplit tx shares summary
+```
+
 `transactions list` and `transactions summary` add `--paid-by <user-id>`, which narrows to
 one person's spending. Ids come from `groups members <group-id>`.
 
@@ -595,6 +744,14 @@ command:
 | --- | --- |
 | `transactions list`, `transactions summary` | **the group's whole ledger** -- every expense in it, whoever paid |
 | `transactions monthly`, `transactions shares list\|summary` | only *your* rows in that group |
+
+```bash
+groupsplit tx list                                          # expenses you paid for
+groupsplit tx summary                                       # and their total
+groupsplit tx list --group <group-id>                       # the group's whole ledger
+groupsplit tx summary --group <group-id>                    # and its total
+groupsplit tx list --group <group-id> --paid-by <user-id>   # one person's spending in it
+```
 
 Without `--group`, the first two answer only the caller's own expenses: a group of 1,411
 expenses answers a count of 2 to a member who paid for two of them. A short answer from these
@@ -612,6 +769,10 @@ It ignores the group's default period (`set-default-period`): without `--from`/`
 all time, whatever the app opens on. Without `--kind` it lists both kinds. `--from`/`--to`
 are date-times there and calendar dates (`2026-01-01`) on `inbox list`, which is what a bank
 puts on a row.
+
+```bash
+groupsplit groups set-default-period <group-id> all-time  # the app's Activity tab only
+```
 
 `transactions summary` and `transactions shares summary` take the same filters and answer
 with totals instead of rows. Ask them instead of paging a list and adding it up yourself.
@@ -641,6 +802,12 @@ member's**: give them a share with `--split`, name them with `--paid-by`, settle
 Do not wait for anybody to sign up, and do not leave them out of a division the user
 described as including them.
 
+```bash
+groupsplit groups add-guest <group-id> Carlos Nuria  # answers with their user ids
+groupsplit tx create Rent 90 --group <group-id> --split <anabel-id>=60 --split <carlos-id>=30
+groupsplit tx create Taxi 40 --group <group-id> --paid-by <carlos-id>
+```
+
 Their id is the user id, from `groups add-guest`, `groups guests`, or the `groups members`
 row with `isGuest` true. It is the one id for splits, payer, repayments, their link and
 removing them. The token is not an id; it is the link to send them.
@@ -652,8 +819,15 @@ is all theirs", and the rule becomes the claimer's if somebody claims their link
 **You record their side.** A guest cannot sign in, so "Carlos paid me back 30" is
 `groups settle <group-id> <carlos-id> 30`, "I paid Carlos" adds `--direction youpaidthem`,
 and "Carlos paid Nuria" is `groups settle-between <group-id> <carlos-id> <nuria-id> <amount>`.
-`groups settle-up` and `settle pay` include guests like anybody else (`settle plan` marks them
-`(guest)`).
+`groups settle-up` and `settle pay` include guests like anybody else (`groups balances` and
+`settle plan` mark them `(guest)`).
+
+```bash
+groupsplit groups settle <group-id> <carlos-id> 30                          # Carlos paid you
+groupsplit groups settle <group-id> <carlos-id> 30 --direction YouPaidThem  # you paid Carlos
+groupsplit groups settle-between <group-id> <carlos-id> <nuria-id> 15       # Carlos paid Nuria
+groupsplit settle pay <carlos-id>                                           # across groups
+```
 
 **Removing one** is `groups remove-member <group-id> <user-id>`, refused with
 `GROUP_MEMBER_NOT_SETTLED` (and their balance) until they are square, so record the repayment
@@ -664,6 +838,17 @@ new money, and the group's join link is untouched.
 `groups guest-link create` prints the link (safe to repeat: it returns the one already out),
 `--new` replaces it, `revoke` stops it. Declining a link only stops it; the
 guest stays.
+
+```bash
+groupsplit groups guest-link create <group-id> <carlos-id>        # issue, or print the one out
+groupsplit groups guest-link create <group-id> <carlos-id> --new  # replace it; asks first
+groupsplit groups guest-link revoke <group-id> <carlos-id>        # stop it; the guest stays
+groupsplit groups add-guest <group-id> Carlos --link              # add and issue in one go
+```
+
+Nobody is notified: sending the link is the group's job. Text output prints it as
+`<server>/claim/<token>` when a server origin is configured; JSON carries the `token`.
+Replacing a link also forgets who had opened it, so a link that leaked is not handed on.
 
 **A link expires 30 days after it was issued**, claimed or not. An expired link answers
 `GROUP_INVITATION_NOT_FOUND`, the same 404 as a claimed or mistyped one, and `groups guests`
@@ -709,6 +894,18 @@ asks for more than that one leaves owing. Do not work out a month's figure by fi
 expenses and subtracting; that leaves out repayments. The repayments it records remember the
 day, and `transactions show <settlement-id>` reports the period they covered and anything
 still owed for it, including an expense dated inside the period and added afterwards.
+`settle history` shows the day on the row.
+
+The day ends at midnight on the machine's calendar: the CLI sends its current UTC offset
+beside it, as the web app does. A settlement's period can be corrected or cleared afterwards.
+An expense has none, and `--covers-through` on one is refused before anything is sent.
+
+```bash
+groupsplit groups balances <group-id> --through 2026-08-31
+groupsplit groups settle-up <group-id> --through 2026-08-31 --dry-run
+groupsplit transactions update <settlement-id> --covers-through 2026-08-31
+groupsplit transactions update <settlement-id> --no-covers-through
+```
 
 It never records money moving between two other members. The user can say what they paid and
 what they were paid, because they were there for both; a payment between two other people is
@@ -734,6 +931,14 @@ handing over the money does not have to do.
 It reads the plan first, so the exit-4 confirmation lists the groups the payment will land
 in and what each takes. Show those lines; the user cannot see them anywhere else.
 `--dry-run` prints the same breakdown and writes nothing.
+
+```bash
+groupsplit settle plan --json
+groupsplit settle plan --through 2026-08-31 --json
+groupsplit settle pay <user-id> --amount 70 --direction YouPaidThem --dry-run
+groupsplit settle pay <user-id> --through 2026-08-31 --dry-run
+groupsplit settle history --json
+```
 
 Being square with somebody is success, not a refusal: the command says
 `"status": "nothing-outstanding"` and writes nothing. So is asking in a direction with
