@@ -505,11 +505,16 @@ public static class GroupApi
                 {
                     var activity = await groupService.GetGroupActivity(id, ct);
 
-                    return Results.Ok(await activity
+                    var ledger = await activity
                         .ApplyFilter(filter)
                         .ApplySort(sort, ActivitySort)
-                        .SelectLedgerDto(currentUser.User.Id, activity)
-                        .ToPageAsync(page, ct));
+                        .SelectLedgerDto(currentUser.User.Id)
+                        .ToPageAsync(page, ct);
+
+                    return Results.Ok(ledger with
+                    {
+                        Items = await activity.WithRunningBalances(currentUser.User.Id, ledger.Items, ct)
+                    });
                 })
                 .WithName("GetGroupActivity")
                 .Produces<PagedResponse<GroupLedgerEntryResponse>>()

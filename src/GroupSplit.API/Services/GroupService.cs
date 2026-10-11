@@ -562,14 +562,20 @@ public class GroupService(
         CancellationToken cancellationToken = default)
     {
         var user = userContext.User;
-        var groups = await GetAllGroups(cancellationToken);
+        // Read first rather than left as a subquery: a correlated EXISTS on one side of the
+        // OR stops Postgres using an index on either, and the feed's count then reads every
+        // transaction in the database. Against a list of ids Postgres can read each side by
+        // its own index, over the caller's groups and their own rows.
+        var groupIds = await (await GetAllGroups(cancellationToken))
+            .Select(@group => @group.Id)
+            .ToListAsync(cancellationToken);
 
         // The same two clauses the expense listing uses -- anything in a group they are in,
         // plus anything they paid for wherever it is -- over transactions rather than
         // expenses, so settlements are in it. That is the whole difference: a balance that
         // moved with nothing in the feed to explain it is its own kind of wrong.
         return from transaction in context.Set<Transaction>()
-               where groups.Any(@group => @group.Id == transaction.GroupId) ||
+               where groupIds.Contains(transaction.GroupId) ||
                      transaction.UserId == user.Id
                select transaction;
     }

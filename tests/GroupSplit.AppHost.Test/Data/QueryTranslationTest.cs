@@ -190,15 +190,17 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         // shape that has to translate actually lives.
         foreach (var kind in new ActivityKind?[] { null, ActivityKind.Expense, ActivityKind.Transfer })
         {
-            await activity
+            var page = await activity
                 .ApplyFilter(new ActivityFilter(
                     From: DateTimeOffset.UtcNow.AddYears(-1),
                     To: DateTimeOffset.UtcNow,
                     Kind: kind,
                     Search: "a"))
                 .ApplySort(new SortRequest(), GroupApi.ActivitySort)
-                .SelectLedgerDto(me, activity)
+                .SelectLedgerDto(me)
                 .ToPageAsync(new PageRequest(), Ct);
+
+            await activity.WithRunningBalances(me, page.Items, Ct);
         }
     }
 
