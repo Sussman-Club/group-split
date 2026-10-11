@@ -23,7 +23,6 @@ public static class MauiProgram
         builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
         // Add device-specific services used by the GroupSplit.App.Shared project
-        builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IAuthService>(ActivatorUtilities.GetServiceOrCreateInstance<AuthService>);
 
