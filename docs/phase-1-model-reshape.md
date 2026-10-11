@@ -1,12 +1,8 @@
 # Phase 1: reshaping the model
 
-The implementation plan for [Phase 1 of the roadmap](roadmap.md#phase-1----reshape-the-model-3-weeks).
-The roadmap settles *what* the model becomes and why; this settles the order it is built
-in, how the existing rows get there, what is deleted on the way, and which tests change.
-
-Read [The target model](roadmap.md#the-target-model), [Settlements as
-transfers](roadmap.md#settlements-as-transfers) and [Category and
-split](roadmap.md#category-and-split) first. Nothing here re-argues them.
+The implementation plan for Phase 1, which reshapes the transaction model: the schema it
+becomes, the order it is built in, how the existing rows get there, what is deleted on the
+way, and which tests change.
 
 ## Scope
 
@@ -21,12 +17,11 @@ In:
 - The TPT rule-version hierarchy, its handlers, `RuleFlags` and `RuleFilter` deleted.
 - The affected tests rewritten against behaviour.
 
-Out, deliberately:
+Out:
 
 - **`PATCH` -> `PUT`, and dropping the pinned JSON Patch package.** Held back on request.
-  JSON Patch stays exactly as it is; what that costs the new model is worked out in
-  [Keeping JSON Patch](#keeping-json-patch), because it is not free and the cost lands on
-  the one invariant everything else rests on.
+  JSON Patch stays as it is. It is not free, and the cost lands on the one invariant
+  everything else rests on; [Keeping JSON Patch](#keeping-json-patch) works it out.
 - Invitations, roles and pending members. They are Phase 2, with the feature that reads
   them. `GroupMembership` gains no speculative columns here -- see
   [Decisions taken](#decisions-taken).
@@ -34,29 +29,39 @@ Out, deliberately:
   writer until Phase 3, and a nullable column with no writer is a comment with a table
   behind it.
 
+*Since then (#403):* personal is a group again. Every account has a Personal group whose id
+is its own user id (`Group.Id == User.Id`), `Transaction.GroupId` is required, and the
+`PersonalGroupIsBack` migration moved every group-less expense into its payer's Personal
+group. A request that leaves the group out still means personal, Personal still takes any
+currency, and a personal expense can be filed under the Personal group's own categories.
+Wherever this plan says personal is `GroupId is null`, read the Personal group.
+
 ## Decisions taken
 
-The roadmap left four questions open. Two of them block this phase, so they are answered
-here rather than deferred.
+Four questions were still open when this phase began. Two of them block it and are
+answered here.
 
 **Rule history is dropped, with no replacement.** No `SplitRuleRevision`, no versions,
-no `StartDateTime`/`EndDateTime`. The history that matters -- what each person actually
-owed on each expense -- is on the transaction as splits, and is therefore more accurate
-than the version chain was: it survives a rule edit, which is precisely what versioning
-was trying and failing to guarantee. A revision log can be added later without touching
-a single transaction, because no transaction will point at it. Adding it now would be
-the third thing built on a question nobody has asked.
+no `StartDateTime`/`EndDateTime`. The history that matters, what each person owed on each
+expense, is on the transaction as splits. That is more accurate than the version chain
+was: it survives a rule edit, which versioning tried and failed to guarantee. A revision
+log can be added later without touching a single transaction, because no transaction will
+point at it. Adding it now would be the third thing built on a question nobody has asked.
 
 > **Revisited, 11 September 2026 -- see [Split rules are
 > versioned](split-rules-and-membership.md#split-rules-are-versioned).** The question got
 > asked: *divide this expense again by the rule it had at the time*. Stored splits cannot
 > answer it, because they are amounts and a recalculation needs the division that produced
-> them -- correct an amount and there is nothing left to re-divide by but today's rule.
+> them; correct an amount and there is nothing left to re-divide by but today's rule.
 > `SplitRuleVersion` is back, and the sentence above is still right about why the first
 > attempt failed: this one does not replace the splits, it sits beside them. The splits
-> remain what each person owed; the version is what was applied. The rest of this section
-> -- one table, no TPT, no conversion between units -- is unchanged, and the version chain
-> is a second table under the same TPH hierarchy rather than a three-level one.
+> remain what each person owed; the version is what was applied.
+>
+> The shape moved further than this note first said. The kinds left the rule for its
+> versions, so `SplitRule` is a plain name and `ISplitRuleHandler<TRule>` is typed on the
+> version, and since #260 the versions are TPT, a table per kind. `AppDbContext` gives the
+> reasons beside the mapping, along with the five joins they cost. Percent and shares
+> still share one weight column, with no conversion between them.
 
 **Currency lives in both places, and they must agree.** `Group.Currency` and
 `Transaction.Currency`, both ISO 4217, both required, defaulting to `USD` on migration.
@@ -66,44 +71,43 @@ would produce balances that are wrong rather than merely unavailable. A personal
 transaction (no group) may carry any currency; nothing sums across personal transactions
 yet.
 
+This is also the shape Plaid needs later: it hands over a currency per transaction, so the
+column has to exist. And the refusal guards a seam that is otherwise silent, so it gets a
+test rather than a comment.
+
 *Since then (#320):* that promise had two holes. Keeping a bank row personal stamped it with
 the default currency, and moving an expense into a group took the group's currency instead
 of meeting `CurrencyMismatch`. Both are closed: a personal expense keeps the currency it was
 filed or created in (`currency` on the create request, the row's own when filed), and a move
 into a group in another currency is refused. The listing totals do now sum across personal
 transactions, so they total one currency at a time and report the others beside the figure
-(`otherCurrencies`) rather than adding them in.
-
-Two consequences worth naming: this is the shape Plaid needs later (it hands you a
-currency per transaction, so the column has to exist), and the refusal is a guard on a
-seam that is otherwise silent, so it gets a test rather than a comment.
+(`otherCurrencies`) instead of adding them in.
 
 **`GroupMembership` gains nothing in this phase.** It has `ArchivedAt` from Phase 0 and
 that is enough for the model to be correct. `Role`, `Status`, `InvitedEmail`, `JoinedAt`
 and `LeftAt` arrive in Phase 2 alongside invitations, which is the only code that would
-read them. The roadmap lists them in the target-model table because that table describes
-the destination, not this phase.
+read them.
 
 *Since then:* `JoinedAt` arrived with invitations, and `LeftAt`, with `LeftReason` and
-`LeftByUserId`, arrived with the rejoin rule (#310). `Role` and `Status` are not coming --
-members are equal, and a closed row is the only status a membership has -- and
-`InvitedEmail` was superseded by invitations that name a person rather than an address.
+`LeftByUserId`, arrived with the rejoin rule (#310). `Role` and `Status` are not coming:
+members are equal, and a closed row is the only status a membership has. `InvitedEmail`
+was superseded by invitations that name a person rather than an address.
 
 **Leaving a group stays guarded, and the guard changes hands.** Today
 `RuleVersionReferencesRemovedMember` refuses a write whenever a rule version names
-somebody no longer in the group -- a guard that exists only because the split lives on
-the rule. Splits on the transaction are historical facts, so a departed member's past
-splits stay valid and the guard becomes meaningless; it and `RuleVersionHasRemovedMember`
-are deleted. What must not be lost is the reason it was reached for: removing a member
-who is owed money. That becomes an explicit check on removal -- non-zero net balance
-refuses with `409 MemberHasBalance` -- which is a rule about people, states what it means,
-and is a third of the code.
+somebody no longer in the group, a guard that exists only because the split lives on the
+rule. Splits on the transaction are historical facts, so a departed member's past splits
+stay valid and the guard becomes meaningless; it and `RuleVersionHasRemovedMember` are
+deleted. What must not be lost is the reason it was reached for: removing a member who is
+owed money. That becomes a check on removal, where a non-zero net balance refuses with
+`409 MemberHasBalance`. It is a rule about people, says what it means, and is a third of
+the code.
 
 ## The schema
 
-One level of inheritance, shared columns on the base, discriminator indexed. The
-guardrails from [Why TPH](roadmap.md#why-tph-given-what-tpt-did-to-rule-versions) are
-mapping rules here, not aspirations.
+One level of inheritance, shared columns on the base, discriminator indexed. These are the
+guardrails that keep TPH from going the way TPT went for rule versions, and here they are
+mapping rules, not aspirations.
 
 ```csharp
 public abstract class Transaction : Entity
@@ -146,11 +150,10 @@ public class TransactionSplit : Entity
 }
 ```
 
-`SplitRule` is a template and holds no dates:
-
-A rule is data. What it *does* is its handler's, resolved by the rule's runtime type the
-way rule versions already are -- so a `Kind` column and a switch appear nowhere, and
-adding a kind is adding a class rather than editing one.
+`SplitRule` is a template and holds no dates. A rule is data. What it *does* is its
+handler's, resolved by the rule's runtime type the way rule versions already are, so a
+`Kind` column and a switch appear nowhere, and adding a kind is adding a class rather than
+editing one.
 
 ```csharp
 // Nothing here says what shape a split has. "Participants with weights" is one way
@@ -195,14 +198,14 @@ public interface ISplitRuleHandler<in TRule> : ISplitRuleHandler where TRule : S
 }
 ```
 
-Two things worth noticing about that. `PercentSplitRule` and `SharesSplitRule` divide
-**identically** -- both hand their stored weights to the calculator, which normalises by
-whatever total it is given. Shares needing no conversion into percentages is exactly what
-removes the old `SharesRuleVersionHandler` drift correction; what is left that is
-genuinely each kind's own is what makes it invalid. And an even rule that names nobody
-divides between the current membership, so it keeps dividing evenly when somebody joins
-instead of freezing today's members into weights; naming people narrows it instead.
+`PercentSplitRule` and `SharesSplitRule` divide identically: both hand their stored
+weights to the calculator, which normalises by whatever total it is given. Shares need no
+conversion into percentages, and that removes the old `SharesRuleVersionHandler` drift
+correction; all each kind keeps of its own is what makes it invalid. An even rule that
+names nobody divides between the current membership, so it keeps dividing evenly when
+somebody joins instead of freezing today's members into weights; naming people narrows it.
 
+```csharp
 public class Category : Entity
 {
     public Guid GroupId { get; set; }
@@ -218,8 +221,8 @@ Mapping, in `AppDbContext`:
   the discriminator column is indexed explicitly, because EF does not and every expense
   listing filters on it.
 - `Amount` stays `HasPrecision(18, 2)`; `Currency` is `HasMaxLength(3).IsFixedLength()`.
-- `TransactionSplit` gets a unique index on `(TransactionId, UserId)` -- a person appears
-  at most once in a split -- and a plain index on `UserId`, which is the balance query's
+- `TransactionSplit` gets a unique index on `(TransactionId, UserId)` (a person appears
+  at most once in a split) and a plain index on `UserId`, which is the balance query's
   access path.
 - `Transaction` gets `(GroupId, Date)`, which is every listing's sort and filter.
 - `Category` gets a unique index on `(GroupId, Name)`, inheriting the constraint
@@ -251,10 +254,9 @@ public static class SplitCalculator
 }
 ```
 
-The payer absorbs the remainder in every case -- even, shares and percent alike -- so the
+The payer absorbs the remainder in every case (even, shares and percent alike), so the
 result depends on nothing but the inputs. That is the deterministic-remainder fix from
-Phase 0, arriving here instead, because here it is one function rather than three
-patches.
+Phase 0, arriving here instead because here it is one function rather than three patches.
 
 The balance query then has no arithmetic left to duplicate:
 
@@ -275,13 +277,13 @@ it consumes `GroupNetBalance` and never knew where the numbers came from.
 ## Migrating the rows
 
 One EF migration, `ReshapeTransactionsAsExpensesAndTransfers`, with the backfill written
-as C# in the migration rather than raw SQL -- the settlement pairing needs matching logic
-that reads badly in SQL and is worth testing.
+as C# in the migration rather than raw SQL, because the settlement pairing needs matching
+logic that reads badly in SQL and is worth testing.
 
 The migration is destructive and one-way. It is safe because the only data is seed and
-development data, exactly as the roadmap assumed; a production database would need a
-different plan and does not exist yet. That is a fact about today, so it goes in the
-migration's own comment, where the next person meets it.
+development data; a production database would need a different plan and does not exist
+yet. That is a fact about today, so it goes in the migration's own comment, where the next
+person meets it.
 
 **Order.** Additive first, backfill second, destructive last, so a failure part-way leaves
 a database that still reads:
@@ -316,15 +318,15 @@ whoever pressed the button. Balance is paid minus owed and settlements owe nothi
 the effect today is that the positive row's payer rises by `amount` and the negative
 row's payer falls by it.
 
-A transfer reproduces exactly that: `PaidBy` rises by `Amount`, and the single split makes
-the recipient fall by it. So the pairing is
+A transfer does the same: `PaidBy` rises by `Amount`, and the single split makes the
+recipient fall by it. So the pairing is
 
 > **from** = the payer of the **positive** row, **to** = the payer of the **negative**
 > row, **amount** = the absolute value,
 
-matched on `(GroupId, DateTime, Abs(Amount))` with opposite signs. An unpaired row -- a
+matched on `(GroupId, DateTime, Abs(Amount))` with opposite signs. An unpaired row (a
 half-written settle from a crash, which the seed data does not contain but a developer
-database might -- is migrated as a transfer to itself only if that preserves the balance;
+database might) is migrated as a transfer to itself only if that preserves the balance;
 otherwise the migration stops and says which row, because guessing here silently moves
 somebody's money.
 
@@ -335,7 +337,7 @@ and not answered by a migration whose correctness criterion is that nothing move
 **The correctness criterion, and the test that enforces it.** For every user in every
 group, the net balance computed after the migration equals the net balance computed
 before. That single invariant covers the percentage truncation, the personal rows and the
-settlement pairing at once, and it is the migration's only real test:
+settlement pairing at once, and it is the migration's only real test.
 `TransactionReshapeMigrationTest` snapshots every `(GroupId, UserId) -> Balance` over the
 seeded database, migrates, recomputes with the new query, and asserts equality to the
 cent.
@@ -345,31 +347,30 @@ cent.
 `PATCH` stays, so `PatchedModel.IsValid`, `GetUpdateModel` and the pinned
 `Microsoft.AspNetCore.JsonPatch.SystemTextJson` reference all stay. What changes is that
 the model being patched now sits in front of rows that must stay consistent with it, and
-JSON Patch is the one verb that can change *part* of a model. That matters in exactly one
-place, and it is the place that matters most:
+JSON Patch is the one verb that can change *part* of a model. That bites in one place,
+the one everything else rests on:
 
 > A patch that changes `Amount` and says nothing about `Splits` leaves splits that no
 > longer sum to the amount -- and every balance in the group is that sum.
 
-`PUT` would not have this problem, because a whole model always arrives. So the rule is
-explicit, and it is the reason this exclusion is not free:
-
-This is built, and the shape it took differs from the plan in one place worth reading:
+`PUT` would not have this problem, because a whole model always arrives. Under `PATCH`
+the rule has to be stated, and that is what keeping it costs. It is built, and it differs
+from the plan in one place, `GetUpdateModel`, below the list.
 
 - `UpdateTransactionRequest` and `CreateTransactionRequest` both carry an optional
   `IReadOnlyList<SplitInput>? Splits`. Null is not "no shares"; it is "don't state any",
   which is a different instruction and the ordinary one.
-- The service recomputes splits **unless the request states them**. Recomputation runs
+- The service recomputes splits unless the request states them. Recomputation runs
   `SplitCalculator` over the expense's category default, or an even split when it has
-  none -- the same path a create takes.
+  none, the same path a create takes.
 
   > **Revisited, 11 September 2026 -- see
   > [`docs/split-rules-and-membership.md`](split-rules-and-membership.md).** That is the
   > contract as it stood until 47c6904, and it is no longer what the endpoint does. Silence
-  > about `/splits` now means **keep the stored shares**: a patch that states no division
-  > carries the expense's own into the save, and recomputation happens only when the edit
-  > moved something the division was worked out *from* -- the amount, the payer, the
-  > category or the group -- and the stored shares are reproducible from the expense's own
+  > about `/splits` now means keep the stored shares: a patch that states no division
+  > carries the expense's own into the save. Recomputation happens only when the edit
+  > moved something the division was worked out *from* (the amount, the payer, the
+  > category or the group) and the stored shares are reproducible from the expense's own
   > rule. Reading silence as "divide it again" is what re-divided 733 expenses and moved
   > 1,394.72 onto one member. `replace /splits null` is the operation that asks for a
   > division outright.
@@ -384,11 +385,11 @@ This is built, and the shape it took differs from the plan in one place worth re
 
 **`GetUpdateModel` leaves the splits out, and the endpoint fills them in.** The plan had
 the model carry them so a patch could address one by index. Built that way it made silence
-mean the opposite of what it should: an ordinary read-change-write through the service --
-raise the amount, save -- came back carrying the old shares, which then failed to add up to
+mean the opposite of what it should. An ordinary read-change-write through the service
+(raise the amount, save) came back carrying the old shares, which then failed to add up to
 the new amount, against a division the caller had never asked to keep. So the model arrives
-without them, and the update route fills them in only for a patch that actually addresses
-them, which is the one caller that needs an index to address.
+without them, and the update route fills them in only for a patch that addresses them, the
+one caller that needs an index.
 
 *Since then:* this was reversed on 2026-09-09 (47c6904). `GetUpdateModel` carries the stored
 shares into every patch, so a rename never re-divides anything, and the service tells
@@ -399,9 +400,13 @@ share for somebody who has since left is accepted as it is, and changing it is r
 Transfers are not patchable in the parts that define them, and in the end that needed no
 code: every transaction route reads `Set<Expense>()`, so a transfer is not something the
 transactions API can address at all and a patch naming one is a 404. `TransferNotEditable`
-was never added. What that also means is that a transfer cannot be deleted through those
-routes either, so "correcting a transfer is deleting it and settling again" has no path
-yet -- filed as Phase 2 work along with the settlement UI, not done here.
+was never added. It also means a transfer cannot be deleted through those routes, so
+"correcting a transfer is deleting it and settling again" has no path yet. That was filed
+as Phase 2 work along with the settlement UI.
+
+*Since then (e037eb6):* the transaction routes reach a transfer. A settlement is edited
+and deleted there, from its row in the group's activity, and an edit makes the checks a
+new settlement meets: a positive amount, and one recipient.
 
 ## What is deleted
 
@@ -411,7 +416,7 @@ yet -- filed as Phase 2 work along with the settlement UI, not done here.
 | `PercentRuleUser`, `SharesRuleUser` | `SplitRuleParticipant`, one weight column |
 | `Rule`, `RuleFlags` | `Category` is the label; `SplitRule` is the split; no rule is a pseudo-rule any more |
 | `IRuleVersionHandler` and its four implementations, `RuleVersionHandler` reflection dispatch, `RuleVersionServiceExtensions` | ~~One shape of rule, converted directly~~ **Retained, retargeted** -- see below |
-| `RuleFilter` | Rules are bounded per group and returned whole -- see [Listing contract](roadmap.md#listing-contract) |
+| `RuleFilter` | Rules are bounded per group and returned whole |
 | `TransactionService.GetTransactionSplits` | Splits are rows; read them |
 | `RuleVersionReferencesRemovedMember`, `ErrorCodes.RuleVersionHasRemovedMember` | Replaced by `MemberHasBalance` on removal |
 | `User.PersonalGroup`, the personal `Group` rows, `Rule.PersonalDefault` | Personal is `GroupId is null` |
@@ -420,8 +425,8 @@ yet -- filed as Phase 2 work along with the settlement UI, not done here.
 The handler row is a correction. This plan originally had the handler machinery deleted
 along with the hierarchy it served, on the grounds that one shape of rule needs no
 dispatch. That was wrong twice over: there is not one shape of rule, and even if there
-were, deleting the pattern only moves the problem -- something still has to turn a wire
-DTO into the right subtype, and without a handler resolved by type that something is a
+were, deleting the pattern only moves the problem. Something still has to turn a wire DTO
+into the right subtype, and without a handler resolved by type that something is a
 switch, in the API layer, needing an edit every time a kind is added. The pattern is kept
 and pointed at `SplitRule` instead: `ISplitRuleHandler<TRule>`, a dispatcher that makes
 the generic interface from the rule's own type, and one handler per kind.
@@ -429,50 +434,54 @@ the generic interface from the rule's own type, and one handler per kind.
 The split-rule handlers sit in `GroupSplit.API/Services/SplitRuleHandlers`, beside the
 rule-version handlers they are modelled on, and register from `Extensions` beside theirs.
 They started in `GroupSplit.Data` on the theory that the seeder needed them and could not
-reach the API project; the seeder references `GroupSplit.API` directly, so that was simply
-untrue and the split bought nothing. The arithmetic itself -- `SplitCalculator` and the
-two value types -- sits beside them in `Services` for the same reason. It stayed in
-`GroupSplit.Data` only as long as `ExpenseSplitting` divided there, and followed the
-handlers out once that was deleted with the old model.
+reach the API project; the seeder references `GroupSplit.API` directly, so that was
+untrue and the split bought nothing. `SplitCalculator` followed them out, as the next
+section records.
 
 What differs from the rule-version handlers is lifetime: these are singletons, because
 dividing needs the rule, the amount, the payer and the membership and nothing else. The
-rule-version handlers are scoped because theirs genuinely query the database.
+rule-version handlers are scoped because theirs query the database.
 
-That last row is worth reading twice. Four error codes and
-`RejectGroupTransactionWithoutARule` exist to handle "you picked a group but it has no
-rule to record against", a state that only the current model can be in. In the new one an
-expense needs a group, an amount and a payer; a category is optional and a missing one
-means an even split. The failure disappears with the thing that caused it.
+The table's last row covers four error codes and `RejectGroupTransactionWithoutARule`,
+which exist to handle "you picked a group but it has no rule to record against", a state
+only the current model can be in. In the new one an expense needs a group, an amount and a
+payer; a category is optional and a missing one means an even split. The failure
+disappears with the thing that caused it.
+
+*Since then (#298, #260):* the even split is a rule. Every group is given a built-in Even
+rule and a default split that points at it, and an expense under no category, or under one
+naming no rule, divides by the group's default. Every group also holds an "All for" rule per
+member that puts the whole amount on that person.
 
 ## What the build changed about this plan
 
-Three things came out differently once the code was written, and this section is the
-record rather than a revision -- the plan above still reads as it was decided.
+Four things came out differently once the code was written. This section records them; the
+plan above still reads as it was decided.
 
 **`SplitCalculator` is shared with the seeder, and lives in the API.** The seeder needs
 the same division. Seed data divided even slightly differently from the way the app
 divides gives every developer a set of balances that no sequence of user actions could
 have produced, which is a worse bug than the duplication was. It was first placed in
-`GroupSplit.Data` so the seeder could reach it; the seeder references `GroupSplit.API`
-anyway, so it now sits in `GroupSplit.API/Services` with the handlers that call it.
+`GroupSplit.Data` so the seeder could reach it, and stayed while `ExpenseSplitting` divided
+there. The seeder references `GroupSplit.API` anyway, so once `ExpenseSplitting` went with
+the old model, `SplitCalculator` and its two value types moved to `GroupSplit.API/Services`
+with the handlers that call it.
 
-**`Expense` keeps its `RuleVersion` for now.** Steps 3 and 4 moved the *storage* -- splits
-are rows, balances are sums -- while the wire contract still speaks in
-`RuleVersionId`, so the client and its tests never had to change in the same commit as
-the balance query. `Category` takes over in step 5, and the column goes with the rest of
+**`Expense` keeps its `RuleVersion` for now.** Steps 3 and 4 moved the *storage* (splits
+are rows, balances are sums) while the wire contract still speaks in `RuleVersionId`, so
+the client and its tests never had to change in the same commit as the balance query. `Category` takes over in step 5, and the column goes with the rest of
 the old model in step 6. The nullability falls out of putting it on the leaf: a transfer
 never had one.
 
 **The migration corrects one thing rather than preserving it.** Balance preservation was
 the stated criterion, and it holds everywhere the payer is a participant. Where they are
-not -- somebody paying for a split they are no part of -- the old query truncated each
+not (somebody paying for a split they are no part of), the old query truncated each
 participant's share and left the remaining cents belonging to nobody, so the group's
 balances did not sum to zero. Preserving that faithfully would mean writing splits that
 do not sum to their amount, breaking the one invariant everything else rests on. The
-migration assigns those cents the way the application now does. The better test came out
-of noticing it: **every group's balances sum to zero** is a stronger statement than
-"unchanged", and it is the one the suite asserts.
+migration assigns those cents the way the application now does. Noticing it gave a better
+test: every group's balances sum to zero, which is stronger than "unchanged" and is what
+the suite asserts.
 
 The migration was run against PostgreSQL 16 rather than reasoned about: seeded with
 thirds that do not divide, an amount that truncates on every participant, a personal
@@ -481,8 +490,8 @@ identical to the cent, five rows became four, and no transaction's splits failed
 
 **The drop migration renames the column rather than replacing it, and reuses ids.**
 `RuleVersionId` becomes `CategoryId` in place. Each rule outside a personal group becomes a
-category carrying the rule's own id -- which is also the id the seed data names, so the
-seeder recognises what the migration made and does not write it twice -- and its latest
+category carrying the rule's own id. That is also the id the seed data names, so the
+seeder recognises what the migration made and does not write it twice. The rule's latest
 proportional version becomes the split rule the category defaults to, under the version's
 id. Every expense's value is then re-pointed from the version to the category made from
 its rule. Personal rules become nothing: a personal expense is filed under no category,
@@ -494,7 +503,7 @@ filed under a category, because the versions it would point back at are gone.
 Each step builds and keeps the suite green. Test counts are the floor, not the target;
 the coverage gate in CI is a ratchet and does not move down.
 
-All seven steps are done. Steps 1 to 4 took three commits -- the arithmetic, then the new
+All seven steps are done. Steps 1 to 4 took three commits: the arithmetic, then the new
 tables, then the cut-over. Steps 5 and 6 landed together: deleting the old model is what
 made the categories the only model there was. Step 7 followed in two parts, the dialogs
 speaking categories and split rules, and then the splits themselves reaching the wire.
@@ -504,22 +513,27 @@ speaking categories and split rules, and then the splits themselves reaching the
    serves every request.
 2. **The migration and its balance-preservation test.** The database moves; the API does
    not compile against the new tables yet, so this step ends with both models mapped.
-   This is the only step that is hard to reverse, and it is deliberately alone.
+   This is the only step that is hard to reverse, so it stands alone.
 3. **The write path.** `TransactionService` creates `Expense` and `Transfer` with splits;
    `GroupService.Settle` builds a `Transfer` instead of a signed pair. Reads still work
    because the balance query is next.
 4. **The read path.** `NetBalances` becomes the two sums; listings read `Set<Expense>()`;
    `TransactionDetailsResponse.Splits` reads split rows. Settlement rows stop appearing in
-   expense lists here, by construction rather than by a filter -- which is the Phase 0
-   item this phase absorbs.
+   expense lists here, by construction rather than by a filter; that is the Phase 0 item
+   this phase absorbs.
 5. **Categories and rules.** `RulesApi` becomes categories and split rules; the handler
    hierarchy and `RuleFilter` are deleted.
 6. **Delete the old model.** Entities, migration for the drop, `RuleFlags`, the dead
    error codes. Nothing references them by now, so this step is mechanical and should be
    reviewed as a pure deletion.
 7. **The client.** DTOs gain `$type`; the transaction dialog sends splits; the grid reads
-   `Set<Expense>()`-backed listings. The two client write paths are not unified here --
+   `Set<Expense>()`-backed listings. The two client write paths are not unified here;
    that is Phase 2's command layer.
+
+*Since then:* the screens step 7 touched are gone. The expenses grid went when a group's
+expenses and settlements merged into one ledger (#213), and recording or editing an
+expense is one screen each, with categories, split rules and rule versions managed in the
+group's settings (#251).
 
 ## Tests that change
 

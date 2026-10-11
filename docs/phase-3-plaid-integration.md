@@ -1,13 +1,8 @@
 # Phase 3: bank data through Plaid
 
-The implementation plan for [Phase 3 of the roadmap](roadmap.md#phase-3----plaid-3-weeks).
-The roadmap settles *what* arrives and where the seam sits; this settles what each table
-and interface looks like, how a sync behaves at its edges, what the API and the client
-expose, and the order it is built in.
-
-Read [Bank data without a provider in the
-model](roadmap.md#bank-data-without-a-provider-in-the-model) and [Plaid
-integration](roadmap.md#plaid-integration) first. Nothing here re-argues them.
+The implementation plan for Phase 3, which brings bank data in through Plaid: what each
+table and interface looks like, how a sync behaves at its edges, what the API and the
+client expose, and the order it is built in.
 
 ## Scope
 
@@ -26,20 +21,19 @@ In:
 - A linked-banks card on the Account page with the re-login flow.
 - Aspire parameters, the `validate-plaid` pipeline step, deploy docs.
 
-Out, deliberately:
+Out:
 
-- **Credits.** A Plaid row with money coming *in* -- a refund, a deposit, a paycheque --
+- **Credits.** A Plaid row with money coming *in* (a refund, a deposit, a paycheque)
   arrives in the inbox and can be ignored, and that is all. It cannot be filed, because
   an `Expense` is money going out and an `Income` leaf is Phase 4. Refused with
   `422 BankTransactionIsCredit` rather than filed as a negative expense that every total
   would have to know about.
-- **Auto-file rules by merchant.** The roadmap's review row mentions them; the phase list
-  does not. What is built is auto-filing *once a row has a group and a category*: the
-  category's default rule writes the splits with no further review. Remembering "Lidl
-  always goes to Home" is a rule table with a UI and belongs with recurring detection.
+- **Auto-file rules by merchant.** What is built is auto-filing *once a row has a group
+  and a category*: the category's default rule writes the splits with no further review.
+  Remembering "Lidl always goes to Home" is a rule table with a UI and belongs with
+  recurring detection.
 - **MAUI.** The head does not reach the API at all today (no client options setter, an
-  `AuthService` that throws). Hosted Link would be built on nothing. Phase 4, as the
-  roadmap already has it.
+  `AuthService` that throws). Hosted Link would be built on nothing. Phase 4.
 - **Balances, and account types beyond a label.** `LinkedAccount.Type` is stored as Plaid
   hands it over (`depository`, `credit`, ...) for display. Nothing reads balances.
 - **Conversion.** A row in a currency other than the target group's is refused by the
@@ -59,17 +53,16 @@ configuration section (`ClientId`, `Secret`, `Environment`) through its own
 calls the connector needs: `/link/token/create`, `/item/public_token/exchange`,
 `/accounts/get`, `/transactions/sync`, `/item/remove`,
 `/webhook_verification_key/get`, and in the sandbox `/sandbox/public_token/create`.
-A community library is a dependency on one maintainer; the seam is what makes that
-acceptable, because `PlaidConnector` is the only file that references it, and swapping
-it for a generated client later touches that file and its tests. There is no Aspire
-integration for Plaid, so the parameters and the `Plaid__*` environment variables are
-wired by hand next to the SMTP ones.
+A community library is a dependency on one maintainer. The seam makes that acceptable:
+`PlaidConnector` is the only file that references it, and swapping it for a generated
+client later touches that file and its tests. There is no Aspire integration for Plaid,
+so the parameters and the `Plaid__*` environment variables are wired by hand next to the
+SMTP ones.
 
 **Routes are provider-neutral.** `/bank-connections` and `/inbox`, not `/plaid/...`. The
-roadmap sketched the steps with Plaid's names because it was describing Plaid's flow;
-the seam it also asked for means the UI must not change when a second provider arrives,
-and a route named after the first one would. `Provider` travels as a field
-(`"plaid"`), and the webhook route already carries it as a segment.
+seam means the UI must not change when a second provider arrives, and a route named after
+the first one would. `Provider` travels as a field (`"plaid"`), and the webhook route
+already carries it as a segment.
 
 **Access tokens go through ASP.NET Data Protection, and the key ring is itself
 encrypted.** `AppDbContext` implements `IDataProtectionKeyContext`, which forces the one
@@ -77,8 +70,8 @@ encrypted.** `AppDbContext` implements `IDataProtectionKeyContext`, which forces
 remark on it says so. The ring lives in the app database so every instance reads what any
 other wrote.
 
-On its own that would be close to worthless, and the first version of this shipped exactly
-that: a key ring in plaintext beside the ciphertext it opens, so a database dump carried
+On its own that would be close to worthless, and the first version of this shipped it:
+a key ring in plaintext beside the ciphertext it opens, so a database dump carried
 both. What closes it is `ProtectKeysWithCertificate`, with the certificate held as a
 deployment secret the database never sees. Data Protection keeps doing what it is good at,
 rotating keys and reading what older ones wrote, and the thing that unlocks it lives
@@ -91,10 +84,10 @@ bank credentials and a rotation story that had to be built by hand. Using the fr
 is worth a one-time certificate.
 
 Locally there is usually no certificate and the ring is unwrapped, which is the ordinary
-development posture; the publish refuses a deployment that has bank sync on and no
+development posture. The publish refuses a deployment that has bank sync on and no
 certificate, and outside Development the API refuses to start with Plaid configured and no
-certificate, because that deployment looks exactly like a correct one until somebody reads
-the database. For a while it did not (#328); undoing a ring that was stored unwrapped is in
+certificate, because that deployment looks like a correct one until somebody reads the
+database. Until #328 neither refused; undoing a ring that was stored unwrapped is in
 [A ring that was stored unwrapped](development-and-deployment.md#a-ring-that-was-stored-unwrapped).
 
 **Statuses are strings in the database.** The first enums in the data layer, and the
@@ -103,20 +96,19 @@ through `HasConversion<string>()`: a status column that reads `Filed` in `psql` 
 more than the bytes an integer saves, and it matches how the discriminators already read.
 
 **Amounts keep the sign they arrive with.** Plaid is positive for money leaving the
-account; so is an `Expense`. `BankTransaction.Amount` is therefore the same number,
-and the "map in one place" the roadmap asked for is `PlaidConnector` translating
-Plaid's row into the seam's `ImportedTransaction` -- the sign convention is stated on
-that type and enforced nowhere else. A negative amount is a credit, see Scope.
+account; so is an `Expense`. `BankTransaction.Amount` is therefore the same number, and
+the one place it is mapped is `PlaidConnector` translating Plaid's row into the seam's
+`ImportedTransaction`. The sign convention is stated on that type and enforced nowhere
+else. A negative amount is a credit, see Scope.
 
 **A posted row supersedes its pending row; neither is deleted.** Plaid delivers
 pending -> posted as a new row in `added` whose `pending_transaction_id` names the old
 one, and then a `removed` entry for the old one. The posted row takes `ReplacesId`, and
 takes over the pending row's status: `New` stays `New` under the new row, `Ignored`
-stays ignored, and `Filed` moves the ledger link -- the `Transaction` now points at the
+stays ignored, and `Filed` moves the ledger link, so the `Transaction` now points at the
 posted row. Receipt files attached to the pending row move with it. The pending row
 becomes `Superseded`, which no listing shows and no sync touches again. That keeps the
-history the roadmap wanted `ReplacesId` for, and keeps the inbox from showing the same
-coffee twice.
+history in `ReplacesId`, and keeps the inbox from showing the same coffee twice.
 
 **A `removed` entry deletes a row nobody has acted on.** `New` and `Ignored` rows are
 deleted, with any receipt file attached to them in the inbox and its stored object; a
@@ -129,13 +121,13 @@ row back in the inbox.
 **Rows are saved per page; the cursor only when the page run is complete.** Plaid's
 guidance is to persist `next_cursor` only once `has_more` is false, and on any error
 during pagination to restart the loop from the cursor the run began with. So each page's
-rows are written as they arrive -- every write is an upsert keyed on the provider's id,
-so a replay changes nothing -- and `Cursor` moves only at the end. A crash mid-run
-leaves the rows and the old cursor, and the next run walks the same pages over the
-same rows and lands in the same place. A restart from the starting cursor
+rows are written as they arrive (every write is an upsert keyed on the provider's id, so a
+replay changes nothing), and `Cursor` moves only at the end. A crash mid-run leaves the
+rows and the old cursor, and the next run walks the same pages over the same rows and
+lands in the same place. A restart from the starting cursor
 (`TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION`) remembers the rows the abandoned walk
-inserted; one the walk that finishes never reports again, and nobody has filed, is deleted
-before the cursor moves -- otherwise it would sit in the inbox as money nobody spent.
+inserted. One that the finishing walk never reports again, and nobody has filed, is
+deleted before the cursor moves, or it would sit in the inbox as money nobody spent.
 
 **One sync per connection at a time, in process.** A `SemaphoreSlim` per connection id,
 held by a singleton. That is correct for one API instance, which is what runs today and
@@ -144,11 +136,15 @@ is the one method that takes the semaphore. Written down here so it is not redis
 as a duplicate-row bug.
 
 **Filing goes through `TransactionService.Create`.** "Add to group" builds a
-`CreateTransactionRequest` from the row -- date, amount, currency, merchant, the chosen
-group and category, optional stated splits -- and hands it to the same method the
-dialog uses. Category default, even fallback, `CurrencyMismatch`, `SplitsDoNotSumToAmount`
+`CreateTransactionRequest` from the row (date, amount, currency, merchant, the chosen
+group and category, optional stated splits) and hands it to the same method the dialog
+uses. Category default, even fallback, `CurrencyMismatch`, `SplitsDoNotSumToAmount`
 and membership checks all come from there and are not written twice. The only thing the
 inbox adds is `BankTransactionId` on the new expense and `Filed` on the row.
+
+*Since then (#403):* keeping a row personal files it in the person's Personal group, whose
+id is their own user id. The request still leaves the group out, and the API reads that as
+Personal.
 
 **Category suggestions are a label, matched by the client.** Plaid's
 `personal_finance_category.primary` is stored in `ProviderCategory` and returned with a
@@ -166,15 +162,14 @@ enqueues a sync; `ERROR` with `ITEM_LOGIN_REQUIRED` marks the connection
 `LoginRequired`; `LOGIN_REPAIRED` marks it `Active` again; `USER_PERMISSION_REVOKED`
 marks it `Revoked`. Everything else is acknowledged and logged at debug.
 
-**Sandbox locally, a switch in production.** The deployment configuration explicitly
-supplies `plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, the redirect
-URI and `bank-key-certificate`. When the switch is `true`, the credentials must be valid
-and the certificate present -- the `validate-plaid` step and the deploy workflow's
-`require_when` line both refuse it otherwise; when it is `false`, the
-API still starts and `GET /bank-connections` answers an empty list with `enabled: false`
-in the envelope, so the client hides the Link button. Locally the credentials come from
-user secrets, and Link runs against the sandbox where
-`user_good` / `pass_good` opens any bank.
+**Sandbox locally, a switch in production.** The deployment configuration supplies
+`plaid-enabled`, `plaid-client-id`, `plaid-secret`, `plaid-env`, the redirect URI and
+`bank-key-certificate`. When the switch is `true`, the credentials must be valid and the
+certificate present, or the `validate-plaid` step and the deploy workflow's `require_when`
+line refuse it. When it is `false`, the API still starts and `GET /bank-connections`
+answers an empty list with `enabled: false` in the envelope, so the client hides the Link
+button. Locally the credentials come from user secrets, and Link runs against the sandbox
+where `user_good` / `pass_good` opens any bank.
 
 ## The schema
 
@@ -235,16 +230,16 @@ public abstract class Transaction : Entity
 }
 ```
 
-The merchant is a table of its own and was not, added after the phase shipped. The logo
-started as a `LogoUrl` column on `BankTransaction`, which put the same URL on every payment
-at the same shop and left it where no expense could reach it -- the ledger holds no
-provider enrichment and should not start. A row per place fixes both: the sync resolves the
+`Merchant`, a table of its own, was added after the phase shipped. The logo started as a
+`LogoUrl` column on `BankTransaction`, which put the same URL on every payment at the same
+shop and left it where no expense could reach it, since the ledger holds no provider
+enrichment and should not start. A row per place fixes both: the sync resolves the
 provider's `merchant_name` to one, filing copies the link onto the expense the way it copies
 the amount, and a logo the provider only supplies later arrives on every expense at that
 place at once.
 
 Shared is not the same as everybody's (#329). A caller reads only the merchants they already
-have something at -- an expense they can see, or a row their own bank imported -- at most 20
+have something at (an expense they can see, or a row their own bank imported), at most 20
 to a listing and only for a search of two characters or more, because the table also holds
 places only one person's card has paid. Nobody renames, relogos or deletes a merchant
 (`MERCHANT_EDIT_FORBIDDEN`): it would change what every group that has spent there sees, and
@@ -265,14 +260,14 @@ public class Merchant : Entity
 
 Mapping, in `AppDbContext`:
 
-- `BankConnection` unique on `(Provider, ProviderItemId)` -- a bank linked twice is one
-  connection, and the exchange endpoint answers the existing one -- and indexed on
-  `UserId`, which is every listing's filter. Cascades from `User`: deleting an account
-  takes its bank data with it, as the roadmap's "an item belongs to a person" implies.
+- `BankConnection` unique on `(Provider, ProviderItemId)` (a bank linked twice is one
+  connection, and the exchange endpoint answers the existing one) and indexed on
+  `UserId`, which is every listing's filter. Cascades from `User`: an item belongs to a
+  person, so deleting an account takes its bank data with it.
 - `LinkedAccount` unique on `(BankConnectionId, ProviderAccountId)`; cascades from the
   connection.
-- `BankTransaction` unique on `(LinkedAccountId, ProviderTransactionId)` -- the dedup
-  key every upsert relies on -- and indexed on `(LinkedAccountId, Status, Date)`, which
+- `BankTransaction` unique on `(LinkedAccountId, ProviderTransactionId)`, the dedup
+  key every upsert relies on, and indexed on `(LinkedAccountId, Status, Date)`, which
   is the inbox. `ReplacesId` is a self-reference with `SetNull`; the raw payload is
   `jsonb` in the Postgres context and text elsewhere. Cascades from the account.
 - `Transaction.BankTransactionId` is `SetNull` on delete and uniquely indexed: a bank
@@ -288,8 +283,7 @@ Mapping, in `AppDbContext`:
   `DataProtectionKeys`.
 
 The migration is `BankConnectionsAndImports`, purely additive: four tables and one
-nullable column with no rows to backfill, so no data step and a `Down` that simply
-drops them.
+nullable column with no rows to backfill, so no data step and a `Down` that drops them.
 
 ## The seam
 
@@ -371,13 +365,14 @@ A sync is asked for as a job, `SyncBankConnection(connectionId)`, through the
 `IJobDispatcher` seam in `GroupSplit.Jobs`. `POST /bank-connections/{id}/sync` and the
 webhook both dispatch and return; nothing waits on a sync inside a request. The daily
 sweep is a job too, `SweepBankConnections`, whose handler dispatches one sync per active
-connection,
-and it is scheduled at midnight UTC rather than relative to application startup.
+connection, and it is scheduled at midnight UTC rather than relative to application
+startup.
 
-That seam is the reason the queue is not simply a `Channel<Guid>` in the sync service.
+That seam is why the queue is not a `Channel<Guid>` in the sync service.
 `GroupSplit.Jobs` holds the shape and defaults to running it here: `AddJobs()` gives an
-in-memory channel, a hosted worker draining it into the registered handlers, and --
-through `Scheduler.Add(job, JobSchedule.Cron("0 0 * * *", TimeZoneInfo.Utc))` -- a scheduler for timed registrations. A deployment that
+in-memory channel, a hosted worker draining it into the registered handlers, and a
+scheduler for timed registrations, through
+`Scheduler.Add(job, JobSchedule.Cron("0 0 * * *", TimeZoneInfo.Utc))`. A deployment that
 would rather have a queue service deliver to a function keeps every `AddJobHandler` call
 and points `Dispatcher.Use(...)` and `Receiver.Use(...)` at that transport; the daily
 sweep becomes a schedule outside the process that dispatches `SweepBankConnections`, and
@@ -388,8 +383,8 @@ sweep catches it tomorrow.
 Nobody waits on a sync, so its failure would have nowhere to go but the job's handle, which
 every caller drops. The worker logs it instead: every job that throws is logged at error with
 its type and inputs (the record's `ToString`, which is why jobs carry ids and nothing
-secret), and a job cancelled while the host is still running -- an HTTP timeout, usually --
-is logged as the failure it is, apart from one stopped by shutdown, which is only noted.
+secret). A job cancelled while the host is still running, usually by an HTTP timeout, is
+logged as the failure it is; one stopped by shutdown is only noted.
 
 ## The API
 
@@ -465,6 +460,19 @@ row is a 404, never a 403, matching the rest of the API.
 - `PageStateRefreshTest` gets a sibling: filing from the inbox shows on Expenses and
   the group page without a reload.
 
+*Since then:* the inbox and its dialog changed shape. The nav has three destinations since
+the app flow was redesigned (#285): the count sits on Activity, and the inbox is reached
+from a "Bank transactions to review" card there (`/transactions/not-filed`; `/inbox` still
+answers). Each waiting row has one primary action, **Add to group**, with **Keep
+personal** and **Ignore** behind a menu; a credit offers only **Ignore**, and an ignored
+row offers **Put back**. Several rows can be kept personal or ignored at once (#213).
+Adding to a group stays one row at a time, and so does a row that may already be recorded
+([The same expense arriving twice](duplicate-detection.md)). `FileBankTransactionDialog`
+became the one screen recording any expense takes (#251): Personal or a group, the
+category and the shares, with a receipt attachable. When the row may match an expense
+already recorded, it opens as a choice between attaching to that expense and recording a
+new one (#285).
+
 ## Tests
 
 Above the seam, with `FakeBankConnector` scripting pages:
@@ -497,7 +505,7 @@ Above the seam, with `FakeBankConnector` scripting pages:
   `TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION`.
 
 `QueryTranslationTest` gains the inbox listing and its sort keys, because `DateOnly`
-ordering and the status filter are exactly the kind of thing the in-memory provider
+ordering and the status filter are the kind of thing the in-memory provider
 will accept and Npgsql might not.
 
 ## Order of work
