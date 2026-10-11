@@ -39,6 +39,9 @@ public interface IInboxStateService
     /// <summary>Whether the server has rows this has not asked for yet.</summary>
     bool HasMore { get; }
 
+    /// <summary>How many pages of rows are shown: one, plus one per "Load more".</summary>
+    int Pages { get; }
+
     /// <summary>The linked banks, and whether linking one is possible at all here.</summary>
     BankConnectionsResponse? Connections { get; }
 
@@ -72,6 +75,12 @@ public interface IInboxStateService
     /// </summary>
     Task LoadRowsAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Asks for the rows of one filter, span and number of pages, in one read -- what a URL
+    /// asks for when the page opens on it.
+    /// </summary>
+    Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default);
+
     /// <summary>Asks for the next page and adds it to what is already shown.</summary>
     Task LoadMoreAsync(CancellationToken ct = default);
 
@@ -98,6 +107,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// Rows per page. A bank sends a few a day, so this is a couple of weeks at a time.
     /// </summary>
     private const int PageSize = 25;
+
+    private const int MaxPages = 40;
 
     private readonly IInboxClient _inbox;
     private readonly IBankConnectionsClient _connections;
@@ -158,6 +169,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public int TotalCount { get; private set; }
 
     public bool HasMore => Rows.Count < TotalCount;
+
+    public int Pages => _pages;
 
     public BankConnectionsResponse? Connections { get; private set; }
 
@@ -226,6 +239,19 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             _loaded ??= Task.CompletedTask;
 
         return RefreshAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default)
+    {
+        Filter = status;
+        Range = range;
+
+        // A link asks for as many pages as somebody once loaded, which is never thousands;
+        // the cap is there so a hand-edited one cannot overflow the page size it multiplies.
+        _pages = Math.Clamp(pages, 1, MaxPages);
+
+        return LoadRowsAsync(ct);
     }
 
     /// <inheritdoc />

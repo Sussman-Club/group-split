@@ -296,6 +296,7 @@
     [Parameter, SupplyParameterFromQuery(Name = "page")] public string? PageParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "size")] public string? SizeParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "sort")] public string? SortParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "expense")] public string? ExpenseParameter { get; set; }
 
     /// <summary>
     /// Whether this is the caller's personal group: nothing is settled in it and every
@@ -625,12 +626,66 @@
     /// carries the caller's share and not the other members', and the whole split is most
     /// of what somebody opens this for.
     /// </remarks>
-    private async Task ViewAsync(GroupLedgerEntryResponse entry)
+    private Task ViewAsync(GroupLedgerEntryResponse entry) => ShowExpenseAsync(entry.Id);
+
+    /// <summary>The entry whose details are open, which the URL names so it can be linked to.</summary>
+    private Guid? _expense;
+
+    private bool _showingExpense;
+
+    private bool _disposed;
+
+    /// <summary>
+    /// Opens an entry's details and names it in the URL until they close, so a refresh keeps
+    /// it open and the address can be sent to somebody.
+    /// </summary>
+    private async Task ShowExpenseAsync(Guid id)
     {
-        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, entry.Id } };
+        _showingExpense = true;
+        _expense = id;
+        await WriteUrlAsync();
+
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        IDialogReference dialog;
+
+        try
+        {
+            dialog = await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        }
+        catch
+        {
+            await ForgetExpenseAsync();
+            throw;
+        }
+
+        // Not awaited: the click that opened it would stay unfinished for as long as the
+        // details are open.
+        _ = ForgetExpenseWhenClosedAsync(dialog);
+    }
+
+    private async Task ForgetExpenseWhenClosedAsync(IDialogReference dialog)
+    {
+        await dialog.Result;
+        await InvokeAsync(ForgetExpenseAsync);
+    }
+
+    private async Task ForgetExpenseAsync()
+    {
+        _showingExpense = false;
+        _expense = null;
+        await WriteUrlAsync();
+    }
+
+    /// <summary>
+    /// An entry named in the URL is opened once the tab is interactive: a dialog needs a live
+    /// page to open on, which a prerender is not.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_expense is { } id && !_showingExpense)
+            await ShowExpenseAsync(id);
     }
 
     private async Task EditAsync(GroupLedgerEntryResponse entry)
@@ -769,7 +824,7 @@
 
     /// <summary>The tab's narrowing as it is spelled in the query string.</summary>
     private sealed record Query(string? Kind, string? Search, string? Range, string? From, string? To,
-        string? Page, string? Size, string? Sort);
+        string? Page, string? Size, string? Sort, string? Expense);
 
     /// <summary>
     /// The query this tab last read or wrote. A parameter set that brings the same one back
@@ -786,7 +841,7 @@
     };
 
     private Query Asked => new(KindQuery(Kind), SearchParameter, RangeParameter, FromParameter, ToParameter,
-        PageParameter, SizeParameter, SortParameter);
+        PageParameter, SizeParameter, SortParameter, ExpenseParameter);
 
     /// <summary>What is on the tab, spelled for the URL, with its opening state left out.</summary>
     private Query Current
@@ -798,7 +853,8 @@
             return new Query(KindQuery(Kind), Search, range, from, to,
                 ListingQuery.FormatPage(_page),
                 ListingQuery.FormatPageSize(_pageSize),
-                ListingQuery.FormatSort(_sort));
+                ListingQuery.FormatSort(_sort),
+                _expense?.ToString());
         }
     }
 
@@ -806,7 +862,9 @@
     {
         var query = Current;
 
-        if (query == _settled || !QueryChanged.HasDelegate)
+        // Gone already: an expense's details can close after the tab has been left, and the
+        // host would put this tab's query on whatever page is open now.
+        if (query == _settled || !QueryChanged.HasDelegate || _disposed)
             return Task.CompletedTask;
 
         _settled = query;
@@ -820,7 +878,8 @@
             ["to"] = query.To,
             ["page"] = query.Page,
             ["size"] = query.Size,
-            ["sort"] = query.Sort
+            ["sort"] = query.Sort,
+            ["expense"] = query.Expense
         });
     }
 
@@ -833,6 +892,7 @@
         _page = ListingQuery.ParsePage(query.Page);
         _pageSize = ListingQuery.ParsePageSize(query.Size);
         _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "amount");
+        _expense = Guid.TryParse(query.Expense, out var expense) ? expense : null;
     }
 
     /// <summary>
@@ -868,6 +928,8 @@
 
     public void Dispose()
     {
+        _disposed = true;
+
         Changes.TransactionsChanged -= OnDataChangedAsync;
         Changes.GroupsChanged -= OnDataChangedAsync;
     }

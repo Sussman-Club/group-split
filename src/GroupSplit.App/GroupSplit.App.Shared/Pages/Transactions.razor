@@ -403,6 +403,7 @@
     [Parameter, SupplyParameterFromQuery(Name = "page")] public string? PageParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "size")] public string? SizeParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "sort")] public string? SortParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "expense")] public string? ExpenseParameter { get; set; }
 
     /// <summary>
     /// The chips, each with the line that says what it counts.
@@ -928,12 +929,64 @@
     /// in the home page's lists.
     /// </para>
     /// </remarks>
-    private async Task ViewAsync(TransactionResponse row)
+    private Task ViewAsync(TransactionResponse row) => ShowExpenseAsync(row.Id);
+
+    /// <summary>The expense whose details are open, which the URL names so it can be linked to.</summary>
+    private Guid? _expense;
+
+    private bool _showingExpense;
+
+    /// <summary>
+    /// Opens an expense's details and names it in the URL until they close, so a refresh
+    /// keeps it open and the address can be sent to somebody.
+    /// </summary>
+    private async Task ShowExpenseAsync(Guid id)
     {
-        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, row.Id } };
+        _showingExpense = true;
+        _expense = id;
+        WriteUrl();
+
+        var parameters = new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } };
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        IDialogReference dialog;
+
+        try
+        {
+            dialog = await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        }
+        catch
+        {
+            ForgetExpense();
+            throw;
+        }
+
+        // Not awaited: the click that opened it would stay unfinished for as long as the
+        // details are open.
+        _ = ForgetExpenseWhenClosedAsync(dialog);
+    }
+
+    private async Task ForgetExpenseWhenClosedAsync(IDialogReference dialog)
+    {
+        await dialog.Result;
+        await InvokeAsync(ForgetExpense);
+    }
+
+    private void ForgetExpense()
+    {
+        _showingExpense = false;
+        _expense = null;
+        WriteUrl();
+    }
+
+    /// <summary>
+    /// An expense named in the URL is opened once the page is interactive: a dialog needs a
+    /// live page to open on, which a prerender is not.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_expense is { } id && !_showingExpense)
+            await ShowExpenseAsync(id);
     }
 
     private async Task EditAsync(TransactionResponse row)
@@ -1047,7 +1100,7 @@
 
     /// <summary>The page's narrowing as it is spelled in the query string.</summary>
     private sealed record Query(string? View, string? Search, string? Range, string? From, string? To,
-        string? Ledger, string? Page, string? Size, string? Sort);
+        string? Ledger, string? Page, string? Size, string? Sort, string? Expense);
 
     /// <summary>
     /// The query this page last read or wrote. A parameter set that brings the same one back
@@ -1057,7 +1110,7 @@
     private Query? _settled;
 
     private Query Asked => new(ViewParameter, SearchParameter, RangeParameter, FromParameter, ToParameter,
-        LedgerParameter, PageParameter, SizeParameter, SortParameter);
+        LedgerParameter, PageParameter, SizeParameter, SortParameter, ExpenseParameter);
 
     /// <summary>
     /// What is on the page, spelled for the URL. Whatever the page opens on is left out, so
@@ -1080,7 +1133,8 @@
                 _where == AllLedgers ? null : _where,
                 ListingQuery.FormatPage(_page),
                 ListingQuery.FormatPageSize(_pageSize),
-                ListingQuery.FormatSort(_sort));
+                ListingQuery.FormatSort(_sort),
+                _expense?.ToString());
         }
     }
 
@@ -1092,7 +1146,9 @@
     {
         var query = Current;
 
-        if (query == _settled)
+        // Gone already: an expense's details can close after its page has been left, and
+        // writing then would put this page's query on whatever page is open now.
+        if (query == _settled || CancellationToken.IsCancellationRequested)
             return;
 
         _settled = query;
@@ -1107,7 +1163,8 @@
             ["ledger"] = query.Ledger,
             ["page"] = query.Page,
             ["size"] = query.Size,
-            ["sort"] = query.Sort
+            ["sort"] = query.Sort,
+            ["expense"] = query.Expense
         }), replace: true);
     }
 
@@ -1153,6 +1210,7 @@
         _page = ListingQuery.ParsePage(query.Page);
         _pageSize = ListingQuery.ParsePageSize(query.Size);
         _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "group", "category", "amount", "share");
+        _expense = Guid.TryParse(query.Expense, out var expense) ? expense : null;
     }
 
     /// <summary>
