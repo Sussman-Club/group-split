@@ -28,8 +28,8 @@ namespace GroupSplit.App.Web.Test.Components;
 /// The exclusion stays for now: a Razor component compiles into <c>obj/</c>, which the
 /// coverage config drops as generated, so these move the measured figure hardly at all
 /// while the library's other ~1,260 lines would arrive at once and take the build under
-/// its floor. Taking it out is its own piece of work, and is still tracked in
-/// <c>docs/qa/test-quality-and-coverage.md</c>.
+/// its floor. Taking it out is its own piece of work, listed as a known gap in
+/// <c>docs/testing.md</c>.
 /// </para>
 /// </remarks>
 public abstract class ComponentTest : BunitContext

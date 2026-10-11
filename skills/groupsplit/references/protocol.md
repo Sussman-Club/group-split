@@ -1,16 +1,14 @@
 # The machine contract
 
-What a program can rely on. Everything here is deliberate; none of it is a side effect of
-how the CLI happens to be written today.
+What a program can rely on. None of it is a side effect of how the CLI is written today.
 
 ## stdout and stderr
 
 - **stdout carries the result and nothing else.** Exit code 0 means stdout is safe to parse.
-- **stderr carries everything else** -- progress, warnings, errors.
+- **stderr carries everything else**: progress, warnings, errors.
 
-Capture them separately. A warning folded into stdout will break a JSON parse, and
-redirecting stdout to a file is meant to leave you with a clean file and the warnings still
-on screen.
+Capture them separately. A warning folded into stdout breaks a JSON parse. Redirecting
+stdout to a file leaves a clean file, with the warnings still on screen.
 
 ## Choosing the rendering
 
@@ -19,9 +17,8 @@ on screen.
 | a terminal | text: tables, colour, sized to the window |
 | anything else | JSON |
 
-So no flag has to be remembered when piping. Pass `--json` anyway when you are the one
-running the command: you are not always holding the pipe, and a table parsed as JSON fails
-in a confusing way.
+Pass `--json` anyway when you run the command: you are not always holding the pipe, and a
+table parsed as JSON fails in a confusing way.
 
 `--fields id,name` narrows JSON output to the named top-level fields, of an object or of
 every element of an array. It never narrows the confirmation envelope: an exit 4 always
@@ -38,8 +35,8 @@ carries the whole of it.
 | `4` | A mutation needs confirming. stdout carries the confirmation envelope. |
 | `5` | Rate limited: too many requests of one kind (receipt transcription, bank link and sync, invitations) in the window. Nothing was done. The envelope's `retryAfter` says how many seconds to wait; the same command then succeeds. |
 
-The distinction worth relying on is between 1 and 3: **3 means retrying will not help until
-something changes.** A parse error is 3, and so is a value the server rejected.
+Unlike 1, **3 means retrying will not help until something changes.** A parse error is 3,
+and so is a value the server rejected.
 
 Adding a code is a compatible change. Changing what an existing one means is not, so these
 six will not be redefined underneath you.
@@ -66,9 +63,9 @@ On stderr, whenever a command fails:
 
 ### Codes the CLI raises itself
 
-Prefixed `CLI_`, which is how you tell them apart from the server's. Most of them mean the
-request was never sent. Two do not: `CLI_OUTCOME_UNKNOWN` says outright that it may have
-been carried out, and `CLI_CANCELLED` can interrupt a request already on its way.
+Prefixed `CLI_`, which tells them apart from the server's. Most mean the request was never
+sent. Two do not: `CLI_OUTCOME_UNKNOWN` means it may have been carried out, and
+`CLI_CANCELLED` can interrupt a request already on its way.
 
 | Code | Exit | Meaning |
 | --- | --- | --- |
@@ -87,10 +84,9 @@ been carried out, and `CLI_CANCELLED` can interrupt a request already on its way
 
 ### Codes from the server
 
-Anything without the prefix is the API's own code, passed through verbatim -- the CLI does
-not invent a second vocabulary for conditions the API already names. The full catalog is in
-[docs/errors.md](https://github.com/Sussman-Club/group-split/blob/dev/docs/errors.md). The
-ones worth handling by name:
+Anything without the prefix is the API's own code, passed through verbatim. The full catalog
+is in [docs/errors.md](https://github.com/Sussman-Club/group-split/blob/dev/docs/errors.md).
+Handle these by name:
 
 | Code | What it means for a caller |
 | --- | --- |
@@ -132,9 +128,9 @@ Written to stdout with exit code 4, in place of the result:
 performs the action, so a caller with no terminal does not have to reconstruct the
 invocation from its own history.
 
-It is written back out of the invocation that was refused, not by hand, so it carries
-every option that was given -- `--profile` and `--server` included, so it acts on the same
-account -- and adds only `--yes`. On the way:
+It is rebuilt from the invocation that was refused, so it carries every option that was
+given (`--profile` and `--server` included, so it acts on the same account) and adds only
+`--yes`. Also:
 
 - A file is named by its absolute path, so it reads the same file from any directory.
 - Each word is quoted for a POSIX shell (single quotes) when it needs to be. Run it in
@@ -143,13 +139,12 @@ account -- and adds only `--yes`. On the way:
   `--amount` comes back with the amount the prompt named, so confirming after the balance
   moved still pays that amount.
 
-What the server holds can still change between the prompt and the confirmation -- a member
-pays, somebody edits the expense -- and the confirmed run acts on what is there then.
+What the server holds can still change between the prompt and the confirmation (a member
+pays, somebody edits the expense), and the confirmed run acts on what is there then.
 `settle-up` and `receipts divide` work their figures out again when confirmed.
 
-Nothing ever blocks on a prompt that nobody can answer. That is the reason exit code 4
-exists, and the reason `--yes` should be something a user asked for rather than something
-you added to keep the pipeline moving.
+Nothing blocks on a prompt that nobody can answer; exit code 4 is returned instead. Add
+`--yes` only when a user asked for it, never to keep a pipeline moving.
 
 ## The schema
 
@@ -159,21 +154,20 @@ you added to keep the pipeline moving.
 {
   "name": "groupsplit",
   "version": "...",
-  "exitCodes": { "success": 0, "error": 1, "authRequired": 2, "invalidInput": 3, "confirmationRequired": 4 },
+  "exitCodes": { "success": 0, "error": 1, "authRequired": 2, "invalidInput": 3, "confirmationRequired": 4, "rateLimited": 5 },
   "command": { "name": "groupsplit", "description": "...", "aliases": [], "arguments": [], "options": [], "subcommands": [] }
 }
 ```
 
 `command` nests to the leaves. Each argument carries `name`, `type`, `arity` (`"min..max"`,
 with `*` for unbounded) and `required`; each option carries `name`, `aliases`, `type`,
-`required` and `recursive`. Types are rendered as what they look like on a command line --
-`string`, `uuid`, `integer`, `number`, `boolean`, `date-time`, `string[]` -- and an enum as
-its values joined by `|`, e.g. `asc|desc`.
+`required` and `recursive`. Types are rendered as they look on a command line (`string`,
+`uuid`, `integer`, `number`, `boolean`, `date-time`, `string[]`), and an enum as its values
+joined by `|`, e.g. `asc|desc`.
 
 Hidden commands and options are omitted, so what the schema lists is what is supported.
 
 ## Debugging
 
 `GROUPSPLIT_DEBUG=1` attaches a stack trace to the envelope of an unexpected error.
-`groupsplit --version` prints the version and the commit it was built from, so an installed
-tool can always be traced back to what produced it.
+`groupsplit --version` prints the version and the commit it was built from.

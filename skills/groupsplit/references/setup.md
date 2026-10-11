@@ -1,22 +1,21 @@
 # Getting `groupsplit` running
 
-Three things have to be true before a command can work: the binary is on `PATH`, a server is
-configured, and there are credentials. `groupsplit config list` answers the middle one, and
-`groupsplit auth status` the last.
+A command needs three things: the binary on `PATH`, a configured server, and credentials.
+`groupsplit config list` checks the second, and `groupsplit auth status` the third.
 
 ## Installing
 
 The repository is public and every package the CLI depends on is on nuget.org, so building
-it needs nothing but the .NET SDK -- version 10.0.100 or later, pinned in `global.json`.
-**This is the path that needs no credentials, and it is the one to reach for first.**
+it needs only the .NET SDK (10.0.100 or later, pinned in `global.json`). **This path needs no
+credentials. Try it first.**
 
 ```bash
 git clone https://github.com/Sussman-Club/group-split
 dotnet run --project group-split/src/GroupSplit.Cli -- groups list --json
 ```
 
-Everything after `--` is the command line, so `--json` and the rest read exactly as they do
-below. For a real `groupsplit` on `PATH` without a feed or a token:
+Everything after `--` is the command line, read as it is below. For a real `groupsplit` on
+`PATH` without a feed or a token:
 
 ```bash
 dotnet pack src/GroupSplit.Cli -c Release -o artifacts/nupkg
@@ -28,8 +27,8 @@ dotnet tool install --global --add-source ./artifacts/nupkg --prerelease GroupSp
 
 ### From the org's feed
 
-Releases are published to GitHub Packages, which unlike the repository *is* private, so this
-path wants a token with the `read:packages` scope:
+Releases are published to GitHub Packages, which is private (unlike the repository), so this
+path needs a token with the `read:packages` scope:
 
 ```bash
 dotnet nuget add source https://nuget.pkg.github.com/Sussman-Club/index.json \
@@ -41,20 +40,19 @@ dotnet tool install --global GroupSplit.Cli
 `~/.dotnet/tools` has to be on `PATH`; the installer says so if it is not. `dotnet tool
 update --global GroupSplit.Cli` upgrades, and `--prerelease` gets `dev` builds.
 
-**Do not run those two unasked.** `--store-password-in-clear-text` does what it says: the
-token lands in plain text in `~/.nuget/NuGet/NuGet.Config`. Building from the checkout above
-writes no credential anywhere, which is why it comes first.
+**Do not run those two unasked.** `--store-password-in-clear-text` writes the token in plain
+text to `~/.nuget/NuGet/NuGet.Config`. Building from the checkout above writes no credential
+anywhere.
 
 ### When the tool is missing
 
-A missing `groupsplit` is not a dead end and not a reason to stop. Offer the clone-and-build
-above -- it is public, it needs no token, and it produces the same CLI. Ask before installing
-anything globally.
+A missing `groupsplit` is no reason to stop. Offer the clone-and-build above: it is public,
+needs no token, and produces the same CLI. Ask before installing anything globally.
 
 ## Pointing it at a server
 
-No URL is compiled into the binary. One build talks to a local run, a staging box and
-production, and which one is a runtime decision.
+No URL is compiled into the binary. One build talks to a local run, a staging box or
+production, chosen at runtime.
 
 A deployment serves the API and Keycloak under a single public origin, so one setting is
 usually enough:
@@ -64,9 +62,8 @@ groupsplit config set server https://groupsplit.example.com
 ```
 
 From that origin the CLI derives the API as `{server}/native/api` and the authority as
-`{server}/idp/realms/group-split`. `/native/api` rather than `/api` because they are
-different doors: `/api` is the browser's and authenticates with the web app's session
-cookie, so a request carrying its own bearer token is refused there.
+`{server}/idp/realms/group-split`. Not `/api`: that is the browser's, authenticated by the
+web app's session cookie, and it refuses a request carrying its own bearer token.
 
 Sources are consulted in this order, first one wins:
 
@@ -74,8 +71,8 @@ Sources are consulted in this order, first one wins:
 2. `GROUPSPLIT_SERVER`
 3. the `server` key of the active profile in `~/.config/groupsplit/config.json`
 
-When the API and Keycloak are **not** under one origin -- which is every local run, where
-each resource gets its own port -- set the two directly. Either replaces the derived value:
+When the API and Keycloak are not under one origin (every local run, where each resource gets
+its own port), set the two directly. Either replaces the derived value:
 
 ```bash
 export GROUPSPLIT_API_URL=https://localhost:7043
@@ -110,8 +107,8 @@ groupsplit config profiles --json
 
 The settable keys are `server`, `apiurl`, `authority` and `clientid`. `groupsplit config
 list` reports what the *next* command will resolve to and which source each value came
-from, which is the quickest way to check before wondering why a request went somewhere
-unexpected. `groupsplit config path` prints the file.
+from; check it first when a request went somewhere unexpected. `groupsplit config path`
+prints the file.
 
 ## Credentials
 
@@ -131,17 +128,16 @@ not print it into a transcript.** It is a bearer token for somebody's real money
 
 `groupsplit auth login` uses the OAuth 2.0 device authorization grant: it prints a URL and a
 code, opens a browser when there is one, and waits for approval. The browser that approves
-need not be on the same machine, which is why it is the flow used rather than a loopback
-redirect.
+need not be on the same machine.
 
-This is a step only a person can complete. **Do not run it and wait.** When a command
-returns exit code 2, tell the user to run `groupsplit auth login`, or ask them for a token
-to put in `GROUPSPLIT_TOKEN`.
+Only a person can complete this step. **Do not run it and wait.** When a command returns
+exit code 2, tell the user to run `groupsplit auth login`, or ask them for a token to put in
+`GROUPSPLIT_TOKEN`.
 
-`--no-browser` prints the URL and the code without trying to open anything. It is the flag
-to give a user over SSH or in a container, where a launch attempt either fails silently or
-opens a browser on the wrong machine. It does not make the step automatable: somebody still
-has to approve it.
+`--no-browser` prints the URL and the code without trying to open anything. Give it to a
+user over SSH or in a container, where a launch attempt either fails silently or opens a
+browser on the wrong machine. It does not make the step automatable; somebody still has to
+approve it.
 
 Credentials land in `~/.local/share/groupsplit/credentials.json`, keyed by realm and client,
 narrowed to `0600` on Unix. Expired access tokens refresh silently; a spent refresh token is

@@ -145,6 +145,29 @@ public sealed class ReceiptCommandTests : IDisposable
         Assert.Equal(ExitCodes.Success, result.ExitCode);
         Assert.Equal(Version, _api.Requests.Last().Json.GetProperty("splitRuleVersionId").GetGuid());
     }
+    /// <summary>
+    /// On a bill the expense divides by, `set` and `rule` re-divide it as `divide` does, so
+    /// they ask first. A bill that is only attached moves nothing and is written straight away.
+    /// </summary>
+    [Fact]
+    public async Task Set_and_rule_ask_first_on_a_bill_the_expense_divides_by()
+    {
+        var item = Guid.NewGuid();
+        _api.Returns($"/api/transactions/{Expense}/receipt", Dividing(), method: "GET");
+        _api.Returns($"/api/transactions/{Expense}/receipt", Bill(), method: "PUT");
+        _api.Returns($"/api/transactions/{Expense}/receipt/items/{item}/rule", Bill());
+
+        var set = await Cli.RunAsync("receipts", "set", Expense.ToString(), "--item", "Food=106");
+        var rule = await Cli.RunAsync("receipts", "rule", Expense.ToString(), item.ToString(),
+            "--rule-version", Version.ToString());
+
+        Assert.Equal(ExitCodes.ConfirmationRequired, set.ExitCode);
+        Assert.Equal("receipts.set", set.Json.GetProperty("action").GetString());
+        Assert.Equal(ExitCodes.ConfirmationRequired, rule.ExitCode);
+        Assert.Equal("receipts.rule", rule.Json.GetProperty("action").GetString());
+        Assert.All(_api.Requests, request => Assert.Equal("GET", request.Method));
+    }
+
     [Fact]
     public void Parser_keeps_item_identity_when_correcting_a_line()
     {
@@ -327,7 +350,7 @@ public sealed class ReceiptCommandTests : IDisposable
     private static object Saved(decimal tip, params object[] items) => new
     {
         id = Guid.NewGuid(), expenseId = Expense, subtotal = 12m, tax = .48m, tip, total = 12.48m + tip,
-        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true, canEdit = true,
+        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false, canEdit = true,
         merchantName = "Costco", purchaseDate = "2026-09-30", items
     };
 
@@ -340,6 +363,11 @@ public sealed class ReceiptCommandTests : IDisposable
     };
 
     private static object Bill(params object[] items) => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
-        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true,
+        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false,
         canEdit = true, items };
+
+    /// <summary>A bill the expense divides by, so changing it moves balances.</summary>
+    private static object Dividing() => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
+        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true,
+        canEdit = true, items = Array.Empty<object>() };
 }

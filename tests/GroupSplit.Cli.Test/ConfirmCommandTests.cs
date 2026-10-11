@@ -155,6 +155,12 @@ public sealed class ConfirmCommandTests : IDisposable
                 shares = new[] { new { userId = Omar, subtotal = 35m, amount = 40m } }
             }, method: "GET")),
 
+        new("receipts.set", ["receipts", "set", $"{Thing}", "--item", "Food=100/tax6"], api =>
+            api.Returns($"/api/transactions/{Thing}/receipt", DividingBill(), method: "GET")),
+
+        new("receipts.rule", ["receipts", "rule", $"{Thing}", $"{Other}", "--rule-version", $"{Omar}"], api =>
+            api.Returns($"/api/transactions/{Thing}/receipt", DividingBill(), method: "GET")),
+
         new("receipts.delete", ["receipts", "delete", $"{Thing}"], api =>
             api.Returns($"/api/transactions/{Thing}/receipt", new
             {
@@ -450,6 +456,21 @@ public sealed class ConfirmCommandTests : IDisposable
         name = "Omar", invitedByUserName = "Anabel", invitedAt = DateTimeOffset.UtcNow, alreadyAMember = false
     };
 
+    private static object DividingBill() => new
+    {
+        id = Other, expenseId = Thing, subtotal = 100m, tax = 6m, tip = 0m, total = 106m,
+        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true, canEdit = true,
+        items = new[]
+        {
+            new
+            {
+                id = Other, name = "Food", normalizedName = "food", unitPrice = 100m, quantity = 1m,
+                totalPrice = 100m, taxAmount = 6m, splitRuleVersionId = (Guid?)null,
+                splitRuleName = (string?)null, splitRule = (object?)null
+            }
+        }
+    };
+
     private static object Attachment(Guid id, Guid? expenseId, Guid? bankTransactionId) => new
     {
         id, expenseId, bankTransactionId, receiptId = (Guid?)null,
@@ -481,7 +502,7 @@ public sealed class ConfirmCommandTests : IDisposable
     /// single quotes, double quotes and backslashes. No expansion, because the point of the
     /// quoting is that there is none.
     /// </summary>
-    private static class PosixShell
+    internal static class PosixShell
     {
         public static List<string> Split(string line)
         {

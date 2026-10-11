@@ -1,12 +1,13 @@
 # Participants: who is in a group, and what each may do
 
 A group's people are not all the same kind of person. Some are in it, some are guests it
-keeps track of without their having an account, some have left. This page says what each of them is, how the API tells them
-apart, and what each may and may not do -- with the code every refusal answers with.
+keeps track of without their having an account, some have left. This page says what each of
+them is, how the API tells them apart, and what each may and may not do, with the code every
+refusal answers with.
 
-For the two neighbours of this page: [guests.md](guests.md) is the whole story of guests and
-their links, and [split-rules-and-membership.md](split-rules-and-membership.md) is what
-membership does to split rules.
+[guests.md](guests.md) is the whole story of guests and their links, and
+[split-rules-and-membership.md](split-rules-and-membership.md) is what membership does to
+split rules.
 
 ## Four standings
 
@@ -20,7 +21,7 @@ What somebody is to one group is one question with four answers, and
 | **Departed** | Was a member or a guest and is not now: left, was removed, deleted their account, or was removed as a guest. | A closed membership row (`LeftAt`, `LeftReason`, `LeftByUserId`), or a name the group's ledger or rules still carry -- which is what is left of a removed guest, and of departures from before membership rows were kept. |
 | **Stranger** | None of the above. | |
 
-Two sets are built from these, and the difference between them is the point of the model:
+Two sets are built from these:
 
 - **Membership** is access. Every "may this person read or change the group" check asks it of
   `Group.Users`, which a query filter on `GroupMembership` restricts to open rows.
@@ -33,17 +34,21 @@ Two sets are built from these, and the difference between them is the point of t
 There are no roles. No owner, no admin, and the creator of a group or whoever added a guest
 has no power the others lack. Any member may add guests, issue, replace or stop any guest's
 link, make or revoke the join link, record any repayment, and remove any other member or
-guest. The one asymmetry is
-that you cannot remove yourself: that is leaving.
+guest. The one asymmetry is that you cannot remove yourself: that is leaving.
+
+A personal group, the one whose id is its owner's user id, has its owner as its only member.
+It refuses everything that needs a second person (guests, join links, split rules,
+settlements, leaving and archiving) with 409 `PERSONAL_GROUP_NOT_SHARED`, so the table below
+is about shared groups.
 
 ## Removed and left
 
-Both end in the same standing -- departed -- and differ only on the way out:
+Both end in the same standing, departed, and differ only on the way out:
 
 - who acted, which `LeftReason` and `LeftByUserId` record;
 - leaving is refused to the last member (`GROUP_CANNOT_LEAVE_LAST_MEMBER`), removing has no
   such case because you cannot remove yourself;
-- **removing puts out the group's live join link**, because the person removed could read it
+- removing puts out the group's live join link, because the person removed could read it
   and may pass it on. Leaving does not: the link is the group's, and leaving expresses no
   distrust.
 
@@ -85,8 +90,8 @@ history -- but nothing about the join link changes: a guest never had a way to r
 ## What a departure fixes in place
 
 Somebody can only leave square, and the group's balances list only the people still in it.
-The column therefore adds up for exactly as long as nothing changes what a departed person
-paid or owed. So that is the rule, per transaction: their part stays as it was recorded.
+The column therefore adds up for as long as nothing changes what a departed person paid or
+owed. So the rule, per transaction, is that their part stays as it was recorded.
 
 What still works on an expense a leaver was on: renaming it, its note, its date, its
 category, re-pointing a line of its bill, and changing the amount with the shares set by
@@ -95,18 +100,18 @@ amount any other way, handing what they paid to somebody else, and moving it to 
 group. The same holds for the settlement that let them leave.
 
 `IGroupParticipants.DepartedOn` takes the snapshot before an edit is applied, reading the
-transaction itself rather than membership rows -- so a removed guest is covered too -- and
+transaction itself rather than membership rows (so a removed guest is covered too), and
 `DepartedPositions` compares.
 
 ## Coming back
 
 A way back in is only as good as its date. A join link is dated by when it was made and a
-guest's link by when it was issued (`LinkIssuedAt`, not when the guest was added); `IGroupJoiner` refuses either to a person whose membership
-ended at or after that moment, on the landing page's read as well as on the join. One issued
-afterwards is how a group says it wants them back, and they return as an ordinary member on
-the same row, with `JoinedAt` reset. A guest's link that has expired is a 404 before this
-rule is asked, and issuing it again dates the new one now -- see
-[guests.md](guests.md#expiry).
+guest's link by when it was issued (`LinkIssuedAt`, not when the guest was added);
+`IGroupJoiner` refuses either to a person whose membership ended at or after that moment, on
+the landing page's read as well as on the join. One issued afterwards is how a group says it
+wants them back, and they return as an ordinary member on the same row, with `JoinedAt`
+reset. A guest's link that has expired is a 404 before this rule is asked, and issuing it
+again dates the new one now (see [guests.md](guests.md#expiry)).
 
 ## What the database holds it to
 

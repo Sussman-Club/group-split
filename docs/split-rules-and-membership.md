@@ -6,8 +6,7 @@ a record of anything that happened -- a recorded expense holds the amounts it wa
 divided into, so editing a rule, or the group's membership, cannot restate what anybody owed
 last March.
 
-Which leaves one question this document exists to answer: a rule names people, and people
-join groups and leave them. What does the rule mean then?
+A rule names people, and people join groups and leave them. What does the rule mean then?
 
 What each kind of person in a group -- member, guest, departed -- may do, outside the
 rules, is [participants.md](participants.md).
@@ -25,11 +24,14 @@ was current and opens a new one -- editing it from the app or the CLI, and a mem
 which is the one change that happens without anybody editing anything.
 
 Every transaction records the version that divided it, in `Transaction.SplitRuleVersionId`.
-Null there is not a gap: a transfer, a personal expense, an expense filed under nothing or
-under a category that names no rule, and an expense whose shares somebody typed in by hand
-all divide by something other than a rule, and an invented row would say otherwise.
+Null there is not a gap: a transfer, a personal expense and an expense whose shares somebody
+typed in by hand all divide by something other than a rule, and an invented row would say
+otherwise. An expense filed under nothing, or under a category that names no rule, divides by
+the group's default split (the built-in Even unless the group chose another) and records its
+version like any other ([#298](https://github.com/Sussman-Club/group-split/pull/298)).
+Expenses recorded before that hold none.
 
-The pair is the point, and neither half replaces the other:
+The shares and the version are a pair, and neither replaces the other:
 
 | | Says | Survives |
 | --- | --- | --- |
@@ -41,7 +43,7 @@ what its category's rule says today -- nobody correcting a figure is asking to b
 under a division agreed afterwards. Filing it under a different category is the edit that
 does ask for that, and gets that category's current version.
 
-Being divided again takes two things, and it takes both. `PATCH /transactions/{id}` reads
+Being divided again takes two things. `PATCH /transactions/{id}` reads
 silence about `/splits` as *never restate a division somebody made*, so the API first asks
 whether the stored shares are the ones the expense's own version reproduces -- a rule's, or
 an even split under no rule, which the app worked out just as surely. Shares a person typed
@@ -54,9 +56,9 @@ operation on its own is never enough.
 
 Asking outright is still an explicit `/splits` operation with null, and it means something
 the two conditions above cannot: discard the shares it holds and divide by the category's rule
-whatever the edit touched. Not by that rule **as it reads now** -- an expense that still
+whatever the edit touched. Not by that rule as it reads now, though: an expense that still
 records a version is divided again by that version, the same one an amount edit would use, so
-a rule edited since is not applied retroactively by asking. What reaches a rule as it stands
+asking does not apply a rule edited since. What reaches a rule as it stands
 is filing the expense under another category, and an expense somebody split by hand, which
 records no version at all. The edit dialog's **Automatically** sends it, `transactions update
 --redivide` sends it from the CLI, and `POST /transactions/{id}/preview?redivide=true` shows
@@ -70,15 +72,15 @@ shared it would hand their share to the rest; it is refused instead
 (`TRANSACTION_MOVES_DEPARTED_BALANCE`). An amount edit with the shares set by hand, leaving
 the leaver's as it is, is the way to correct such an expense.
 
-An expense divided by its **bill** follows its amount the same way, and the bill follows with
-it: an amount edit that divides again re-totals the bill first, the difference on its tip --
-the one figure that belongs to no line and is spread over all of them by price -- and then
-divides by it. The tip cannot go below nothing, so lowering the amount by more than the tip
-is refused (`RECEIPT_DOES_NOT_ADD_UP`): which line was wrong is for the person holding the
-paper to say, by correcting the bill. Shares somebody stated are left out of this exactly as
-above, and so is their bill. The bill is the source of the shares while the expense records
-the itemised version, including while an edit has left a line without a rule: whichever call
-gives that line its rule -- a whole-bill save or a single line's -- divides the expense again.
+An expense divided by its bill follows its amount the same way, and the bill follows with
+it: an amount edit that divides again re-totals the bill first, the difference on its tip
+(the one figure that belongs to no line, spread over all of them by price), and then divides
+by it. The tip cannot go below nothing, so lowering the amount by more than the tip is
+refused (`RECEIPT_DOES_NOT_ADD_UP`): which line was wrong is for the person holding the
+paper to say, by correcting the bill. Shares somebody stated are left out of this as above,
+and so is their bill. The bill is the source of the shares while the expense records the
+itemised version, including while an edit has left a line without a rule: whichever call
+gives that line its rule, a whole-bill save or a single line's, divides the expense again.
 Moving the expense to another group clears every line's rule, since a line may only divide by
 a rule of its expense's own group, and a line still holding another group's rule reads as a
 line with none.
@@ -94,12 +96,12 @@ ratio agreed in 2026. Two things put that right, and neither touches a stored am
 | `PUT /split-rules/{id}/versions` | States the divisions a rule stood for, oldest first, each with the date it started. Only for a rule that has stood for one division since it was made; the last entry has to be that division, and its row is reused rather than replaced, because recorded expenses already point at it. |
 | `PUT /transactions/{id}/division-source` | What divided one expense, stated by hand. Null means the amounts are the expense's own. |
 
-Provenance only, both. Neither calls the splitter, and `ExpenseProvenance` -- which serves the
-second -- does not take it as a dependency, so that is structural rather than a promise.
+Provenance only, both. Neither calls the splitter, and `ExpenseProvenance`, which serves the
+second, does not take it as a dependency, so that is structural rather than a promise.
 
 There was a third, `POST /transactions/reattach`: a pass over a group pointing every expense
 at the version of its category's rule whose window contained its date. It is gone. It found
-the rule through the category's pointer **as the category points now**, so a group that had
+the rule through the category's pointer *as the category points now*, so a group that had
 since re-pointed Groceries from an even split to one by income got three years of Groceries
 expenses pointed at versions of a rule that had never divided them -- and the database has no
 way to tell that case from the honest one, because it records which version divided an
@@ -107,21 +109,16 @@ expense and has never recorded which rule a category named in 2023. Writing a hi
 still worth doing: it makes the rule's own account of itself true, and expenses stay where
 they point.
 
-Neither is reachable from the app, and neither is what they write. The app used to
-print what divided an expense above its shares, with a panel behind it for correcting the
-answer, and it resolved the sentence through the category's rule **as the category points
-now** -- so a group that re-pointed Groceries from an even split to one by income had three
-years of Groceries expenses describing themselves in the words of a rule that had never
-touched them. Nothing stored was wrong; the reading was. A screen that cannot tell the truth
-about an old expense is better silent, so the app says nothing about provenance at all and
-these stay CLI commands -- where the person running one knows what a re-pointed category
-means, and `dryRun` will say what a pass would do before it does it.
-
-One of the three is reachable from the app: the edit dialog offers to correct which version
-divided one expense. The other two stay CLI commands. Writing a rule's past wholesale was
-never going to be a dialog -- 42 months of a workbook are not re-lived one at a time -- and
-re-pointing a whole group is a migration somebody runs once, knowing why, rather than a
-button a group sees for ever after.
+Neither is reachable from the app, and neither is what they write. The app used to print
+what divided an expense above its shares, with a panel behind it for correcting the answer,
+and it resolved the sentence through the category's rule as the category points now: the
+same mistake as the pass above, made in words. Nothing stored was wrong; the reading was. A
+screen that cannot tell the truth about an old expense is better silent, so the app says
+nothing about provenance at all. Both stay CLI commands (`split-rules versions set` and
+`transactions update --divided-by`), where the person running one knows what a re-pointed
+category means and `--dry-run` shows a history before it is written. Writing a rule's past
+wholesale was never going to be a dialog anyway: 42 months of a workbook are not re-lived
+one at a time.
 
 Three edits, three effects, and none of them reaches the others: renaming a rule touches no
 version, pointing a category somewhere else touches no rule, and editing a division touches
@@ -133,20 +130,19 @@ an expense cannot be left with amounts and no account of where they came from.
 
 ## The rule every group holds for every participant
 
-Beside the rules a group writes, it is given one per participant -- every member, and every
-guest: **all of it is for them**. They
-exist because the commonest thing an expense has to say is the one thing its category
-cannot -- the weekly shop is even, and this one is Ana's gym on the joint card -- and a group
-should not have to invent a rule apiece, name them, and keep them in step with its
-membership before anybody can say it.
+Beside the rules a group writes, it is given one per participant, every member and every
+guest: **all of it is for them**. They exist because the commonest thing an expense has to
+say is the one thing its category cannot -- the weekly shop is even, and this one is Ana's
+gym on the joint card -- and a group should not have to invent a rule apiece, name them, and
+keep them in step with its membership before anybody can say it.
 
-One appears as each member joins, and as each guest is added -- the friend on the trip is
-the one most likely to need "all of it is theirs", and should not have to sign up first. The
+One appears as each member joins, and as each guest is added: the friend on the trip is the
+one most likely to need "all of it is theirs", and should not have to sign up first. The
 migration that introduced them wrote one per existing membership, and a later one wrote one
-per guest (then called a pending invitation). The first was the same migration that gave every kind of version a table of its
-own, so that "who the whole amount is for" is a column in the table of the kind that has
-one, required, rather than a nullable column on a table the other four kinds share. Two
-facts, kept in the two places that state them:
+per guest (then called a pending invitation). The first was the same migration that gave
+every kind of version a table of its own, so that "who the whole amount is for" is a column
+in the table of the kind that has one, required, rather than a nullable column on a table the
+other four kinds share. Two facts, kept in the two places that state them:
 
 | | Where | Says |
 | --- | --- | --- |
@@ -163,29 +159,36 @@ one keep every share they hold.
 
 Nothing records the member twice. "Which rule is Ana's" is a question about the division a
 rule stands for, and asking it of the version is the only way that cannot go stale: restate
-the rule and the answer follows, because the answer *is* the rule's answer.
+the rule and the answer follows.
 
 **Nothing changes what one says.** Renaming, restating, writing a history and deleting are
 all refused by name (`SPLIT_RULE_NOT_EDITABLE`), so one of these stands for a single
-division for as long as it exists. That is not tidiness: an expense can name one without
-anybody having created it, so a restatement would move money on expenses recorded under a
-division nobody chose. A group that wants "all of it is for Ana, until we say otherwise"
-creates a rule of its own -- the same kind, and editable like any other.
+division for as long as it exists. An expense can name one without anybody having created
+it, so a restatement would move money on expenses recorded under a division nobody chose. A
+group that wants "all of it is for Ana, until we say otherwise" creates a rule of its own --
+the same kind, and editable like any other.
+
+Every shared group is given two more rules on the same terms
+([#298](https://github.com/Sussman-Club/group-split/pull/298)): Even, which names nobody and
+so divides between whoever is in the group at the time, and the bill rule, which divides an
+expense by the rule on each line of its receipt. Even is the group's default split, what an
+expense under no category divides by, until the group chooses another. A personal group is
+given none, and keeps no rules at all.
 
 **A guest's rule follows their position.** When their link is claimed by somebody with no
 rule of their own in the group, it becomes theirs: its versions are repointed, and expenses
 recorded "all for Luz" before she joined now say her account. When the position lands on
-somebody who already has one -- a member claiming it -- it is retired: deleted if nothing was divided by it and nothing
-defaults to it, and otherwise kept for that history, repointed at the receiver, and no longer
-provisioned, so it leaves the "One pays" picker and becomes an ordinary rule the group may
-rename. `IMemberSplitRules.HandOver` decides which, and is the one place that writes
-`BuiltIn` back to false.
+somebody who already has one (a member claiming it), it is retired: deleted if nothing was
+divided by it and nothing defaults to it, and otherwise kept for that history, repointed at
+the receiver, and no longer provisioned, so it leaves the "One pays" picker and becomes an
+ordinary rule the group may rename. `IMemberSplitRules.HandOver` decides which, and is the
+one place that writes `BuiltIn` back to false.
 
 A departure leaves them alone, and can: the member is an account, which is anonymised rather
 than erased, so the rule goes on naming a row that is still there. What it stops doing is
 dividing, because a division only pays people who are still participants -- the same
 `SPLIT_RULE_INVALID` any rule pruned down to nobody gets. The app stops offering them in the
-"all for one" picker at the same moment, since that list is the group's members.
+"One pays" picker at the same moment, since that list is the group's members.
 
 ## A rule keeps the shape it was written with
 
@@ -202,7 +205,7 @@ the rule mean different things, and one of the two is refused for not totalling 
 other is perfectly good. The editor converts between them while a rule is being *written*,
 which is where choosing the shape belongs; on an existing rule the selector is fixed.
 
-Writing a history is the exception, and deliberately: `PUT /split-rules/{id}/versions` takes
+Writing a history is the exception: `PUT /split-rules/{id}/versions` takes
 entries of whatever kinds the rule really stood for, because a flat that divided its rent
 evenly until it started keeping shares has to be able to say so. What guards that path is the
 entry it ends on -- the last one has to be the division the rule stands for now, kind
@@ -211,7 +214,7 @@ included.
 ## An expense can name the rule it divides by
 
 `POST /transactions` and `PATCH /transactions/{id}` take a `splitRuleId`: divide this one by
-that rule, whatever its category says. It is an **instruction and not a stored field**. What
+that rule, whatever its category says. It is an instruction, and nothing stores it. What
 the expense keeps is what every expense keeps -- `SplitRuleVersionId`, the division that
 produced its shares -- which for "all for Ana" is the one version Ana's rule will ever have.
 
@@ -232,17 +235,17 @@ stays divisible. Correcting the amount afterwards divides it again; hand-typed s
 refused, because shares that summed to the old total do not sum to the new one.
 
 The two are one question with two answers, so a request carrying both a `splitRuleId` and
-`splits` is refused -- with one exception that is not one: the update endpoint hands every
+`splits` is refused, with one apparent exception: the update endpoint hands every
 patch the shares the expense already holds, so shares identical to the stored ones are
 silence about the division, which is what they have meant since 2026-09-09.
 
 ## What is true now
 
-- **A departing member is taken out of the rules that name them -- by a new version of
-  each.** Not marked, not zeroed, and not deleted out of the version the rule is on: the
-  current version closes and a new one opens without them. This happens on all three ways
-  out -- removed by somebody else, leaving of their own accord, and deleting the account --
-  because all three go through `GroupService.DetachMember`. A guest who is removed is
+- **A departing member is taken out of the rules that name them, by a new version of
+  each.** The current version closes and a new one opens without them; nothing is marked,
+  zeroed or deleted out of the version the rule is on. This happens on all three ways out
+  (removed by somebody else, leaving of their own accord, and deleting the account) because
+  all three go through `GroupService.DetachMember`. A guest who is removed is
   handled the same way, by `GroupService.DetachGuest`. Both go through
   `ISplitRuleRevisions`, which is the only place a rule changes without somebody editing it.
 
@@ -274,41 +277,41 @@ silence about the division, which is what they have meant since 2026-09-09.
   The check is `DepartedPositions`, against a snapshot `IGroupParticipants.DepartedOn` takes
   before the edit is applied; it reads the transaction rather than membership rows, so it
   covers a removed guest too.
-- **What was theirs is redistributed among the rest, not left as a hole.** Weights are
+- **What was theirs is redistributed among the rest.** Weights are
   proportional and the division normalises by whatever total it is given, so two members left
   holding one share each divide the whole amount between them.
 - **A rule that puts the whole amount on one person follows them, or stays as it is.** It
   has no weight to prune and nobody to prune it among, so there are only two things it can
-  do. Where the hand-over names somebody taking their place -- a guest's link claimed --
-  every version naming them is repointed at the claimer, closed versions included, and no
-  new version is opened. That is the one place a superseded version is ever written, and it
-  is written for the same reason the hand-over rewrites the shares on expenses years old: the
+  do. Where the hand-over names somebody taking their place (a guest's link claimed), every
+  version naming them is repointed at the claimer, closed versions included, and no new
+  version is opened. That is the one place a superseded version is ever written, and it is
+  written for the same reason the hand-over rewrites the shares on expenses years old: the
   claim is the person turning out to have been somebody else all along. Where nobody is
-  named -- a member leaving, a guest removed -- nothing moves at all: the account or stand-in
-  survives, so the version goes on naming a row that is still there, and the rule simply
-  stops dividing.
+  named (a member leaving, a guest removed), nothing moves at all: the account or stand-in
+  survives, so the version goes on naming a row that is still there, and the rule stops
+  dividing.
 - **A rule cannot be written naming somebody outside the group.** Create and update both
   refuse it (`RULE_USERS_NOT_IN_GROUP`), so the only way a rule names a non-member is a
   client holding a rule it read before the membership moved. "Outside" means outside the
   group's *participants*, though, which is wider than its members: a guest may be named by a
-  rule too -- see [guests.md](guests.md). If they are removed, the rule stops naming them, by
+  rule too (see [guests.md](guests.md)). If they are removed, the rule stops naming them, by
   the same pruning a departure does above.
 - **A new member is named by nothing.** Rules are not rewritten when somebody joins, so an
   expense divided by an existing percentage or shares rule gives them no share until the
-  rule is edited. An even rule naming nobody -- the default -- includes them from the moment
-  they join, which is why naming nobody is the useful thing for an even split to say.
+  rule is edited. An even rule naming nobody, as the group's built-in Even does, includes
+  them from the moment they join, which is why naming nobody is the useful thing for an even
+  split to say.
 - **The editor edits against today's membership.** `RuleEditorForm` restates the rule it was
   handed before showing it: entries for people who are not members are dropped, and a member
-  the rule never named starts at zero. Both directions matter, because the form renders one
-  field per member and reads its totals from the whole stored division -- an entry with no
-  field is invisible and still counted, and a field with no entry used to throw as the form
-  rendered.
+  the rule never named starts at zero. The form renders one field per member and reads its
+  totals from the whole stored division, so an entry with no field would be invisible and
+  still counted, and a field with no entry used to throw as the form rendered.
 
 ## A percentage rule can be left below 100
 
 Taking a member out of a percentage rule leaves the remaining percentages summing to less
-than 100: three members on 33.33, 33.33 and 33.34 become two on 33.33, totalling 66.66. This
-is deliberate, and it is two different things in two places.
+than 100: three members on 33.33, 33.33 and 33.34 become two on 33.33, totalling 66.66. That
+means two different things in two places.
 
 The division does not care. It is proportional, and 33.33 against 33.33 is half each however
 the pair is written, so expenses go on being split evenly between the two who are left.
@@ -336,21 +339,45 @@ What that costs has changed. It used to be a 500 with a trace id on the next exp
 under a category pointing at that rule -- a fault report for what is a coherent request
 about an incoherent template. `ExpenseSplitter` now turns the refusal into
 `SPLIT_RULE_INVALID`, naming the rule and saying the two ways out: edit it, or file the
-expense under nothing and have it divided evenly.
+expense under nothing, where the group's default split divides it.
 
-The timing is still a gap. A member **leaving** goes through `GroupService.DetachMember`
-and a guest being removed through `DetachGuest`, and neither reports the rules it emptied,
-so a departure can empty a rule in silence. (Declining or withdrawing an invitation used to
-count them; neither touches a rule any more.) And an **even** rule emptied this way does not refuse at all: naming nobody is how
-an even split says "between everybody", so it silently widens rather than failing, and the
-warning above is the only thing that mentions it.
+The timing is still a gap. A member leaving goes through `GroupService.DetachMember` and a
+guest being removed through `DetachGuest`, and neither reports the rules it emptied, so a
+departure can empty a rule in silence. (Declining or withdrawing an invitation used to count
+them; neither touches a rule any more.) And an even rule emptied this way does not refuse at
+all: naming nobody is how an even split says "between everybody", so it silently widens
+instead of failing, and this paragraph is the only place that says so.
 
 ## Which way a rule moves depends on the direction
 
-Somebody **arriving** keeps their place in a rule. When a guest's link is claimed the weight
+Somebody arriving keeps their place in a rule. When a guest's link is claimed the weight
 follows the person onto their own account -- added to a weight they already held, since a
 rule may hold only one opinion about somebody -- because the group wrote "Carlos gets one
 share" and meant it. One hand-over served both directions at first and pruned in both, so
 claiming quietly took the new member out of the very templates that had named them. The
 claim is the only hand-over left, and it always transfers; departures prune through
 `ISplitRuleRevisions.WithoutParticipant` with `RuleHandling.Prune`.
+
+## Retiring a category
+
+A category with anything filed under it cannot be deleted (`CATEGORY_IN_USE`). A category is
+how a group reads its spending back, and deleting one would take months of that with it; the
+foreign key from `Expense` would refuse it anyway. What a group usually means by deleting a
+category it has used is that it should stop being offered, and that is archiving.
+
+An archived category leaves the pickers and the default listing. Every expense filed under
+it goes on naming it and divides as it did, and it goes on naming its rule, so that rule
+still cannot be deleted (`SPLIT_RULE_IN_USE`). It keeps its name too, so a new category
+cannot take it (`CATEGORY_NAME_TAKEN`). A group's categories are the group's, so one member
+archiving one retires it for everybody. `Category.ArchivedAt` records when, and
+unarchiving clears it and offers the category again; nothing else changes either way.
+
+- **App:** the archive button on the category's row under the group's Settings (the cog).
+  The row stays, tagged Archived, and the same button offers it again.
+- **API:** `POST /categories/{id}/archive` and `POST /categories/{id}/unarchive`.
+  `GET /categories?includeArchived=true` lists archived ones beside the rest.
+- **CLI:** `categories archive <id>`, `categories unarchive <id>`, and
+  `categories list --archived`. Neither asks for confirmation: one command undoes it, and
+  nothing it touches is money.
+
+Deleting is for a category nothing is filed under, and it is final.
