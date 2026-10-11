@@ -58,8 +58,8 @@ what it is about to change rather than echo a guid back: `groups remove-member`,
 and `receipts delete` do the same. The roster read also lets
 `groups remove-member` refuse before asking: somebody not on it is an error
 straight away rather than a confirmation the server would then refuse. `receipts divide` goes further and
-reads the division itself, so the prompt lists what each person ends up owing rather than
-saying the shares will change -- it is money moving between people's balances, and the
+reads the division itself, so the prompt lists each share -- by user id -- and what it comes
+to, rather than saying the shares will change -- it is money moving between people's balances, and the
 figures are the thing worth reading before agreeing to them.
 `merchants update` and `merchants delete` ask nothing: a merchant belongs to no group, so a
 rename, a new logo or a deletion would change what every group that has spent there sees,
@@ -193,10 +193,10 @@ groupsplit groups members <group-id>
 ```
 
 ```bash
-groupsplit tx create --group <group-id> --amount 90 --name Rent \
+groupsplit tx create Rent 90 --group <group-id> \
     --split <anabel-id>=60 --split <carlos-id>=30
 
-groupsplit tx create --group <group-id> --amount 40 --name Taxi --paid-by <carlos-id>
+groupsplit tx create Taxi 40 --group <group-id> --paid-by <carlos-id>
 ```
 
 Their balance is in `groups balances`, marked `(guest)`, and in the transfers underneath it
@@ -1008,7 +1008,7 @@ groupsplit receipts attachments delete <transaction-id> <attachment-id>
 and PDF, up to 10 MB. The transcription result is still a draft: it does not save the
 itemised receipt or change the expense's shares. For a bill that is already the source of
 the stored ledger, a subsequent valid `receipts set` or `receipts rule` correction keeps
-the shares synchronized; otherwise `receipts divide` remains the explicit step that changes
+the shares synchronized, so both are confirmation-gated on such a bill; otherwise `receipts divide` remains the explicit step that changes
 the ledger.
 
 An imported bank row can hold the source file before it becomes an expense. Use the same
@@ -1067,7 +1067,7 @@ any other division:
 
 ```bash
 groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
-groupsplit categories update <category-id> --split-rule <rule-id>
+groupsplit categories update <category-id> --rule <rule-id>
 ```
 
 There is no `--itemized` on `split-rules create`; asking for one is refused with

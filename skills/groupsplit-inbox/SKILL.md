@@ -127,7 +127,7 @@ reading you -- and that is also how a genuine duplicate gets waved through.
 
 ## The refusal
 
-Filing a row that looks like an expense already recorded fails with exit code 1 and
+Filing a row that looks like an expense already recorded fails with exit code 3 and
 
 ```json
 { "code": "POSSIBLE_DUPLICATE_EXPENSE", "error": "..." }

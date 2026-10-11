@@ -43,7 +43,8 @@ way the app does:
 - After reviewing a transcription, use `receipts set` to save the bill and `receipts rule` to
   assign each line's split rule. `receipts divide` explicitly stores the division when the
   bill is not already the source of the expense's shares. If an itemised receipt already
-  drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync;
+  drives the stored ledger, a valid `set` or `rule` correction keeps those shares in sync,
+  so both ask for confirmation first;
   an incomplete correction remains editable and leaves the last valid shares in place, and
   the call that completes it divides again. A forgotten tip is `transactions update --amount`:
   the bill is re-totalled, the difference on its tip.
@@ -111,7 +112,7 @@ These actions stop unless confirmed: `groups.remove-member`, `groups.leave`,
 `groups.guest-link.create` (only with `--new` on a guest whose link still works),
 `groups.guest-link.revoke`,
 `invitations.claim`, `invitations.decline`, `transactions.delete`, `receipts.divide`,
-`receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
+`receipts.set` and `receipts.rule` (only on a bill the expense is divided by), `receipts.delete`, `receipts.attachments.delete`, `inbox.attachments.delete`,
 `categories.delete`, `split-rules.delete`, `split-rules.versions.set`, `bank.unlink` and
 `users.delete`.
 

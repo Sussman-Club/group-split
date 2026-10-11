@@ -198,8 +198,8 @@ remain in place until the bill is valid again.
 | `receipts attachments transcribe <transaction-id> <attachment-id>` | Read an attached source file into an editable draft. Saves no itemised bill. |
 | `receipts attachments delete <transaction-id> <attachment-id>` | Delete an expense's source file. Confirmation required. |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. |
-| `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. Confirms first when the expense is divided by its bill. |
+| `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. Confirms first when the expense is divided by its bill. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
 | `receipts delete <transaction-id>` | Take the bill off. The shares already stored are left alone. |
@@ -274,7 +274,7 @@ it to divide by the bill by default:
 
 ```bash
 groupsplit split-rules list --group <id>          # the given one is named "Divide by the bill"
-groupsplit categories update <category-id> --split-rule <rule-id>
+groupsplit categories update <category-id> --rule <rule-id>
 ```
 
 `split-rules create` has no `--itemized`: a second is refused with
@@ -503,9 +503,8 @@ which is what stating shares has always done to the version behind an expense.
 
 ### Setting exact shares: `--split`
 
-`transactions update --split <user-id>=<amount>` and `inbox file --split <user-id>=<amount>`
-take money, not percentages or share counts, and are repeatable. They set the division
-outright.
+`transactions create`, `transactions update` and `inbox file` take `--split <user-id>=<amount>`:
+money, not percentages or share counts, repeatable, and they set the division outright.
 
 On `transactions update`, omitting the flag **never restates a division somebody typed**. It
 has not re-derived those since 2026-09-09 -- a bulk pass that assumed otherwise re-divided 733
