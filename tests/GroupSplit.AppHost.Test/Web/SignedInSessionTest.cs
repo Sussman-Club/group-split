@@ -23,7 +23,13 @@ namespace GroupSplit.AppHost.Test.Web;
 /// freeze at page load inside an interactive circuit, and from the WebAssembly mode
 /// development uses that is invisible.
 /// </para>
+/// <para>
+/// In the collection that takes the realm apart, so a sign-in never runs while another test
+/// has re-pointed the browser flow or is running the realm worker. Keycloak restarts a
+/// login whose flow changed under it, and the form came back asking for the password again.
+/// </para>
 /// </remarks>
+[Collection(GoogleFirstBrokerLogin.Collection)]
 public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 {
     private readonly AppHostFixture _appHost = appHost;
