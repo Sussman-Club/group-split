@@ -1,3 +1,5 @@
+using GroupSplit.Shared;
+
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
@@ -60,6 +62,17 @@ public class Group : Entity
     /// unavailable.
     /// </remarks>
     public string Currency { get; init; } = Currencies.Default;
+
+    /// <summary>
+    /// The span the group's Activity tab opens on, for every member. A display preference:
+    /// nothing in the API reads it.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted here and not in the database. A store default on an enum whose zero is
+    /// <see cref="ActivityPeriod.AllTime"/> would have EF read a chosen All time as "not
+    /// set" and write This month instead.
+    /// </remarks>
+    public ActivityPeriod DefaultPeriod { get; set; } = ActivityPeriod.ThisMonth;
 }
 
 /// <summary>

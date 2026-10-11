@@ -234,7 +234,8 @@ public class GroupService(
             {
                 user
             },
-            Name = request.Name
+            Name = request.Name,
+            DefaultPeriod = request.DefaultPeriod
         };
 
         context.Add(group);
@@ -295,7 +296,8 @@ public class GroupService(
                       select new CreateGroupRequest
                       {
                           Name = t.Name,
-                          DefaultSplitRuleId = t.DefaultSplitRuleId
+                          DefaultSplitRuleId = t.DefaultSplitRuleId,
+                          DefaultPeriod = t.DefaultPeriod
                       }).FirstOrDefaultAsync(ct);
     }
 
@@ -311,6 +313,7 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
+        existingGroup.DefaultPeriod = request.DefaultPeriod;
 
         // The property was added to the existing update contract, so callers from before the
         // change omit it.  Omission must preserve the group's default; the UI always names a

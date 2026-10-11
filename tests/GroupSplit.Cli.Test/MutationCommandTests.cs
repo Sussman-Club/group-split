@@ -280,6 +280,31 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Groups_set_default_period_sends_one_replace_on_the_period()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns($"/api/groups/{id}", Group("Trip to Lisbon"));
+
+        var result = await Cli.RunAsync("groups", "set-default-period", id.ToString(), "last-3-months");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var operations = _api.Requests.Single(r => r.Method == "PATCH").Json;
+        Assert.Single(operations.EnumerateArray());
+        Assert.Equal("/defaultPeriod", operations[0].GetProperty("path").GetString(), ignoreCase: true);
+        Assert.Equal("LastThreeMonths", operations[0].GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task Groups_set_default_period_refuses_a_period_it_does_not_offer()
+    {
+        var result = await Cli.RunAsync("groups", "set-default-period", Guid.NewGuid().ToString(), "fortnight");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
+    }
+
+    [Fact]
     public async Task Groups_settle_sends_the_amount_and_the_direction_it_was_given()
     {
         var id = Guid.NewGuid();

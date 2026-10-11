@@ -253,6 +253,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasDefaultValue("USD")
                         .IsFixedLength();
 
+                    b.Property<string>("DefaultPeriod")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<Guid?>("DefaultSplitRuleId")
                         .HasColumnType("uuid");
 

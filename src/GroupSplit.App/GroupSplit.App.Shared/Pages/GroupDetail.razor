@@ -75,7 +75,8 @@
         @switch (Current)
         {
             case "activity":
-                <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" Kind="@LedgerKind" QueryChanged="OnLedgerQueryChanged" />
+                <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" DefaultPeriod="@group.DefaultPeriod"
+                                Kind="@LedgerKind" QueryChanged="OnLedgerQueryChanged" />
                 break;
 
             case "people":
