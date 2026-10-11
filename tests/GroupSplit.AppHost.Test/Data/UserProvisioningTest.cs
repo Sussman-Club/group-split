@@ -78,6 +78,20 @@ public class UserProvisioningTest(AppHostFixture appHost) : IAsyncLifetime
                 .Where(identity => _subjects.Contains(identity.IdentityId))
                 .ExecuteDeleteAsync();
 
+            // Each provisioned account came with a personal group, its membership in it and
+            // the event that membership wrote, and all three point back at the account.
+            await context.Set<GroupMembershipEvent>()
+                .Where(change => userIds.Contains(change.UserId) || userIds.Contains(change.GroupId))
+                .ExecuteDeleteAsync();
+
+            await context.Set<GroupMembership>()
+                .Where(membership => userIds.Contains(membership.UserId))
+                .ExecuteDeleteAsync();
+
+            await context.Set<Group>()
+                .Where(group => userIds.Contains(group.Id))
+                .ExecuteDeleteAsync();
+
             await context.Set<User>()
                 .Where(user => userIds.Contains(user.Id))
                 .ExecuteDeleteAsync();

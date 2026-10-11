@@ -30,17 +30,7 @@
 </div>
 
 <div class="gs-stack">
-    @if (Active.Count == 0 && Archived.Count == 0)
-    {
-        <div class="gs-card gs-empty" style="padding: 64px 24px">
-            <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-            <h3>No group yet</h3>
-            <span>Create a group and name the people you share costs with.</span>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">Create a group</MudButton>
-        </div>
-    }
-    else
+    @if (Active.Count > 0)
     {
         <div class="gs-group-grid">
             @{ var i = 1; }
@@ -49,22 +39,37 @@
                 @GroupCard(group, i++)
             }
         </div>
+    }
 
-        @if (Archived.Count > 0)
-        {
-            <div class="gs-card gs-card-pad gs-reveal" style="--i: @(i + 1)">
-                <div class="gs-card-title">
-                    <h2>Archived</h2>
-                    <span class="gs-tag neutral">only you see this</span>
-                </div>
-                <div class="gs-group-grid">
-                    @foreach (var group in Archived)
-                    {
-                        @GroupCard(group, i++)
-                    }
-                </div>
+    @* Asked of the shared groups: everybody has a personal one, so a new account would never
+       be invited to make the group it came here for. Below the personal card, not instead
+       of it. *@
+    @if (!GroupsService.Groups.Any(group => !group.IsPersonal))
+    {
+        <div class="gs-card gs-empty" style="padding: 64px 24px">
+            <MudIcon Icon="@Icons.Material.Rounded.Groups" />
+            <h3>No shared group yet</h3>
+            <span>Create a group and name the people you share costs with.</span>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">Create a group</MudButton>
+        </div>
+    }
+
+    @if (Archived.Count > 0)
+    {
+        var i = Active.Count + 1;
+        <div class="gs-card gs-card-pad gs-reveal" style="--i: @(i + 1)">
+            <div class="gs-card-title">
+                <h2>Archived</h2>
+                <span class="gs-tag neutral">only you see this</span>
             </div>
-        }
+            <div class="gs-group-grid">
+                @foreach (var group in Archived)
+                {
+                    @GroupCard(group, i++)
+                }
+            </div>
+        </div>
     }
 </div>
 
