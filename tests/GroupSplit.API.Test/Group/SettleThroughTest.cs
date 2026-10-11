@@ -460,7 +460,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_period_starts_the_day_after_the_last_one_the_same_two_people_settled()
+    public async Task A_period_starts_the_day_after_the_last_one_its_payer_settled()
     {
         var (group, _) = await GroupOfTwo();
 
@@ -473,6 +473,47 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var august = (await Transfers(group)).Single(transfer => transfer.CoversThrough == EndOfAugust);
 
         var coverage = await Settlements().GetCoverage(august.Id, 0, Ct);
+
+        Assert.Equal(new DateOnly(2026, 8, 1), coverage!.From);
+    }
+
+    /// <summary>
+    /// The Home group's September (#407). I paid the same member for July; in August the
+    /// plan had the third member pay me, so I paid nobody. My September payment starts on
+    /// 1 September, not back on 1 August.
+    /// </summary>
+    [Fact]
+    public async Task A_period_starts_after_a_month_its_payer_squared_with_somebody_else()
+    {
+        var (group, other, third) = await GroupOfThree();
+
+        await Settle(group, other, SettlementDirection.YouPaidThem, EndOfJuly);
+        await Settle(group, third, SettlementDirection.TheyPaidYou, EndOfAugust);
+        await Settle(group, other, SettlementDirection.YouPaidThem, EndOfSeptember);
+
+        var september = (await Transfers(group)).Single(transfer => transfer.CoversThrough == EndOfSeptember);
+
+        var coverage = await Settlements().GetCoverage(september.Id, 0, Ct);
+
+        Assert.Equal(new DateOnly(2026, 9, 1), coverage!.From);
+    }
+
+    /// <summary>
+    /// The recipient squaring August with somebody else says nothing about the payer's August,
+    /// which nobody settled, so the payer's September payment still reaches back over it.
+    /// </summary>
+    [Fact]
+    public async Task A_period_reaches_back_over_a_month_its_payer_settled_with_nobody()
+    {
+        var (group, other, third) = await GroupOfThree();
+
+        await Settle(group, other, SettlementDirection.TheyPaidYou, EndOfJuly);
+        await Settle(group, third, SettlementDirection.TheyPaidYou, EndOfAugust);
+        await Settle(group, other, SettlementDirection.TheyPaidYou, EndOfSeptember);
+
+        var september = (await Transfers(group)).Single(transfer => transfer.CoversThrough == EndOfSeptember);
+
+        var coverage = await Settlements().GetCoverage(september.Id, 0, Ct);
 
         Assert.Equal(new DateOnly(2026, 8, 1), coverage!.From);
     }
@@ -601,6 +642,19 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             Amount = amount,
             Direction = SettlementDirection.TheyPaidYou,
             Date = date
+        }, Ct);
+    }
+
+    /// <summary>A settlement between the caller and another member, made for a period.</summary>
+    private async Task Settle(Guid groupId, Data.Entities.User other, SettlementDirection direction,
+        DateOnly through)
+    {
+        await GetService<IGroupService>().Settle(groupId, new SettleRequest
+        {
+            UserId = other.Id,
+            Amount = 10,
+            Direction = direction,
+            Through = through
         }, Ct);
     }
 

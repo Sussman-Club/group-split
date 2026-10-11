@@ -259,7 +259,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// What a settlement covers: the previous day the same two people settled through, and
+    /// What a settlement covers: the previous day its payer settled through, and
     /// the payer's balance through this one.
     /// </summary>
     [Fact(Timeout = 120_000)]
