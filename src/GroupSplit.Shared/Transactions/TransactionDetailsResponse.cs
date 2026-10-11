@@ -86,8 +86,9 @@ public record TransactionDetailsResponse : TransactionResponse
 /// </remarks>
 /// <param name="Through">The last day of activity it was meant to settle.</param>
 /// <param name="From">
-/// The first day of the period: the day after the last one an earlier settlement between the
-/// same two people covered through, or null when there was none -- since the group began.
+/// The first day of the period: the day after the last one an earlier settlement the payer
+/// was part of, with anybody, covered through, or null when there was none -- since the
+/// group began.
 /// </param>
 /// <param name="StillOwed">
 /// What the payer still owes the recipient for activity through <paramref name="Through"/>,

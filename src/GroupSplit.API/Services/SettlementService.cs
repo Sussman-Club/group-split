@@ -372,17 +372,17 @@ public class SettlementService(
         if (transfer?.CoversThrough is not { } through)
             return null;
 
-        // Where the period starts: after the last day an earlier settlement between the same
-        // two people covered, whichever way it went. The pair and not the group, because
-        // settling up is personal -- somebody else squaring August says nothing about what
-        // these two were settling.
+        // Where the period starts: after the last day an earlier settlement the payer was part
+        // of covered, whoever it was with and whichever way it went. Not the pair, because who
+        // pays whom is an artifact of the minimised plan and changes month to month: a payer
+        // who was owed in August and squared it with somebody else has no August settlement
+        // with this recipient. Not the recipient's, because the recipient may settle with
+        // somebody every month, which would hide a month the payer really did owe.
         var previous = await context.Set<Transfer>()
             .Where(other => other.GroupId == transfer.GroupId &&
                             other.CoversThrough != null && other.CoversThrough < through &&
-                            ((other.UserId == transfer.PayerId &&
-                              other.Splits.Any(split => split.UserId == transfer.RecipientId)) ||
-                             (other.UserId == transfer.RecipientId &&
-                              other.Splits.Any(split => split.UserId == transfer.PayerId))))
+                            (other.UserId == transfer.PayerId ||
+                             other.Splits.Any(split => split.UserId == transfer.PayerId)))
             .MaxAsync(other => other.CoversThrough, cancellationToken);
 
         // Whether the period is square between these two now: what the plan through the day
