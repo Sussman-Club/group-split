@@ -40,15 +40,20 @@
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
     <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
         <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; min-width: 0">
-            <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
-                @foreach (var (label, value) in Personal ? Kinds.Where(entry => entry.Value != ActivityKind.Transfer) : Kinds)
-                {
-                    var kind = value;
-                    <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
-                            aria-pressed="@(Kind == kind ? "true" : "false")"
-                            @onclick="@(() => SetKindAsync(kind))">@label</button>
-                }
-            </div>
+            @* Not in a personal group: nothing is settled there, so every entry is an
+               expense and the chips would all show the same rows. *@
+            @if (!Personal)
+            {
+                <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
+                    @foreach (var (label, value) in Kinds)
+                    {
+                        var kind = value;
+                        <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
+                                aria-pressed="@(Kind == kind ? "true" : "false")"
+                                @onclick="@(() => SetKindAsync(kind))">@label</button>
+                    }
+                </div>
+            }
 
             <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
         </div>
@@ -269,8 +274,8 @@
 
     /// <summary>
     /// Whether this is the caller's personal group: nothing is settled in it and every
-    /// share is theirs, so there are no settlements to filter to and no share or balance
-    /// worth a column.
+    /// share is theirs, so there is no kind to filter by and no share or balance worth a
+    /// column.
     /// </summary>
     [Parameter] public bool Personal { get; set; }
 
