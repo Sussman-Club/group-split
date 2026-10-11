@@ -6,7 +6,7 @@ know when they have paid it back, and none of that should wait for them to make 
 
 A **guest** is that person. A member adds them by name, and from that moment they are a
 participant in the group's money: they can be given a share, be the payer, be settled with,
-and -- once square -- be removed. The members record all of it. A guest can also be given a
+and, once square, be removed. The members record all of it. A guest can also be given a
 link, so the real person can take their place; most never are.
 
 This document is about what that means and, mostly, about the arithmetic it must not break.
@@ -25,8 +25,8 @@ it waited for the answer. That fixed the backlog of expenses and left two holes:
 - **Nobody could simply drop one.** Withdrawing or declining handed everything they held to
   some member, in full, because there was no other way to make the column add up.
 
-Both came from treating the person as *pending*. A guest is not waiting for anything: they
-are somebody the group keeps track of, and a link is an optional extra.
+Both came from treating the person as *pending*. A guest is somebody the group keeps track
+of, and a link is an optional extra.
 
 [236]: https://github.com/Sussman-Club/group-split/issues/236
 
@@ -35,8 +35,8 @@ are somebody the group keeps track of, and a link is an optional extra.
 `GroupGuest` (the table that used to be `GroupInvitation`, renamed in place with its ids)
 carries the name the group gave them, who added them and when, and a required
 `ParticipantUserId`: the `User` every share recorded for that person belongs to. It is always
-a **stand-in** (`UserKind.StandIn`) -- a row with the name on it, no address, and no
-`UserIdentity`, so nobody can sign in as it -- and never an existing account. There is no
+a **stand-in** (`UserKind.StandIn`), never an existing account: a row with the name on it,
+no address, and no `UserIdentity`, so nobody can sign in as it. There is no
 address to recognise an account by, and guessing from a name would hand a stranger's ledger
 to whoever the group happened to call Dani.
 
@@ -54,15 +54,15 @@ routes, and that is all it is for.
 ## Ended, never deleted
 
 A guest stops being one by being **removed** (by a member, once square) or **claimed** (by
-whoever held their link). Either way the row ends -- `EndedAt`, `EndReason`, `EndedByUserId`
--- rather than going, the same choice a departure makes on `GroupMembership`. A query filter
+whoever held their link). Either way the row ends (`EndedAt`, `EndReason`, `EndedByUserId`)
+rather than going, the same choice a departure makes on `GroupMembership`. A query filter
 keeps ended rows out of every read, so `Group.Guests` and `Set<GroupGuest>()` mean current
 guests everywhere without each read having to say so.
 
 That one filter is most of the behaviour of a removed guest. They are no longer in
 `IGroupParticipants.Of`, so:
 
-- `StandingOf` answers **Departed** (from the ledger), exactly as for a member who left;
+- `StandingOf` answers **Departed** (from the ledger), as for a member who left;
 - they cannot be named as a payer, a share or in a rule (`TRANSACTION_PAYER_NOT_IN_GROUP`,
   `SPLIT_USER_NOT_IN_GROUP`, `RULE_USERS_NOT_IN_GROUP`) or in a repayment (`USER_NOT_FOUND`);
 - what they paid or owed on an old expense is fixed (`TRANSACTION_MOVES_DEPARTED_BALANCE`);
@@ -72,8 +72,8 @@ That one filter is most of the behaviour of a removed guest. They are no longer 
 A claimed guest's stand-in holds nothing, so it is nobody: a **Stranger**, and left out of the
 past participants (the history says it was claimed).
 
-Every add, removal and claim is a `GroupMembershipEvent` -- `GuestAdded`, `GuestRemoved`,
-`GuestClaimed` -- written by the context in the same save, so the group can still say who a
+Every add, removal and claim is a `GroupMembershipEvent` (`GuestAdded`, `GuestRemoved`,
+`GuestClaimed`), written by the context in the same save, so the group can still say who a
 guest was, who added them, and what became of them.
 
 ## The two invariants
@@ -91,7 +91,7 @@ marks them), and why a guest can only be removed square: a removed guest is a de
 participant, and a departed participant has to have left at zero for the column of the
 people still there to add up.
 
-And it is why guests are **in the settlement plan**. A plan is a list of payments somebody
+And it is why guests are in the settlement plan. A plan is a list of payments somebody
 can record, and a member can record a guest's: "Pat paid me back", "I paid Pat", "Pat paid
 Sam". `DebtCalculationService` minimises over everybody, so the plan clears the whole group,
 and the cross-group plan (`/me/settle`) names guests too -- marked, and once per group, since
@@ -119,14 +119,14 @@ there to settle with (`USER_NOT_FOUND`).
 version on -- the same pruning a member who leaves gets (`RuleHandling.Prune`). Their own
 "all for them" rule stays, naming the stand-in, as a leaver's does.
 
-It does **not** revoke the group's join link. Removing a member does, because they could read
+It does not revoke the group's join link. Removing a member does, because they could read
 it and pass it on; a guest never could.
 
 ## The link
 
 A guest has no link until a member issues one (`POST /groups/{id}/guests/{userId}/link`, or
 `IssueLinks` when adding). `GroupGuest.Token` is 24 bytes from the cryptographic generator,
-Base64Url, like `GroupJoinLink.Token` -- and it guards much more.
+Base64Url, like `GroupJoinLink.Token`, and it guards much more.
 
 A **join link** lets somebody into a group as themselves, claiming nothing. It is reusable
 and it expires. A **guest's link** hands over a position in the group's ledger: forward it and
@@ -141,9 +141,9 @@ somebody else inherits the debts recorded for that guest. So:
   place. See [Expiry](#expiry).
 - **Every way a link ends forgets who opened it.** Replaced, stopped, turned down, claimed, or
   the guest removed: `GuestLinkExtensions.EndLink` clears the token *and* deletes the
-  `InvitationOpened` rows for that guest. (Expiring is not an ending -- nothing runs at that
-  moment -- so an expired link's rows go when a member issues the next one.) Otherwise somebody who opened a leaked link would be
-  handed its replacement in their own list.
+  `InvitationOpened` rows for that guest. (Expiring is not an ending: nothing runs at that
+  moment, so an expired link's rows go when a member issues the next one.) Otherwise
+  somebody who opened a leaked link would be handed its replacement in their own list.
 - **It is a concurrency token**, and so is `EndedAt`. Every write that matters to a guest
   changes one of them, so of two at the same moment the second matches no row: two claimers
   end with one member and one 404; a claim racing a replacement, a stop or a removal resolves
@@ -162,7 +162,7 @@ a screenshot.
 
 ### Expiry
 
-A guest's link works for `GroupGuest.LinkLifetime` -- 30 days -- from `LinkIssuedAt`, fixed
+A guest's link works for `GroupGuest.LinkLifetime` (30 days) from `LinkIssuedAt`, fixed
 in code like `GroupJoinLink.Lifetime` (14 days) and for the same reason: a choice on a dialog
 nobody has an opinion about, against a link that is one press to issue again. Longer than a
 join link's because the person a guest's link is for has usually never heard of the app, and
@@ -172,7 +172,7 @@ join link's because the person a guest's link is for has usually never heard of 
   the lifetime, and a second column could only disagree with it. Changing the lifetime
   changes every link already out, which is what a change made for safety should do. Links
   issued before this existed expire 30 days after they were issued, with no backfill.
-- **The same 404.** An expired link answers `GROUP_INVITATION_NOT_FOUND`, exactly as a claimed,
+- **The same 404.** An expired link answers `GROUP_INVITATION_NOT_FOUND`, as a claimed,
   stopped or mistyped one does. A join link says it expired (`GROUP_JOIN_LINK_EXPIRED`), but a
   join link hands over nothing; saying "expired" here would confirm to whoever holds a leaked
   link that a position was once on offer. The claim page names expiry among the reasons a
@@ -202,13 +202,13 @@ join link's because the person a guest's link is for has usually never heard of 
 Somebody opens a link, signs in, and goes to look at something else. `Describe` records the
 pair in `InvitationOpened` and `Mine` reads it back -- the "Waiting on you" row on the home
 page and `invitations list` -- joined to the guests whose link still works, so a link that
-has ended is never offered. It carries the tokens, which is the point, and discloses nothing,
-since holding the token is what put the row there.
+has ended is never offered. It carries the tokens and discloses nothing, since holding the
+token is what put the row there.
 
 ### "This isn't me"
 
 Declining is done by whoever holds the link, since the link is the only credential there is,
-and it only **stops the link**. The guest stays, holding everything recorded for them, and a
+and it only stops the link. The guest stays, holding everything recorded for them, and a
 member can send a new one. Nothing moves, so `InvitationClosedResponse` reports zeros -- it
 keeps its old shape for clients built when declining handed the guest's position to a member.
 
@@ -223,19 +223,18 @@ keeps its old shape for clients built when declining handed the guest's position
 3. the claimer joins the group, through `IGroupJoiner.Join`.
 
 No amount changes. Every transaction still divides into exactly its own amount, so the
-group's balances read the same either side of it -- the same numbers under a different name.
-The answer says what moved, and counts the rule places separately (`RulesTaken`), because a
+group's balances read the same either side of it. The answer says what moved, and counts the rule places separately (`RulesTaken`), because a
 rule place goes on giving them a share of every expense filed under it.
 
 Where the claimer already held a share of the same transaction, the two are added into one
 row: a transaction may hold only one opinion about what a person owed.
 
-**A member claiming a guest who turns out to be them** -- the group named the same person
-twice -- merges the guest into them, and the claim page asks "are you and Pat the same
+**A member claiming a guest who turns out to be them** (the group named the same person
+twice) merges the guest into them, and the claim page asks "are you and Pat the same
 person?" first. Any repayment recorded between the two would now read as the member paying
 themselves, so `HandOver` deletes those rather than repointing them and the answer counts them
 (`SettlementsCancelled`, `AmountCancelled`). They netted to nothing for whoever holds both
-ends, so the member's balance is exactly what the two came to together.
+ends, so the member's balance is what the two came to together.
 
 **Following the group's open join link is not claiming a guest, and does not end one.**
 Nothing has told the group that the person who walked in is the guest it named, and guessing

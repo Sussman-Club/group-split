@@ -7,7 +7,7 @@ two halves are kept from disagreeing.
 
 ## The decision: the Keycloak user is deleted
 
-Decided in [#360][360]. Deleting an account **deletes its Keycloak user**. It is not disabled.
+Decided in [#360][360]. Deleting an account deletes its Keycloak user. It is not disabled.
 
 The alternative was to disable the user and remove its Google link, which would have kept a
 way back: an operator could re-enable it. It was turned down because a person who deletes their
@@ -29,16 +29,16 @@ Before this, deleting an account left the Keycloak user untouched, and that show
 | Gone | Stays |
 | --- | --- |
 | Their name and email address on the app's row. | The row itself, marked deleted and anonymised. Every other member's balance is calculated from the expenses and settlements it took part in, so deleting the row would rewrite other people's ledgers. Those records now show a deleted account. |
-| Their membership of every group. | The expenses and settlements they recorded, in the groups they were recorded in. |
+| Their membership of every shared group. | The expenses and settlements they recorded, in the groups they were recorded in. Their personal group stays with the anonymised row: it has no balance and nobody to leave it to. |
 | Their Keycloak user: login, password, profile, Google link. | The Keycloak subject (an opaque id) on the anonymised row, as a tombstone -- see below. It names nobody once the user it identified is gone. |
 | Every Keycloak session: the web app's, the CLI's refresh token, any other device. | |
 | The web app's own session in the browser they deleted from. | |
 
-It cannot be undone. Signing up again with the same address -- by an admin, since registration
-is closed -- makes a new login and a new, empty account; it does not reach the old one.
+It cannot be undone. Signing up again with the same address (by an admin, since registration
+is closed) makes a new login and a new, empty account; it does not reach the old one.
 
-Deleting is refused with `ACCOUNT_NOT_SETTLED` while any group balance is not zero, and then
-nothing changes in either place.
+Deleting is refused with `ACCOUNT_NOT_SETTLED` while any shared group's balance is not zero,
+and then nothing changes in either place.
 
 ## How it is carried out
 
@@ -66,9 +66,9 @@ login that should not exist, and two things keep that from becoming a silent mis
 
 - **A durable retry.** The `PendingLoginDeletion` row stays. `SweepPendingLoginDeletions` runs
   every five minutes and tries every row older than a minute again, until Keycloak confirms.
-  Each failure is logged with the subject and the attempt count -- a warning at first, an error
-  from the third attempt on -- and it never gives up: giving up would leave the login standing
-  for somebody who asked for it to go.
+  Each failure is logged with the subject and the attempt count (a warning at first, an error
+  from the third attempt on), and it never gives up, because giving up would leave the login
+  standing for somebody who asked for it to go.
 - **The login is refused in the meantime.** The anonymised row keeps its subject, so a sign-in
   with that login finds a deleted account rather than none. `UserProvisioner` refuses it with
   403 `ACCOUNT_DELETED`; it never provisions a fresh account in its place. The same refusal
@@ -89,8 +89,8 @@ confidential client in the `group-split` realm:
 - its secret is the `keycloak-account-deletion-secret` parameter.
 
 It is defined in [`realms.json`](../src/GroupSplit.AppHost/Assets/keycloak/realms.json), so a
-fresh realm imports it. A realm that already exists -- production's, and every developer's,
-which live on volumes and are never imported again -- gets it from the `realm-settings`
+fresh realm imports it. A realm that already exists (production's, and every developer's,
+which live on volumes and are never imported again) gets it from the `realm-settings`
 worker, which creates the client when it is missing and on every run holds it to the file:
 the flows above, the secret it was given, and exactly the roles the file lists, revoking any
 added by hand. So there is no manual step on an existing realm. The API waits for that worker,

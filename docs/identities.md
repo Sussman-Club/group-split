@@ -18,17 +18,18 @@ address. Every request is refused with `409 IDENTITY_EMAIL_IN_USE`
 reference; the CLI exits `2` and says to contact support.
 
 **Why not link it automatically.** Owning an address in Keycloak today is not proof of being
-the person whose expenses are on the old row, and linking would hand that row -- its balances,
-its groups, its bank links -- to whoever holds the new sign-in. That is a decision for a
+the person whose expenses are on the old row, and linking would hand that row (its balances,
+its groups, its bank links) to whoever holds the new sign-in. That is a decision for a
 person to make, once, with the facts in front of them.
 
 **What support does.**
 
 1. Find the log line by the reference (the trace id) the person quotes. It is a warning:
    `IDENTITY_EMAIL_IN_USE: sign-in <new sub> is new, and its email is already on user <holder id>`.
-2. In the Keycloak admin console ([reaching it](development-and-deployment.md#reaching-the-deployed-admin-console)),
-   look up the holder's old `sub` (`SELECT "IdentityId" FROM "UserIdentity" WHERE "UserId" = '<holder id>'`).
-   Then decide which case it is:
+2. Read the holder's old `sub` from the database
+   (`SELECT "IdentityId" FROM "UserIdentity" WHERE "UserId" = '<holder id>'`), look it up in
+   the Keycloak admin console ([reaching it](development-and-deployment.md#reaching-the-deployed-admin-console)),
+   and decide which case it is:
 
    - **The same person, recreated.** The old `sub` no longer exists in Keycloak, and the person
      confirms -- out of band, not on the strength of the address -- that the old account was
@@ -42,9 +43,9 @@ person to make, once, with the facts in front of them.
      `UserId` and the new `sub`. Their next request goes through as the old row.
 
    - **The same person, who wants a fresh start**, or the old row belonged to somebody else who
-     is gone. Free the address on the old row and leave the row itself alone -- other members'
+     is gone. Free the address on the old row and leave the row itself alone (other members'
      balances are made of it, which is also why deleting an account in the app clears the
-     email rather than the row:
+     email and keeps the row):
 
      ```sql
      UPDATE "User" SET "Email" = NULL WHERE "Id" = '<holder id>';
@@ -68,7 +69,7 @@ logged on every such request:
 `IDENTITY_EMAIL_IN_USE: user <id> (sign-in <sub>) has an email in Keycloak that another user holds`.
 
 **Why not refuse it.** The address is only displayed. Refusing would lock somebody out over
-it -- for good when two people swap addresses, since each would be waiting on the other.
+it, for good when two people swap addresses, since each would be waiting on the other.
 
 **What support does.** Usually nothing: the next request tries again, so it resolves by itself
 once the other row lets go of the address. A swap never does. Free one side and let the next
