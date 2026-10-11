@@ -271,10 +271,9 @@ public static class ActivityProjectionExtensions
                                .Where(split => split.UserId == readerId)
                                .Select(split => (decimal?)split.Amount)
                                .FirstOrDefault(),
-                       // Null is not a missing value here: an expense with no group is what
-                       // personal means, and a client renders it as "Personal".
+                       // A personal expense names its payer's personal group, "Personal".
                        GroupId = transaction.GroupId,
-                       GroupName = transaction.Group != null ? transaction.Group.Name : null
+                       GroupName = transaction.Group.Name
                    };
         }
     }

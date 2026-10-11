@@ -68,7 +68,7 @@ public static class GroupCommands
                         group.Id.ToString(),
                         Markup.Escape(group.Name),
                         group.MemberCount.ToString(),
-                        group.IsArchive ? "[grey]archived[/]" : "active");
+                        group.IsPersonal ? "personal" : group.IsArchive ? "[grey]archived[/]" : "active");
                 }
 
                 return table;

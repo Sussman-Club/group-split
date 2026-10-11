@@ -78,18 +78,23 @@
                 <span class="go">Open <MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
             </div>
             <div class="people">
-                <span>@group.MemberCount member@(group.MemberCount == 1 ? "" : "s")</span>
+                <span>@(group.IsPersonal ? "Just you" : $"{group.MemberCount} member{(group.MemberCount == 1 ? "" : "s")}")</span>
             </div>
-            <div class="foot">
-                <span class="gs-eyebrow">@Standing(group)</span>
-                <Money Value="@(BalanceIn(group.Id))" Signed Animate />
-            </div>
+            @if (!group.IsPersonal)
+            {
+                <div class="foot">
+                    <span class="gs-eyebrow">@Standing(group)</span>
+                    <Money Value="@(BalanceIn(group.Id))" Signed Animate />
+                </div>
+            }
         </button>;
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
+    // The personal group first, as the API lists it: it is the one everybody has.
     private List<GroupResponse> Active =>
-        [.. GroupsService.Groups.Where(group => !group.IsArchive).OrderBy(group => group.Name)];
+        [.. GroupsService.Groups.Where(group => !group.IsArchive)
+            .OrderByDescending(group => group.IsPersonal).ThenBy(group => group.Name)];
 
     private List<GroupResponse> Archived =>
         [.. GroupsService.Groups.Where(group => group.IsArchive).OrderBy(group => group.Name)];

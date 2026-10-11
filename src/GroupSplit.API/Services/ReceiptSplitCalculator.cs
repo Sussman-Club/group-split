@@ -99,10 +99,9 @@ public static class ReceiptSplitCalculator
         if (version is ItemizedSplitRuleVersion)
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
                 "An item cannot use an itemized split rule. Choose even, percentage, shares, or all for one.");
-        // Whose rule it is has to be whose expense it is. A personal expense has no group
-        // and so can have no line rules either, which is the null here rather than a
-        // separate refusal.
-        if (groupId is null || version.SplitRule.Group.Id != groupId)
+        // Whose rule it is has to be whose expense it is. A personal group has no rules, so
+        // a personal expense can have no line rules either, without a separate refusal.
+        if (version.SplitRule.Group.Id != groupId)
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
                 "An item's split rule must belong to the expense's group.");
         if (handlers.Invalid(version) is { } error)

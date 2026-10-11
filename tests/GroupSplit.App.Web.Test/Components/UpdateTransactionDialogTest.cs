@@ -56,6 +56,16 @@ public class UpdateTransactionDialogTest : ComponentTest
                 new UserInfo(DanielId, "Daniel", "Jones", "daniel@example.com")
             }.ToAsyncEnumerable());
 
+        // Any other group -- the personal one a personal expense reads its categories
+        // from -- has none, rather than the mock's null.
+        _categories
+            .Setup(c => c.GetCategoriesAsync(It.IsAny<Guid>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(It.IsAny<Guid>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => AsyncEnumerable.Empty<CategoryResponse>());
+
         _categories
             .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new CategoryResponse(FoodCategoryId, GroupId, "Food", null, null)]);

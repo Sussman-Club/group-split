@@ -100,11 +100,11 @@
                    shared by giving it a group, a shared one taken back by choosing Personal,
                    and the category, payer and shares all belong to whichever it says. *@
                 <ExpenseDecisions @ref="_decisions"
-                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                                  Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_model.GroupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
                                   GroupName="@Where"
-                                  ShowCategory="@IsShared"
+                                  ShowCategory="true"
                                   Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.CategoryId, c.Name, c.Splits)).ToList())"
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
@@ -131,11 +131,11 @@
                         @refusal
                     </MudAlert>
                 }
-                else if (_model.GroupId != Original.GroupId)
+                else if (_model.GroupId != OriginalGroupId)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         @(_model.GroupId is null
-                            ? "This will become your own expense: no category, nothing owed by anybody."
+                            ? "This will become your own expense, in your personal group: nothing owed by anybody."
                             : "This will be divided among the members of the group you picked.")
                     </MudAlert>
                 }
@@ -278,6 +278,17 @@
     /// <summary>Whether the expense will belong to a group after this edit.</summary>
     private bool IsShared => _model.GroupId is not null;
 
+    /// <summary>Whether <paramref name="groupId"/> is the caller's personal group.</summary>
+    /// <remarks>
+    /// Inside this dialog personal is the absent group, as the edit model says it, while a
+    /// listing row names the personal group by its id -- the caller's own. Read through
+    /// this, so the two never meet as a "move" from one to the other.
+    /// </remarks>
+    private bool IsPersonalGroup(Guid? groupId) => groupId is null || groupId == Login.User?.Id;
+
+    /// <summary>The group the expense was in when the dialog opened, null for personal.</summary>
+    private Guid? OriginalGroupId => IsPersonalGroup(Original.GroupId) ? null : Original.GroupId;
+
     /// <summary>
     /// Why the group picked cannot take this expense, or null when it can.
     /// </summary>
@@ -292,7 +303,7 @@
     {
         get
         {
-            if (_model.GroupId is not { } groupId || groupId == Original.GroupId)
+            if (_model.GroupId is not { } groupId || groupId == OriginalGroupId)
                 return null;
 
             var group = _groups.FirstOrDefault(candidate => candidate.Id == groupId);
@@ -456,13 +467,13 @@
     /// </summary>
     private bool PayerHasLeft =>
         _members.Count > 0 &&
-        Original.GroupId is not null &&
-        _model.GroupId == Original.GroupId &&
+        OriginalGroupId is not null &&
+        _model.GroupId == OriginalGroupId &&
         _members.All(member => member.Id != Original.PaidByUserId);
 
     private IReadOnlyList<UserInfo> PayerChoices =>
         _members.Count == 0 ||
-        _model.GroupId != Original.GroupId ||
+        _model.GroupId != OriginalGroupId ||
         _members.Any(member => member.Id == Original.PaidByUserId)
             ? _members
             : [.. _members, new UserInfo(Original.PaidByUserId, Original.PaidByUserName, null, null, IsPastMember: true)];
@@ -540,7 +551,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            GroupId = Original.GroupId,
+            GroupId = OriginalGroupId,
             CategoryId = _openedCategoryId,
             MerchantId = _openedMerchantId,
             PaidByUserId = Original.PaidByUserId
@@ -558,7 +569,7 @@
         {
             _groups = await GroupsClient.GetGroupsAsync();
 
-            await LoadGroupAsync(Original.GroupId);
+            await LoadGroupAsync(OriginalGroupId);
 
             var details = await TransactionsClient.GetTransactionAsync(Original.Id);
 
@@ -619,7 +630,7 @@
             // difference and the amounts are what will be kept either way. Choosing
             // "Automatically" is how the division is asked for again, and that is exactly
             // what it does.
-            if (details.SplitRuleVersionId is null && details.GroupId is not null && _storedSplits.Count > 0)
+            if (details.SplitRuleVersionId is null && !IsPersonalGroup(details.GroupId) && _storedSplits.Count > 0)
                 _model.Splits = _storedSplits;
 
             _openedWith = _model.Splits;
@@ -764,7 +775,10 @@
     /// </summary>
     private int _groupLoad;
 
-    /// <summary>The categories and members of one group, or none for personal.</summary>
+    /// <summary>
+    /// The categories and members of one group, or for personal the personal group's
+    /// categories and nobody to divide with.
+    /// </summary>
     /// <returns>
     /// Whether what was read is still for the group chosen -- false when a later move has
     /// started a load of its own, and nothing was written down.
@@ -815,7 +829,17 @@
         }
         else
         {
-            _categories = [];
+            // The personal group's own labels, read from the group whose id is the caller's.
+            var categories = Login.User is { } owner
+                ? await CategoriesClient.GetCategoriesAsAsyncEnumerable(owner.Id)
+                    .Select(category => new CategoryInfo(category.Id, category.Name, null))
+                    .ToListAsync()
+                : [];
+
+            if (load != _groupLoad)
+                return false;
+
+            _categories = categories;
             _members = [];
             _memberRules = [];
             _departedMemberRuleIds = [];
@@ -1101,7 +1125,7 @@
             Description = Original.Description,
             Amount = Original.Amount,
             DateTime = Original.DateTime,
-            GroupId = Original.GroupId,
+            GroupId = OriginalGroupId,
             CategoryId = _openedCategoryId,
             MerchantId = _openedMerchantId,
             SplitRuleId = _openedSplitRuleId,

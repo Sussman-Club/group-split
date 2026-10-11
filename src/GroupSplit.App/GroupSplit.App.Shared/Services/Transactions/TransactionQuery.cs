@@ -19,10 +19,8 @@ public sealed record TransactionQuery(
     bool? Personal = null)
 {
     /// <summary>
-    /// Whose ledger: null for both, true for the expenses in no group at all, false for the
-    /// ones in a group. Personal is the absence of a group rather than a group of its own,
-    /// so it is a filter and not an id -- and asking for it is how somebody sees the
-    /// expenses that used to be filed into a hidden group named "Personal".
+    /// Whose ledger: null for both, true for the expenses in the caller's personal group,
+    /// false for the ones in a shared group.
     /// </summary>
     public bool? Personal { get; init; } = Personal;
 

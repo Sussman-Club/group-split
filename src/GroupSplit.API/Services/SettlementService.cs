@@ -141,6 +141,8 @@ public class SettlementService(
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
+        group.RefuseIfPersonalOf(userContext.User.Id);
+
         var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
 
         // The same calculation the group's balances view shows, and deliberately not the
@@ -189,6 +191,8 @@ public class SettlementService(
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        group.RefuseIfPersonalOf(userContext.User.Id);
 
         if (request.FromUserId == request.ToUserId)
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
@@ -333,8 +337,8 @@ public class SettlementService(
                select new SettlementResponse
                {
                    Id = transfer.Id,
-                   GroupId = transfer.GroupId!.Value,
-                   GroupName = transfer.Group!.Name,
+                   GroupId = transfer.GroupId,
+                   GroupName = transfer.Group.Name,
                    FromUserId = transfer.UserId,
                    FromUserName = transfer.User.FirstName +
                                   (transfer.User.LastName != null ? " " + transfer.User.LastName : ""),
@@ -358,7 +362,7 @@ public class SettlementService(
             .Where(candidate => candidate.Id == transactionId && mine.Any(@group => @group.Id == candidate.GroupId))
             .Select(candidate => new
             {
-                GroupId = candidate.GroupId!.Value,
+                GroupId = candidate.GroupId,
                 candidate.CoversThrough,
                 PayerId = candidate.UserId,
                 RecipientId = candidate.Splits.Select(split => split.UserId).FirstOrDefault()
@@ -442,7 +446,7 @@ public class SettlementService(
         var end = cutoff.End;
 
         var later = await context.Set<Transfer>()
-            .Where(transfer => groupIds.Contains(transfer.GroupId!.Value) &&
+            .Where(transfer => groupIds.Contains(transfer.GroupId) &&
                                (transfer.CoversThrough != null
                                    ? transfer.CoversThrough > through
                                    : transfer.DateTime >= end))
@@ -450,7 +454,7 @@ public class SettlementService(
             .ThenBy(transfer => transfer.Id)
             .Select(transfer => new
             {
-                GroupId = transfer.GroupId!.Value,
+                GroupId = transfer.GroupId,
                 transfer.UserId,
                 RecipientId = transfer.Splits.Select(split => split.UserId).FirstOrDefault(),
                 transfer.Amount

@@ -8,9 +8,9 @@ namespace GroupSplit.Data.Entities;
 /// and a transaction all belong to one, and "what do I owe overall" is a sum across groups
 /// rather than anything a group knows about.
 /// <para>
-/// There is no group for a person's own spending. A personal transaction has no group at
-/// all, which is what personal means -- the hidden "Personal" group that used to stand in
-/// for it is gone, along with the places that had to remember to hide it.
+/// A person's own spending is a group too: every account has a personal group whose id is
+/// the account's id, with its owner as its only member. It is a group of one, so nothing
+/// that needs a second person applies to it (see <see cref="Extensions.PersonalGroupExtensions"/>).
 /// </para>
 /// </remarks>
 public class Group : Entity

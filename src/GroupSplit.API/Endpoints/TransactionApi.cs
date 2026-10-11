@@ -506,11 +506,14 @@ public static class TransactionApi
                 where (after == null || transaction.DateTime >= after) &&
                       (before == null || transaction.DateTime <= before) &&
                       (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
-                      // Personal is the absence of a group rather than a group of its own,
-                      // so it is asked for that way: true keeps only the rows with no group,
-                      // false keeps only the rows with one, and null keeps both.
+                      // Personal is the payer's own group, whose id is theirs: true keeps
+                      // only those rows, false keeps only the shared ones, and null keeps
+                      // both. Asked of the row rather than of the caller, so it reads the
+                      // same in every listing that applies it.
                       (filter.Personal == null ||
-                       (filter.Personal.Value ? transaction.GroupId == null : transaction.GroupId != null)) &&
+                       (filter.Personal.Value
+                           ? transaction.GroupId == transaction.UserId
+                           : transaction.GroupId != transaction.UserId)) &&
                       (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
                       (category == null ||
                        (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
@@ -800,9 +803,7 @@ public static class TransactionApi
         .Key("amount", transaction => transaction.Amount, defaultDescending: true)
         .Key("name", transaction => transaction.Name)
         .Key("category", transaction => transaction.Category!.Name)
-        // Null-safe because a personal expense has no group: the database sorts nulls of
-        // its own accord, but the in-memory provider the tests run on would dereference.
-        .Key("group", transaction => transaction.Group == null ? null : transaction.Group.Name)
+        .Key("group", transaction => transaction.Group.Name)
         .Key("paidBy", transaction => transaction.User.FirstName)
         .Default("dateTime")
         .TieBreak(transaction => transaction.Id);

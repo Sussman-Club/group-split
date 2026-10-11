@@ -47,6 +47,16 @@ public class CreateTransactionDialogTest : ComponentTest
         _login.SetupGet(login => login.User)
             .Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
+        // Any other group -- the personal one a personal expense reads its categories
+        // from -- has none, rather than the mock's null.
+        _categories
+            .Setup(c => c.GetCategoriesAsync(It.IsAny<Guid>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _categories
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(It.IsAny<Guid>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => AsyncEnumerable.Empty<CategoryResponse>());
+
         _merchants
             .Setup(m => m.GetMerchantsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
@@ -139,6 +149,33 @@ public class CreateTransactionDialogTest : ComponentTest
             chip => chip.GetAttribute("aria-label")!.Contains("group", StringComparison.Ordinal));
 
         Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A personal expense can say what it was for: the personal group's own categories are
+    /// offered, read from the group whose id is the caller's. And the personal group is not
+    /// listed among the others, since "Personal (just you)" already stands for it.
+    /// </summary>
+    [Fact]
+    public async Task A_personal_expense_is_offered_the_personal_groups_categories()
+    {
+        _groups
+            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new GroupResponse(MeId, "Personal", 1) { IsPersonal = true },
+                new GroupResponse(GroupId, "Trip", 2)
+            ]);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(MeId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), MeId, "Groceries", null, null)]);
+
+        var provider = await OpenAsync(null);
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+
+        provider.WaitForAssertion(() =>
+            Assert.Equal(["Groceries"], decisions.Instance.Categories.Select(category => category.Name)));
+        Assert.True(decisions.Instance.ShowCategory);
+        Assert.Equal(["Trip"], decisions.Instance.Groups.Select(group => group.Name));
     }
 
     /// <summary>

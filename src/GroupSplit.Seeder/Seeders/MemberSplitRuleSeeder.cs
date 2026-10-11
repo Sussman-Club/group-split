@@ -31,7 +31,10 @@ public class MemberSplitRuleSeeder(
 {
     public async Task SeedAsync(CancellationToken ct = default)
     {
-        var groups = await db.Set<Group>().Include(@group => @group.Users).ToListAsync(ct);
+        var groups = await db.Set<Group>()
+            // Not the personal groups, which divide nothing and so have no rules.
+            .Where(@group => !db.Set<User>().Any(user => user.Id == @group.Id))
+            .Include(@group => @group.Users).ToListAsync(ct);
 
         // Counted once either side rather than around every call: the number is only for the
         // log line, and each member's and invitee's rule is exactly one provisioned rule.

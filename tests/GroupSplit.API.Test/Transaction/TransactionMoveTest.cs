@@ -88,7 +88,7 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var moved = await Transactions.Update(expense.Id, Moving(expense, toGroup: null), Ct);
 
-        Assert.Null(moved.GroupId);
+        Assert.Equal(Me, moved.GroupId);
         Assert.Null((moved as Expense)?.CategoryId);
 
         var share = Assert.Single(await SplitsOf(expense.Id));
@@ -231,7 +231,7 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Nothing moved: still personal, still in euros, still the one share it had.
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
-        Assert.Null(stored.GroupId);
+        Assert.Equal(Me, stored.GroupId);
         Assert.Equal("EUR", stored.Currency);
         Assert.Equal(20m, Assert.Single(await SplitsOf(expense.Id)).Amount);
     }
@@ -292,7 +292,7 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var moved = await Transactions.Update(expense.Id, Moving(expense, toGroup: null), Ct);
 
-        Assert.Null(moved.GroupId);
+        Assert.Equal(Me, moved.GroupId);
         Assert.Equal("EUR", moved.Currency);
     }
 

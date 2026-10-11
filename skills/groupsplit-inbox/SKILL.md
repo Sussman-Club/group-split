@@ -166,8 +166,8 @@ What you may set while filing:
 
 | Flag | |
 | --- | --- |
-| `--group <group-id>` | Which group. **Omit and it is personal** -- on the user's own ledger, shared with nobody. |
-| `--category-id <category-id>` | Its rule is what divides the expense. |
+| `--group <group-id>` | Which group. **Omit and it is personal** -- in the user's personal group, shared with nobody. |
+| `--category-id <category-id>` | Its rule is what divides the expense. Kept personal, a category of the personal group (whose id is the user's) files it with nothing to divide. |
 | `--paid-by <user-id>` | Who paid, if not the user. |
 | `--split-rule <rule-id>` | Divide the whole row by this rule whatever the category says. A group holds one per member that puts all of it on them -- which is what "that one was not ours, it was Ana's" comes to on a card statement. Ids from `split-rules list --group <group-id>`, where the **all for** column names the member. |
 | `--split <user-id>=<amount>` | Exact shares, repeatable. Omit and the category's rule divides it. Refused alongside `--split-rule`: they are two answers to one question. |

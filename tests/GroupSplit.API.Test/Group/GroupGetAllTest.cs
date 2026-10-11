@@ -11,19 +11,20 @@ namespace GroupSplit.API.Test.Group;
 public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     /// <summary>
-    /// A new account is in no groups at all. It used to be in one -- a hidden "Personal"
-    /// group provisioned with it, so that an expense of one's own had somewhere to go --
-    /// and that group was a chip in the switcher, a card on the home page, and one extra on
-    /// every count of somebody's groups.
+    /// A new account is in one group: its personal one, provisioned with it so that an
+    /// expense of one's own has somewhere to go, and keyed on the account's own id.
     /// </summary>
     [Fact]
-    public async Task GetAllGroups_WhenTheAccountIsNew_ReturnsNothing()
+    public async Task GetAllGroups_WhenTheAccountIsNew_ReturnsOnlyThePersonalGroup()
     {
         var groupService = GetService<IGroupService>();
+        var me = GetService<ICurrentUser>().User.Id;
 
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
-        Assert.Empty(groups);
+        var personal = Assert.Single(groups);
+        Assert.Equal(me, personal.Id);
+        Assert.Equal("Personal", personal.Name);
     }
 
     [Fact]
@@ -38,7 +39,8 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
-        Assert.Equal(2, groups.Count);
+        // The two that were made, and the personal group every account has.
+        Assert.Equal(3, groups.Count);
         Assert.Contains(groups, g => g.Name == "Test Group 1");
         Assert.Contains(groups, g => g.Name == "Test Group 2");
     }
@@ -60,9 +62,8 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Act
         var groups = (await groupService.GetAllGroups(TestContext.Current.CancellationToken)).ToList();
 
-        // Assert
-        Assert.Single(groups);
-        Assert.Equal("My Group", groups[0].Name);
+        // Assert: theirs is not here, and neither is their personal group.
+        Assert.Equal(["My Group", "Personal"], groups.Select(g => g.Name).Order());
 
         otherScope.Dispose();
     }

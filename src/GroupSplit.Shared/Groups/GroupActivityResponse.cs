@@ -158,8 +158,9 @@ public sealed record PagedResponseOfGroupLedgerEntryResponse(
 public record UserActivityResponse : GroupActivityResponse
 {
     /// <summary>
-    /// The group it happened in, or null when it is the caller's own. Null is not a missing
-    /// value: an expense with no group is what personal means.
+    /// The group it happened in: for a personal expense, the payer's personal group, whose
+    /// id is their user id. Nullable only for clients written when a personal expense had
+    /// no group; the API always sends one now.
     /// </summary>
     public Guid? GroupId { get; init; }
 

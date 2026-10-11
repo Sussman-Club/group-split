@@ -14,10 +14,9 @@ public record TransactionResponse
     public bool HasBankTransaction { get; set; }
 
     /// <summary>
-    /// The group it was recorded in, or null when it is the caller's own. Null is not a
-    /// missing value: an expense with no group is what personal means, and the hidden
-    /// group that used to stand in for it was the reason "Personal · 1" appeared in the
-    /// group switcher.
+    /// The group it was recorded in. A personal expense is in its payer's personal group,
+    /// whose id is the payer's own user id. Nullable only for clients written when a
+    /// personal expense had no group; the API always sends one now.
     /// </summary>
     public Guid? GroupId { get; set; }
 

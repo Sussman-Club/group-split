@@ -31,6 +31,10 @@
                    content carries no display string, so the control falls back to its
                    converter -- and picking "Household" put a raw guid in a field whose
                    whole job is to say which division this files under. *@
+                @* Not for a personal group's categories: it has no rules, and nobody to
+                   divide with. *@
+                @if (!Personal)
+                {
                 <MudSelect T="Guid?"
                            Label="Divides by"
                            Variant="Variant.Outlined"
@@ -51,6 +55,7 @@
                         ? "With no rule, an expense here is divided evenly between whoever is in the group."
                         : "Expenses filed here are pre-filled with this division. Ones already recorded keep theirs.")
                 </MudText>
+                }
             </MudStack>
         </MudForm>
     </DialogContent>
@@ -79,6 +84,9 @@
 
     /// <summary>The group's rules, to point this category at one of them.</summary>
     [Parameter] public IReadOnlyList<SplitRuleResponse> Rules { get; set; } = [];
+
+    /// <summary>Whether this is a category of the caller's personal group, which divides nothing.</summary>
+    [Parameter] public bool Personal { get; set; }
 
     private readonly CategoryModel _model = new();
     private MudForm _form = null!;

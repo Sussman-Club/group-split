@@ -159,10 +159,11 @@
                         <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
                     </MudMenuItem>
                 }
-                @if (GroupsService.Groups.Count > 0)
+                @* The personal group is "Personal only" above, so it is not listed again. *@
+                @if (GroupsService.Groups.Any(group => !group.IsPersonal))
                 {
                     <MudDivider />
-                    @foreach (var group in GroupsService.Groups)
+                    @foreach (var group in GroupsService.Groups.Where(group => !group.IsPersonal))
                     {
                         var id = group.Id.ToString();
                         <MudMenuItem OnClick="@(() => SetWhereAsync(id))">
@@ -463,8 +464,8 @@
     private Guid? _groupId => Guid.TryParse(_where, out var id) ? id : null;
 
     /// <summary>
-    /// Null keeps both, true keeps the expenses in no group, false keeps the ones in a
-    /// group. Choosing a single group leaves it null: the group id has already said it.
+    /// Null keeps both, true keeps the expenses in the personal group, false keeps the ones
+    /// in a shared group. Choosing a single group leaves it null: the group id has already said it.
     /// </summary>
     private bool? _personal => _where switch
     {

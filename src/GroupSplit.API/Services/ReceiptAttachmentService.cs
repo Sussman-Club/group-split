@@ -288,8 +288,8 @@ public sealed class ReceiptAttachmentService(
     private async Task<Expense> MineToChange(Guid expenseId, CancellationToken ct)
     {
         var expense = await VisibleExpense(expenseId, ct);
-        if (expense.GroupId is { } groupId && !await db.Entry(currentUser.User).Collection(user => user.Groups)
-                .Query().AnyAsync(group => group.Id == groupId, ct))
+        if (!await db.Entry(currentUser.User).Collection(user => user.Groups)
+                .Query().AnyAsync(group => group.Id == expense.GroupId, ct))
         {
             throw new ConflictException(ErrorCodes.TransactionGroupLeft,
                 "You are no longer in this expense's group, so its receipt files cannot be changed.");

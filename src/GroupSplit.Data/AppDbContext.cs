@@ -476,9 +476,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Restrict, like the payer: a group's expenses are its history, and nothing
+            // deletes a group -- a personal one least of all.
             entity.HasOne(transaction => transaction.Group)
                 .WithMany()
-                .HasForeignKey(transaction => transaction.GroupId);
+                .HasForeignKey(transaction => transaction.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Filing copies, then links. Unlinking a bank deletes its rows, and the
             // expenses they became lose the link and nothing else -- they are history,

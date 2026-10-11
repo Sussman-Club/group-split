@@ -72,7 +72,7 @@ public sealed class GuestService(
         var caller = userContext.User;
 
         // Before anything else, so a caller outside the group is told so whatever they sent.
-        await MemberGroup(groupId, ct);
+        (await MemberGroup(groupId, ct)).RefuseIfPersonalOf(caller.Id);
 
         var names = request.Names
             .Select(name => (name ?? string.Empty).Trim())

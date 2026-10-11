@@ -26,18 +26,22 @@ public class DataTest(AppHostFixture appHost) : IAsyncLifetime
         await using var dbTransaction =
             await context.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
-        var user = await context.Set<User>().FirstAsync(TestContext.Current.CancellationToken);
+        // Somebody with a personal group, which every account has and a stand-in does not.
+        var user = await context.Set<User>()
+            .FirstAsync(candidate => context.Set<Group>().Any(group => group.Id == candidate.Id),
+                TestContext.Current.CancellationToken);
 
         var written = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.FromHours(-8));
 
-        // A personal expense: no group, no category. The least a transaction can be and
-        // still be stored, which is all this test needs of it.
+        // A personal expense: the payer's own group, no category. The least a transaction
+        // can be and still be stored, which is all this test needs of it.
         var transaction = new Expense
         {
             Amount = 100,
             DateTime = written,
             Name = "Test",
-            User = user
+            User = user,
+            GroupId = user.Id
         };
 
         context.Add(transaction);

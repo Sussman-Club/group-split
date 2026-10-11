@@ -421,7 +421,7 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var expense = new Expense
         {
             UserId = payer.Id,
-            GroupId = groupId,
+            GroupId = groupId ?? payer.Id,
             Amount = 12.50m,
             Currency = "USD",
             Name = "Weekly shop",

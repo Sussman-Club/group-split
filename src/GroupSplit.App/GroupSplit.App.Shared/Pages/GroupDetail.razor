@@ -41,12 +41,12 @@
             </MudTooltip>
             <Avatar Name="@group.Name" Size="lg" />
             <div class="gs-identity-who">
-                <div class="gs-eyebrow">@(group.IsArchive ? "Archived group" : "Group")</div>
+                <div class="gs-eyebrow">@(group.IsPersonal ? "Just you" : group.IsArchive ? "Archived group" : "Group")</div>
                 <h1 style="margin-top: 2px">@group.Name</h1>
                 @* An expense count told nobody whether the group is still live. When
                    something last happened does. *@
                 <p style="margin-top: 2px">
-                    @group.MemberCount member@(group.MemberCount == 1 ? "" : "s")@LastActivity
+                    @(group.IsPersonal ? "Your own spending" : $"{group.MemberCount} member{(group.MemberCount == 1 ? "" : "s")}")@LastActivity
                 </p>
             </div>
         </div>
@@ -54,7 +54,7 @@
     </div>
 
     <nav class="gs-tabs" aria-label="Group sections">
-        @foreach (var (key, label) in Sections)
+        @foreach (var (key, label) in group.IsPersonal ? PersonalSections : Sections)
         {
             <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
         }
@@ -136,6 +136,15 @@ else if (NotFound)
     ];
 
     /// <summary>
+    /// A personal group's sections. No balances and no people: it has nobody in it to owe,
+    /// be owed or invite, so what is left is what was spent and what it was filed under.
+    /// </summary>
+    private static readonly (string Key, string Label)[] PersonalSections =
+    [
+        ("activity", "Activity")
+    ];
+
+    /// <summary>
     /// Whether the group in the URL is not one of this person's. Read off the list rather
     /// than remembered from the last parameter set, so a group that goes while the page is
     /// open -- left from the members tab, say -- turns into this rather than into a page
@@ -148,7 +157,9 @@ else if (NotFound)
     /// Which section the URL asks for. The retired names remain aliases: a bookmark to a
     /// group's expenses, members, categories or overview still lands in the same place.
     /// </summary>
-    private string Current => Tab?.ToLowerInvariant() switch
+    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "rules" or "splits" or "categories")
+        ? "activity"
+        : Tab?.ToLowerInvariant() switch
     {
         "activity" or "ledger" or "expenses" => "activity",
         "people" or "members" => "people",
@@ -185,7 +196,7 @@ else if (NotFound)
         Nav.NavigateTo($"/groups/{GroupId}/activity{query}", replace: true);
     }
 
-    private string Href(string key) => key == "balances"
+    private string Href(string key) => key == "balances" || (key == "activity" && Group is { IsPersonal: true })
         ? $"/groups/{GroupId}"
         : $"/groups/{GroupId}/{key}";
 
