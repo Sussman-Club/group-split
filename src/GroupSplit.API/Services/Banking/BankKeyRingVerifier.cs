@@ -97,7 +97,7 @@ public static class BankKeyRingVerifier
                         + $"{BankingOptions.SectionName}:{nameof(BankingOptions.KeyRingCertificate)} is not, so the "
                         + "bank access-token key ring would be stored unwrapped beside the tokens it opens, and "
                         + "whoever holds a copy of the database would hold live bank access. Set the certificate "
-                        + "(BANK_KEY_CERTIFICATE in a deployment; docs/development-and-deployment.md has the "
+                        + "(BANK_KEY_CERTIFICATE in a deployment; docs/deployment.md has the "
                         + "command that makes one), or remove the Plaid credentials. Only Development may run "
                         + "without one.");
                 }

@@ -24,9 +24,9 @@ public interface IUserProvisioner
 /// the old address, and the old row still holds it. That sign-in is refused with
 /// <see cref="ErrorCodes.IdentityEmailInUse"/> rather than linked to the old row -- an
 /// address is not proof of being the person the row belonged to -- and support resolves it
-/// by hand (<c>docs/identities.md</c>). An address change that collides is not refused:
-/// the person is known by their subject, so they carry on under the address already
-/// stored, and the collision is logged under the same code.
+/// by hand (<c>docs/keycloak.md</c>, "Sign-ins and accounts"). An address change that
+/// collides is not refused: the person is known by their subject, so they carry on under
+/// the address already stored, and the collision is logged under the same code.
 /// </remarks>
 internal sealed class UserProvisioner(AppDbContext context, ILogger<UserProvisioner> logger) : IUserProvisioner
 {

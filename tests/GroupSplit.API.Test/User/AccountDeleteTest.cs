@@ -12,7 +12,7 @@ namespace GroupSplit.API.Test.User;
 /// <summary>
 /// Tests for deleting one's own account. It is anonymised rather than erased: the
 /// transactions are half of everyone else's history, so what goes is the name, the
-/// address and the Keycloak login. See <c>docs/account-deletion.md</c>.
+/// address and the Keycloak login. See <c>docs/keycloak.md</c>, "Deleting an account".
 /// </summary>
 public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {

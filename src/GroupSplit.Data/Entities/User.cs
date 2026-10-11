@@ -15,7 +15,7 @@ namespace GroupSplit.Data.Entities;
 /// <para>
 /// So nothing here may assume an identity, and a name is all some rows will ever have. See
 /// <c>IGroupParticipants.StandInFor</c> for where they come from and
-/// <c>docs/pending-invitees.md</c> for what they may and may not do.
+/// <c>docs/guests.md</c> for what they may and may not do.
 /// </para>
 /// </remarks>
 public class User : Entity

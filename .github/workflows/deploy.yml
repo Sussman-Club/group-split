@@ -474,7 +474,7 @@ jobs:
         run: |
           set -euo pipefail
           classify="$GITHUB_WORKSPACE/.github/scripts/classify-komodo-failure.sh"
-          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/development-and-deployment.md"
+          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/deployment.md"
           cd src/GroupSplit.AppHost/aspire-output
 
           # What the step is doing and whether production has been touched by then, so a

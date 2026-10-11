@@ -57,7 +57,7 @@ public class AccountDeletionTest(AppHostFixture appHost) : WebPageTest(appHost)
             .ToBeVisibleAsync(Visible);
         Assert.DoesNotContain(await Context.CookiesAsync(), cookie => cookie.Name == "GroupSplit.Auth");
 
-        // Gone from Keycloak, not disabled: the decision recorded in docs/account-deletion.md.
+        // Gone from Keycloak, not disabled: the decision recorded in docs/keycloak.md, "Deleting an account".
         Assert.False(await LoginExistsAsync(email), "the Keycloak user survived the account's deletion");
 
         // The realm session went with the user. One that survived would send the browser
