@@ -42,7 +42,8 @@ public sealed class ReceiptAttachmentService(
     IAmazonS3 storage,
     IReceiptFiles files,
     IOptions<ReceiptStorageOptions> storageOptions,
-    ILogger<ReceiptAttachmentService> logger) : IReceiptAttachmentService
+    ILogger<ReceiptAttachmentService> logger,
+    TimeProvider clock) : IReceiptAttachmentService
 {
     private const long MaximumLength = 10 * 1024 * 1024;
     private static readonly IReadOnlyDictionary<string, string> AllowedTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -120,7 +121,7 @@ public sealed class ReceiptAttachmentService(
             ContentType = AllowedTypes[Path.GetExtension(Path.GetFileName(file.FileName))],
             Length = file.Length,
             UploadedByUserId = currentUser.User.Id,
-            UploadedAt = DateTimeOffset.UtcNow
+            UploadedAt = clock.GetUtcNow()
         };
     }
 

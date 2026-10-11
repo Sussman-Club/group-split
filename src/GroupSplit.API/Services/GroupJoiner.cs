@@ -64,7 +64,7 @@ public interface IGroupJoiner
     Task EnsureMayRejoin(Guid groupId, Guid userId, DateTimeOffset issuedAt, CancellationToken ct = default);
 }
 
-public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRules) : IGroupJoiner
+public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRules, TimeProvider clock) : IGroupJoiner
 {
     public async Task<JoinOutcome> Join(Group group, User user, DateTimeOffset issuedAt,
         CancellationToken ct = default)
@@ -96,7 +96,7 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         if (membership is { LeftAt: { } leftAt } && leftAt >= issuedAt)
             throw Refusal(membership, issuedAt);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         JoinOutcome outcome;
 
         if (membership is not null)

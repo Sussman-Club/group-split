@@ -137,7 +137,8 @@ public class SettlementService(
     IGroupService groups,
     IDebtCalculationService debtCalculator,
     IGroupParticipants participants,
-    AppDbContext context) : ISettlementService
+    AppDbContext context,
+    TimeProvider clock) : ISettlementService
 {
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
@@ -165,7 +166,7 @@ public class SettlementService(
                 ? "You are already square with everybody in this group."
                 : $"You are already square with everybody in this group for everything through {cutoff.Through:d MMM yyyy}.");
 
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
 
         var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
@@ -267,7 +268,7 @@ public class SettlementService(
         // The stated date, or now. A payment made on the 30th and typed in on the 3rd
         // belongs to the month it settled, not the one somebody got round to it in.
         context.Add(group.SettlementBetween(from, to, amount,
-            (date ?? DateTimeOffset.UtcNow).ToUniversalTime(),
+            (date ?? clock.GetUtcNow()).ToUniversalTime(),
             description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
 
         await context.SaveChangesAsync(cancellationToken);
@@ -349,7 +350,7 @@ public class SettlementService(
                         .FirstOrDefaultAsync(user => user.Id == request.UserId, cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
 
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
         var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
         var (from, to) = request.Direction is SettlementDirection.YouPaidThem
