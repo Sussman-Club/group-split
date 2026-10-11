@@ -484,12 +484,6 @@
         }
     }
 
-    private string CategoryName =>
-        _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "uncategorized";
-
-    private string PayerName =>
-        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
-
     /// <summary>
     /// The day, as a person would say it. Today and yesterday by name, because that is what
     /// almost every expense is and a date is a worse way of saying it.
