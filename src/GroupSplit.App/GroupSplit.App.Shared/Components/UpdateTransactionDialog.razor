@@ -1038,7 +1038,13 @@
         // answers about a different day than the one the save will store.
         ApplyDate();
 
-        _awaiting = _model.Amount == 0m ? "Enter an amount to see how it divides." : null;
+        // Both, as on create: the preview is validated like the save, so a blank name comes
+        // back a 400 just as a zero amount does.
+        _awaiting = _model.Amount == 0m
+            ? "Enter an amount to see how it divides."
+            : string.IsNullOrWhiteSpace(_model.Name)
+                ? "Name it to see how it divides."
+                : null;
 
         if (!IsShared || _awaiting is not null || CurrencyRefusal is not null)
         {
