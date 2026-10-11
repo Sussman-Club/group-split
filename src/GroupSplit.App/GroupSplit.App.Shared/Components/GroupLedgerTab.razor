@@ -97,10 +97,18 @@
     </div>
 
     <div class="gs-reveal" style="--i: 2">
+        @* Keyed so a URL arriving from outside rebuilds the grid on the page and sort it
+           asks for: both are only read when a grid starts.
+
+           The page size goes before the page, and the order matters: the grid takes its
+           first page size by resetting to page one, which undid a page from the URL that
+           had already been set. *@
         <MudDataGrid T="GroupLedgerEntryResponse"
+                     @key="_gridGeneration"
                      @ref="_grid"
                      ServerData="LoadPageAsync"
-                     RowsPerPage="10"
+                     @bind-RowsPerPage="_pageSize"
+                     @bind-CurrentPage="_page"
                      SortMode="SortMode.Single"
                      Hover="true"
                      Bordered="false"
@@ -109,13 +117,13 @@
                      RowClassFunc="@RowClass"
                      Class="gs-grid">
             <Columns>
-                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="SortDirection.Descending">
+                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="@Initially("dateTime")">
                     <CellTemplate>
                         <TransactionWhen Value="@context.Item.DateTime"/>
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Name" Title="Entry">
+                <PropertyColumn Property="x => x.Name" Title="Entry" InitialDirection="@Initially("name")">
                     <CellTemplate>
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
                             @* An avatar for an expense and an icon for a transfer. It is
@@ -172,7 +180,8 @@
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right">
+                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right"
+                                InitialDirection="@Initially("amount")">
                     <CellTemplate>
                         <Money Value="context.Item.Amount" Class="gs-grid-amount" />
                     </CellTemplate>
@@ -270,7 +279,23 @@
     /// </summary>
     [Parameter] public ActivityKind? Kind { get; set; }
 
-    [Parameter] public EventCallback<ActivityKind?> KindChanged { get; set; }
+    /// <summary>
+    /// The tab's whole narrowing as query values, kind included, for the host page to put in
+    /// the URL. One writer for the lot: two navigations in one turn would each start from a
+    /// URL the other has not reached yet, and the second would undo the first.
+    /// </summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, object?>> QueryChanged { get; set; }
+
+    // The rest of the narrowing, read from the URL here rather than handed down: the host has
+    // no use for any of it. Strings, so a value that does not parse opens the default rather
+    // than throwing. The kind is the host's to read, because an old path can imply it.
+    [Parameter, SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "page")] public string? PageParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "size")] public string? SizeParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "sort")] public string? SortParameter { get; set; }
 
     /// <summary>
     /// Whether this is the caller's personal group: nothing is settled in it and every
@@ -301,6 +326,10 @@
 
     private DateFilter _range = OpensOn;
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
+    private int _gridGeneration;
+    private int _page;
+    private int _pageSize = ListingQuery.DefaultPageSize;
+    private (string Key, bool Descending) _sort = ListingQuery.DefaultSort;
 
     /// <summary>The reload under way, which a reload asked for meanwhile waits on and follows.</summary>
     private Task? _reloading;
@@ -407,6 +436,11 @@
         GridState<GroupLedgerEntryResponse> state, CancellationToken cancellationToken)
     {
         var sort = state.SortDefinitions.FirstOrDefault();
+
+        // Every narrowing ends up here, so this is where the URL catches up with it.
+        _sort = sort is null ? ListingQuery.DefaultSort : (Camel(sort.SortBy), sort.Descending);
+        await WriteUrlAsync();
+
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
 
         var page = await ReadAsync(() => GroupsClient.GetGroupActivityAsync(
@@ -446,10 +480,7 @@
 
         Kind = kind;
 
-        // The host page owns the URL, so it is told rather than written to from here.
-        if (KindChanged.HasDelegate)
-            await KindChanged.InvokeAsync(kind);
-
+        await WriteUrlAsync();
         await BackToFirstPageAsync();
     }
 
@@ -736,13 +767,104 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>The tab's narrowing as it is spelled in the query string.</summary>
+    private sealed record Query(string? Kind, string? Search, string? Range, string? From, string? To,
+        string? Page, string? Size, string? Sort);
+
+    /// <summary>
+    /// The query this tab last read or wrote. A parameter set that brings the same one back
+    /// is the echo of its own write, and is not applied: it would overwrite whatever has been
+    /// typed in the search box since.
+    /// </summary>
+    private Query? _settled;
+
+    private static string? KindQuery(ActivityKind? kind) => kind switch
+    {
+        ActivityKind.Expense => "expense",
+        ActivityKind.Transfer => "settlement",
+        _ => null
+    };
+
+    private Query Asked => new(KindQuery(Kind), SearchParameter, RangeParameter, FromParameter, ToParameter,
+        PageParameter, SizeParameter, SortParameter);
+
+    /// <summary>What is on the tab, spelled for the URL, with its opening state left out.</summary>
+    private Query Current
+    {
+        get
+        {
+            var (range, from, to) = ListingQuery.FormatRange(_range, OpensOn);
+
+            return new Query(KindQuery(Kind), Search, range, from, to,
+                ListingQuery.FormatPage(_page),
+                ListingQuery.FormatPageSize(_pageSize),
+                ListingQuery.FormatSort(_sort));
+        }
+    }
+
+    private Task WriteUrlAsync()
+    {
+        var query = Current;
+
+        if (query == _settled || !QueryChanged.HasDelegate)
+            return Task.CompletedTask;
+
+        _settled = query;
+
+        return QueryChanged.InvokeAsync(new Dictionary<string, object?>
+        {
+            ["kind"] = query.Kind,
+            ["q"] = query.Search,
+            ["range"] = query.Range,
+            ["from"] = query.From,
+            ["to"] = query.To,
+            ["page"] = query.Page,
+            ["size"] = query.Size,
+            ["sort"] = query.Sort
+        });
+    }
+
+    private void Apply(Query query)
+    {
+        _settled = query;
+
+        _searchString = query.Search ?? "";
+        _range = ListingQuery.ParseRange(query.Range, query.From, query.To, OpensOn);
+        _page = ListingQuery.ParsePage(query.Page);
+        _pageSize = ListingQuery.ParsePageSize(query.Size);
+        _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "amount");
+    }
+
+    /// <summary>
+    /// The direction a column starts sorted in: the one the URL asked for, or none. Only read
+    /// when the grid starts, which is why the grid is rebuilt when a new URL arrives.
+    /// </summary>
+    private SortDirection Initially(string key) => _sort.Key != key
+        ? SortDirection.None
+        : _sort.Descending ? SortDirection.Descending : SortDirection.Ascending;
+
     protected override void OnInitialized()
     {
+        Apply(Asked);
+
         Changes.TransactionsChanged += OnDataChangedAsync;
         Changes.GroupsChanged += OnDataChangedAsync;
     }
 
-    protected override Task OnParametersSetAsync() => ReadSummaryAsync();
+    /// <summary>
+    /// A URL the tab did not write -- the Activity tab's own link back to a bare ledger, say
+    /// -- replaces everything on it, and the rows are read again.
+    /// </summary>
+    protected override Task OnParametersSetAsync()
+    {
+        if (Asked != _settled)
+        {
+            Apply(Asked);
+            _gridGeneration++;
+        }
+
+        return ReadSummaryAsync();
+    }
 
     public void Dispose()
     {
