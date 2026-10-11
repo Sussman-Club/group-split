@@ -4,7 +4,6 @@
 @namespace GroupSplit.App.Shared.Components
 @inject ICategoryCommands Categories
 @inject ISplitRuleCommands Rules
-@inject ISplitRulesClient RulesClient
 @inject IGroupsClient GroupsClient
 @inject ApiErrorPresenter Errors
 @inject IDialogService DialogService
@@ -482,14 +481,7 @@
     /// </remarks>
     private async Task LoadDefinitionsAsync()
     {
-        var read = await Task.WhenAll(_rules.Select(async rule =>
-        {
-            SplitRuleDetailsResponse? details = null;
-
-            await Errors.CaptureAsync(async () => details = await RulesClient.GetSplitRuleAsync(rule.Id));
-
-            return details;
-        }));
+        var read = await Task.WhenAll(_rules.Select(rule => Rules.GetQuietlyAsync(rule.Id)));
 
         // Merged rather than replaced, for the reason the lists are kept above: a refresh
         // whose reads failed would otherwise blank the description under every rule that had

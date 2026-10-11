@@ -44,6 +44,19 @@ public sealed class SplitRuleCommands(
         return done ? rule : null;
     }
 
+    public async Task<SplitRuleDetailsResponse?> GetQuietlyAsync(Guid ruleId, CancellationToken ct = default)
+    {
+        try
+        {
+            return await rules.GetSplitRuleAsync(ruleId, ct);
+        }
+        catch (Exception exception) when (ApiErrors.IsCancellation(exception) || ApiErrors.IsApiFailure(exception))
+        {
+            // A bug still throws: the error boundary is for those.
+            return null;
+        }
+    }
+
     public async Task<SplitRuleHistoryResponse?> HistoryAsync(Guid ruleId, CancellationToken ct = default)
     {
         SplitRuleHistoryResponse? history = null;

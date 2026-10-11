@@ -33,6 +33,17 @@ public interface ISplitRuleCommands
     /// <summary>One rule with the division it stands for, to edit or to copy.</summary>
     Task<SplitRuleDetailsResponse?> GetAsync(Guid ruleId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The same, without saying anything when the read fails.
+    /// </summary>
+    /// <remarks>
+    /// For the Splits tab, which reads every rule at once to put a line of description under
+    /// each row. The rows work without it, and one snackbar per rule would be the loudest
+    /// possible way to say a line is missing.
+    /// </remarks>
+    /// <returns>Null when the read failed.</returns>
+    Task<SplitRuleDetailsResponse?> GetQuietlyAsync(Guid ruleId, CancellationToken ct = default);
+
     Task<SplitRuleDetailsResponse?> CreateAsync(CreateSplitRuleRequest request, CancellationToken ct = default);
 
     /// <summary>
