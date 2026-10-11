@@ -34,6 +34,24 @@
     color: var(--gs-clay-deep);
 }
 
+:root[data-theme="dark"] .gs-divide-progress .mud-icon-root {
+    color: var(--gs-teal-bright);
+}
+
+:root[data-theme="dark"] .gs-divide-progress.is-wanting .mud-icon-root {
+    color: var(--gs-clay);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .gs-divide-progress .mud-icon-root {
+        color: var(--gs-teal-bright);
+    }
+
+    :root:not([data-theme="light"]) .gs-divide-progress.is-wanting .mud-icon-root {
+        color: var(--gs-clay);
+    }
+}
+
 .gs-divide-progress-total {
     flex: 0 0 auto;
     font-weight: 700;

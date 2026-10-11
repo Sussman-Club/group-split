@@ -5,9 +5,6 @@ using MudBlazor.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
-// Add device-specific services used by the GroupSplit.App.Shared project
-builder.Services.AddSingleton<IFormFactor, FormFactor>();
-
 // Add MudBlazor services
 builder.Services.AddMudServices();
 

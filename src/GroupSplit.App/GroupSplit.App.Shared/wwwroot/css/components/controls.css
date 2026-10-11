@@ -128,30 +128,6 @@
     border-top: 1px solid var(--gs-line);
 }
 
-/* Action toolbar on group header. */
-.gs-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px;
-    border-radius: var(--gs-radius-pill);
-    background: var(--gs-surface);
-    border: 1px solid var(--gs-line);
-    box-shadow: var(--gs-shadow-sm);
-}
-
-.gs-toolbar .mud-icon-button {
-    width: 36px;
-    height: 36px;
-}
-
-.gs-toolbar .sep {
-    width: 1px;
-    height: 20px;
-    background: var(--gs-line);
-    margin: 0 2px;
-}
-
 /* ------------------------------------------------------------------ FAB --- */
 
 .gs-fab {

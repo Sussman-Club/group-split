@@ -124,7 +124,6 @@ html[data-gs-ready] .gs-topbar::after {
 /* Controls that need the runtime are muted until it is there. */
 html:not([data-gs-ready]) .gs-user-btn,
 html:not([data-gs-ready]) .gs-fab,
-html:not([data-gs-ready]) .gs-toolbar,
 html:not([data-gs-ready]) .gs-chip:not(.active),
 html:not([data-gs-ready]) .gs-row,
 html:not([data-gs-ready]) .gs-group-card {
@@ -241,16 +240,6 @@ html:not([data-gs-ready]) .gs-group-card {
     gap: 4px;
     margin-top: 12px;
     --gs-nav-item-h: 46px;
-}
-
-.gs-nav-label {
-    padding: 14px 14px 6px;
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--gs-muted);
-    white-space: nowrap;
 }
 
 .gs-nav-item {
@@ -383,7 +372,6 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 .is-rail .gs-nav-text,
-.is-rail .gs-nav-label,
 .is-rail .gs-brand-name,
 .is-rail .gs-sidebar-user-text {
     display: none;
@@ -460,10 +448,6 @@ html:not([data-gs-ready]) .gs-group-card {
     height: 100%;
     gap: 0;
     --gs-nav-item-h: 100%;
-}
-
-.gs-tabbar .gs-nav-label {
-    display: none;
 }
 
 .gs-tabbar .gs-nav-item {

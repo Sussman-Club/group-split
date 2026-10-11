@@ -129,14 +129,6 @@
         font-size: 0.9375rem;
     }
 
-    /* Edge to edge, so the actions read as this page's toolbar rather than a pill floating
-       under the title. Five controls spread across the width are also five bigger touch
-       targets. */
-    .gs-toolbar {
-        width: 100%;
-        justify-content: space-between;
-    }
-
     .gs-stack {
         gap: 12px;
     }
