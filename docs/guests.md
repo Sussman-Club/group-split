@@ -12,24 +12,6 @@ link, so the real person can take their place; most never are.
 This document is about what that means and, mostly, about the arithmetic it must not break.
 The table of who may do what, by standing, is [participants.md](participants.md).
 
-## Where this came from
-
-Until [#236][236] a group could not record anything for somebody before they signed up. Then
-a group could **invite** somebody: name them, get a link, and record money against them while
-it waited for the answer. That fixed the backlog of expenses and left two holes:
-
-- **Nobody could settle with an invitee.** A repayment naming one was refused
-  (`SETTLEMENT_WITH_PENDING_INVITEE`), the debt plan left them out, and so a group with an
-  invitee could never square up -- the overview could say "owed by 0 people" while money was
-  owed.
-- **Nobody could simply drop one.** Withdrawing or declining handed everything they held to
-  some member, in full, because there was no other way to make the column add up.
-
-Both came from treating the person as *pending*. A guest is somebody the group keeps track
-of, and a link is an optional extra.
-
-[236]: https://github.com/Sussman-Club/group-split/issues/236
-
 ## A guest is a row with a stand-in behind it
 
 `GroupGuest` (the table that used to be `GroupInvitation`, renamed in place with its ids)
@@ -241,19 +223,18 @@ Nothing has told the group that the person who walked in is the guest it named, 
 from a name would be the mistake this design refuses. A member can remove the guest once
 square, or send them their link.
 
-## The routes from before guests
+## Deprecated routes
 
-For one release, so the published CLI and agents following the old skill keep working:
+The API still serves the invitation routes the published CLI and older skills call, marked
+deprecated in the OpenAPI document:
 
 - `POST /groups/{id}/invitations` adds guests and issues each a link;
 - `GET /groups/{id}/invitations` lists the guests with a link out, by their row id;
-- `DELETE /groups/{id}/invitations/{invitationId}` stops that guest's link -- it no longer
-  moves anything;
-- every `IsGuest` flag is also written as `isPendingInvitee` (and `paidByIsGuest` as
-  `paidByIsPendingInvitee`).
+- `DELETE /groups/{id}/invitations/{invitationId}` stops that guest's link and moves nothing.
 
-All are marked deprecated in the OpenAPI document. `SETTLEMENT_WITH_PENDING_INVITEE` and
-`GROUP_MEMBER_NOT_JOINED` are never sent any more.
+Every `IsGuest` flag is also written as `isPendingInvitee` (and `paidByIsGuest` as
+`paidByIsPendingInvitee`). `SETTLEMENT_WITH_PENDING_INVITEE` and `GROUP_MEMBER_NOT_JOINED`
+are never sent.
 
 ## Where it is decided
 
