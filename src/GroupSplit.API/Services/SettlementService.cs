@@ -245,12 +245,24 @@ public class SettlementService(
         // The newest repayment the caller was on either end of, in any group. Null when
         // they have never settled, which is a different thing from having settled long ago
         // and is why the screen can say "never" rather than showing nothing.
-        var lastSettled = await context.Set<Transfer>()
-            .Where(transfer => transfer.UserId == callerId ||
-                               transfer.Splits.Any(split => split.UserId == callerId))
-            .OrderByDescending(transfer => transfer.DateTime)
+        //
+        // Two reads, one per end, each from the caller's own rows, and the newest picked
+        // here. Asked as one OR with a newest-first LIMIT 1, Postgres walked the date index
+        // backwards through every transaction there is -- all of them, for somebody who has
+        // never settled -- and a bare MAX(DateTime) is planned the same way. Without an
+        // ordering to satisfy it reads the caller's rows by their own index instead, and a
+        // person's settlements are few.
+        var paid = await context.Set<Transfer>()
+            .Where(transfer => transfer.UserId == callerId)
             .Select(transfer => (DateTimeOffset?)transfer.DateTime)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        var paidTo = await context.Set<TransactionSplit>()
+            .Where(split => split.UserId == callerId && split.Transaction is Transfer)
+            .Select(split => (DateTimeOffset?)split.Transaction.DateTime)
+            .ToListAsync(cancellationToken);
+
+        var lastSettled = paid.Concat(paidTo).Max();
 
         return new SettlementPlanResponse(owed - youOwe, owed, youOwe, youPay, owedToYou, lastSettled);
     }
