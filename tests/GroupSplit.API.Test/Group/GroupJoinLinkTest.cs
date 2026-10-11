@@ -200,7 +200,8 @@ public class GroupJoinLinkTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             var theirGroups = await (await scope.ServiceProvider.GetRequiredService<IGroupService>()
                 .GetAllGroups(Ct)).ToListAsync(Ct);
 
-            var only = Assert.Single(theirGroups);
+            // Beside the personal group they already had.
+            var only = Assert.Single(theirGroups, candidate => candidate.Name != "Personal");
             Assert.Equal(shared.Id, only.Id);
         }
 

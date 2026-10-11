@@ -287,6 +287,7 @@ public class PatchHardeningTest : IAsyncLifetime
     [Theory]
     [InlineData("[{\"op\":\"replace\",\"path\":\"/nothingHere\",\"value\":1}]")]
     [InlineData("[{\"op\":\"replace\",\"path\":\"/defaultSplitRuleId\",\"value\":\"abc\"}]")]
+    [InlineData("[{\"op\":\"replace\",\"path\":\"/defaultPeriod\",\"value\":\"Fortnight\"}]")]
     [InlineData("[{\"op\":\"test\",\"path\":\"/name\",\"value\":\"Not the name\"}]")]
     public async Task A_group_patch_that_cannot_apply_is_refused_as_malformed(string operations)
     {
@@ -327,6 +328,39 @@ public class PatchHardeningTest : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         var after = await Client.GetFromJsonAsync<GroupResponse>($"/groups/{groupId}", Json, Ct);
         Assert.Equal(before!.DefaultSplitRuleId, after!.DefaultSplitRuleId);
+    }
+
+    /// <summary>
+    /// The span the Activity tab opens on (#405): This month until a member picks another,
+    /// and then that one, through a rename that says nothing about it.
+    /// </summary>
+    [Fact]
+    public async Task A_groups_default_period_is_set_by_the_patch_and_kept_by_a_rename()
+    {
+        var (groupId, _, _) = await AGroupOfTwo();
+        var before = await Client.GetFromJsonAsync<GroupResponse>($"/groups/{groupId}", Json, Ct);
+
+        Assert.Equal(ActivityPeriod.ThisMonth, before!.DefaultPeriod);
+
+        (await Client.PatchAsync($"/groups/{groupId}",
+            PatchBody(("replace", "/defaultPeriod", "AllTime")), Ct)).EnsureSuccessStatusCode();
+        (await Client.PatchAsync($"/groups/{groupId}",
+            PatchBody(("replace", "/name", "Renamed")), Ct)).EnsureSuccessStatusCode();
+
+        var after = await Client.GetFromJsonAsync<GroupResponse>($"/groups/{groupId}", Json, Ct);
+        Assert.Equal(ActivityPeriod.AllTime, after!.DefaultPeriod);
+    }
+
+    /// <summary>A number reads as an enum value; one that names no period is still refused.</summary>
+    [Fact]
+    public async Task A_default_period_that_names_no_period_is_refused()
+    {
+        var (groupId, _, _) = await AGroupOfTwo();
+
+        var response = await Client.PatchAsync($"/groups/{groupId}",
+            PatchBody(("replace", "/defaultPeriod", 99)), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private async Task<Guid> AnExpense(Guid groupId, Guid payerId, decimal amount)

@@ -70,10 +70,11 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
 
         var context = Service<AppDbContext>();
 
-        // Somebody who is actually in a group, so the queries have rows to walk rather than
-        // short-circuiting on an empty scope.
+        // Somebody who is actually in a shared group, so the queries have rows to walk rather
+        // than short-circuiting on a scope of their personal group alone.
         var user = await context.Set<User>()
-            .Where(candidate => candidate.Email != null && candidate.Groups.Any())
+            .Where(candidate => candidate.Email != null &&
+                                candidate.Groups.Any(group => group.Id != candidate.Id))
             .OrderBy(candidate => candidate.Email)
             .FirstAsync(Ct);
 
@@ -91,8 +92,10 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     private async Task<Guid> AGroupOfTheirs()
     {
         var groups = await Service<IGroupService>().GetAllGroups(Ct);
+        var me = Service<ICurrentUser>().User.Id;
 
-        return await groups.Select(group => group.Id).FirstAsync(Ct);
+        // A shared one: the personal group has no invitations, guests or balances to read.
+        return await groups.Where(group => group.Id != me).Select(group => group.Id).FirstAsync(Ct);
     }
 
     [Fact(Timeout = 120_000)]
@@ -187,15 +190,17 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         // shape that has to translate actually lives.
         foreach (var kind in new ActivityKind?[] { null, ActivityKind.Expense, ActivityKind.Transfer })
         {
-            await activity
+            var page = await activity
                 .ApplyFilter(new ActivityFilter(
                     From: DateTimeOffset.UtcNow.AddYears(-1),
                     To: DateTimeOffset.UtcNow,
                     Kind: kind,
                     Search: "a"))
                 .ApplySort(new SortRequest(), GroupApi.ActivitySort)
-                .SelectLedgerDto(me, activity)
+                .SelectLedgerDto(me)
                 .ToPageAsync(new PageRequest(), Ct);
+
+            await activity.WithRunningBalances(me, page.Items, Ct);
         }
     }
 
@@ -256,7 +261,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// What a settlement covers: the previous day the same two people settled through, and
+    /// What a settlement covers: the previous day its payer settled through, and
     /// the payer's balance through this one.
     /// </summary>
     [Fact(Timeout = 120_000)]
@@ -544,9 +549,8 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
 
     /// <summary>
     /// The seeder writes expenses that belong to nobody but their payer -- petrol, a
-    /// dentist, a birthday present for somebody in the group. They are the only rows that
-    /// exercise the personal ledger end to end, and before phase 2 there was no way to
-    /// write one: every expense went into a group, the hidden "Personal" one if no other.
+    /// dentist, a birthday present for somebody in the group -- in the payer's personal
+    /// group. They are the only rows that exercise the personal ledger end to end.
     /// </summary>
     [Fact(Timeout = 120_000)]
     public async Task The_seed_data_includes_personal_expenses()
@@ -554,14 +558,14 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         var context = Service<AppDbContext>();
 
         var personal = await context.Set<Expense>()
-            .Where(expense => expense.GroupId == null)
+            .Where(expense => expense.GroupId == expense.UserId)
             .Include(expense => expense.Splits)
             .ToListAsync(Ct);
 
         Assert.NotEmpty(personal);
 
-        // No group means no category and nobody to divide with: one share, the payer's own,
-        // for the whole amount.
+        // The payer's own group: no category seeded, and nobody to divide with -- one share,
+        // the payer's own, for the whole amount.
         Assert.All(personal, expense =>
         {
             Assert.Null(expense.CategoryId);
@@ -582,9 +586,9 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The personal half of the listing: expenses in no group at all. A separate case
-    /// because the filter reaches a nullable navigation, and the search clause has to stay
-    /// null-safe over it.
+    /// The personal half of the listing: expenses in the payer's personal group. A separate
+    /// case because the filter compares the group with the payer, and the search clause
+    /// reaches the group's name.
     /// </summary>
     [Fact(Timeout = 120_000)]
     public async Task The_personal_filter_and_the_search_translate()

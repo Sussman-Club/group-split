@@ -23,7 +23,15 @@ namespace GroupSplit.AppHost.Test.Web;
 /// freeze at page load inside an interactive circuit, and from the WebAssembly mode
 /// development uses that is invisible.
 /// </para>
+/// <para>
+/// In the collection that takes the realm apart, so a sign-in never straddles one of its
+/// changes. <c>RealmBindingsAndCliClientTest</c> re-points the browser flow and the worker
+/// points it back; a login form served under one binding and posted under the other is
+/// answered with the password step again, already knowing the account, and the sign-in
+/// stops there.
+/// </para>
 /// </remarks>
+[Collection(GoogleFirstBrokerLogin.Collection)]
 public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 {
     private readonly AppHostFixture _appHost = appHost;
@@ -154,9 +162,10 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
     /// <summary>
     /// The empty state of the page the sign-in lands on. Specific to the page having been
-    /// told, by the API, that there are no groups -- which a fresh account is true of.
+    /// told, by the API, that there are no shared groups -- which a fresh account is true of;
+    /// its personal group is the only one it has.
     /// </summary>
-    private ILocator Groups => Page.GetByText("No group yet");
+    private ILocator Groups => Page.GetByText("No shared group yet");
 
     /// <summary>
     /// How many times the API client has reported having no token to send. The marker is

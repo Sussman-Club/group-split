@@ -141,17 +141,11 @@ public static class ActivityProjectionExtensions
         }
 
         /// <summary>
-        /// A group's ledger rows: the entry, what it cost the reader, and where the reader
-        /// stood immediately after it.
+        /// A group's ledger rows: the entry, and what it cost the reader. Where the reader
+        /// stood after each one is <see cref="WithRunningBalances"/>, asked of the page once
+        /// it is read.
         /// </summary>
-        /// <param name="wholeLedger">
-        /// The group's entries before any filtering. The running balance is read from this
-        /// rather than from the narrowed query on purpose -- a balance as at a date is what
-        /// it is whether or not the rows above it are currently on screen, and narrowing the
-        /// list to settlements must not rewrite history.
-        /// </param>
-        public IQueryable<GroupLedgerEntryResponse> SelectLedgerDto(Guid readerId,
-            IQueryable<Transaction> wholeLedger)
+        public IQueryable<GroupLedgerEntryResponse> SelectLedgerDto(Guid readerId)
         {
             return from transaction in activity
                    select new GroupLedgerEntryResponse
@@ -198,26 +192,63 @@ public static class ActivityProjectionExtensions
                            : transaction.Splits
                                .Where(split => split.UserId == readerId)
                                .Select(split => (decimal?)split.Amount)
-                               .FirstOrDefault(),
-                       // What the reader has paid out minus what has been put on them, over
-                       // everything up to and including this entry. Transfers are in both
-                       // sums, which is exactly why the merged ledger can carry this column
-                       // and neither of the two tabs it replaces could.
-                       RunningBalance =
-                           wholeLedger
-                               .Where(prior => prior.DateTime < transaction.DateTime ||
-                                               (prior.DateTime == transaction.DateTime &&
-                                                prior.Id <= transaction.Id))
-                               .Where(prior => prior.UserId == readerId)
-                               .Sum(prior => prior.Amount)
-                           - wholeLedger
-                               .Where(prior => prior.DateTime < transaction.DateTime ||
-                                               (prior.DateTime == transaction.DateTime &&
-                                                prior.Id <= transaction.Id))
-                               .SelectMany(prior => prior.Splits)
-                               .Where(split => split.UserId == readerId)
-                               .Sum(split => split.Amount)
+                               .FirstOrDefault()
                    };
+        }
+
+        /// <summary>
+        /// Puts on each entry of a page where the reader stood in the group immediately after
+        /// it: what they had paid out minus what had been put on them, over everything up to
+        /// and including that entry.
+        /// </summary>
+        /// <remarks>
+        /// Called on the group's entries before any filtering, on purpose -- a balance as at
+        /// a date is what it is whether or not the rows above it are currently on screen, and
+        /// narrowing the list to settlements must not rewrite history. Transfers are in both
+        /// sums, which is exactly why the merged ledger can carry this column and neither of
+        /// the two tabs it replaces could.
+        /// <para>
+        /// One sum for everything before the page's earliest entry, then the entries from it
+        /// to the page's latest added up here in ledger order. Worked out per row in SQL it
+        /// was two correlated sums over the whole group for each of them. The window is
+        /// bounded by timestamps rather than by the rows themselves so that entries sharing
+        /// a timestamp are put in order by the database, which compares ids the way the
+        /// ledger's own sort does and a <see cref="Guid"/> here would not.
+        /// </para>
+        /// </remarks>
+        public async Task<IReadOnlyList<GroupLedgerEntryResponse>> WithRunningBalances(Guid readerId,
+            IReadOnlyList<GroupLedgerEntryResponse> page, CancellationToken ct)
+        {
+            if (page.Count == 0)
+                return page;
+
+            var earliest = page.Min(entry => entry.DateTime);
+            var latest = page.Max(entry => entry.DateTime);
+
+            var before = activity.Where(prior => prior.DateTime < earliest);
+            var balance = await before.Where(prior => prior.UserId == readerId).SumAsync(prior => prior.Amount, ct)
+                          - await before.SelectMany(prior => prior.Splits)
+                              .Where(split => split.UserId == readerId)
+                              .SumAsync(split => split.Amount, ct);
+
+            var window = await activity
+                .Where(entry => entry.DateTime >= earliest && entry.DateTime <= latest)
+                .OrderBy(entry => entry.DateTime)
+                .ThenBy(entry => entry.Id)
+                .Select(entry => new
+                {
+                    entry.Id,
+                    Change = (entry.UserId == readerId ? entry.Amount : 0m)
+                             - entry.Splits.Where(split => split.UserId == readerId).Sum(split => split.Amount)
+                })
+                .ToListAsync(ct);
+
+            var after = new Dictionary<Guid, decimal>(window.Count);
+
+            foreach (var entry in window)
+                after[entry.Id] = balance += entry.Change;
+
+            return page.Select(entry => entry with { RunningBalance = after[entry.Id] }).ToList();
         }
 
         /// <summary>
@@ -271,10 +302,9 @@ public static class ActivityProjectionExtensions
                                .Where(split => split.UserId == readerId)
                                .Select(split => (decimal?)split.Amount)
                                .FirstOrDefault(),
-                       // Null is not a missing value here: an expense with no group is what
-                       // personal means, and a client renders it as "Personal".
+                       // A personal expense names its payer's personal group, "Personal".
                        GroupId = transaction.GroupId,
-                       GroupName = transaction.Group != null ? transaction.Group.Name : null
+                       GroupName = transaction.Group.Name
                    };
         }
     }

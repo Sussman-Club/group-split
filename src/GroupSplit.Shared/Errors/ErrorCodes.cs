@@ -111,6 +111,13 @@ public static class ErrorCodes
     [Obsolete("Guests are removed like members; this is never sent.")]
     public const string GroupMemberNotJoined = "GROUP_MEMBER_NOT_JOINED";
     public const string GroupCannotLeaveLastMember = "GROUP_CANNOT_LEAVE_LAST_MEMBER";
+
+    /// <summary>
+    /// Something that needs a second person was asked of a personal group: a member, a
+    /// guest, an invitation, a join link, a split rule, a settlement, leaving it or
+    /// archiving it. A personal group is its owner's alone, and always will be.
+    /// </summary>
+    public const string PersonalGroupNotShared = "PERSONAL_GROUP_NOT_SHARED";
     public const string GroupJoinLinkExpired = "GROUP_JOIN_LINK_EXPIRED";
     public const string GroupJoinLinkRevoked = "GROUP_JOIN_LINK_REVOKED";
 

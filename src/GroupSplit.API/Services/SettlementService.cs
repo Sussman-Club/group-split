@@ -141,6 +141,8 @@ public class SettlementService(
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
+        group.RefuseIfPersonalOf(userContext.User.Id);
+
         var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
 
         // The same calculation the group's balances view shows, and deliberately not the
@@ -189,6 +191,8 @@ public class SettlementService(
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        group.RefuseIfPersonalOf(userContext.User.Id);
 
         if (request.FromUserId == request.ToUserId)
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
@@ -241,12 +245,24 @@ public class SettlementService(
         // The newest repayment the caller was on either end of, in any group. Null when
         // they have never settled, which is a different thing from having settled long ago
         // and is why the screen can say "never" rather than showing nothing.
-        var lastSettled = await context.Set<Transfer>()
-            .Where(transfer => transfer.UserId == callerId ||
-                               transfer.Splits.Any(split => split.UserId == callerId))
-            .OrderByDescending(transfer => transfer.DateTime)
+        //
+        // Two reads, one per end, each from the caller's own rows, and the newest picked
+        // here. Asked as one OR with a newest-first LIMIT 1, Postgres walked the date index
+        // backwards through every transaction there is -- all of them, for somebody who has
+        // never settled -- and a bare MAX(DateTime) is planned the same way. Without an
+        // ordering to satisfy it reads the caller's rows by their own index instead, and a
+        // person's settlements are few.
+        var paid = await context.Set<Transfer>()
+            .Where(transfer => transfer.UserId == callerId)
             .Select(transfer => (DateTimeOffset?)transfer.DateTime)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        var paidTo = await context.Set<TransactionSplit>()
+            .Where(split => split.UserId == callerId && split.Transaction is Transfer)
+            .Select(split => (DateTimeOffset?)split.Transaction.DateTime)
+            .ToListAsync(cancellationToken);
+
+        var lastSettled = paid.Concat(paidTo).Max();
 
         return new SettlementPlanResponse(owed - youOwe, owed, youOwe, youPay, owedToYou, lastSettled);
     }
@@ -333,8 +349,8 @@ public class SettlementService(
                select new SettlementResponse
                {
                    Id = transfer.Id,
-                   GroupId = transfer.GroupId!.Value,
-                   GroupName = transfer.Group!.Name,
+                   GroupId = transfer.GroupId,
+                   GroupName = transfer.Group.Name,
                    FromUserId = transfer.UserId,
                    FromUserName = transfer.User.FirstName +
                                   (transfer.User.LastName != null ? " " + transfer.User.LastName : ""),
@@ -358,7 +374,7 @@ public class SettlementService(
             .Where(candidate => candidate.Id == transactionId && mine.Any(@group => @group.Id == candidate.GroupId))
             .Select(candidate => new
             {
-                GroupId = candidate.GroupId!.Value,
+                GroupId = candidate.GroupId,
                 candidate.CoversThrough,
                 PayerId = candidate.UserId,
                 RecipientId = candidate.Splits.Select(split => split.UserId).FirstOrDefault()
@@ -368,17 +384,17 @@ public class SettlementService(
         if (transfer?.CoversThrough is not { } through)
             return null;
 
-        // Where the period starts: after the last day an earlier settlement between the same
-        // two people covered, whichever way it went. The pair and not the group, because
-        // settling up is personal -- somebody else squaring August says nothing about what
-        // these two were settling.
+        // Where the period starts: after the last day an earlier settlement the payer was part
+        // of covered, whoever it was with and whichever way it went. Not the pair, because who
+        // pays whom is an artifact of the minimised plan and changes month to month: a payer
+        // who was owed in August and squared it with somebody else has no August settlement
+        // with this recipient. Not the recipient's, because the recipient may settle with
+        // somebody every month, which would hide a month the payer really did owe.
         var previous = await context.Set<Transfer>()
             .Where(other => other.GroupId == transfer.GroupId &&
                             other.CoversThrough != null && other.CoversThrough < through &&
-                            ((other.UserId == transfer.PayerId &&
-                              other.Splits.Any(split => split.UserId == transfer.RecipientId)) ||
-                             (other.UserId == transfer.RecipientId &&
-                              other.Splits.Any(split => split.UserId == transfer.PayerId))))
+                            (other.UserId == transfer.PayerId ||
+                             other.Splits.Any(split => split.UserId == transfer.PayerId)))
             .MaxAsync(other => other.CoversThrough, cancellationToken);
 
         // Whether the period is square between these two now: what the plan through the day
@@ -442,7 +458,7 @@ public class SettlementService(
         var end = cutoff.End;
 
         var later = await context.Set<Transfer>()
-            .Where(transfer => groupIds.Contains(transfer.GroupId!.Value) &&
+            .Where(transfer => groupIds.Contains(transfer.GroupId) &&
                                (transfer.CoversThrough != null
                                    ? transfer.CoversThrough > through
                                    : transfer.DateTime >= end))
@@ -450,7 +466,7 @@ public class SettlementService(
             .ThenBy(transfer => transfer.Id)
             .Select(transfer => new
             {
-                GroupId = transfer.GroupId!.Value,
+                GroupId = transfer.GroupId,
                 transfer.UserId,
                 RecipientId = transfer.Splits.Select(split => split.UserId).FirstOrDefault(),
                 transfer.Amount

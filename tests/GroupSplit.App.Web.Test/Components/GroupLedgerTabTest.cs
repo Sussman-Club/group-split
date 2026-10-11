@@ -226,6 +226,44 @@ public class GroupLedgerTabTest : ComponentTest
         Assert.Contains("this month", tab.Markup);
     }
 
+    /// <summary>
+    /// A group that chose All time opens on all of it (#405): a trip from last month is not
+    /// an empty month, and an empty ledger there is a group with nothing in it.
+    /// </summary>
+    [Fact]
+    public void A_group_that_opens_on_all_time_asks_about_all_time()
+    {
+        var tab = base.Render<GroupLedgerTab>(parameters => parameters
+            .Add(t => t.GroupId, Group)
+            .Add(t => t.DefaultPeriod, ActivityPeriod.AllTime));
+
+        Assert.True(Assert.Single(_asks).IsAllTime);
+
+        var (heading, blurb) = Empty(tab);
+
+        Assert.Equal("Nothing recorded yet", heading);
+        Assert.DoesNotContain("All time", blurb);
+    }
+
+    /// <summary>
+    /// The group's default is the opening span, so it is the one the URL leaves out -- and
+    /// This month, picked on a group that opens on all time, is a span somebody chose.
+    /// </summary>
+    [Fact]
+    public async Task On_a_group_that_opens_on_all_time_this_month_is_a_filter()
+    {
+        var tab = base.Render<GroupLedgerTab>(parameters => parameters
+            .Add(t => t.GroupId, Group)
+            .Add(t => t.DefaultPeriod, ActivityPeriod.AllTime));
+
+        await PickSpanAsync(tab, DateFilterPreset.ThisMonth);
+
+        var (heading, blurb) = Empty(tab);
+
+        Assert.Equal("Nothing matches", heading);
+        Assert.Equal("Nothing in this month.", blurb);
+    }
+
     [Fact]
     public async Task Picking_a_range_asks_about_that_range_and_shows_what_comes_back()
     {

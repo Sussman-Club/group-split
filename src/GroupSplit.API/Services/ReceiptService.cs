@@ -61,7 +61,7 @@ public class ReceiptService(
         // a group division. They remain editable by their owner, while division stays a
         // shared-expense concern.
         var canEdit = await StillInTheGroup(expense, ct);
-        var canDivide = expense.GroupId is not null && canEdit;
+        var canDivide = !expense.IsPersonal && canEdit;
         if (canDivide)
         {
             try
@@ -100,9 +100,7 @@ public class ReceiptService(
         // saves would leave balances describing the old bill. Capture that state before the
         // draft is applied; a hand-stated division must remain hand-stated.
         var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
-        var members = expense.GroupId is { } groupId
-            ? await participants.IdsOf(groupId, ct)
-            : [expense.Payer];
+        var members = await participants.IdsOf(expense.GroupId, ct);
         var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id))
             .ToListAsync(ct);
         // An id on an incoming line says "this is that stored line, corrected", so it has to
@@ -405,7 +403,7 @@ public class ReceiptService(
     }
 
     private async Task<IReadOnlyCollection<Guid>> Members(Expense expense, CancellationToken ct) =>
-        expense.GroupId is { } groupId ? await participants.IdsOf(groupId, ct) : [expense.Payer];
+        await participants.IdsOf(expense.GroupId, ct);
 
     /// <summary>
     /// Whether the current receipt is the rule-produced source of the expense's stored
@@ -534,8 +532,8 @@ public class ReceiptService(
     }
 
     /// <summary>
-    /// Whether the caller is still in the expense's group -- vacuously true for a personal
-    /// one, which is nobody's but theirs.
+    /// Whether the caller is still in the expense's group -- always true for a personal one,
+    /// whose only member they are.
     /// </summary>
     /// <remarks>
     /// Shared by the refusal and by the response that predicts it, so the two cannot drift:
@@ -544,8 +542,7 @@ public class ReceiptService(
     /// </remarks>
     private async Task<bool> StillInTheGroup(Expense expense, CancellationToken ct)
     {
-        if (expense.GroupId is not { } groupId)
-            return true;
+        var groupId = expense.GroupId;
 
         return await dbContext.Entry(userContext.User).Collection(user => user.Groups)
             .Query()

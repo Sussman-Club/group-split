@@ -234,7 +234,8 @@ public class GroupService(
             {
                 user
             },
-            Name = request.Name
+            Name = request.Name,
+            DefaultPeriod = request.DefaultPeriod
         };
 
         context.Add(group);
@@ -295,7 +296,8 @@ public class GroupService(
                       select new CreateGroupRequest
                       {
                           Name = t.Name,
-                          DefaultSplitRuleId = t.DefaultSplitRuleId
+                          DefaultSplitRuleId = t.DefaultSplitRuleId,
+                          DefaultPeriod = t.DefaultPeriod
                       }).FirstOrDefaultAsync(ct);
     }
 
@@ -311,12 +313,15 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
+        existingGroup.DefaultPeriod = request.DefaultPeriod;
 
         // The property was added to the existing update contract, so callers from before the
         // change omit it.  Omission must preserve the group's default; the UI always names a
         // new one and never offers an unset state.
         if (request.DefaultSplitRuleId is { } ruleId)
         {
+            existingGroup.RefuseIfPersonalOf(userContext.User.Id);
+
             // Projected rather than loaded: the question is one fact about the rule's
             // current version, and a rule edited a dozen times carries a dozen versions
             // nothing here reads.
@@ -411,6 +416,8 @@ public class GroupService(
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        group.RefuseIfPersonalOf(currentUser.Id);
 
         // Who they are to this group decides what there is to remove: a member's membership,
         // or a guest's place. Anybody else -- somebody who has already gone, or was never
@@ -555,14 +562,20 @@ public class GroupService(
         CancellationToken cancellationToken = default)
     {
         var user = userContext.User;
-        var groups = await GetAllGroups(cancellationToken);
+        // Read first rather than left as a subquery: a correlated EXISTS on one side of the
+        // OR stops Postgres using an index on either, and the feed's count then reads every
+        // transaction in the database. Against a list of ids Postgres can read each side by
+        // its own index, over the caller's groups and their own rows.
+        var groupIds = await (await GetAllGroups(cancellationToken))
+            .Select(@group => @group.Id)
+            .ToListAsync(cancellationToken);
 
         // The same two clauses the expense listing uses -- anything in a group they are in,
         // plus anything they paid for wherever it is -- over transactions rather than
         // expenses, so settlements are in it. That is the whole difference: a balance that
         // moved with nothing in the feed to explain it is its own kind of wrong.
         return from transaction in context.Set<Transaction>()
-               where groups.Any(@group => @group.Id == transaction.GroupId) ||
+               where groupIds.Contains(transaction.GroupId) ||
                      transaction.UserId == user.Id
                select transaction;
     }
@@ -594,12 +607,17 @@ public class GroupService(
     {
         var groups = await GetAllGroups(cancellationToken);
         var before = cutoff?.End;
+        var callerId = userContext.User.Id;
 
         // The same two sums <see cref="NetBalances"/> takes, with the group carried through.
         // Transfers are in both of them, because a transfer is a transaction with one split:
         // the payer's paid rises and the payee's owed rises, which is what paying somebody
         // back does to a balance.
+        //
+        // Not the caller's personal group. Nobody else is in it, so there is nobody to owe
+        // or be owed, and a balance from it could only ever be a row of noise.
         return from @group in groups
+               where @group.Id != callerId
                from user in context.Set<User>()
                where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
                      context.Set<GroupGuest>().Any(guest =>
@@ -689,6 +707,8 @@ public class GroupService(
                               .FirstOrDefaultAsync(cancellationToken)
                           ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
+        resultGroup.RefuseIfPersonalOf(currentUser.Id);
+
         // A participant, not only a member: a guest's balance is real and is on the group's
         // balances page, and the members record what a guest pays and is paid. Somebody who
         // has gone is not here to settle with.
@@ -734,6 +754,10 @@ public class GroupService(
                         .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
+        // Before the last-member answer, which is true of a personal group too and would
+        // send its owner off to archive it, which they cannot do either.
+        group.RefuseIfPersonalOf(user.Id);
+
         // A group with nobody in it is invisible to everybody and still holds the history
         // its last member is walking away from. Archiving is what they actually want here,
         // and it is one tap away, so this says so rather than quietly orphaning the rows.
@@ -763,8 +787,11 @@ public class GroupService(
         // Per group first, then added up, and the two directions kept apart. Netting them
         // into one number would say a person owed 25 in one group and owed 40 in another is
         // owed 15, which is true of nobody: they still have two people to square up with.
+        //
+        // Shared groups only: the personal one has nobody in it to square up with.
         var groups = await (
                 from @group in GroupsOf(user.Id)
+                where @group.Id != user.Id
                 join membership in context.Set<GroupMembership>()
                     on new { GroupId = @group.Id, UserId = user.Id }
                     equals new { membership.GroupId, membership.UserId }
@@ -816,6 +843,10 @@ public class GroupService(
 
         if (membership is null)
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        // Archiving tidies a group away, and a personal group is where the owner's own
+        // spending goes whatever else they tidy.
+        PersonalGroupGuard.RefuseIfPersonal(groupId, user.Id);
 
         if (membership.ArchivedAt.HasValue != archivedAt.HasValue)
         {

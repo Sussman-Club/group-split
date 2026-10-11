@@ -61,11 +61,12 @@ Groups you belong to, their members and their balances.
 
 | Command | |
 | --- | --- |
-| `groups list` | List every group you are a member of. |
+| `groups list` | List every group you are a member of. Your personal group comes first, state `personal` (`isPersonal` in JSON); its id is your user id. |
 | `groups show <group-id>` | Show one group. |
 | `groups create <name>` | Create a group. |
 | `groups rename <group-id> <name>` | Rename a group. |
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
+| `groups set-default-period <group-id> <period>` | Choose which span the group's Activity tab opens on in the app, for every member: `all-time`, `this-month` (the default), `last-month`, `last-3-months` or `this-year`. `groups show` prints it; JSON carries it as `defaultPeriod`. Nothing in the CLI reads it. |
 | `groups members <group-id>` | List a group's people: its members and its guests. The `Status` column, and `isGuest` in JSON, say which. |
 | `groups remove-member <group-id> <user-id>` | Remove a member or a guest. Requires that their balance in it is settled (`GROUP_MEMBER_NOT_SETTLED` otherwise, with the balance). Removing a member stops the group's join link, and they need a link issued afterwards to come back; removing a guest leaves the join link alone and keeps them as a past guest. Somebody not on the roster -- including anyone who has already left -- is refused with `USER_NOT_FOUND` before any confirmation is asked for. |
 | `groups balances <group-id>` | Show who owes whom in a group. `--through <day>` shows it for activity dated up to that day. |
@@ -618,6 +619,8 @@ code 3 and `GROUP_NOT_FOUND`, not answered with an empty list. Their own expense
 they left are still in `transactions list`; the group's ledger is the group's.
 
 `groups activity` takes `--from`, `--to`, `--search` and `--kind` (`Expense` or `Transfer`).
+It ignores the group's default period (`set-default-period`): without `--from`/`--to` it is all
+time, whatever the app opens on.
 `--kind` is what the group's two old tabs became: absent means everything, which is the
 default because "what has happened here" does not distinguish. `--from`/`--to` are date-times there and calendar dates
 (`2026-01-01`) on `inbox list`, which is what a bank puts on a row.

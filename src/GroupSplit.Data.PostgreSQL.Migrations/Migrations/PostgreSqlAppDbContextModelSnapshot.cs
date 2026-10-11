@@ -253,6 +253,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasDefaultValue("USD")
                         .IsFixedLength();
 
+                    b.Property<string>("DefaultPeriod")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<Guid?>("DefaultSplitRuleId")
                         .HasColumnType("uuid");
 
@@ -902,7 +907,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(13)
                         .HasColumnType("character varying(13)");
 
-                    b.Property<Guid?>("GroupId")
+                    b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("MerchantId")
@@ -1441,7 +1446,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
                         .WithMany()
-                        .HasForeignKey("GroupId");
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("GroupSplit.Data.Entities.Merchant", "Merchant")
                         .WithMany("Transactions")

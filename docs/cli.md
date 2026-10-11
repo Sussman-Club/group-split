@@ -820,6 +820,30 @@ so `64.00` is not a debt and `45.00` is. Both are gross: a settlement is a trans
 than an expense, so nothing here has been paid back yet. Where you actually stand is
 `groupsplit users position`.
 
+## Your personal group
+
+Every account has a personal group. Its id is your own user id (`users me`), it is listed
+first by `groups list` with the state `personal`, and you are its only member. It is where an
+expense of your own goes: leave `--group` off `tx create`, `inbox file` or (with `--personal`)
+`tx update`, or name the personal group's id outright -- the two are the same.
+
+```bash
+groupsplit categories create "Groceries" --group <your-user-id>   # a category of your own
+groupsplit tx create "Weekly shop" 64.20 --category-id <category-id>
+groupsplit tx list --group <your-user-id>                         # your own spending
+```
+
+It divides nothing, so everything that needs a second person is refused with
+`PERSONAL_GROUP_NOT_SHARED`, exit code 3: adding a member or a guest, invitations and join
+links, split rules (and `--rule` on one of its categories), settling up or recording a
+repayment, leaving it and archiving it. A personal expense takes no `--split`
+(`SPLIT_ON_A_PERSONAL_EXPENSE`). Its balance is always zero, so `users position` and the
+settle-up plan leave it out.
+
+A category belongs to one group, so `tx update --personal` or `--group` on an expense filed
+under a category is refused with `CATEGORY_NOT_FOUND` until you also pass `--no-category`, or
+a `--category-id` from the group it is moving to.
+
 ## An expense in another currency
 
 A group keeps its balances in one currency, and nothing in GroupSplit converts between
@@ -1208,6 +1232,21 @@ A single expense can still say otherwise, whatever the group's default:
 groupsplit tx update <id> --split-rule <rule-id>           # this one divides by that rule
 groupsplit tx update <id> --no-category                    # back to the group's default
 ```
+
+## Which span a group's Activity tab opens on
+
+In the app, a group's Activity tab opens on a span the group chooses: This month unless a
+member picked another, which suits a household. A trip that only holds the trip is better
+opened on all of it. The setting is the group's, so changing it changes it for every member,
+the personal group included. `groups show` prints it as `Activity opens on`, and `groups list
+--json` carries it as `defaultPeriod`:
+
+```bash
+groupsplit groups set-default-period <group-id> all-time   # or this-month, last-month, last-3-months, this-year
+```
+
+It is a display preference for the app and nothing else. `groups activity` ignores it and uses
+only the `--from` and `--to` it is given, so a script always gets what it asked for.
 
 ## An expense that is one person's
 

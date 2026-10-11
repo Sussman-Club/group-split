@@ -269,6 +269,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .HasDefaultValue(Currencies.Default);
 
+            // By name, like the other enums, so a row read in psql says what it is.
+            entity.Property(group => group.DefaultPeriod)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
             // No action rather than restrict. Both refuse to delete a rule a group defaults to;
             // the difference is when they look. Restrict looks at once, so deleting a group --
             // whose rules cascade from it -- tripped over the group's own default before the
@@ -476,9 +482,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Restrict, like the payer: a group's expenses are its history, and nothing
+            // deletes a group -- a personal one least of all.
             entity.HasOne(transaction => transaction.Group)
                 .WithMany()
-                .HasForeignKey(transaction => transaction.GroupId);
+                .HasForeignKey(transaction => transaction.GroupId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Filing copies, then links. Unlinking a bank deletes its rows, and the
             // expenses they became lose the link and nothing else -- they are history,

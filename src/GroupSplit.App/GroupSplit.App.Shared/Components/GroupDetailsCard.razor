@@ -1,3 +1,4 @@
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
@@ -5,8 +6,9 @@
 @inject IGroupsPageStateService GroupsService
 
 @*
-    The group's own settings -- its name, and what an expense divides by when nothing else
-    says -- on the Settings page itself rather than behind an Edit button.
+    The group's own settings -- its name, the span its Activity tab opens on, and what an
+    expense divides by when nothing else says -- on the Settings page itself rather than
+    behind an Edit button.
 
     This was a dialog. It opened from a card that only described what the dialog would let
     you change, so the page said "name and default split" and then made you press something
@@ -33,7 +35,7 @@
                     <div>
                         <h3 id="group-name-heading" class="gs-group-setting-title">Name</h3>
                         <span class="gs-group-setting-description">
-                            The name your members see throughout the app.
+                            @(Group.IsPersonal ? "The name your own spending goes under." : "The name your members see throughout the app.")
                         </span>
                     </div>
                 </div>
@@ -46,6 +48,34 @@
                               Immediate="true" />
             </div>
 
+            @* The group's and not the reader's: whether it is a trip or a household is true
+               for everybody in it. Picking a span on the Activity tab itself never saves here. *@
+            <div class="gs-group-setting-section" aria-labelledby="default-period-heading">
+                <div class="gs-group-setting-heading">
+                    <div>
+                        <h3 id="default-period-heading" class="gs-group-setting-title">Activity opens on</h3>
+                        <span class="gs-group-setting-description">
+                            @(Group.IsPersonal ? "The span your Activity tab starts on." : "The span every member's Activity tab starts on.")
+                        </span>
+                    </div>
+                </div>
+
+                <MudSelect T="ActivityPeriod"
+                           @bind-Value="_edit.DefaultPeriod"
+                           ToStringFunc="@DateFilter.LabelOf"
+                           Label="Activity opens on"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense">
+                    @foreach (var period in Enum.GetValues<ActivityPeriod>())
+                    {
+                        <MudSelectItem T="ActivityPeriod" Value="@period">@DateFilter.LabelOf(period)</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+
+            @* A personal group divides nothing, so it has no default to choose. *@
+            @if (!Group.IsPersonal)
+            {
             <div class="gs-group-setting-section gs-group-default-split" aria-labelledby="default-split-heading">
                 <div class="gs-group-setting-heading">
                     <span class="gs-group-setting-icon" aria-hidden="true">
@@ -83,6 +113,7 @@
                     <span>Categories with their own split keep using it.</span>
                 </div>
             </div>
+            }
         </div>
     </MudForm>
 
@@ -101,14 +132,18 @@
         }
 
         @* One tap, no confirmation: archiving hides the group from this person's own list
-           and nothing else, and the same button puts it back. *@
-        <MudButton Variant="Variant.Text" Size="Size.Small"
-                   Color="@(Group.IsArchive ? Color.Primary : Color.Error)"
-                   Class="gs-btn-quiet gs-group-setting-archive"
-                   StartIcon="@(Group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
-                   OnClick="@ToggleArchiveAsync">
-            @(Group.IsArchive ? "Restore group" : "Archive group")
-        </MudButton>
+           and nothing else, and the same button puts it back. Not for the personal group,
+           which is where their own spending goes whatever else they tidy away. *@
+        @if (!Group.IsPersonal)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small"
+                       Color="@(Group.IsArchive ? Color.Primary : Color.Error)"
+                       Class="gs-btn-quiet gs-group-setting-archive"
+                       StartIcon="@(Group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
+                       OnClick="@ToggleArchiveAsync">
+                @(Group.IsArchive ? "Restore group" : "Archive group")
+            </MudButton>
+        }
     </div>
 </section>
 
@@ -157,7 +192,8 @@
               ?? "";
 
     private bool Dirty =>
-        _edit.Name != _original.Name || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId;
+        _edit.Name != _original.Name || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId
+        || _edit.DefaultPeriod != _original.DefaultPeriod;
 
     /// <summary>
     /// Follows the group, not the keystrokes. The page re-renders whenever the groups
@@ -167,10 +203,16 @@
     /// </summary>
     protected override void OnParametersSet()
     {
-        if (Group.Name == _original.Name && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId)
+        if (Group.Name == _original.Name && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId
+            && Group.DefaultPeriod == _original.DefaultPeriod)
             return;
 
-        _original = new CreateGroupRequest { Name = Group.Name, DefaultSplitRuleId = Group.DefaultSplitRuleId };
+        _original = new CreateGroupRequest
+        {
+            Name = Group.Name,
+            DefaultSplitRuleId = Group.DefaultSplitRuleId,
+            DefaultPeriod = Group.DefaultPeriod
+        };
         _edit = _original with { };
     }
 
@@ -190,6 +232,9 @@
 
         if (_original.DefaultSplitRuleId != _edit.DefaultSplitRuleId)
             patch.Replace(request => request.DefaultSplitRuleId, _edit.DefaultSplitRuleId);
+
+        if (_original.DefaultPeriod != _edit.DefaultPeriod)
+            patch.Replace(request => request.DefaultPeriod, _edit.DefaultPeriod);
 
         _saving = true;
 

@@ -110,7 +110,8 @@ public class JoinLinkEndpointTest : IAsyncLifetime
         // Their own list, which is the thing they opened the link to end up in.
         var theirs = await them.GetFromJsonAsync<GroupResponse[]>("/groups", Json, Ct);
 
-        Assert.Equal(group, Assert.Single(theirs!).Id);
+        // Beside their personal group, which comes first and was there before the link.
+        Assert.Equal(group, Assert.Single(theirs!, candidate => !candidate.IsPersonal).Id);
     }
 
     [Fact]

@@ -144,12 +144,16 @@
                                 <Avatar Name="@g.Name" />
                                 <div style="min-width: 0">
                                     <div class="title"><span>@g.Name</span></div>
-                                    <div class="meta">@g.MemberCount member@(g.MemberCount == 1 ? "" : "s")</div>
+                                    <div class="meta">@(g.IsPersonal ? "Just you" : $"{g.MemberCount} member{(g.MemberCount == 1 ? "" : "s")}")</div>
                                 </div>
-                                <div>
-                                    <div><Money Value="balance" Signed /></div>
-                                    <span class="when">@(balance == 0 ? "settled" : balance > 0 ? "owed to you" : "you owe")</span>
-                                </div>
+                                @* Nothing to settle in a group of one, so no balance to show. *@
+                                @if (!g.IsPersonal)
+                                {
+                                    <div>
+                                        <div><Money Value="balance" Signed /></div>
+                                        <span class="when">@(balance == 0 ? "settled" : balance > 0 ? "owed to you" : "you owe")</span>
+                                    </div>
+                                }
                             </a>
                         }
                     </div>

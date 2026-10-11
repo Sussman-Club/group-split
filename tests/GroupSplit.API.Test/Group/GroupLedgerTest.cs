@@ -306,11 +306,13 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var activity = await GetService<IGroupService>().GetGroupActivity(group, Ct);
 
-        return await activity
+        var entries = await activity
             .ApplyFilter(filter)
             .ApplySort(new SortRequest(), GroupApi.ActivitySort)
-            .SelectLedgerDto(Me.Id, activity)
+            .SelectLedgerDto(Me.Id)
             .ToListAsync(Ct);
+
+        return [.. await activity.WithRunningBalances(Me.Id, entries, Ct)];
     }
 
     private Task Expense(Guid groupId, decimal amount, string name,

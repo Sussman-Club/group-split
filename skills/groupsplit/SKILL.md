@@ -170,6 +170,10 @@ looking for it -- list or show what it would have changed -- or it may be record
   code 3 (`CLI_USAGE` for an argument or option, `CLI_INVALID_INPUT` inside `--split`,
   `--percent` or `--item`). When a user says "12,50 euros", convert it to `12.50` yourself;
   when they write "1.234,56", that is `1234.56`. Ask if it could be read two ways.
+- **Personal is a group of one.** Every user has a personal group whose id is their user
+  id; an expense with no `--group` goes there, and it can be filed under that group's own
+  categories (`categories create <name> --group <user-id>`). It has no members, rules or
+  settlements, and asking for one is `PERSONAL_GROUP_NOT_SHARED`.
 - **Never convert a currency yourself.** A personal expense may be in any currency
   (`transactions create ... --currency EUR`, no `--group`); a group takes only its own, and
   an expense never changes currency -- moving one into a group in another is refused with

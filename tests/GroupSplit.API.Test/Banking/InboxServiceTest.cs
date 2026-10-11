@@ -73,7 +73,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
 
-        Assert.Null(expense.GroupId);
+        Assert.Equal(expense.UserId, expense.GroupId);
 
         var split = await DbContext.Set<TransactionSplit>()
             .SingleAsync(candidate => candidate.TransactionId == expense.Id, Ct);
@@ -145,7 +145,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
 
-        Assert.Null(stored.GroupId);
+        Assert.Equal(stored.UserId, stored.GroupId);
         Assert.Equal("EUR", stored.Currency);
         Assert.Equal(20m, stored.Amount);
     }
@@ -197,7 +197,7 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(ErrorCodes.CurrencyMismatch, e.Code);
 
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(candidate => candidate.Id == expense.Id, Ct);
-        Assert.Null(stored.GroupId);
+        Assert.Equal(stored.UserId, stored.GroupId);
         Assert.Equal("EUR", stored.Currency);
     }
 

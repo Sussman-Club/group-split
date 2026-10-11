@@ -199,8 +199,9 @@ public class RealmRepairTest(AppHostFixture appHost)
 }
 
 /// <summary>
-/// The tests that sign in through, or take apart, the Google first broker login flow. They
-/// share one realm, so they run one at a time.
+/// The tests that sign in through, or take apart, the Google first broker login flow, and
+/// the password sign-ins a re-pointed browser flow would break. They share one realm, so
+/// they run one at a time.
 /// </summary>
 [CollectionDefinition(Collection)]
 public sealed class GoogleFirstBrokerLogin

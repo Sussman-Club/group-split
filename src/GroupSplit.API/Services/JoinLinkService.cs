@@ -86,6 +86,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
     public async Task<GroupJoinLinkResponse> Create(Guid groupId, CancellationToken ct = default)
     {
         var group = await MemberGroup(groupId, ct);
+        group.RefuseIfPersonalOf(userContext.User.Id);
 
         // Whatever was standing goes out with this one, and the database holds the group to
         // one unrevoked link. Two members pressing the button at the same moment both revoke

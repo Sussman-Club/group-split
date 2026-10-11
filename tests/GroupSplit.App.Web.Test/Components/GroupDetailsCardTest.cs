@@ -44,7 +44,7 @@ public class GroupDetailsCardTest : ComponentTest
     }
 
     /// <summary>
-    /// The two settings carry different weight, and each says what it is for before
+    /// The settings carry different weight, and each says what it is for before
     /// offering a field. The by-the-bill rule is not offered as a default: it defers to a
     /// receipt, and a default has to divide an expense that was typed in with nothing
     /// attached.
@@ -54,8 +54,9 @@ public class GroupDetailsCardTest : ComponentTest
     {
         var card = Render(new GroupResponse(Flat, "The flat", 3) { DefaultSplitRuleId = Even });
 
-        Assert.Equal(2, card.FindAll(".gs-group-setting-section").Count);
+        Assert.Equal(3, card.FindAll(".gs-group-setting-section").Count);
         Assert.Contains("The name your members see throughout the app.", card.Markup, StringComparison.Ordinal);
+        Assert.Contains("The span every member's Activity tab starts on.", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Default split", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Used when an expense has no category.", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Categories with their own split keep using it.", card.Markup, StringComparison.Ordinal);

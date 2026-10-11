@@ -69,7 +69,8 @@ public static class GroupApi
                     {
                         Currency = createdGroup.Currency,
                         DefaultSplitRuleId = createdGroup.DefaultSplitRuleId,
-                        DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name
+                        DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name,
+                        DefaultPeriod = createdGroup.DefaultPeriod
                     };
                     return Results.Ok(groupInfo);
                 })
@@ -504,11 +505,16 @@ public static class GroupApi
                 {
                     var activity = await groupService.GetGroupActivity(id, ct);
 
-                    return Results.Ok(await activity
+                    var ledger = await activity
                         .ApplyFilter(filter)
                         .ApplySort(sort, ActivitySort)
-                        .SelectLedgerDto(currentUser.User.Id, activity)
-                        .ToPageAsync(page, ct));
+                        .SelectLedgerDto(currentUser.User.Id)
+                        .ToPageAsync(page, ct);
+
+                    return Results.Ok(ledger with
+                    {
+                        Items = await activity.WithRunningBalances(currentUser.User.Id, ledger.Items, ct)
+                    });
                 })
                 .WithName("GetGroupActivity")
                 .Produces<PagedResponse<GroupLedgerEntryResponse>>()
@@ -682,6 +688,10 @@ public static class GroupApi
         /// <paramref name="context"/> says whose list this is being read for: archiving is
         /// personal, so IsArchive is true only when that person archived it. Reading it off
         /// the group would tell every member what one of them had tidied away.
+        /// <para>
+        /// The reader's personal group comes first, which is the only order the list has: it
+        /// is the one group everybody has, and the one they reach for most.
+        /// </para>
         /// </summary>
         private IQueryable<GroupResponse> SelectDto(AppDbContext context, Guid userId)
         {
@@ -689,12 +699,15 @@ public static class GroupApi
                 join membership in context.Set<GroupMembership>()
                     on new { GroupId = @group.Id, UserId = userId }
                     equals new { membership.GroupId, membership.UserId }
+                orderby @group.Id == userId descending
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                     membership.ArchivedAt != null)
                 {
                     Currency = @group.Currency,
                     DefaultSplitRuleId = @group.DefaultSplitRuleId,
-                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name
+                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                    DefaultPeriod = @group.DefaultPeriod,
+                    IsPersonal = @group.Id == userId
                 };
         }
     }

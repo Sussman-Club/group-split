@@ -24,6 +24,7 @@ public static class GroupCommands
         groups.Subcommands.Add(Create());
         groups.Subcommands.Add(Rename());
         groups.Subcommands.Add(SetDefaultSplit());
+        groups.Subcommands.Add(SetDefaultPeriod());
         groups.Subcommands.Add(Members());
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
@@ -68,7 +69,7 @@ public static class GroupCommands
                         group.Id.ToString(),
                         Markup.Escape(group.Name),
                         group.MemberCount.ToString(),
-                        group.IsArchive ? "[grey]archived[/]" : "active");
+                        group.IsPersonal ? "personal" : group.IsArchive ? "[grey]archived[/]" : "active");
                 }
 
                 return table;
@@ -185,6 +186,65 @@ public static class GroupCommands
 
         return command;
     }
+
+    /// <summary>
+    /// The span the group's Activity tab opens on in the app, for every member.
+    /// </summary>
+    /// <remarks>
+    /// A command of its own, like <c>set-default-split</c>. It is a display preference for the
+    /// app and nothing more: <c>groups activity</c> ignores it and reads only the
+    /// <c>--from</c> and <c>--to</c> it is given, so a script always gets what it asked for.
+    /// </remarks>
+    private static Command SetDefaultPeriod()
+    {
+        var period = new Argument<ActivityPeriod>("period")
+        {
+            Description = "all-time, this-month, last-month, last-3-months or this-year.",
+            CustomParser = result =>
+            {
+                var token = result.Tokens.Single().Value;
+
+                if (Periods.FirstOrDefault(known => string.Equals(known.Name, token, StringComparison.OrdinalIgnoreCase))
+                    is { Name: not null } match)
+                    return match.Period;
+
+                result.AddError($"Could not read period '{token}'. Use one of: {string.Join(", ", Periods.Select(known => known.Name))}.");
+                return default;
+            }
+        };
+        period.CompletionSources.Add(Periods.Select(known => known.Name).ToArray());
+
+        var command = new Command("set-default-period",
+            "Choose which span this group's Activity tab opens on in the app.")
+        {
+            GroupId, period
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var patch = new JsonPatchDocument<CreateGroupRequest>();
+            patch.Replace(request => request.DefaultPeriod, context.ParseResult.GetValue(period));
+
+            var group = await context.Groups.UpdateGroupAsync(
+                context.ParseResult.GetValue(GroupId), patch, ct);
+
+            context.Output.Write(group, Render);
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>The periods as the command line spells them.</summary>
+    private static readonly (string Name, ActivityPeriod Period)[] Periods =
+    [
+        ("all-time", ActivityPeriod.AllTime),
+        ("this-month", ActivityPeriod.ThisMonth),
+        ("last-month", ActivityPeriod.LastMonth),
+        ("last-3-months", ActivityPeriod.LastThreeMonths),
+        ("this-year", ActivityPeriod.ThisYear)
+    ];
 
     private static Command Members()
     {
@@ -1269,6 +1329,8 @@ public static class GroupCommands
         table.AddRow("Default split", group.DefaultSplitRuleId is { } ruleId
             ? $"{Markup.Escape(group.DefaultSplitRuleName ?? "unnamed")} ({ruleId})"
             : "[grey]none — divides evenly[/]");
+
+        table.AddRow("Activity opens on", Periods.First(known => known.Period == group.DefaultPeriod).Name);
 
         return table;
     }

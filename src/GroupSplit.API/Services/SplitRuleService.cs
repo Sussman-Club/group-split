@@ -116,6 +116,7 @@ public class SplitRuleService(
         ArgumentNullException.ThrowIfNull(request);
 
         var group = await GroupOfCaller(request.GroupId, ct);
+        group.RefuseIfPersonalOf(userContext.User.Id);
 
         await RefuseDuplicateName(group.Id, request.Name, null, ct);
 

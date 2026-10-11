@@ -68,7 +68,7 @@ public interface IBankCommands
     Task<int> IgnoreManyAsync(IReadOnlyList<(Guid Id, string Title)> rows, CancellationToken ct = default);
 
     /// <summary>
-    /// Files several rows as the caller's own expenses -- in no group, owed to nobody.
+    /// Files several rows as the caller's own expenses -- in their personal group, owed to nobody.
     /// </summary>
     /// <param name="rows">
     /// Each row's id, its title, and whether it is being filed over a suspected duplicate.

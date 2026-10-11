@@ -2,6 +2,7 @@
 @page "/transactions/not-filed"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
@@ -13,6 +14,7 @@
 @inject LocalClock Clock
 @inject ISnackbar Snackbar
 @inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
 @implements IDisposable
 
 @*
@@ -49,12 +51,12 @@
             <MudButton Variant="@(State.Filter == choice ? Variant.Filled : Variant.Text)"
                        Color="@(State.Filter == choice ? Color.Primary : Color.Default)"
                        Size="Size.Small" Class="gs-btn-pill"
-                       OnClick="@(() => State.SetFilterAsync(choice))">
+                       OnClick="@(() => SetFilterAsync(choice))">
                 @Label(choice)
             </MudButton>
         }
 
-        <DateRangeFilter Value="@State.Range" ValueChanged="@(range => State.SetRangeAsync(range))" />
+        <DateRangeFilter Value="@State.Range" ValueChanged="SetRangeAsync" />
     </div>
 
     @if (State.Connections is { Enabled: false })
@@ -308,7 +310,7 @@
     What is selected, and what can be done with it, over the list rather than beside it.
 
     Both actions need no target and neither creates a debt: ignoring is reversible from the
-    Ignored filter, and keeping a payment personal files it in no group and owed to nobody.
+    Ignored filter, and keeping a payment personal files it in the personal group and owed to nobody.
     Adding to a group is deliberately not here -- it needs a group, a category and a split,
     and one answer applied to twenty rows is a guess about nineteen of them.
 *@
@@ -467,6 +469,7 @@
         try
         {
             await State.LoadMoreAsync();
+            WriteUrl();
         }
         finally
         {
@@ -479,7 +482,109 @@
         State.OnChanged += OnChanged;
 
         await State.EnsureLoadedAsync();
-        await State.LoadRowsAsync();
+        await LoadAskedAsync();
+    }
+
+    // Which rows, over what span and how many pages of them, are in the URL, so a refresh
+    // or a shared link shows the same list (#398). The ticks are not: they are a decision in
+    // progress, not a place. Strings, so a value that does not parse opens the default.
+    [Parameter, SupplyParameterFromQuery(Name = "status")] public string? StatusParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "pages")] public string? PagesParameter { get; set; }
+
+    /// <summary>The list's narrowing as it is spelled in the query string.</summary>
+    private sealed record Query(string? Status, string? Range, string? From, string? To, string? Pages);
+
+    /// <summary>
+    /// The query this page last read or wrote, so the echo of its own write is not read as a
+    /// new address and the list is not asked for twice.
+    /// </summary>
+    private Query? _settled;
+
+    private Query Asked => new(StatusParameter, RangeParameter, FromParameter, ToParameter, PagesParameter);
+
+    /// <summary>
+    /// What is on the page, spelled for the URL. What it opens on -- waiting rows, all time,
+    /// one page -- is left out, so the link from the activity page stays bare.
+    /// </summary>
+    private Query Current
+    {
+        get
+        {
+            var (range, from, to) = ListingQuery.FormatRange(State.Range, DateFilter.AllTime);
+
+            return new Query(
+                State.Filter switch
+                {
+                    InboxStatus.Filed => "added",
+                    InboxStatus.Ignored => "ignored",
+                    _ => null
+                },
+                range, from, to,
+                ListingQuery.FormatPage(State.Pages - 1));
+        }
+    }
+
+    /// <summary>Reads the list the URL asks for, in one request.</summary>
+    private Task LoadAskedAsync()
+    {
+        var asked = Asked;
+        _settled = asked;
+
+        var status = asked.Status?.ToLowerInvariant() switch
+        {
+            "added" or "filed" => InboxStatus.Filed,
+            "ignored" => InboxStatus.Ignored,
+            _ => InboxStatus.New
+        };
+
+        return State.LoadRowsAsync(status,
+            ListingQuery.ParseRange(asked.Range, asked.From, asked.To, DateFilter.AllTime),
+            ListingQuery.ParsePage(asked.Pages) + 1);
+    }
+
+    /// <summary>
+    /// A URL the page did not write -- the activity page's link back to a bare inbox, say --
+    /// replaces the list on it.
+    /// </summary>
+    protected override Task OnParametersSetAsync() =>
+        _settled is not null && Asked != _settled ? LoadAskedAsync() : Task.CompletedTask;
+
+    /// <summary>
+    /// Puts the list's narrowing in the URL. Replacing rather than pushing keeps the back
+    /// button leaving the page instead of stepping back through every filter.
+    /// </summary>
+    private void WriteUrl()
+    {
+        var query = Current;
+
+        if (query == _settled)
+            return;
+
+        _settled = query;
+
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["status"] = query.Status,
+            ["range"] = query.Range,
+            ["from"] = query.From,
+            ["to"] = query.To,
+            ["pages"] = query.Pages
+        }), replace: true);
+    }
+
+    private async Task SetFilterAsync(InboxStatus status)
+    {
+        await State.SetFilterAsync(status);
+        WriteUrl();
+    }
+
+    private async Task SetRangeAsync(DateFilter range)
+    {
+        await State.SetRangeAsync(range);
+        WriteUrl();
     }
 
     private void OnChanged()

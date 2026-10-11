@@ -6,8 +6,8 @@ public class TransactionSeedDto
     public required Guid PayerId { get; init; }
     /// <summary>
     /// What it was filed under, or null for a personal expense -- one the payer recorded
-    /// for themselves, in no group and under no category. A category belongs to a group,
-    /// so naming one is also what says which group the expense is in.
+    /// for themselves, in their personal group and under no category. A category belongs
+    /// to a group, so naming one is also what says which group the expense is in.
     /// </summary>
     public Guid? CategoryId { get; init; }
     public required decimal Amount { get; set; }

@@ -400,11 +400,13 @@ public sealed class InboxService(
     /// A group's balances are one currency, and conversion is out of scope, so a row in
     /// another one cannot join them. Checked before the expense is created rather than
     /// after, and only for a group the caller is actually in -- otherwise the group's own
-    /// 404 is the answer, and this must not leak that the group exists.
+    /// 404 is the answer, and this must not leak that the group exists. Never for the
+    /// caller's personal group, null or named, which takes any currency: nothing sums it
+    /// with anybody else's.
     /// </summary>
     private async Task RefuseCurrencyMismatch(BankTransaction row, Guid? groupId, CancellationToken ct)
     {
-        if (groupId is not { } id)
+        if (groupId is not { } id || id == userContext.User.Id)
             return;
 
         var currency = await dbContext.Entry(userContext.User).Collection(user => user.Groups).Query()

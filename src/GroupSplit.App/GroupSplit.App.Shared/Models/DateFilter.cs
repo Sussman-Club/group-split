@@ -1,3 +1,5 @@
+using GroupSplit.Shared;
+
 namespace GroupSplit.App.Shared.Models;
 
 /// <summary>The named spans a listing offers, plus the one someone picks themselves.</summary>
@@ -38,6 +40,19 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
     DateTime? CustomTo = null)
 {
     public static readonly DateFilter AllTime = new();
+
+    /// <summary>The span a group's Activity tab opens on, as the filter that shows it.</summary>
+    public static DateFilter Of(ActivityPeriod period) => new(period switch
+    {
+        ActivityPeriod.ThisMonth => DateFilterPreset.ThisMonth,
+        ActivityPeriod.LastMonth => DateFilterPreset.LastMonth,
+        ActivityPeriod.LastThreeMonths => DateFilterPreset.LastThreeMonths,
+        ActivityPeriod.ThisYear => DateFilterPreset.ThisYear,
+        _ => DateFilterPreset.AllTime
+    });
+
+    /// <summary>What the tab's chip calls <paramref name="period"/>, so Settings uses the same words.</summary>
+    public static string LabelOf(ActivityPeriod period) => Of(period).Label;
 
     public bool IsAllTime => Preset is DateFilterPreset.AllTime
         || (Preset is DateFilterPreset.Custom && CustomFrom is null && CustomTo is null);

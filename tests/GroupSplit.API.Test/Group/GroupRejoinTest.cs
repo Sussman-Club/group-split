@@ -315,8 +315,9 @@ public class GroupRejoinTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             await JoinGroup(group.Id, removed);
             await Groups.RemoveGroupMember(group.Id, removed.Id, Ct);
 
-            // Their own view: the group is gone from it.
-            Assert.Empty(await (await As<IGroupService>(scope).GetAllGroups(Ct)).ToListAsync(Ct));
+            // Their own view: the group is gone from it, and only their personal one is left.
+            Assert.Equal(removed.Id,
+                Assert.Single(await (await As<IGroupService>(scope).GetAllGroups(Ct)).ToListAsync(Ct)).Id);
             Assert.Empty(await As<IGroupService>(scope).GetGroupById(group.Id, Ct));
             Assert.DoesNotContain((await As<IGroupService>(scope).GetPosition(Ct)).Groups,
                 position => position.GroupId == group.Id);
