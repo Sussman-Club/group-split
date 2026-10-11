@@ -35,13 +35,13 @@ public abstract class Transaction : Entity
     /// The group this belongs to.
     /// </summary>
     /// <remarks>
-    /// Nullable because in the finished model a personal transaction has no group -- that
-    /// is what personal means. Nothing writes null yet: every transaction still sits in a
-    /// group, including the hidden personal one, until the step that deletes those.
+    /// Always one. A personal expense belongs to its payer's personal group, whose id is
+    /// the payer's own (see <see cref="Extensions.PersonalGroupExtensions"/>), so it has
+    /// categories and figures the way any group's expenses do.
     /// </remarks>
-    public virtual Group? Group { get; set; }
+    public virtual Group Group { get; set; } = null!;
 
-    public Guid? GroupId { get; set; }
+    public Guid GroupId { get; set; }
 
     /// <summary>
     /// Stored to two decimal places, which the column enforces rather than the callers

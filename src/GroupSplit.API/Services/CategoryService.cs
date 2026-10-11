@@ -154,6 +154,9 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         if (splitRuleId is null)
             return null;
 
+        // A personal group has no rules to name, and no reason ever to have one.
+        group.RefuseIfPersonalOf(userContext.User.Id);
+
         return await dbContext.Set<SplitRule>()
                    .FirstOrDefaultAsync(rule => rule.Id == splitRuleId && rule.Group.Id == group.Id, ct)
                ?? throw new NotFoundException(ErrorCodes.SplitRuleNotFound, "Split rule not found.");

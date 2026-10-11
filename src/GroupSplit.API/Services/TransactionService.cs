@@ -2,6 +2,7 @@ using GroupSplit.Data;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -140,10 +141,9 @@ public class TransactionService(
         var groups = dbContext.Entry(currentUser).Collection(u => u.Groups).Query();
 
         // Two kinds of expense are the caller's to read: the ones in a group they belong
-        // to, and the ones they paid for wherever those are -- personal ones, which have no
-        // group, and ones in a group they have since left. The second clause used to be
-        // "in no group and mine", which made leaving a group erase everything the leaver
-        // had paid in it from their own listing and totals.
+        // to -- their personal group among them -- and the ones they paid for wherever
+        // those are, which is what keeps an expense in a group they have since left in
+        // their own listing and totals.
         var query = from expense in dbContext.Set<Expense>()
                     where groups.Any(@group => @group.Id == expense.GroupId) ||
                           expense.UserId == currentUser.Id
@@ -193,8 +193,7 @@ public class TransactionService(
     /// </remarks>
     private async Task RefuseIfLeft(Transaction transaction, CancellationToken ct)
     {
-        if (transaction.GroupId is not { } groupId)
-            return;
+        var groupId = transaction.GroupId;
 
         var stillIn = await dbContext.Entry(userContext.User).Collection(u => u.Groups).Query()
             .AnyAsync(@group => @group.Id == groupId, ct);
@@ -231,9 +230,7 @@ public class TransactionService(
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        group is null
-                            ? "A personal expense can only have been paid by you."
-                            : "The paying user is neither a member of the group nor invited to it.");
+                        PayerNotInGroup(group));
 
         var category = await CategoryFor(group, request.CategoryId, ct);
         var selectedRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId,
@@ -280,9 +277,7 @@ public class TransactionService(
 
         var payer = await ParticipantOf(group, paidByUserId, ct)
                     ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                        group is null
-                            ? "A personal expense can only have been paid by you."
-                            : "The paying user is neither a member of the group nor invited to it.");
+                        PayerNotInGroup(group));
 
         var category = await CategoryFor(group, request.CategoryId, ct);
         var selectedRuleVersionId = await VersionOfRuleFor(group, request.SplitRuleId,
@@ -297,7 +292,7 @@ public class TransactionService(
             Currency = currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
-            GroupId = group?.Id,
+            GroupId = group.Id,
             CategoryId = category?.Id,
             SplitRuleVersionId = selectedRuleVersionId,
             UserId = payer.Id
@@ -308,7 +303,7 @@ public class TransactionService(
         else
             await splitter.WriteSplitsAsync(draft, request.Splits, ct);
 
-        return await Describe(draft, group?.Id, ct);
+        return await Describe(draft, group.Id, ct);
     }
 
     /// <summary>
@@ -371,7 +366,7 @@ public class TransactionService(
             ? await GroupFor(existing.GroupId, ct)
             : await GroupFor(request.GroupId, ct);
 
-        var groupMoved = group?.Id != existing.GroupId;
+        var groupMoved = group.Id != existing.GroupId;
 
         // Before anything is divided, as the save refuses it: a preview that showed the
         // shares of a move the save will not make is a promise nobody can keep.
@@ -382,9 +377,7 @@ public class TransactionService(
             ? existing.UserId
             : (await ParticipantOf(group, request.PaidByUserId, ct)
                ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                   group is null
-                       ? "A personal expense can only have been paid by you."
-                       : "The paying user is neither a member of the group nor invited to it.")).Id;
+                   PayerNotInGroup(group))).Id;
 
         var category = await CategoryFor(group, request.CategoryId, ct);
 
@@ -399,16 +392,16 @@ public class TransactionService(
         // meets it while there is still a flag to add.
         //
         // Three edits are not carried forward into. A move to another group, where the
-        // shares name people who may not be in the destination. An expense with no group on
-        // either side, whose single share the splitter refuses by name while the save of the
-        // very same edit sails through, because GetUpdateModel hands it no shares at all;
-        // group-less is excluded outright rather than left to "the group did not change",
-        // which is also true of two nulls and made every preview of a personal edit fail.
+        // shares name people who may not be in the destination. A personal expense, whose
+        // single share the splitter refuses by name while the save of the very same edit
+        // sails through, because GetUpdateModel hands it no shares at all; it is excluded
+        // outright rather than left to "the group did not change", which is also true of a
+        // personal expense staying personal and made every preview of a personal edit fail.
         // And an explicit ask to divide it again, which is the one instruction silence
         // cannot carry -- see the parameter.
         var stated = request.Splits;
 
-        if (!redivide && stated is null && existing.GroupId is not null && group?.Id == existing.GroupId)
+        if (!redivide && stated is null && !existing.IsPersonal && group.Id == existing.GroupId)
         {
             stated = [.. existing.Splits.Select(split =>
                 new SplitInput { UserId = split.UserId, Amount = split.Amount })];
@@ -440,7 +433,7 @@ public class TransactionService(
             Currency = existing.Currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
-            GroupId = group?.Id,
+            GroupId = group.Id,
             CategoryId = category?.Id,
             UserId = payerId,
 
@@ -491,10 +484,9 @@ public class TransactionService(
         else
             await splitter.WriteSplitsAsync(draft, stated, ct);
 
-        if (existing.GroupId is { } recordedIn)
-            DepartedPositions.RefuseIfMoved(departed, draft, recordedIn);
+        DepartedPositions.RefuseIfMoved(departed, draft, existing.GroupId);
 
-        return await Describe(draft, group?.Id, ct);
+        return await Describe(draft, group.Id, ct);
     }
 
     /// <summary>
@@ -507,15 +499,15 @@ public class TransactionService(
     /// behind them at all and used to be reported under the category's, and an edit may be
     /// divided by a version the rule has moved on from.
     /// </remarks>
-    private Task<SplitPreviewResponse> Describe(Expense draft, Guid? groupId, CancellationToken ct) =>
+    private Task<SplitPreviewResponse> Describe(Expense draft, Guid groupId, CancellationToken ct) =>
         Describe(groupId,
             [.. draft.Splits.Select(split => new SplitAmount(split.UserId, split.Amount))],
             draft.SplitRuleVersion,
             ct);
 
-    /// <inheritdoc cref="Describe(Expense, Guid?, CancellationToken)"/>
+    /// <inheritdoc cref="Describe(Expense, Guid, CancellationToken)"/>
     private async Task<SplitPreviewResponse> Describe(
-        Guid? groupId, IReadOnlyList<SplitAmount> splits, SplitRuleVersion? version, CancellationToken ct)
+        Guid groupId, IReadOnlyList<SplitAmount> splits, SplitRuleVersion? version, CancellationToken ct)
     {
         var named = splits.Select(split => split.UserId).ToList();
 
@@ -556,7 +548,7 @@ public class TransactionService(
 
         // Who among the people on this transaction is one of the group's guests. One query
         // for the whole transaction rather than one per share, and empty for a personal
-        // expense, which has no group to have guests.
+        // expense, whose group has nobody to invite.
         var guests = await GuestsIn(transaction.GroupId, ct);
 
         // Read, not re-derived. The amounts below are the ones the group's balances are
@@ -583,7 +575,7 @@ public class TransactionService(
             Currency = transaction.Currency,
             DateTime = transaction.DateTime,
             GroupId = transaction.GroupId,
-            GroupName = transaction.Group?.Name,
+            GroupName = transaction.Group.Name,
             PaidByUserId = transaction.User.Id,
             PaidByUserName = People.Display(transaction.User),
             PaidByIsGuest = guests.Contains(transaction.User.Id),
@@ -623,7 +615,7 @@ public class TransactionService(
             CategoryId = expense?.CategoryId,
             MerchantId = transaction.MerchantId,
             CoversThrough = (transaction as Transfer)?.CoversThrough,
-            Splits = transaction.GroupId == null
+            Splits = transaction.IsPersonal
                 ? null
                 : transaction.Splits.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList()
         };
@@ -725,8 +717,7 @@ public class TransactionService(
                 }
             }
 
-            if (recordedIn is { } transferGroup)
-                DepartedPositions.RefuseIfMoved(departed, transfer, transferGroup);
+            DepartedPositions.RefuseIfMoved(departed, transfer, recordedIn);
 
             await dbContext.SaveChangesAsync(ct);
             return transfer;
@@ -742,6 +733,12 @@ public class TransactionService(
         // it stands and neither can be asked afterwards: the first re-runs the division the
         // stored shares came from, and the second is a comparison against values that are
         // about to be overwritten.
+        // Null is the caller's personal group, said the short way -- as on create, and as
+        // the edit model of a personal expense still carries it to older clients. Named
+        // outright before anything compares groups, so a personal expense staying personal
+        // is not read as a move.
+        request.GroupId ??= userContext.User.Id;
+
         var cameFromRule = await splitter.DivisionCameFromItsRule(expense, ct);
         var inputsMoved = InputsMoved(expense, request);
         var saysNothingNew = SaysNothingNew(expense.Splits, request.Splits);
@@ -761,8 +758,8 @@ public class TransactionService(
             throw DepartedPositions.Refusal([departedPayer.UserId]);
 
         // The destination, which is the group it is already in unless the request moves it.
-        // Resolved the way a create resolves its group -- one of the caller's, or none for
-        // personal -- so moving into a group the caller is not in is the same 404 as
+        // Resolved the way a create resolves its group -- one of the caller's, their
+        // personal one among them -- so moving into a group the caller is not in is the same 404 as
         // creating there would be. The old shares are not carried over: they name the old
         // group's members, and the splitter below divides afresh among the new one's.
         var group = request.GroupId == expense.GroupId
@@ -780,14 +777,15 @@ public class TransactionService(
         // the request names instead, or none where the edit hands it back to its category.
         var division = await DivisionFor(expense, request, group, asked: request.Splits is null, ct);
 
-        if (group?.Id != expense.GroupId)
+        if (groupMoved)
         {
             expense.Group = group;
-            expense.GroupId = group?.Id;
+            expense.GroupId = group.Id;
             // The currency stays. Into a group it already matches -- anything else was
-            // refused above -- and out of one it is still what the money was spent in.
+            // refused above -- and into a personal one, which takes any currency, it is
+            // still what the money was spent in.
 
-            if (group == null)
+            if (IsPersonal(group))
             {
                 request.Splits = null;
             }
@@ -810,9 +808,7 @@ public class TransactionService(
         {
             expense.User = await ParticipantOf(group, request.PaidByUserId, ct)
                            ?? throw new ConflictException(ErrorCodes.TransactionPayerNotInGroup,
-                               group is null
-                                   ? "A personal expense can only have been paid by you."
-                                   : "The paying user is neither a member of the group nor invited to it.");
+                               PayerNotInGroup(group));
         }
 
         var category = await CategoryFor(group, request.CategoryId, ct);
@@ -871,8 +867,7 @@ public class TransactionService(
 
         // Last, against the positions taken before anything moved: whatever the edit was,
         // what a departed participant paid and owed here is what it was.
-        if (recordedIn is { } recordedGroup)
-            DepartedPositions.RefuseIfMoved(departed, expense, recordedGroup);
+        DepartedPositions.RefuseIfMoved(departed, expense, recordedIn);
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -1061,20 +1056,31 @@ public class TransactionService(
     }
 
     /// <summary>
-    /// The group the expense belongs to, or null when it belongs to none -- which is what
-    /// a personal expense is, rather than a hidden group of one.
+    /// The group the expense belongs to: one of the caller's, or their personal group when
+    /// the request names none.
     /// </summary>
-    private async Task<Group?> GroupFor(Guid? groupId, CancellationToken ct)
+    /// <remarks>
+    /// Null stays a way of saying "mine" because it is how every client has said it since
+    /// personal expenses had no group -- the CLI's <c>--personal</c>, the inbox's "Keep
+    /// personal" -- and the personal group's id is not one a client has to look up.
+    /// </remarks>
+    private async Task<Group> GroupFor(Guid? groupId, CancellationToken ct)
     {
-        if (groupId is null)
-            return null;
-
         var currentUser = userContext.User;
+        var id = groupId ?? currentUser.Id;
 
         return await dbContext.Entry(currentUser).Collection(u => u.Groups).Query()
-                   .FirstOrDefaultAsync(@group => @group.Id == groupId, ct)
+                   .FirstOrDefaultAsync(@group => @group.Id == id, ct)
                ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
     }
+
+    /// <summary>Whether <paramref name="group"/> is the caller's personal group.</summary>
+    private bool IsPersonal(Group group) => group.IsPersonalOf(userContext.User.Id);
+
+    private string PayerNotInGroup(Group group) =>
+        IsPersonal(group)
+            ? "A personal expense can only have been paid by you."
+            : "The paying user is neither a member of the group nor invited to it.";
 
     /// <summary>
     /// The currency a new expense is recorded in: the one it was stated in, or the group's
@@ -1088,12 +1094,12 @@ public class TransactionService(
     /// one currency and conversion is out of scope, so there a stated currency has to be
     /// the group's own.
     /// </remarks>
-    private static string CurrencyFor(Group? group, string? stated)
+    private string CurrencyFor(Group group, string? stated)
     {
         var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
 
-        if (group is null)
-            return currency ?? Currencies.Default;
+        if (IsPersonal(group))
+            return currency ?? group.Currency;
 
         if (currency is not null && !SameCurrency(currency, group.Currency))
             throw CurrencyMismatch(currency, group);
@@ -1107,11 +1113,12 @@ public class TransactionService(
     /// <remarks>
     /// The same refusal filing into the group meets, on the other way in. A move used to
     /// take the destination's currency, which relabelled the amount rather than converting
-    /// it -- twenty euros became twenty dollars in everybody's balance.
+    /// it -- twenty euros became twenty dollars in everybody's balance. Never into the
+    /// caller's personal group, which takes any currency for the reason above.
     /// </remarks>
-    private static void RefuseCurrencyMove(Expense expense, Group? destination)
+    private void RefuseCurrencyMove(Expense expense, Group destination)
     {
-        if (destination is not null && destination.Id != expense.GroupId &&
+        if (!IsPersonal(destination) && destination.Id != expense.GroupId &&
             !SameCurrency(expense.Currency, destination.Currency))
             throw CurrencyMismatch(expense.Currency, destination);
     }
@@ -1126,48 +1133,32 @@ public class TransactionService(
             .WithExtension("groupCurrency", group.Currency);
 
     /// <summary>
-    /// Which of a group's participants are its guests, as ids. Empty for no group at all,
-    /// which is what a personal expense has.
+    /// Which of a group's participants are its guests, as ids. Empty for a personal group,
+    /// which can have none.
     /// </summary>
-    private async Task<HashSet<Guid>> GuestsIn(Guid? groupId, CancellationToken ct)
+    private async Task<HashSet<Guid>> GuestsIn(Guid groupId, CancellationToken ct)
     {
-        if (groupId is not { } id)
-            return [];
-
         return [.. await dbContext.Set<GroupGuest>()
-            .Where(guest => guest.GroupId == id)
+            .Where(guest => guest.GroupId == groupId)
             .Select(guest => guest.ParticipantUserId)
             .ToListAsync(ct)];
     }
 
     /// <summary>
     /// The participant of <paramref name="group"/> with that id: a member, or one of its
-    /// guests. When there is no group, the caller themselves, since a personal expense is one
-    /// only they can have paid.
+    /// guests. In a personal group that is the caller alone, since it has no other member.
     /// </summary>
-    private Task<User?> ParticipantOf(Group? group, Guid userId, CancellationToken ct)
-    {
-        if (group is null)
-        {
-            var currentUser = userContext.User;
-            return Task.FromResult(userId == currentUser.Id ? currentUser : null);
-        }
-
-        return participants.Find(group.Id, userId, ct);
-    }
+    private Task<User?> ParticipantOf(Group group, Guid userId, CancellationToken ct) =>
+        participants.Find(group.Id, userId, ct);
 
     /// <summary>
     /// The category, checked to belong to the same group. A category from another group
     /// would file the expense under a label its members cannot see.
     /// </summary>
-    private async Task<Category?> CategoryFor(Group? group, Guid? categoryId, CancellationToken ct)
+    private async Task<Category?> CategoryFor(Group group, Guid? categoryId, CancellationToken ct)
     {
         if (categoryId is null)
             return null;
-
-        // Categories belong to groups, so an expense in no group can be filed under none.
-        if (group is null)
-            throw new NotFoundException(ErrorCodes.CategoryNotFound, "Category not found.");
 
         return await dbContext.Set<Category>()
                    .FirstOrDefaultAsync(category =>
@@ -1213,13 +1204,13 @@ public class TransactionService(
     /// </para>
     /// </remarks>
     private async Task<Guid?> DivisionFor(
-        Expense expense, UpdateTransactionRequest request, Group? group, bool asked, CancellationToken ct)
+        Expense expense, UpdateTransactionRequest request, Group group, bool asked, CancellationToken ct)
     {
         if (request.SplitRuleId is { } named)
             return await VersionOfRuleFor(
                 group, named, SaysNothingNew(expense.Splits, request.Splits) ? null : request.Splits, ct);
 
-        if (group?.Id != expense.GroupId)
+        if (group.Id != expense.GroupId)
             return null;
 
         if (asked && expense.SplitRuleVersionId is { } held &&
@@ -1255,7 +1246,7 @@ public class TransactionService(
     /// </para>
     /// </remarks>
     private async Task<Guid?> VersionOfRuleFor(
-        Group? group, Guid? splitRuleId, IReadOnlyList<SplitInput>? stated, CancellationToken ct)
+        Group group, Guid? splitRuleId, IReadOnlyList<SplitInput>? stated, CancellationToken ct)
     {
         if (splitRuleId is null)
             return null;
@@ -1265,7 +1256,7 @@ public class TransactionService(
                 "An expense divides by a rule or by the shares you state, not both. Leave the "
                 + "shares out to divide by the rule.");
 
-        if (group is null)
+        if (IsPersonal(group))
             throw new ConflictException(ErrorCodes.SplitRuleNotInGroup,
                 "A personal expense is not shared with anybody, so there is nothing for a rule to divide.");
 

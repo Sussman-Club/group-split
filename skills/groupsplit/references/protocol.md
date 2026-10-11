@@ -106,9 +106,10 @@ ones worth handling by name:
 | `CURRENCY_MISMATCH` | The money is not in the group's currency: recording it there (`--currency`), filing a bank row into it, or moving an expense into it with `transactions update --group`. Nothing converts, and an expense keeps its currency for good. It can stay personal, or go to a group in that currency. |
 | `CATEGORY_IN_USE`, `SPLIT_RULE_IN_USE` | Something still points at it. Move those first. |
 | `IDENTITY_EMAIL_IN_USE` | Exit code 2, on every command: the server refuses this sign-in because its email belongs to another account (somebody deleted and recreated in Keycloak). Running `auth login` again as the same person will not fix it. Stop and tell your user to contact support with the `traceId`. |
-| `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense with no group cannot be divided. |
+| `SPLIT_ON_A_PERSONAL_EXPENSE` | An expense in the payer's personal group cannot be divided. |
+| `PERSONAL_GROUP_NOT_SHARED` | The group is the user's personal group (its id is their user id), and the command needs a second person: a member, guest, invitation, join link, split rule (or `--rule` on its category), settlement or repayment, leaving or archiving. Do not retry; a personal group is the user's alone. |
 | `SPLIT_RULE_NOT_EDITABLE` | The rule is one the group was given per member -- all of it is for them -- and nothing renames, restates or deletes one. Create a rule of your own instead. |
-| `SPLIT_RULE_NOT_IN_GROUP` | The `--split-rule` id belongs to another group, or the expense has no group for a rule to divide. |
+| `SPLIT_RULE_NOT_IN_GROUP` | The `--split-rule` id belongs to another group, or the expense is personal and has nobody for a rule to divide between. |
 | `MERCHANT_EDIT_FORBIDDEN` | Exit code 2, but not about who is signed in: no account may rename, relogo or delete a merchant. Do not retry or re-authenticate. Point the expense at another merchant instead. |
 | `MERCHANT_SEARCH_TOO_SHORT`, `MERCHANT_LOGO_NOT_ALLOWED` | `merchants list --search` needs 2+ characters; `--logo-url` must be on the bank provider's logo hosts -- leave it out. |
 | `SPLIT_RULE_KIND_FIXED` | The update would change the rule's shape -- shares to percentages, or either to "all on one person". Change the numbers, or create a rule for the new shape. |

@@ -682,6 +682,10 @@ public static class GroupApi
         /// <paramref name="context"/> says whose list this is being read for: archiving is
         /// personal, so IsArchive is true only when that person archived it. Reading it off
         /// the group would tell every member what one of them had tidied away.
+        /// <para>
+        /// The reader's personal group comes first, which is the only order the list has: it
+        /// is the one group everybody has, and the one they reach for most.
+        /// </para>
         /// </summary>
         private IQueryable<GroupResponse> SelectDto(AppDbContext context, Guid userId)
         {
@@ -689,12 +693,14 @@ public static class GroupApi
                 join membership in context.Set<GroupMembership>()
                     on new { GroupId = @group.Id, UserId = userId }
                     equals new { membership.GroupId, membership.UserId }
+                orderby @group.Id == userId descending
                 select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                     membership.ArchivedAt != null)
                 {
                     Currency = @group.Currency,
                     DefaultSplitRuleId = @group.DefaultSplitRuleId,
-                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name
+                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                    IsPersonal = @group.Id == userId
                 };
         }
     }

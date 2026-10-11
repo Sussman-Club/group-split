@@ -47,8 +47,9 @@ public class TransactionSeeder(
         if (payer is null)
             return null;
 
-        // No category means a personal expense: no group either, since a category is what
-        // says which group an expense is in. It divides to a single share, the payer's own.
+        // No category means a personal expense, in the payer's personal group: a category
+        // is what says which shared group an expense is in. It divides to a single share,
+        // the payer's own.
         var category = dto.CategoryId is { } categoryId
             ? await DbContext.Set<Category>()
                 .Include(c => c.Group)
@@ -67,7 +68,10 @@ public class TransactionSeeder(
             Description = dto.Description,
             DateTime = When(dto),
             User = payer,
-            Group = category?.Group,
+            Group = category?.Group
+                    ?? await DbContext.Set<Group>().FindAsync([payer.Id], ct)
+                    ?? throw new InvalidOperationException(
+                        $"Seeded expense {dto.Id} is personal, and its payer {payer.Id} has no personal group."),
             Category = category,
             // Where it was spent, for the seeded expenses that name a shop. A real one gets
             // this from the bank row it was filed from; nothing files a seeded expense, so

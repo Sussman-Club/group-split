@@ -350,7 +350,8 @@ public class TransactionWithoutACategoryTest(ApiTestFixture fixture) : ApiUnitTe
         var split = Assert.Single(await SplitsOf(created.Id));
 
         Assert.Equal("Dinner", created.Name);
-        Assert.Null(created.GroupId);
+        // In the payer's personal group, whose id is theirs.
+        Assert.Equal(created.UserId, created.GroupId);
         Assert.Equal(20m, split.Amount);
         Assert.Equal(GetService<ICurrentUser>().User.Id, split.UserId);
     }

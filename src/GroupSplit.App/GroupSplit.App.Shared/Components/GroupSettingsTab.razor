@@ -36,9 +36,11 @@
 
     <div class="gs-page-head" style="margin-bottom: 0">
         <div>
-            <div class="gs-eyebrow">Rules and categories</div>
+            <div class="gs-eyebrow">@(Group.IsPersonal ? "Categories" : "Rules and categories")</div>
             <p style="margin-top: 4px">
-                The divisions this group keeps, and the labels that point at them.
+                @(Group.IsPersonal
+                    ? "What your own spending is filed under."
+                    : "The divisions this group keeps, and the labels that point at them.")
             </p>
         </div>
     </div>
@@ -118,7 +120,12 @@
                                    used-by tags and the delete gate read the other let the
                                    same screen say "no rule" on a category and "Used by
                                    Groceries" on the rule it points at. *@
-                                <span class="meta">@DividesBy(category)</span>
+                                @* A personal group's categories divide nothing, so there is
+                                   nothing to say under them. *@
+                                @if (!Group.IsPersonal)
+                                {
+                                    <span class="meta">@DividesBy(category)</span>
+                                }
                             </span>
 
                             <span class="gs-row-actions gs-inline" style="gap: 2px">
@@ -153,6 +160,9 @@
             }
         </div>
 
+        @* A personal group has nobody to divide with, so it keeps no rules. *@
+        @if (!Group.IsPersonal)
+        {
         <div class="gs-card gs-card-pad">
             <div class="gs-card-title">
                 <h3>Split rules</h3>
@@ -279,6 +289,7 @@
                 </div>
             }
         </div>
+        }
     </div>
 </div>
 
@@ -536,7 +547,8 @@
         {
             { dialog => dialog.GroupId, GroupId },
             { dialog => dialog.Category, category },
-            { dialog => dialog.Rules, _rules }
+            { dialog => dialog.Rules, _rules },
+            { dialog => dialog.Personal, Group.IsPersonal }
         };
 
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };

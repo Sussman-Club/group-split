@@ -2,6 +2,7 @@ using GroupSplit.Data;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -65,11 +66,10 @@ public sealed class AccountService(
         await context.Entry(user).Collection(entity => entity.Groups)
             .LoadAsync(cancellationToken);
 
-        // Every group they are in is a shared one now. The hidden "Personal" group that
-        // used to be among them -- and had to be filtered out here, since it holds only
-        // their own records and blocks nothing -- is gone: a personal expense is one with
-        // no group at all.
-        var sharedGroups = user.Groups.ToList();
+        // Not their personal group. It holds only their own records, so it has no balance
+        // to block anything and nobody to leave it to; it stays with the account's
+        // tombstone, the way what they paid in a shared group does.
+        var sharedGroups = user.Groups.Where(group => !group.IsPersonalOf(user.Id)).ToList();
 
         // Every group is checked before any of them is touched. Settling up first is the
         // same rule that already governs leaving a single group, and applying it group by

@@ -166,6 +166,32 @@ public class EndpointTest : IAsyncLifetime
         Assert.False(afterUnarchive!.IsArchive);
     }
 
+    /// <summary>
+    /// The personal group is listed first and says what it is, so a client can pin it and
+    /// leave out what it cannot do; asking it for one of those is the 409 that says why.
+    /// </summary>
+    [Fact]
+    public async Task The_personal_group_is_listed_first_and_refuses_to_be_archived()
+    {
+        await CreateGroup("Aardvarks");
+
+        var listed = await Client.GetFromJsonAsync<List<GroupResponse>>(
+            "/groups", Json, TestContext.Current.CancellationToken);
+
+        var personal = listed![0];
+        Assert.True(personal.IsPersonal);
+        Assert.Equal("Personal", personal.Name);
+        Assert.Equal(1, personal.MemberCount);
+        Assert.False(Assert.Single(listed, g => g.Name == "Aardvarks").IsPersonal);
+
+        var archived = await Client.PostAsync($"/groups/{personal.Id}/archive", content: null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, archived.StatusCode);
+        Assert.Contains("PERSONAL_GROUP_NOT_SHARED",
+            await archived.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task An_authenticated_caller_is_provisioned_on_first_sight()
     {

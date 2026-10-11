@@ -808,7 +808,7 @@ public class TransactionSplitPatchTest : IAsyncLifetime
 
         var details = await Details(transactionId);
 
-        Assert.Null(details.GroupId);
+        Assert.Equal(details.PaidByUserId, details.GroupId);
         var share = Assert.Single(details.Splits);
         Assert.Equal(me, share.UserId);
         Assert.Equal(100m, share.Amount);

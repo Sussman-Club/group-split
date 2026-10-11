@@ -1,5 +1,6 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
@@ -21,9 +22,6 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
             Identity = new UserIdentity { IdentityId = dto.ExternalUserId },
         };
 
-        // No personal group. An expense of one's own is one with no group at all, so the
-        // hidden group that used to stand in for it -- and appeared in the switcher, on the
-        // home page and in every count of somebody's groups -- is not seeded either.
         foreach (var groupId in dto.GroupIds)
         {
             if (await DbContext.Set<Group>().FindAsync([groupId], ct) is { } group)
@@ -31,5 +29,16 @@ public class UserSeeder(AppDbContext db, ILogger<UserSeeder> logger, ISeedDataSo
         }
 
         return user;
+    }
+
+    /// <summary>
+    /// The user, and the personal group every account has, the way provisioning makes both.
+    /// Only for a user being added, so a second run makes no second group.
+    /// </summary>
+    protected override Task AddEntityAsync(User entity, UserSeedDto dto, CancellationToken ct = default)
+    {
+        DbContext.Add(entity);
+        DbContext.Add(entity.NewPersonalGroup());
+        return Task.CompletedTask;
     }
 }

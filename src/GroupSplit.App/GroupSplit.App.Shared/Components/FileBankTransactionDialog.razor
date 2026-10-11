@@ -175,12 +175,12 @@
             @* The same row the create and edit dialogs use. Only two of the five chips: the
                amount, the day and the shop are the bank's account of what happened and not
                open to an opinion here. *@
-            <ExpenseDecisions Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+            <ExpenseDecisions Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                               GroupId="@_groupId"
                               GroupChosen="@_chosen"
                               GroupIdChanged="@OnGroupPickedAsync"
                               GroupName="@GroupName"
-                              ShowCategory="@IsShared"
+                              ShowCategory="@_chosen"
                               Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, c.DefaultSplitRuleName)).ToList())"
                               CategoryId="@_categoryId"
                               CategoryIdChanged="@OnCategoryPickedAsync"
@@ -374,11 +374,13 @@
         await RefreshPreviewAsync();
     }
 
-    private string CategoryHint => !IsShared
+    private string CategoryHint => !_chosen
         ? "Pick a group first."
         : Row.CategoryLabel is { Length: > 0 } label
             ? $"Your bank called this \"{label}\"."
-            : "A category with a split rule divides the expense for you.";
+            : IsShared
+                ? "A category with a split rule divides the expense for you."
+                : "What it was for, in your own categories.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -417,6 +419,23 @@
         if (_groupId is not { } groupId)
         {
             _preview = null;
+
+            // Kept personal, it can still be filed under one of the personal group's own
+            // categories -- the group whose id is the caller's, listed with the others.
+            if (_groups.FirstOrDefault(group => group.IsPersonal) is { } personal)
+            {
+                IReadOnlyList<CategoryResponse> own = [];
+
+                await Errors.TryAsync(
+                    async () => own = [.. await CategoriesClient.GetCategoriesAsync(personal.Id)],
+                    "Could not load your categories.");
+
+                if (load != _groupLoad)
+                    return;
+
+                _categories = own;
+                _categoryId = Suggested()?.Id;
+            }
 
             await RefreshPreviewAsync();
             return;

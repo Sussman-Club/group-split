@@ -61,7 +61,7 @@ Groups you belong to, their members and their balances.
 
 | Command | |
 | --- | --- |
-| `groups list` | List every group you are a member of. |
+| `groups list` | List every group you are a member of. Your personal group comes first, state `personal` (`isPersonal` in JSON); its id is your user id. |
 | `groups show <group-id>` | Show one group. |
 | `groups create <name>` | Create a group. |
 | `groups rename <group-id> <name>` | Rename a group. |

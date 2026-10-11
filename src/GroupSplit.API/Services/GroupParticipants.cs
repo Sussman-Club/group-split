@@ -294,9 +294,7 @@ public sealed class GroupParticipants(
     public async Task<IReadOnlyList<ParticipantPosition>> DepartedOn(Transaction transaction,
         CancellationToken ct = default)
     {
-        if (transaction.GroupId is not { } groupId)
-            return [];
-
+        var groupId = transaction.GroupId;
         var current = await IdsOf(groupId, ct);
 
         return transaction.Splits.Select(split => split.UserId)

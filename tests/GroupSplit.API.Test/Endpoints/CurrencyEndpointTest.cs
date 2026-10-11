@@ -103,7 +103,7 @@ public class CurrencyEndpointTest : IAsyncLifetime
         Assert.Equal("CURRENCY_MISMATCH", await CodeOf(response));
 
         var read = await Client.GetFromJsonAsync<TransactionDetailsResponse>($"/transactions/{created.Id}", Json, Ct);
-        Assert.Null(read!.GroupId);
+        Assert.Equal(read!.PaidByUserId, read.GroupId);
         Assert.Equal("EUR", read.Currency);
     }
 

@@ -22,9 +22,9 @@ public class UserMeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Assert
         Assert.NotNull(result);
         Assert.Equal(TestUserClaims.UserId, result.Identity.IdentityId);
-        // No group is provisioned with the account any more: a personal expense is one
-        // with no group at all, so there is nothing to provision.
-        Assert.Empty(result.Groups);
+        // One group is provisioned with the account: its personal one, whose id is its own.
+        var personal = Assert.Single(result.Groups);
+        Assert.Equal(result.Id, personal.Id);
 
         // Verify user was saved to database
         var userInDb = await DbContext.Set<Data.Entities.User>()

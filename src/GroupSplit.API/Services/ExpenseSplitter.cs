@@ -97,8 +97,8 @@ public class ExpenseSplitter(
         // division could say that is not either "all of it, to me" -- which is what it gets
         // anyway -- or a share for somebody who cannot see the expense at all. Refused by
         // name rather than left to fall out of the membership check below, which would
-        // report a group the expense does not have.
-        if (given is not null && (expense.Group?.Id ?? expense.GroupId) is null)
+        // report a share for somebody who is not in the group.
+        if (given is not null && expense.IsPersonal)
             throw new ValidationException(ErrorCodes.SplitOnAPersonalExpense,
                 "A personal expense is not shared with anybody, so it cannot be split.");
 
@@ -486,12 +486,9 @@ public class ExpenseSplitter(
 
     private async Task<IReadOnlyCollection<Guid>> MembersOf(Expense expense, CancellationToken ct)
     {
-        var groupId = expense.Group?.Id ?? expense.GroupId;
-
-        if (groupId is null)
-            return [expense.Payer];
-
-        return await participants.IdsOf(groupId.Value, ct);
+        // A personal group's only member is its owner, so a personal expense divides to the
+        // payer alone without being told so.
+        return await participants.IdsOf(expense.Group?.Id ?? expense.GroupId, ct);
     }
 
     /// <summary>
@@ -567,8 +564,7 @@ public class ExpenseSplitter(
     /// <summary>What the group divides an expense by when nothing else says.</summary>
     private async Task<Guid?> GroupDefault(Expense expense, CancellationToken ct)
     {
-        if ((expense.Group?.Id ?? expense.GroupId) is not { } groupId)
-            return null;
+        var groupId = expense.Group?.Id ?? expense.GroupId;
 
         return await dbContext.Set<Group>()
             .Where(group => group.Id == groupId)
@@ -587,8 +583,7 @@ public class ExpenseSplitter(
     /// </remarks>
     private async Task<bool> ACategorysRule(Expense expense, Guid ruleId, CancellationToken ct)
     {
-        if ((expense.Group?.Id ?? expense.GroupId) is not { } groupId)
-            return false;
+        var groupId = expense.Group?.Id ?? expense.GroupId;
 
         return await dbContext.Set<Category>()
             .AnyAsync(category => category.Group.Id == groupId && category.DefaultSplitRuleId == ruleId, ct);

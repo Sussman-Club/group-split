@@ -154,9 +154,10 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
     /// <summary>
     /// The empty state of the page the sign-in lands on. Specific to the page having been
-    /// told, by the API, that there are no groups -- which a fresh account is true of.
+    /// told, by the API, that there are no shared groups -- which a fresh account is true of;
+    /// its personal group is the only one it has.
     /// </summary>
-    private ILocator Groups => Page.GetByText("No group yet");
+    private ILocator Groups => Page.GetByText("No shared group yet");
 
     /// <summary>
     /// How many times the API client has reported having no token to send. The marker is

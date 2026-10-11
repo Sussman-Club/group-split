@@ -104,6 +104,7 @@ public static class ErrorMessages
             "You are no longer in this group, and this link was shared before you left. " +
             "Ask someone in the group for a new one.",
         [ErrorCodes.GroupCannotLeaveLastMember] = "You are the only member left. Archive the group instead of leaving it.",
+        [ErrorCodes.PersonalGroupNotShared] = "Your personal group is yours alone, so it can't be shared, settled, left or archived.",
         [ErrorCodes.GroupInvitationNoName] = "A guest needs a name.",
         // GROUP_MEMBER_NOT_JOINED and SETTLEMENT_WITH_PENDING_INVITEE had messages here. Both
         // are retired -- guests are removed and settled with like anybody else -- and the

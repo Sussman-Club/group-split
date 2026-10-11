@@ -120,12 +120,12 @@
                               Immediate="true"/>
 
                 <ExpenseDecisions ShowGroup="@(!GroupFixed)"
-                                  Groups="@(_groups.Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
+                                  Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_groupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
                                   GroupName="@Where"
-                                  ShowCategory="@IsShared"
-                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, Divides(c))).ToList())"
+                                  ShowCategory="true"
+                                  Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, IsShared ? Divides(c) : "")).ToList())"
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
                                   ShowPayer="@(IsShared && !DisablePayingUserSelection)"
@@ -514,7 +514,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _groupId = SelectedGroupId;
+        // Opened from the personal group's own page, which names it by its id: inside this
+        // dialog personal is the absent group, so it is told apart by that alone.
+        _groupId = SelectedGroupId == Login.User?.Id ? null : SelectedGroupId;
 
         var now = Clock.Now;
         _selectedDate = now.Date;
@@ -605,10 +607,24 @@
 
         if (_groupId is not { } groupId)
         {
-            _categories = [];
             _members = [];
             _memberRules = [];
             _evenRuleId = null;
+
+            // A personal expense divides nothing, but it can still say what it was for:
+            // the personal group's categories, read from the group whose id is the
+            // caller's own.
+            IReadOnlyList<CategoryResponse> personal = [];
+
+            if (Login.User is { } owner)
+                await Errors.TryAsync(
+                    async () => personal = [.. await CategoriesClient.GetCategoriesAsync(owner.Id)],
+                    "Could not load your categories.");
+
+            if (load != _groupLoad)
+                return false;
+
+            _categories = personal;
             return true;
         }
 

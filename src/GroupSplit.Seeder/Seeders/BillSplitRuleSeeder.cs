@@ -22,7 +22,10 @@ public sealed class BillSplitRuleSeeder(
 {
     public async Task SeedAsync(CancellationToken ct = default)
     {
-        var groups = await db.Set<Group>().ToListAsync(ct);
+        var groups = await db.Set<Group>()
+            // Not the personal groups, which divide nothing and so have no rules.
+            .Where(@group => !db.Set<User>().Any(user => user.Id == @group.Id))
+            .ToListAsync(ct);
         var seeded = 0;
 
         foreach (var group in groups)

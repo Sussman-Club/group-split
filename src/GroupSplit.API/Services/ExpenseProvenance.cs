@@ -68,8 +68,7 @@ public sealed class ExpenseProvenance(ICurrentUser userContext, AppDbContext dbC
         // Reading is wider than changing, here as everywhere: what divided an expense is part
         // of a group's account of its own money, and somebody who has left is no longer
         // writing it.
-        if (expense.GroupId is { } groupId &&
-            !await groups.AnyAsync(@group => @group.Id == groupId, ct))
+        if (!await groups.AnyAsync(@group => @group.Id == expense.GroupId, ct))
         {
             throw new ConflictException(ErrorCodes.TransactionGroupLeft,
                 "You are no longer in this transaction's group, so it cannot be changed.");

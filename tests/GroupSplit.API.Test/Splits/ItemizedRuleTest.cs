@@ -58,7 +58,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Departed_sole_recipient_keeps_bill_readable_but_cannot_be_divided()
     {
         var (expense, other, even, _) = await Setup();
-        var sole = await Rule(expense.GroupId!.Value, "Other", new SoleSplitRuleDto(other));
+        var sole = await Rule(expense.GroupId, "Other", new SoleSplitRuleDto(other));
         var receipt = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, sole.Id)), Ct);
         var membership = await DbContext.Set<GroupMembership>().SingleAsync(
             m => m.GroupId == expense.GroupId && m.UserId == other, Ct);
@@ -145,7 +145,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var receipt = await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, even)), Ct);
         // The group's own bill rule, which is the only itemized one there is now -- and the
         // only way this nesting can still be attempted.
-        var nested = await BillRuleOf(expense.GroupId!.Value);
+        var nested = await BillRuleOf(expense.GroupId);
         await Assert.ThrowsAsync<ValidationException>(() => Receipts.SetRule(expense.Id, receipt.Items.Single().Id,
             new SetReceiptItemRuleRequest { SplitRuleVersionId = nested.Id }, Ct));
         Assert.Equal(even, receipt.Items.Single().SplitRuleVersionId);
@@ -165,7 +165,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Per_line_tax_and_proportional_tip_follow_the_item_rules()
     {
         var (expense, other, even, sole) = await Setup(239m);
-        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
+        var mine = await Rule(expense.GroupId, "Mine", new SoleSplitRuleDto(Self));
         await Receipts.SaveForExpense(expense.Id, Bill(Item("Food", 100, mine.Id, 6), Item("Goods", 100, sole, 23))
             with { Tip = 10, Total = 239 }, Ct);
         var shares = (await Receipts.Preview(expense.Id, Ct)).Shares;
@@ -211,8 +211,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Previewing_an_edit_divided_by_its_bill_reads_the_bill()
     {
         var (expense, other, even, _) = await Setup();
-        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
-        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+        var mine = await Rule(expense.GroupId, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId, "Theirs", new SoleSplitRuleDto(other));
 
         await Receipts.SaveForExpense(expense.Id,
             Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
@@ -246,17 +246,17 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .SingleAsync(Ct);
         var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
         {
-            GroupId = expense.GroupId!.Value,
+            GroupId = expense.GroupId,
             Name = "Even food",
             DefaultSplitRuleId = evenRuleId
         }, Ct);
-        var mine = await Rule(expense.GroupId.Value, "Mine", new SoleSplitRuleDto(Self));
-        var theirs = await Rule(expense.GroupId.Value, "Theirs", new SoleSplitRuleDto(other));
+        var mine = await Rule(expense.GroupId, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId, "Theirs", new SoleSplitRuleDto(other));
 
         await Receipts.SaveForExpense(expense.Id,
             Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
 
-        var billRule = await BillRuleOf(expense.GroupId.Value);
+        var billRule = await BillRuleOf(expense.GroupId);
         var request = new UpdateTransactionRequest
         {
             Name = expense.Name,
@@ -346,8 +346,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private async Task<(Expense Expense, Guid Other)> DividedByItsBill()
     {
         var (expense, other, _, _) = await Setup();
-        var mine = await Rule(expense.GroupId!.Value, "Mine", new SoleSplitRuleDto(Self));
-        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+        var mine = await Rule(expense.GroupId, "Mine", new SoleSplitRuleDto(Self));
+        var theirs = await Rule(expense.GroupId, "Theirs", new SoleSplitRuleDto(other));
         await Receipts.SaveForExpense(expense.Id, Bill(Item("Mine", 30, mine.Id), Item("Theirs", 18, theirs.Id)), Ct);
         await Receipts.Divide(expense.Id, Ct);
         return (expense, other);
@@ -427,7 +427,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task An_expense_split_by_hand_keeps_refusing_the_amount_alone_and_its_bill_stays()
     {
         var (expense, other, _, _) = await Setup();
-        var theirs = await Rule(expense.GroupId!.Value, "Theirs", new SoleSplitRuleDto(other));
+        var theirs = await Rule(expense.GroupId, "Theirs", new SoleSplitRuleDto(other));
         await Receipts.SaveForExpense(expense.Id, Bill(Item("Dinner", 48, theirs.Id)), Ct);
 
         var edit = (await Transactions.GetUpdateModel(expense.Id, Ct))!;

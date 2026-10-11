@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data.Extensions;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -76,11 +77,6 @@ internal sealed class UserProvisioner(AppDbContext context, ILogger<UserProvisio
             throw await EmailInUse(identityId, email, cancellationToken);
         }
 
-        // No personal group either. Provisioning used to make one, because an expense had
-        // to belong to a group and to a rule, so every account started with a hidden
-        // "Personal" group holding a locked "Default" rule. Both were scaffolding: a
-        // personal expense is one with no group, and the group that stood in for it is
-        // what put "Personal - 1" in the group switcher and a card on the home page.
         var user = new User
         {
             Identity = new UserIdentity { IdentityId = identityId }
@@ -89,6 +85,12 @@ internal sealed class UserProvisioner(AppDbContext context, ILogger<UserProvisio
         ApplyProfile(user, principal, email);
 
         users.Add(user);
+
+        // And the group their own spending goes in, in the same save: an account without
+        // one would have nowhere to put a personal expense. Two racing first requests fail
+        // as a whole on the identity's unique index, so the loser reads back the winner's
+        // account and the group that went in with it.
+        context.Add(user.NewPersonalGroup());
 
         try
         {

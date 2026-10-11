@@ -40,15 +40,20 @@
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
     <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
         <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; min-width: 0">
-            <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
-                @foreach (var (label, value) in Kinds)
-                {
-                    var kind = value;
-                    <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
-                            aria-pressed="@(Kind == kind ? "true" : "false")"
-                            @onclick="@(() => SetKindAsync(kind))">@label</button>
-                }
-            </div>
+            @* Not in a personal group: nothing is settled there, so every entry is an
+               expense and the chips would all show the same rows. *@
+            @if (!Personal)
+            {
+                <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
+                    @foreach (var (label, value) in Kinds)
+                    {
+                        var kind = value;
+                        <button type="button" class="gs-chip @(Kind == kind ? "active" : "")"
+                                aria-pressed="@(Kind == kind ? "true" : "false")"
+                                @onclick="@(() => SetKindAsync(kind))">@label</button>
+                    }
+                </div>
+            }
 
             <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
         </div>
@@ -84,7 +89,10 @@
                it, and the wording is all that tells them apart. *@
             <span class="gs-eyebrow">Total spent</span>
             <Money Value="Spent" Animate Class="gs-stat-value" />
-            <span class="gs-muted" style="font-size: .8125rem">your share @YourShare.ToMoney()</span>
+            @if (!Personal)
+            {
+                <span class="gs-muted" style="font-size: .8125rem">your share @YourShare.ToMoney()</span>
+            }
         </div>
     </div>
 
@@ -174,7 +182,7 @@
                    every listing in the app used to show only the first. A transfer has no
                    share -- paying somebody back is not a cost anyone carries a part of --
                    so it renders as a dash rather than as zero. *@
-                <TemplateColumn Title="Your share" Sortable="false" HideSmall="true"
+                <TemplateColumn Title="Your share" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         @if (context.Item.Share is { } share)
@@ -188,7 +196,7 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                <TemplateColumn Title="Balance" Sortable="false" HideSmall="true"
+                <TemplateColumn Title="Balance" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         <Money Value="context.Item.RunningBalance" Signed Class="gs-grid-balance" />
@@ -263,6 +271,13 @@
     [Parameter] public ActivityKind? Kind { get; set; }
 
     [Parameter] public EventCallback<ActivityKind?> KindChanged { get; set; }
+
+    /// <summary>
+    /// Whether this is the caller's personal group: nothing is settled in it and every
+    /// share is theirs, so there is no kind to filter by and no share or balance worth a
+    /// column.
+    /// </summary>
+    [Parameter] public bool Personal { get; set; }
 
     private static readonly (string Label, ActivityKind? Value)[] Kinds =
     [
@@ -368,7 +383,7 @@
         {
             var said = new List<string>(3)
             {
-                "by everyone",
+                Personal ? "by you" : "by everyone",
                 _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant()
             };
 
