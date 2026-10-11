@@ -23,7 +23,15 @@ namespace GroupSplit.AppHost.Test.Web;
 /// freeze at page load inside an interactive circuit, and from the WebAssembly mode
 /// development uses that is invisible.
 /// </para>
+/// <para>
+/// In the collection that takes the realm apart, so a sign-in never straddles one of its
+/// changes. <c>RealmBindingsAndCliClientTest</c> re-points the browser flow and the worker
+/// points it back; a login form served under one binding and posted under the other is
+/// answered with the password step again, already knowing the account, and the sign-in
+/// stops there.
+/// </para>
 /// </remarks>
+[Collection(GoogleFirstBrokerLogin.Collection)]
 public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 {
     private readonly AppHostFixture _appHost = appHost;

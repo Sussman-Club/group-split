@@ -45,7 +45,9 @@ public class RealmBindingsAndCliClientTest(AppHostFixture appHost)
 
     /// <summary>
     /// Re-pointed at a copy rather than a genuinely weaker flow, so a sign-in another test
-    /// makes while the binding is wrong still works.
+    /// makes while the binding is wrong still works. One that starts under one binding and
+    /// is posted under the other does not, which is why SignedInSessionTest shares the
+    /// collection.
     /// </summary>
     [Fact(Timeout = 300_000)]
     public async Task The_worker_points_a_re_pointed_browser_flow_back()
