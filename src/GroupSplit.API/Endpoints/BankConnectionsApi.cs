@@ -10,10 +10,9 @@ namespace GroupSplit.API.Endpoints;
 /// unlinking.
 /// </summary>
 /// <remarks>
-/// Named for what it is rather than for who provides it. The roadmap sketched these as
-/// <c>/plaid/...</c> because it was describing Plaid's flow, but the connector seam exists
-/// so that a second provider changes nothing above it -- and a route named after the first
-/// one would change. The provider travels as a field.
+/// Named for what it is, not for who provides it: the connector seam exists so that a
+/// second provider changes nothing above it, and a <c>/plaid/...</c> route would change.
+/// The provider travels as a field.
 /// </remarks>
 public static class BankConnectionsApi
 {
