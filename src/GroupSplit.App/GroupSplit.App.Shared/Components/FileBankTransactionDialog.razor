@@ -715,19 +715,12 @@
                 return;
 
             _receipt = receipt;
-            _name = string.IsNullOrWhiteSpace(_name) ? SuggestedName(receipt) : _name;
+            _name = string.IsNullOrWhiteSpace(_name) ? CreateTransactionDialog.SuggestedName(receipt) : _name;
         }
         finally
         {
             _readingReceipt = false;
         }
-    }
-
-    private static string SuggestedName(SaveReceiptRequest receipt)
-    {
-        var names = receipt.Items.Select(item => item.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Take(2);
-        var name = string.Join(", ", names);
-        return string.IsNullOrWhiteSpace(name) ? "Receipt" : name[..Math.Min(name.Length, TransactionNames.MaxLength)];
     }
 
     private void Submit()
