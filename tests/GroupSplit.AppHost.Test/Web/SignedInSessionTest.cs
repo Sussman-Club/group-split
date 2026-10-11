@@ -24,9 +24,11 @@ namespace GroupSplit.AppHost.Test.Web;
 /// development uses that is invisible.
 /// </para>
 /// <para>
-/// In the collection that takes the realm apart, so a sign-in never runs while another test
-/// has re-pointed the browser flow or is running the realm worker. Keycloak restarts a
-/// login whose flow changed under it, and the form came back asking for the password again.
+/// In the collection that takes the realm apart, so a sign-in never straddles one of its
+/// changes. <c>RealmBindingsAndCliClientTest</c> re-points the browser flow and the worker
+/// points it back; a login form served under one binding and posted under the other is
+/// answered with the password step again, already knowing the account, and the sign-in
+/// stops there.
 /// </para>
 /// </remarks>
 [Collection(GoogleFirstBrokerLogin.Collection)]
