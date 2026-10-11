@@ -69,7 +69,8 @@ public static class GroupApi
                     {
                         Currency = createdGroup.Currency,
                         DefaultSplitRuleId = createdGroup.DefaultSplitRuleId,
-                        DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name
+                        DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name,
+                        DefaultPeriod = createdGroup.DefaultPeriod
                     };
                     return Results.Ok(groupInfo);
                 })
@@ -700,6 +701,7 @@ public static class GroupApi
                     Currency = @group.Currency,
                     DefaultSplitRuleId = @group.DefaultSplitRuleId,
                     DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                    DefaultPeriod = @group.DefaultPeriod,
                     IsPersonal = @group.Id == userId
                 };
         }

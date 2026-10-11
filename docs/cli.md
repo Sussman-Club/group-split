@@ -1233,6 +1233,21 @@ groupsplit tx update <id> --split-rule <rule-id>           # this one divides by
 groupsplit tx update <id> --no-category                    # back to the group's default
 ```
 
+## Which span a group's Activity tab opens on
+
+In the app, a group's Activity tab opens on a span the group chooses: This month unless a
+member picked another, which suits a household. A trip that only holds the trip is better
+opened on all of it. The setting is the group's, so changing it changes it for every member,
+the personal group included. `groups show` prints it as `Activity opens on`, and `groups list
+--json` carries it as `defaultPeriod`:
+
+```bash
+groupsplit groups set-default-period <group-id> all-time   # or this-month, last-month, last-3-months, this-year
+```
+
+It is a display preference for the app and nothing else. `groups activity` ignores it and uses
+only the `--from` and `--to` it is given, so a script always gets what it asked for.
+
 ## An expense that is one person's
 
 Every group holds one rule per member that puts the whole amount on them, provisioned rather

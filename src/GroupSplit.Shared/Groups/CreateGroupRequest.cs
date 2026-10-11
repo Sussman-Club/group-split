@@ -11,4 +11,8 @@ public record CreateGroupRequest
     /// <summary>The fallback rule for uncategorized expenses.</summary>
     /// <remarks>New groups always start with Even; this is changed through the group PATCH.</remarks>
     public Guid? DefaultSplitRuleId { get; set; }
+
+    /// <summary>The span the group's Activity tab opens on, for every member.</summary>
+    [EnumDataType(typeof(ActivityPeriod), ErrorMessage = "Default period is not one of the periods offered.")]
+    public ActivityPeriod DefaultPeriod { get; set; } = ActivityPeriod.ThisMonth;
 }

@@ -254,10 +254,11 @@
                        IsNarrowed put "Nothing matches" over a group created a minute ago
                        -- naming a filter nobody set. *@
                     <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
-                    @* The tab opens on the current month, so an empty ledger is the default
-                       state for any group that has been quiet -- and "Nothing matches" over
-                       a span nobody chose reads as "this group is empty", which is the
-                       exact confusion the --group fix was about. Name the span. *@
+                    @* The tab opens on the group's default span, the current month for most,
+                       so an empty ledger is the default state for any group that has been
+                       quiet -- and "Nothing matches" over a span nobody chose reads as "this
+                       group is empty", which is the exact confusion the --group fix was
+                       about. Name the span. *@
                     <span>@EmptyBlurb</span>
                 </div>
             </NoRecordsContent>
@@ -305,6 +306,12 @@
     /// </summary>
     [Parameter] public bool Personal { get; set; }
 
+    /// <summary>
+    /// The span the group opens its Activity tab on, from its settings (#405). Picking
+    /// another span here changes what this reader is looking at, not the group's default.
+    /// </summary>
+    [Parameter] public ActivityPeriod DefaultPeriod { get; set; } = ActivityPeriod.ThisMonth;
+
     private static readonly (string Label, ActivityKind? Value)[] Kinds =
     [
         ("Everything", null),
@@ -314,18 +321,20 @@
 
     private string _searchString = "";
     /// <summary>
-    /// The span the tab opens on: the current month. A group's ledger going back three
-    /// years opens on a page of the newest twenty-five either way, so all-time bought
-    /// nothing but a "total spent" over a span nobody chose. The chip above the list says
-    /// which month, and widening is one tap.
+    /// The span the tab opens on: the group's own default, which is the current month
+    /// unless a member chose otherwise. A household's ledger going back three years opens
+    /// on a page of the newest twenty-five either way, so all-time bought it nothing but a
+    /// "total spent" over a span nobody chose; a trip that only holds the trip is better
+    /// opened on all of it. The chip above the list says which span, and changing it is
+    /// one tap.
     /// </summary>
     /// <remarks>
     /// Named rather than inlined because the empty state has to tell this span apart from
     /// one somebody picked -- otherwise it offers "All time" to a reader already on it.
     /// </remarks>
-    private static readonly DateFilter OpensOn = new(DateFilterPreset.ThisMonth);
+    private DateFilter OpensOn => DateFilter.Of(DefaultPeriod);
 
-    private DateFilter _range = OpensOn;
+    private DateFilter _range = DateFilter.Of(ActivityPeriod.ThisMonth);
     private MudDataGrid<GroupLedgerEntryResponse>? _grid;
     private int _gridGeneration;
     private int _page;
@@ -383,15 +392,16 @@
     /// </summary>
     private string EmptyBlurb => (IsSearching, Kind) switch
     {
+        // Already at the widest the tab goes, so there is no span to name and nowhere to
+        // point. Offering "All time" from here was advice to do the thing they had done.
+        // First, because a group can open on all time too.
+        (false, null) when _range.IsAllTime =>
+            "Nothing recorded in this group yet. Expenses and settlements will show up here.",
         // The default empty state: a quiet month in a group that may have years behind it.
         // Names the span and says how to leave it.
         (false, null) when _range == OpensOn =>
-            $"Nothing in {Span}. This tab opens on the current month — pick \"All time\" for "
+            $"Nothing in {Span}. This group's Activity opens on {Span} — pick \"All time\" for "
             + "the whole ledger.",
-        // Already at the widest the tab goes, so there is no span to name and nowhere to
-        // point. Offering "All time" from here was advice to do the thing they had done.
-        (false, null) when _range.IsAllTime =>
-            "Nothing recorded in this group yet. Expenses and settlements will show up here.",
         (false, null) => $"Nothing in {Span}.",
         (false, ActivityKind.Transfer) => $"No settlements{InSpan}.",
         (false, ActivityKind.Expense) => $"Nothing spent{InSpan}.",
