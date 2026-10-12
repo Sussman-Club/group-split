@@ -339,7 +339,7 @@ public class SettlementService(
                          ? "There is nothing outstanding between the two of you in that direction."
                          : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
 
-        var allocations = Allocate(request.Amount, person.Groups);
+        var allocations = person.Allocate(request.Amount);
 
         var groups = await context.Set<Group>()
             .Include(@group => @group.Users)
@@ -603,7 +603,8 @@ public class SettlementService(
 
     /// <summary>
     /// Largest person first, and within a person largest group first -- which is both how
-    /// somebody reads the list and the order <see cref="Allocate"/> spends a payment in.
+    /// somebody reads the list and the order <see cref="PersonSettlement.Allocate"/> spends a
+    /// payment in.
     /// </summary>
     private static IReadOnlyList<PersonSettlement> Finish(Dictionary<Guid, PersonBuilder> side) =>
     [
@@ -617,41 +618,6 @@ public class SettlementService(
                [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)],
                entry.Value.IsGuest)
     ];
-
-    /// <summary>
-    /// Spends one payment over the groups the debt spans, largest group first.
-    /// </summary>
-    /// <remarks>
-    /// The caller does not choose, and that is the point of the screen: which group a
-    /// payment lands in is bookkeeping, and the person handing over the money should not
-    /// have to do it. Largest first clears whole groups soonest, so a partial payment
-    /// leaves the fewest groups half-settled.
-    /// <para>
-    /// Anything beyond what is outstanding -- somebody rounding up -- goes onto the largest
-    /// group. It has to land somewhere, and that is where an overpayment is least
-    /// surprising to find.
-    /// </para>
-    /// </remarks>
-    private static IReadOnlyList<GroupDebt> Allocate(decimal amount, IReadOnlyList<GroupDebt> groups)
-    {
-        var allocations = new List<GroupDebt>(groups.Count);
-        var remaining = amount;
-
-        foreach (var @group in groups)
-        {
-            if (remaining <= 0)
-                break;
-
-            var part = Math.Min(remaining, @group.Amount);
-            allocations.Add(@group with { Amount = part });
-            remaining -= part;
-        }
-
-        if (remaining > 0 && allocations.Count > 0)
-            allocations[0] = allocations[0] with { Amount = allocations[0].Amount + remaining };
-
-        return allocations;
-    }
 
     /// <remarks>
     /// <see cref="IsGuest"/> is the same in every group the person spans, because a guest's
