@@ -202,6 +202,7 @@
                                  Value="@_splits"
                                  ValueChanged="@OnSplitsChangedAsync"
                                  MemberRules="@_memberRules"
+                                 EvenRuleId="@_evenRuleId"
                                  SplitRuleId="@_splitRuleId"
                                  SplitRuleIdChanged="@OnSplitRuleChangedAsync"
                                  Preview="@_preview"
@@ -307,6 +308,9 @@
 
     /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
+
+    /// <summary>The group's even rule, which the split editor's Evenly button picks.</summary>
+    private Guid? _evenRuleId;
 
     private SplitPreviewResponse? _preview;
     private string? _previewError;
@@ -415,6 +419,7 @@
         _categories = [];
         _members = [];
         _memberRules = [];
+        _evenRuleId = null;
 
         if (_groupId is not { } groupId)
         {
@@ -470,6 +475,7 @@
         _categories = categories;
         _members = members;
         _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
+        _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
 
         // The bank's own category, matched against what this group already uses. Only a
         // suggestion, and only when a name happens to line up: whatever is selected when
