@@ -46,7 +46,7 @@ public interface ICategoryService
 /// about which categories follow it.
 /// </para>
 /// </remarks>
-public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) : ICategoryService
+public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, TimeProvider clock) : ICategoryService
 {
     public Task<IQueryable<Category>> List(Guid? groupId, bool includeArchived = false,
         CancellationToken ct = default)
@@ -110,7 +110,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         if (archived == category.ArchivedAt.HasValue)
             return category;
 
-        category.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
+        category.ArchivedAt = archived ? clock.GetUtcNow() : null;
 
         await dbContext.SaveChangesAsync(ct);
 

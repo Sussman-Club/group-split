@@ -219,7 +219,8 @@ public class GroupService(
     IMemberSplitRules memberRules,
     IBillSplitRule billRule,
     IEvenSplitRule evenRule,
-    IJoinLinkService joinLinks) : IGroupService
+    IJoinLinkService joinLinks,
+    TimeProvider clock) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -245,7 +246,7 @@ public class GroupService(
 
         if (membership is not null)
         {
-            membership.JoinedAt = DateTimeOffset.UtcNow;
+            membership.JoinedAt = clock.GetUtcNow();
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -499,7 +500,7 @@ public class GroupService(
         var membership = await context.Set<GroupMembership>()
             .FirstAsync(row => row.GroupId == group.Id && row.UserId == user.Id, cancellationToken);
 
-        membership.LeftAt = DateTimeOffset.UtcNow;
+        membership.LeftAt = clock.GetUtcNow();
         membership.LeftReason = reason;
         membership.LeftByUserId = byUserId;
 
@@ -524,7 +525,7 @@ public class GroupService(
         var guest = await context.Set<GroupGuest>()
             .FirstAsync(row => row.GroupId == group.Id && row.ParticipantUserId == userId, ct);
 
-        guest.EndedAt = DateTimeOffset.UtcNow;
+        guest.EndedAt = clock.GetUtcNow();
         guest.EndReason = GuestEndReason.Removed;
         guest.EndedByUserId = byUserId;
 
@@ -769,7 +770,7 @@ public class GroupService(
     }
 
     public Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default) =>
-        SetArchivedAt(groupId, DateTimeOffset.UtcNow, cancellationToken);
+        SetArchivedAt(groupId, clock.GetUtcNow(), cancellationToken);
 
     public Task<IQueryable<Group>> Unarchive(Guid groupId, CancellationToken cancellationToken = default) =>
         SetArchivedAt(groupId, null, cancellationToken);

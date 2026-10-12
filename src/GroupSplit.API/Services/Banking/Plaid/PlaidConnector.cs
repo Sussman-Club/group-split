@@ -34,7 +34,8 @@ public sealed class PlaidConnector(
     PlaidClient plaid,
     PlaidWebhookVerifier verifier,
     IOptions<PlaidConnectorOptions> options,
-    ILogger<PlaidConnector> logger) : IBankConnector
+    ILogger<PlaidConnector> logger,
+    TimeProvider clock) : IBankConnector
 {
     public const string Name = "plaid";
 
@@ -69,7 +70,7 @@ public sealed class PlaidConnector(
 
         return new LinkSession(
             response.LinkToken,
-            response.Expiration == default ? DateTimeOffset.UtcNow.AddMinutes(30) : response.Expiration);
+            response.Expiration == default ? clock.GetUtcNow().AddMinutes(30) : response.Expiration);
     }
 
     /// <summary>
