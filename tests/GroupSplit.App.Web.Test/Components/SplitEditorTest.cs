@@ -316,6 +316,32 @@ public class SplitEditorTest : ComponentTest
     }
 
     /// <summary>
+    /// The bill names the category a line's rule came from, so the category's rule and name
+    /// have to reach it as values -- a string parameter written without <c>@</c> arrives as
+    /// its own name, and every line said "from CategoryName".
+    /// </summary>
+    [Fact]
+    public void The_bill_is_given_the_categorys_rule_and_name()
+    {
+        var groceries = Guid.NewGuid();
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.ShowByBill, true)
+            .Add(e => e.Bill, Bill())
+            .Add(e => e.BillRuleId, Guid.NewGuid())
+            .Add(e => e.SplitRuleId, (Guid?)null)
+            .Add(e => e.CategoryRuleId, groceries)
+            .Add(e => e.CategoryName, "Groceries")
+            .Add(e => e.Preview, Divided("Divide by the bill")));
+
+        var bill = editor.FindComponent<BillDivision>().Instance;
+
+        Assert.Equal(groceries, bill.CategoryRuleId);
+        Assert.Equal("Groceries", bill.CategoryName);
+    }
+
+    /// <summary>
     /// And one whose category divides some other way still opens on Automatically, bill or no
     /// bill: a receipt can be attached to an expense nothing reads it for.
     /// </summary>
