@@ -8,6 +8,10 @@ namespace GroupSplit.API.Services;
 public interface IEvenSplitRule
 {
     Task<SplitRule> EnsureFor(Group group, CancellationToken ct = default);
+
+    /// <summary>The group's Even rule, or null when it has not been given one yet.</summary>
+    /// <remarks>Reads only, for a caller that must not write a rule as a side effect.</remarks>
+    Task<SplitRule?> For(Guid groupId, CancellationToken ct = default);
 }
 
 /// <remarks>
@@ -22,10 +26,7 @@ public sealed class EvenSplitRule(AppDbContext context) : IEvenSplitRule
     {
         ArgumentNullException.ThrowIfNull(group);
 
-        var existing = await context.Set<SplitRule>()
-            .Include(rule => rule.Versions)
-            .FirstOrDefaultAsync(rule => rule.BuiltIn && rule.Group.Id == group.Id &&
-                rule.Versions.Any(version => version.SupersededAt == null && version is EvenSplitRuleVersion), ct);
+        var existing = await For(group.Id, ct);
 
         if (existing is not null)
             return existing;
@@ -42,6 +43,12 @@ public sealed class EvenSplitRule(AppDbContext context) : IEvenSplitRule
         await context.SaveChangesAsync(ct);
         return rule;
     }
+
+    public Task<SplitRule?> For(Guid groupId, CancellationToken ct = default) =>
+        context.Set<SplitRule>()
+            .Include(rule => rule.Versions)
+            .FirstOrDefaultAsync(rule => rule.BuiltIn && rule.Group.Id == groupId &&
+                rule.Versions.Any(version => version.SupersededAt == null && version is EvenSplitRuleVersion), ct);
 
     private async Task<string> FreeName(Guid groupId, CancellationToken ct)
     {

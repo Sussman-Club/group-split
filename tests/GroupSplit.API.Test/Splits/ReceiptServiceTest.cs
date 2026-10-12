@@ -511,9 +511,9 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>
-    /// A bill that divided the expense, made incomplete by splitting a line in two and then
-    /// completed by giving the new half its rule. The incomplete save keeps the shares; the
-    /// call that completes it -- the one <c>receipts rule</c> makes -- divides again. It used
+    /// A bill that divided the expense, with a line split in two -- the new half starting on
+    /// the default -- then made incomplete by clearing it, and completed again. The
+    /// incomplete bill keeps the shares; the call that completes it -- the one <c>receipts rule</c> makes -- divides again. It used
     /// to find the bill "not the source" because it had been incomplete a moment before, and
     /// the ledger stayed where it was for good.
     /// </summary>
@@ -536,19 +536,26 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var shared = bill.Items.Single(item => item.Name == "Shared").Id;
         var theirs = bill.Items.Single(item => item.Name == "Other").Id;
 
-        // Their 24 was two things, and only one of them was theirs alone.
+        // Their 24 was two things, and only one of them was theirs alone. The new half starts
+        // on the group's default -- Even -- so the bill stays complete and the ledger follows.
         bill = await Receipts.SaveForExpense(expense.Id, Bill(
             Item("Shared", 24m, even, shared), Item("Other", 12m, sole, theirs), Item("Dessert", 12m, null)), Ct);
+        var dessert = bill.Items.Single(item => item.Name == "Dessert").Id;
         var split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
-        Assert.Equal(12m, split.Single(share => share.UserId == Self).Amount);
-        Assert.Equal(36m, split.Single(share => share.UserId == other).Amount);
-
-        await Receipts.SetRule(expense.Id, bill.Items.Single(item => item.Name == "Dessert").Id,
-            new SetReceiptItemRuleRequest { SplitRuleVersionId = even }, Ct);
-
-        split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
         Assert.Equal(18m, split.Single(share => share.UserId == Self).Amount);
         Assert.Equal(30m, split.Single(share => share.UserId == other).Amount);
+
+        // Cleared, the bill is incomplete and the ledger keeps the last shares it gave.
+        await Receipts.SetRule(expense.Id, dessert, new SetReceiptItemRuleRequest(), Ct);
+        split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
+        Assert.Equal(18m, split.Single(share => share.UserId == Self).Amount);
+
+        // The dessert was theirs too.
+        await Receipts.SetRule(expense.Id, dessert, new SetReceiptItemRuleRequest { SplitRuleVersionId = sole }, Ct);
+
+        split = (await Transactions.GetDetails(expense.Id, Ct))!.Splits;
+        Assert.Equal(12m, split.Single(share => share.UserId == Self).Amount);
+        Assert.Equal(36m, split.Single(share => share.UserId == other).Amount);
     }
 
     /// <summary>

@@ -168,6 +168,14 @@
                             <MudSelectItem T="Guid?" Value="@((Guid?)rule.VersionId)">@rule.Name</MudSelectItem>
                         }
                     </MudSelect>
+
+                    @* Said quietly, so a line on the category's rule -- where the API starts a
+                       line nobody gave one -- reads as the usual answer, and the exceptions
+                       stand out as the lines somebody pointed elsewhere. *@
+                    @if (item.SplitRuleVersionId is { } on && on == CategoryVersionId)
+                    {
+                        <span class="gs-divide-line-note">from @(CategoryName ?? "the category")</span>
+                    }
                 </li>
             }
         </ul>
@@ -251,7 +259,17 @@
     /// </remarks>
     [Parameter] public EventCallback<ReceiptResponse> ReceiptChanged { get; set; }
 
+    /// <summary>The rule the expense's category divides by, or null under no category.</summary>
+    [Parameter] public Guid? CategoryRuleId { get; set; }
+
+    /// <summary>The category's name, for the hint on a line on its rule.</summary>
+    [Parameter] public string? CategoryName { get; set; }
+
     private readonly List<SplitRuleDetailsResponse> _rules = [];
+
+    /// <summary>The version of the category's rule offered here, if a line can use it.</summary>
+    private Guid? CategoryVersionId =>
+        CategoryRuleId is { } ruleId ? _rules.FirstOrDefault(rule => rule.Id == ruleId)?.VersionId : null;
     private bool _busy;
     private bool _loading;
     private bool _ready;

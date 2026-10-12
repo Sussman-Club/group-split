@@ -38,8 +38,10 @@ The source file and the itemised bill are separate. Keep them apart, as the app 
 - `groupsplit inbox attachments upload <row-id> <file>` does the same for a bank row that
   is still waiting in the inbox. Filing or linking the row moves its pending files to the
   expense, but neither upload nor transcription files the row or chooses its group.
-- After reviewing a transcription, use `receipts set` to save the bill and `receipts rule` to
-  assign each line's split rule. When the bill is not yet the source of the expense's shares,
+- After reviewing a transcription, use `receipts set` to save the bill. A new line given
+  without `@` starts on the split rule of the expense's category (or the group's default,
+  then Even, when a line cannot use it), so give `@` or use `receipts rule` only for the
+  lines that divide differently. When the bill is not yet the source of the expense's shares,
   `receipts divide` stores its division. When the expense is already divided by its bill, a
   valid `set` or `rule` correction divides it again, so both ask for confirmation first. An
   incomplete correction stays editable and leaves the last valid shares in place; the call

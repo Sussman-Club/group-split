@@ -260,4 +260,96 @@ public class BillDivisionTest : ComponentTest
         Assert.Contains(_versionId, offered);
         Assert.DoesNotContain(departedVersion, offered);
     }
+
+    /// <summary>A rule for "Groceries" beside the group's Even, both offered for a line.</summary>
+    private (Guid Rule, Guid Version) AGroceriesRule()
+    {
+        var rule = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        _rules.Setup(r => r.ForGroupAsync(_group, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new SplitRuleResponse(_ruleId, _group, "Everyone evenly"),
+                new SplitRuleResponse(rule, _group, "Groceries split")
+            ]);
+
+        _rules.Setup(r => r.GetAsync(rule, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleDetailsResponse
+            {
+                Id = rule, GroupId = _group, Name = "Groceries split",
+                VersionId = version, Definition = new EvenSplitRuleDto()
+            });
+
+        return (rule, version);
+    }
+
+    private IRenderedComponent<BillDivision> OpenUnder(ReceiptResponse bill, Guid? categoryRule) =>
+        Render<BillDivision>(p => p
+            .Add(c => c.Receipt, bill)
+            .Add(c => c.TransactionId, _expense)
+            .Add(c => c.GroupId, _group)
+            .Add(c => c.Amount, bill.Total)
+            .Add(c => c.CategoryRuleId, categoryRule)
+            .Add(c => c.CategoryName, "Groceries"));
+
+    /// <summary>
+    /// The API starts a line nobody gave a rule on the category's, so a bill arrives with
+    /// nothing wanting. A line on that rule says where it came from, and the exceptions --
+    /// the steak somebody pointed elsewhere -- are the lines without the hint.
+    /// </summary>
+    [Fact]
+    public void A_line_on_the_categorys_rule_says_so_and_an_exception_does_not()
+    {
+        var (groceries, groceriesVersion) = AGroceriesRule();
+        var page = OpenUnder(Bill(
+            Line("Bananas", 3, groceriesVersion, "Groceries split"),
+            Line("Milk", 2, groceriesVersion, "Groceries split"),
+            Line("Steak", 15, _versionId, "Everyone evenly")), groceries);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".gs-divide-line-note").Count));
+        Assert.All(page.FindAll(".gs-divide-line-note"), note => Assert.Equal("from Groceries", note.TextContent));
+        Assert.Contains("Every line has a rule", page.Markup);
+        _bills.Verify(b => b.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Pointing a line somewhere else writes that one line, and the hint goes with it.
+    /// </summary>
+    [Fact]
+    public async Task Pointing_a_line_elsewhere_takes_its_hint_away()
+    {
+        var (groceries, groceriesVersion) = AGroceriesRule();
+        var before = Bill(
+            Line("Bananas", 3, groceriesVersion, "Groceries split"),
+            Line("Wine", 12, groceriesVersion, "Groceries split"));
+        var after = before with
+        {
+            Items = [before.Items[0], before.Items[1] with { SplitRuleVersionId = _versionId, SplitRuleName = "Everyone evenly" }]
+        };
+        _bills.Setup(b => b.SetRuleAsync(_expense, before.Items[1].Id, _versionId)).ReturnsAsync(after);
+
+        var page = OpenUnder(before, groceries);
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".gs-divide-line-note").Count));
+
+        var wine = page.FindComponents<MudSelect<Guid?>>()[1];
+        await page.InvokeAsync(() => wine.Instance.ValueChanged.InvokeAsync(_versionId));
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".gs-divide-line-note")));
+        _bills.Verify(b => b.SetRuleAsync(_expense, before.Items[0].Id, It.IsAny<Guid?>()), Times.Never);
+    }
+
+    /// <summary>
+    /// With no category there is nothing to say a line came from, and a line with no rule
+    /// is left for a person: this component writes nothing on its own.
+    /// </summary>
+    [Fact]
+    public void Under_no_category_no_line_is_hinted_and_nothing_is_written()
+    {
+        var page = OpenUnder(Bill(Line("Bacalhau", 22, _versionId, "Everyone evenly"), Line("Vinho", 8, null, null)), null);
+
+        page.WaitForAssertion(() => Assert.Contains("1 of 2 lines", page.Markup));
+        Assert.Empty(page.FindAll(".gs-divide-line-note"));
+        _bills.Verify(b => b.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
+    }
 }

@@ -33,7 +33,8 @@ public class ReceiptService(
     ICurrentUser userContext,
     IGroupParticipants participants,
     IExpenseSplitter splitter,
-    ISplitRuleHandler handlers) : IReceiptService
+    ISplitRuleHandler handlers,
+    IEvenSplitRule evenRule) : IReceiptService
 {
     public async Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default)
     {
@@ -119,16 +120,33 @@ public class ReceiptService(
             SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip,
             Total = request.Total
         };
+        // Worked out once, and only if some line needs it.
+        SplitRuleVersion? lineDefault = null;
+        var lineDefaultKnown = false;
         for (var position = 0; position < request.Items.Count; position++)
         {
             var input = request.Items[position];
-            var savedDescription = existing?.Items.FirstOrDefault(item => item.Id == input.Id)?.Description;
+            var stored = existing?.Items.FirstOrDefault(item => item.Id == input.Id);
+            var savedDescription = stored?.Description;
             var version = input.SplitRuleVersionId is { } versionId
                 ? versions.FirstOrDefault(v => v.Id == versionId)
                   ?? throw new ValidationException(ErrorCodes.ReceiptInvalid,
                       "The item's split rule version was not found.")
                 : null;
             if (version is not null) ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
+            // A line new to the bill and sent without a rule starts on the rule the expense's
+            // kind of spending usually divides by. A stored line keeps what it has -- even
+            // none, which somebody may have chosen by clearing it.
+            else if (stored is null)
+            {
+                if (!lineDefaultKnown)
+                {
+                    lineDefault = await LineDefault(expense, members, ct);
+                    lineDefaultKnown = true;
+                }
+
+                version = lineDefault;
+            }
             draft.Items.Add(new ReceiptItem
             {
                 Id = input.Id ?? Guid.NewGuid(), Position = position,
@@ -414,7 +432,7 @@ public class ReceiptService(
     /// Two ways to be the source. The shares are what the bill divides into now; or they are
     /// not, and the expense still records the itemised version as what divided it. The
     /// second is the bill that was the source a moment ago and was made incomplete by an
-    /// edit -- a line split in two, the new half with no rule yet -- which keeps the shares
+    /// edit -- a line whose rule was cleared, nothing yet in its place -- which keeps the shares
     /// it last gave. Re-running the division cannot recognise it, because there is no
     /// division to re-run, and without this the call that completed the bill again found it
     /// "not the source" and left the ledger behind the bill for good. A bill already left
@@ -463,6 +481,66 @@ public class ReceiptService(
             return false;
         }
         catch (UnprocessableException)
+        {
+            return false;
+        }
+        catch (ConflictException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The rule a line starts on when it arrives without one: the category's default, then
+    /// the group's default split, then the group's Even rule -- the first a line can use.
+    /// </summary>
+    /// <remarks>
+    /// Most of a bill divides the way the group always divides that kind of expense, and
+    /// only a few lines are exceptions, so the common case should not cost a pick per line.
+    /// Filled here, where every bill is written -- the web app, the CLI, a saved
+    /// transcription -- so they all get the same answer.
+    /// <para>
+    /// A rule is passed over when <see cref="ReceiptSplitCalculator.ValidateRule"/> would
+    /// refuse it on a line. Nearly always that is the bill rule itself, which "Dinners out"
+    /// may well default to; otherwise a rule naming somebody who has left. The version is
+    /// the one current now, pinned like a version somebody picked, and it never follows a
+    /// later edit to the rule.
+    /// </para>
+    /// </remarks>
+    private async Task<SplitRuleVersion?> LineDefault(Expense expense, IReadOnlyCollection<Guid> members,
+        CancellationToken ct)
+    {
+        // A personal expense has no group to divide with, so its lines have no rules at all.
+        if (expense.IsPersonal)
+            return null;
+
+        var groupId = expense.GroupId;
+        var category = expense.CategoryId is { } categoryId
+            ? await dbContext.Set<Category>().Where(c => c.Id == categoryId)
+                .Select(c => c.DefaultSplitRuleId).FirstOrDefaultAsync(ct)
+            : null;
+        var group = await dbContext.Set<Group>().Where(g => g.Id == groupId)
+            .Select(g => g.DefaultSplitRuleId).FirstOrDefaultAsync(ct);
+        var even = (await evenRule.For(groupId, ct))?.Id;
+
+        foreach (var ruleId in new[] { category, group, even }.OfType<Guid>().Distinct())
+        {
+            var version = await Versions().FirstOrDefaultAsync(v => v.SplitRuleId == ruleId && v.SupersededAt == null, ct);
+            if (version is not null && LineCanUse(version, groupId, members))
+                return version;
+        }
+
+        return null;
+    }
+
+    private bool LineCanUse(SplitRuleVersion version, Guid groupId, IReadOnlyCollection<Guid> members)
+    {
+        try
+        {
+            ReceiptSplitCalculator.ValidateRule(version, groupId, members, handlers);
+            return true;
+        }
+        catch (ValidationException)
         {
             return false;
         }
