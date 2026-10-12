@@ -20,6 +20,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("GroupSplit.Data.Entities.BankConnection", b =>
@@ -567,6 +568,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("NormalizedName")
                         .IsUnique();
+
+                    b.HasIndex(new[] { "NormalizedName" }, "IX_Merchant_NormalizedName_Trigram");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "NormalizedName" }, "IX_Merchant_NormalizedName_Trigram"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "NormalizedName" }, "IX_Merchant_NormalizedName_Trigram"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("Merchant");
                 });
