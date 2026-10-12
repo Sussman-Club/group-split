@@ -108,16 +108,5 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
             entity.Property(row => row.RawJson).HasColumnType("jsonb");
         });
 
-        // The merchant search is a substring match, LIKE '%lid%', which the unique btree on
-        // the same column cannot serve: that one is for the sync's exact lookups. A trigram
-        // index can, and the table is every place any account's bank has ever reported.
-        // Named, because an unnamed index on the same column would be taken for the unique
-        // one and replace it.
-        modelBuilder.HasPostgresExtension("pg_trgm");
-
-        modelBuilder.Entity<Merchant>()
-            .HasIndex(merchant => merchant.NormalizedName, "IX_Merchant_NormalizedName_Trigram")
-            .HasMethod("gin")
-            .HasOperators("gin_trgm_ops");
     }
 }
