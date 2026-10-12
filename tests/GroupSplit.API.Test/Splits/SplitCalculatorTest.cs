@@ -1,4 +1,4 @@
-using GroupSplit.API.Services;
+using GroupSplit.Shared;
 namespace GroupSplit.API.Test.Splits;
 
 /// <summary>

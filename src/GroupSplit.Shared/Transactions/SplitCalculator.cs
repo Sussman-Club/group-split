@@ -1,4 +1,4 @@
-namespace GroupSplit.API.Services;
+namespace GroupSplit.Shared;
 
 /// <summary>
 /// One participant's weight in a split. What the weight means is the rule's business --
@@ -26,6 +26,10 @@ public readonly record struct SplitAmount(Guid UserId, decimal Amount);
 /// <para>
 /// Now it runs once, at write time, and its output is stored as rows. The balance query
 /// sums those rows and has no arithmetic of its own left to disagree with.
+/// </para>
+/// <para>
+/// It lives beside the DTOs rather than in the API so the app can call it too: the even
+/// starting point the expense editor fills its fields with is this division, not a copy.
 /// </para>
 /// </remarks>
 public static class SplitCalculator
