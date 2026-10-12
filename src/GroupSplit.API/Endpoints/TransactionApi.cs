@@ -173,15 +173,9 @@ public static class TransactionApi
         {
             return group.MapGet("monthly", async (
                     [AsParameters] TransactionFilter filter,
-                    ICurrentUser currentUser,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
-                {
-                    var expenses = (await transactionService.List(ct)).ApplyFilter(filter);
-                    var shares = await transactionService.Shares(ct);
-
-                    return Results.Ok(await expenses.ToMonthlyExposureAsync(shares, currentUser.User.Id, ct));
-                })
+                    Results.Ok(await transactionService.MonthlyExposure(filter, ct)))
                 .WithName("GetMonthlyExposure")
                 .Produces<MonthlyExposureResponse[]>();
         }
@@ -530,68 +524,6 @@ public static class TransactionApi
                        (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
                        (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
                 select transaction;
-        }
-
-        /// <summary>
-        /// What the caller paid and what their share came to, month by month, over these
-        /// expenses: the series behind <c>GET /transactions/monthly</c>.
-        /// </summary>
-        /// <remarks>
-        /// A currency to a row as well as a month, so the series can be drawn in one of
-        /// them: a line that added euros to dollars would plot a number that is not an
-        /// amount of anything. Its own method rather than the endpoint's body so the real
-        /// database can be asked to translate it.
-        /// </remarks>
-        internal async Task<List<MonthlyExposureResponse>> ToMonthlyExposureAsync(
-            IQueryable<TransactionSplit> shares, Guid userId, CancellationToken ct)
-        {
-            var paid = await transactions
-                .Where(expense => expense.UserId == userId)
-                .GroupBy(expense => new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency })
-                .Select(month => new
-                {
-                    month.Key.Year,
-                    month.Key.Month,
-                    month.Key.Currency,
-                    Count = month.Count(),
-                    Total = month.Sum(expense => expense.Amount)
-                })
-                .ToListAsync(ct);
-
-            var owed = await (from split in shares
-                              join expense in transactions on split.TransactionId equals expense.Id
-                              group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency }
-                              into month
-                              select new
-                              {
-                                  month.Key.Year,
-                                  month.Key.Month,
-                                  month.Key.Currency,
-                                  Count = month.Count(),
-                                  Total = month.Sum()
-                              })
-                .ToListAsync(ct);
-
-            var currency = HeadlineCurrency(
-                paid.Select(row => (row.Currency, row.Count))
-                    .Concat(owed.Select(row => (row.Currency, row.Count)))
-                    .GroupBy(row => row.Currency)
-                    .Select(rows => (rows.Key, rows.Sum(row => row.Count))));
-
-            paid = [.. paid.Where(row => row.Currency == currency)];
-            owed = [.. owed.Where(row => row.Currency == currency)];
-
-            return paid.Select(row => (row.Year, row.Month))
-                .Union(owed.Select(row => (row.Year, row.Month)))
-                .OrderBy(month => month)
-                .Select(month => new MonthlyExposureResponse(
-                    new DateOnly(month.Year, month.Month, 1),
-                    paid.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m,
-                    owed.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m)
-                {
-                    Currency = currency
-                })
-                .ToList();
         }
 
         /// <summary>
