@@ -306,7 +306,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
                 await transactions.List(Ct), new TransactionFilter(), me, owedOnly, Ct);
         }
 
-        var months = await (await transactions.List(Ct)).ToMonthlyExposureAsync(await transactions.Shares(Ct), me, Ct);
+        var months = await transactions.MonthlyExposure(new TransactionFilter(), Ct);
 
         Assert.All(months, month => Assert.Equal(months[0].Currency, month.Currency));
     }
