@@ -445,12 +445,6 @@
         ? "Personal"
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
-    private string CategoryName =>
-        _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "uncategorized";
-
-    private string PayerName =>
-        PayerChoices.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
-
     /// <summary>
     /// Who the payer picker offers: the group's members and guests, and -- on an expense
     /// paid for by somebody who has since left -- that person too, marked as gone.
@@ -488,8 +482,6 @@
     /// a pick -- the same round trip the picker itself makes, which is why it is cheap.
     /// </remarks>
     private string? _merchantName;
-
-    private string MerchantName => _merchantName ?? "where";
 
     /// <summary>The mark for that merchant, when it has one.</summary>
     private string? _merchantLogo;
