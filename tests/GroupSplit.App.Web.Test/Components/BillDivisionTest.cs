@@ -262,7 +262,7 @@ public class BillDivisionTest : ComponentTest
     }
 
     /// <summary>A rule for "Groceries" beside the group's Even, both offered for a line.</summary>
-    private (Guid Rule, Guid Version) AGroceriesRule(SplitRuleDto definition)
+    private (Guid Rule, Guid Version) AGroceriesRule()
     {
         var rule = Guid.NewGuid();
         var version = Guid.NewGuid();
@@ -278,118 +278,78 @@ public class BillDivisionTest : ComponentTest
             .ReturnsAsync(new SplitRuleDetailsResponse
             {
                 Id = rule, GroupId = _group, Name = "Groceries split",
-                VersionId = version, Definition = definition
+                VersionId = version, Definition = new EvenSplitRuleDto()
             });
 
         return (rule, version);
     }
 
-    /// <summary>
-    /// Echoes the bill back with the line on the version it was given, the way the API
-    /// answers a rule change.
-    /// </summary>
-    private void AnswerRuleChangesOn(ReceiptResponse bill)
-    {
-        _bills.Setup(b => b.SetRuleAsync(_expense, It.IsAny<Guid>(), It.IsAny<Guid?>()))
-            .ReturnsAsync((Guid _, Guid itemId, Guid? version) =>
-            {
-                bill = bill with
-                {
-                    Items = [.. bill.Items.Select(item => item.Id == itemId
-                        ? item with { SplitRuleVersionId = version, SplitRuleName = "set" }
-                        : item)]
-                };
-                return bill;
-            });
-    }
-
-    private IRenderedComponent<BillDivision> OpenUnder(ReceiptResponse bill, Guid? categoryRule,
-        IReadOnlyList<UserInfo>? members = null) =>
+    private IRenderedComponent<BillDivision> OpenUnder(ReceiptResponse bill, Guid? categoryRule) =>
         Render<BillDivision>(p => p
             .Add(c => c.Receipt, bill)
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.GroupId, _group)
             .Add(c => c.Amount, bill.Total)
-            .Add(c => c.Members, members ?? [])
             .Add(c => c.CategoryRuleId, categoryRule)
-            .Add(c => c.CategoryName, "Groceries")
-            .Add(c => c.EvenRuleId, _ruleId));
+            .Add(c => c.CategoryName, "Groceries"));
 
     /// <summary>
-    /// Most of a bill divides the way the category does, so a line nobody answered starts on
-    /// the category's rule -- and one somebody did answer is left exactly where it was.
+    /// The API starts a line nobody gave a rule on the category's, so a bill arrives with
+    /// nothing wanting. A line on that rule says where it came from, and the exceptions --
+    /// the steak somebody pointed elsewhere -- are the lines without the hint.
     /// </summary>
     [Fact]
-    public void Unanswered_lines_start_on_the_categorys_rule_and_say_so()
+    public void A_line_on_the_categorys_rule_says_so_and_an_exception_does_not()
     {
-        var (groceries, groceriesVersion) = AGroceriesRule(new EvenSplitRuleDto());
-        var bill = Bill(
-            Line("Bananas", 3, null, null),
-            Line("Milk", 2, null, null),
-            Line("Steak", 15, _versionId, "Everyone evenly"));
-        AnswerRuleChangesOn(bill);
+        var (groceries, groceriesVersion) = AGroceriesRule();
+        var page = OpenUnder(Bill(
+            Line("Bananas", 3, groceriesVersion, "Groceries split"),
+            Line("Milk", 2, groceriesVersion, "Groceries split"),
+            Line("Steak", 15, _versionId, "Everyone evenly")), groceries);
 
-        var page = OpenUnder(bill, groceries);
-
-        page.WaitForAssertion(() => Assert.Contains("Every line has a rule", page.Markup));
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[0].Id, groceriesVersion), Times.Once);
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[1].Id, groceriesVersion), Times.Once);
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[2].Id, It.IsAny<Guid?>()), Times.Never);
-        Assert.Equal(2, page.FindAll(".gs-divide-line-note").Count(note => note.TextContent == "from Groceries"));
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".gs-divide-line-note").Count));
+        Assert.All(page.FindAll(".gs-divide-line-note"), note => Assert.Equal("from Groceries", note.TextContent));
+        Assert.Contains("Every line has a rule", page.Markup);
+        _bills.Verify(b => b.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
     }
 
     /// <summary>
-    /// The pre-fill is a starting point: picking another rule for one line writes that one
-    /// line, and its hint goes with it.
+    /// Pointing a line somewhere else writes that one line, and the hint goes with it.
     /// </summary>
     [Fact]
-    public async Task A_line_started_on_the_default_can_be_pointed_elsewhere()
+    public async Task Pointing_a_line_elsewhere_takes_its_hint_away()
     {
-        var (groceries, groceriesVersion) = AGroceriesRule(new EvenSplitRuleDto());
-        var bill = Bill(Line("Bananas", 3, null, null), Line("Wine", 12, null, null));
-        AnswerRuleChangesOn(bill);
+        var (groceries, groceriesVersion) = AGroceriesRule();
+        var before = Bill(
+            Line("Bananas", 3, groceriesVersion, "Groceries split"),
+            Line("Wine", 12, groceriesVersion, "Groceries split"));
+        var after = before with
+        {
+            Items = [before.Items[0], before.Items[1] with { SplitRuleVersionId = _versionId, SplitRuleName = "Everyone evenly" }]
+        };
+        _bills.Setup(b => b.SetRuleAsync(_expense, before.Items[1].Id, _versionId)).ReturnsAsync(after);
 
-        var page = OpenUnder(bill, groceries);
+        var page = OpenUnder(before, groceries);
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".gs-divide-line-note").Count));
 
         var wine = page.FindComponents<MudSelect<Guid?>>()[1];
         await page.InvokeAsync(() => wine.Instance.ValueChanged.InvokeAsync(_versionId));
 
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".gs-divide-line-note")));
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[1].Id, _versionId), Times.Once);
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[0].Id, groceriesVersion), Times.Once);
+        _bills.Verify(b => b.SetRuleAsync(_expense, before.Items[0].Id, It.IsAny<Guid?>()), Times.Never);
     }
 
     /// <summary>
-    /// "Dinners out" may well divide by the bill, which no line can: the lines start on Even.
+    /// With no category there is nothing to say a line came from, and a line with no rule
+    /// is left for a person: this component writes nothing on its own.
     /// </summary>
     [Fact]
-    public void Under_a_category_that_divides_by_the_bill_lines_start_on_even()
+    public void Under_no_category_no_line_is_hinted_and_nothing_is_written()
     {
-        var bill = Bill(Line("Bacalhau", 22, null, null));
-        AnswerRuleChangesOn(bill);
+        var page = OpenUnder(Bill(Line("Bacalhau", 22, _versionId, "Everyone evenly"), Line("Vinho", 8, null, null)), null);
 
-        // A rule the lines are never offered, the way the bill rule is not.
-        var page = OpenUnder(bill, Guid.NewGuid());
-
-        page.WaitForAssertion(() => Assert.Contains("even, by default", page.Markup));
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[0].Id, _versionId), Times.Once);
-    }
-
-    /// <summary>A category rule naming somebody who has left is passed over for Even.</summary>
-    [Fact]
-    public void A_category_rule_naming_somebody_who_left_starts_lines_on_even()
-    {
-        var stays = new UserInfo(Guid.NewGuid(), "Ana", "Ruiz", "ana@example.com");
-        var (groceries, groceriesVersion) = AGroceriesRule(new SharesSplitRuleDto
-            { Shares = new() { [stays.Id] = 1, [Guid.NewGuid()] = 1 } });
-        var bill = Bill(Line("Bananas", 3, null, null));
-        AnswerRuleChangesOn(bill);
-
-        var page = OpenUnder(bill, groceries, [stays]);
-
-        page.WaitForAssertion(() => Assert.Contains("Every line has a rule", page.Markup));
-        _bills.Verify(b => b.SetRuleAsync(_expense, bill.Items[0].Id, _versionId), Times.Once);
-        _bills.Verify(b => b.SetRuleAsync(_expense, It.IsAny<Guid>(), groceriesVersion), Times.Never);
+        page.WaitForAssertion(() => Assert.Contains("1 of 2 lines", page.Markup));
+        Assert.Empty(page.FindAll(".gs-divide-line-note"));
+        _bills.Verify(b => b.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
     }
 }

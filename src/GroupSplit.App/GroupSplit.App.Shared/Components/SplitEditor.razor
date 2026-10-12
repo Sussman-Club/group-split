@@ -172,7 +172,6 @@
                           SavedAmount="SavedAmount"
                           CategoryRuleId="CategoryRuleId"
                           CategoryName="CategoryName"
-                          EvenRuleId="EvenRuleId"
                           ReceiptChanged="OnBillChanged" />
         }
 
@@ -413,10 +412,10 @@
     /// <summary>Raised when a line of the bill was pointed at a different rule.</summary>
     [Parameter] public EventCallback<ReceiptResponse> BillChanged { get; set; }
 
-    /// <summary>The rule the expense's category divides by, which unanswered bill lines start on.</summary>
+    /// <summary>The rule the expense's category divides by, for the bill's line hints.</summary>
     [Parameter] public Guid? CategoryRuleId { get; set; }
 
-    /// <summary>The expense's category, named on a bill line started on its rule.</summary>
+    /// <summary>The expense's category, named on a bill line on its rule.</summary>
     [Parameter] public string? CategoryName { get; set; }
 
     private Task OnBillChanged(ReceiptResponse bill) => BillChanged.InvokeAsync(bill);

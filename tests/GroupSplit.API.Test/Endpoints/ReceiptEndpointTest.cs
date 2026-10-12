@@ -130,14 +130,21 @@ public class ReceiptEndpointTest : IAsyncLifetime
         var glass = (await split.Content.ReadFromJsonAsync<ReceiptResponse>(Json, Ct))!.Items
             .Single(item => item.Name == "Second glass").Id;
 
-        Assert.Equal(20m, await Owed(expense, pat));
+        // The new line starts on the group's default, Even -- the category divides by the
+        // bill, which a line cannot -- so the bill is complete and divides at once.
+        Assert.Equal(17.5m, await Owed(expense, pat));
+
+        // Cleared, the bill is incomplete and the ledger keeps the last shares it gave.
+        (await Client.PutAsJsonAsync($"/transactions/{expense}/receipt/items/{glass}/rule",
+            new SetReceiptItemRuleRequest(), Json, Ct)).EnsureSuccessStatusCode();
+        Assert.Equal(17.5m, await Owed(expense, pat));
 
         var ruled = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt/items/{glass}/rule",
-            new SetReceiptItemRuleRequest { SplitRuleVersionId = together }, Json, Ct);
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = patOnly }, Json, Ct);
 
         Assert.Equal(HttpStatusCode.OK, ruled.StatusCode);
-        Assert.Equal(17.5m, await Owed(expense, pat));
-        Assert.Equal(12.5m, await Owed(expense, me));
+        Assert.Equal(20m, await Owed(expense, pat));
+        Assert.Equal(10m, await Owed(expense, me));
     }
 
     private async Task<decimal> Owed(Guid expense, Guid user) =>
@@ -182,7 +189,13 @@ public class ReceiptEndpointTest : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
 
-        var body = await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
+        // A new line starts on the group's default, so the line is emptied by clearing it.
+        var line = (await saved.Content.ReadFromJsonAsync<JsonElement>(Json, Ct))
+            .GetProperty("items")[0].GetProperty("id").GetGuid();
+        var cleared = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt/items/{line}/rule",
+            new SetReceiptItemRuleRequest(), Json, Ct);
+
+        var body = await cleared.Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
 
         Assert.Equal(1, body.GetProperty("missingRuleItemCount").GetInt32());
         Assert.False(body.GetProperty("canDivide").GetBoolean());

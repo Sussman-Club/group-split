@@ -45,7 +45,11 @@ public record ReceiptItemInput
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
     [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; init; }
     public bool? IsTaxable { get; init; }
-    /// <summary>The exact saved version to use. Null leaves this line unfinished.</summary>
+    /// <summary>
+    /// The exact saved version to use. Null on a new line starts it on the first rule a line
+    /// can use: the category's default, the group's default split, then Even. Null on a
+    /// stored line leaves it without a rule.
+    /// </summary>
     public Guid? SplitRuleVersionId { get; init; }
 }
 

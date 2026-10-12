@@ -197,7 +197,7 @@ last valid shares stay in place until the bill is valid again.
 | `receipts attachments transcribe <transaction-id> <attachment-id>` | Read an attached source file into an editable draft. Saves no itemised bill. |
 | `receipts attachments delete <transaction-id> <attachment-id>` | Delete an expense's source file. Confirmation required. |
 | `receipts show <transaction-id>` | The bill, its lines with their ids, the rule each divides by, and whether it can be divided yet. |
-| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. Confirms first when the expense is divided by its bill. |
+| `receipts set <transaction-id>` | Transcribe the bill, replacing whatever was there. `--item` per line, repeatable; a new line without `@` starts on the category's split rule. `--tip`. `--subtotal`, `--tax` and `--total` default to the lines added up and the extras added on. Keeps what it has no flag for: the merchant, purchase date, the tip unless `--tip`, and, on a line named by its id, its tax and rate unless the line states `/tax` or `/notax`. Confirms first when the expense is divided by its bill. |
 | `receipts rule <transaction-id> <item-id>` | Choose one line's split rule. `--rule-version <id>`; omitting it clears the line's rule. Confirms first when the expense is divided by its bill. |
 | `receipts preview <transaction-id>` | What dividing by the bill would come to, per person. Stores nothing. |
 | `receipts divide <transaction-id>` | Divide the expense by its bill and store the shares. Destructive: confirms with the figures. |
@@ -218,8 +218,13 @@ example, `Beers=27.00x3` means three beers with a line total of 27.00, or 9.00 e
 
 A plate the table shared is a line naming a rule that divides between them, and a bottle Omar
 had twice as much of is a shares rule weighted that way. The weighting lives in the rule,
-which the group can reuse and edit, not in the line. A line with no `@` has no rule yet,
-which is fine until you divide.
+which the group can reuse and edit, not in the line.
+
+A new line with no `@` starts on the rule the expense's category divides by, so only the
+lines that divide differently need one. When the category has no rule a line can use (it
+divides by the bill, or names somebody who has left), the line starts on the group's
+default split, then on Even. A line already on the bill keeps the rule it has, or none if
+somebody cleared it with `receipts rule`.
 
 A line cannot name an itemised rule (a bill inside a line of a bill divides nothing) nor a
 rule belonging to another group. Both are `RECEIPT_INVALID`.

@@ -265,8 +265,9 @@ public static class ReceiptCommands
             Description = "A line on the bill, as <name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]. "
                           + "The number before x is the total printed for the whole line, not the unit price; "
                           + "repeatable. /notax says the bill's tax was not charged on it. "
-                          + "Rules are optional while editing and can be set later with "
-                          + "`groupsplit receipts rule`.",
+                          + "A new line without @ starts on the expense category's split rule (or the "
+                          + "group's default, then Even), so give @ only for lines that divide differently; "
+                          + "change one later with `groupsplit receipts rule`.",
             AllowMultipleArgumentsPerToken = false
         };
 
