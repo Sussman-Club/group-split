@@ -143,7 +143,9 @@ public static class SettleCommands
 
             var paying = parse.GetValue(amount) ?? person.Amount;
 
-            var lines = Allocation(paying, person.Groups)
+            // Where the API will spread it, by the API's own rule, so the confirmation is
+            // something somebody can check before agreeing to it.
+            var lines = person.Allocate(paying)
                 .Select(part => $"{part.GroupName}: {part.Amount:N2}")
                 .ToList();
 
@@ -290,30 +292,5 @@ public static class SettleCommands
         }
 
         return table;
-    }
-
-    /// <summary>
-    /// How the API will spread the payment: largest group first, until it runs out.
-    /// </summary>
-    /// <remarks>
-    /// A second copy of the server's rule, and worth it: the confirmation this feeds is the
-    /// last thing somebody sees before a write, and one that described the payment without
-    /// saying where it lands would be asking them to agree to something they cannot check.
-    /// The server remains the one that decides -- this only says what it will do.
-    /// </remarks>
-    private static IEnumerable<GroupDebt> Allocation(decimal amount, IReadOnlyList<GroupDebt> groups)
-    {
-        var remaining = amount;
-
-        foreach (var part in groups.OrderByDescending(part => part.Amount))
-        {
-            if (remaining <= 0)
-                yield break;
-
-            var spent = Math.Min(remaining, part.Amount);
-            remaining -= spent;
-
-            yield return part with { Amount = spent };
-        }
     }
 }
