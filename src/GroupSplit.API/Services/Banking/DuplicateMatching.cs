@@ -63,6 +63,13 @@ public interface IDuplicateMatcher
         IReadOnlyCollection<BankTransaction> rows, CancellationToken ct = default);
 
     /// <summary>
+    /// How many of <paramref name="rows"/> carry at least one
+    /// <see cref="MatchConfidence.Confident"/> match, counted by the database. What a
+    /// summary asks, over every waiting row, without loading any of them.
+    /// </summary>
+    Task<int> CountConfident(IQueryable<BankTransaction> rows, CancellationToken ct = default);
+
+    /// <summary>
     /// The other order: rows still waiting in the caller's inbox that could already be
     /// <paramref name="expense"/>. What is asked right after somebody records one by hand.
     /// </summary>
@@ -281,6 +288,40 @@ public sealed class DuplicateMatcher(
         return matches;
     }
 
+    /// <remarks>
+    /// The confident branch of <see cref="Grade"/> said again in terms the database can
+    /// answer: the same currency, the same amount to the cent, and days no further apart
+    /// than <see cref="WindowDays"/>. Only that branch, because it is the only one a count
+    /// is ever of, and the only one that needs nothing but columns -- the possible branch
+    /// reads the merchant, the pending flag and which way the amounts differ.
+    /// <para>
+    /// Said twice, so the two have to be kept as one rule: a change to the confident branch
+    /// of <see cref="Grade"/> is a change here too, and the tests that compare this count
+    /// with what <see cref="ExpensesLike(IReadOnlyCollection{BankTransaction}, CancellationToken)"/>
+    /// grades are what catch them drifting. It replaced loading every waiting row and every
+    /// expense across their whole span -- after a first bank link, two years of both -- to
+    /// grade them against each other in memory for one number.
+    /// </para>
+    /// </remarks>
+    public Task<int> CountConfident(IQueryable<BankTransaction> rows, CancellationToken ct = default)
+    {
+        var candidates = Unheld();
+        var dismissals = dbContext.Set<BankMatchDismissal>();
+
+        // The day the rule reads on each side: authorised where the bank says, and for an
+        // expense the UTC day of the instant it is stored as -- what Facts works out.
+        return rows
+            .Where(row => row.Amount > 0
+                          && (row.Status == BankTransactionStatus.New || row.Status == BankTransactionStatus.Ignored))
+            .CountAsync(row => candidates.Any(expense =>
+                expense.Amount == row.Amount
+                && expense.Currency.ToUpper() == row.Currency.ToUpper()
+                && DateOnly.FromDateTime(expense.DateTime.UtcDateTime) >= (row.AuthorizedDate ?? row.Date).AddDays(-WindowDays)
+                && DateOnly.FromDateTime(expense.DateTime.UtcDateTime) <= (row.AuthorizedDate ?? row.Date).AddDays(WindowDays)
+                && !dismissals.Any(dismissal => dismissal.BankTransactionId == row.Id
+                                                && dismissal.TransactionId == expense.Id)), ct);
+    }
+
     public async Task<IReadOnlyList<BankTransaction>> RowsLike(Expense expense, CancellationToken ct = default)
     {
         // An expense somebody else paid cannot be one of the caller's card charges, and the
@@ -452,19 +493,29 @@ public sealed class DuplicateMatcher(
     private Task<List<Expense>> Candidates(DateOnly from, DateOnly to, CancellationToken ct)
     {
         var (after, before) = Window(from, to);
+
+        return Unheld()
+            .Where(expense => expense.DateTime >= after && expense.DateTime < before)
+            .Include(expense => expense.Group)
+            .Include(expense => expense.User)
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// The caller's own expenses that no row the bank still stands behind is holding:
+    /// everything <see cref="Candidates"/> and <see cref="CountConfident"/> offer a row
+    /// against, before any window narrows it.
+    /// </summary>
+    private IQueryable<Expense> Unheld()
+    {
         var me = userContext.User.Id;
 
         return dbContext.Set<Expense>()
             .Where(expense => expense.UserId == me
                               && (expense.BankTransactionId == null
                                   || expense.BankTransaction!.RemovedAt != null
-                                  || expense.BankTransaction.Status == BankTransactionStatus.Superseded)
-                              && expense.DateTime >= after
-                              && expense.DateTime < before)
-            .Include(expense => expense.Group)
-            .Include(expense => expense.User)
-            .AsNoTracking()
-            .ToListAsync(ct);
+                                  || expense.BankTransaction.Status == BankTransactionStatus.Superseded));
     }
 
     /// <summary>

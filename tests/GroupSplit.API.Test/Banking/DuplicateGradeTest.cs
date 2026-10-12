@@ -246,6 +246,79 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(1, withConfident.PossibleDuplicates);
     }
 
+    /// <summary>
+    /// The summary counts in the database and the matcher grades in memory, so the rule is
+    /// written twice. This is what keeps the two one rule: every edge of the confident
+    /// branch, asked both ways, has to get the same answer.
+    /// </summary>
+    [Fact]
+    public async Task The_summary_count_agrees_with_the_matcher_row_by_row()
+    {
+        // Confident: the same money, at the far edge of the window either way.
+        await Expense("Groceries", 82.14m, Dinner);
+        await Row(82.14m, on: Dinner.AddDays(5), providerId: "five-days-later");
+        await Expense("Pharmacy", 12.80m, Dinner);
+        await Row(12.80m, on: Dinner.AddDays(-5), providerId: "five-days-earlier");
+
+        // Confident through the authorised date, though the posting date is outside.
+        await Expense("Hardware", 31.99m, Dinner);
+        var authorised = await Row(31.99m, on: Dinner.AddDays(9), providerId: "posted-late");
+        authorised.AuthorizedDate = Dinner.AddDays(1);
+        await DbContext.SaveChangesAsync(Ct);
+
+        // Not: a day past the window.
+        await Expense("Books", 23.00m, Dinner);
+        await Row(23.00m, on: Dinner.AddDays(6), providerId: "six-days-later");
+
+        // Not: another currency, to the cent.
+        await Expense("Taxi", 18.40m, Dinner);
+        await Row(18.40m, on: Dinner, currency: "EUR", providerId: "euros");
+
+        // Not: only possible, a tip on top.
+        await Expense("Dinner", 40m, Dinner);
+        await Row(46m, on: Dinner, providerId: "tipped");
+
+        // Not: the same money, but the person already said it is not.
+        var cinema = await Expense("Cinema", 27.50m, Dinner);
+        var dismissed = await Row(27.50m, on: Dinner, providerId: "dismissed");
+        await Inbox.DismissMatch(dismissed.Id, new DismissBankMatchRequest { TransactionId = cinema.Id }, Ct);
+
+        var rows = await DbContext.Set<BankTransaction>().Select(row => row.Id).ToListAsync(Ct);
+        var graded = await Inbox.Matches(rows, Ct);
+
+        var summary = await Inbox.Summary(withDuplicates: true, Ct);
+
+        Assert.Equal(7, summary.NewCount);
+        Assert.Equal(3, summary.PossibleDuplicates);
+        Assert.Equal(
+            graded.Count(row => row.Value.Any(match => match.Confidence == MatchConfidence.Confident)),
+            summary.PossibleDuplicates);
+    }
+
+    /// <summary>
+    /// An expense a bank row still holds is spoken for, and is not counted as somewhere a
+    /// waiting row could be recorded already -- until the bank withdraws that row, and the
+    /// expense is waiting for its money again.
+    /// </summary>
+    [Fact]
+    public async Task The_summary_counts_an_expense_only_while_no_row_holds_it()
+    {
+        var first = await Row(82.14m, on: Dinner, providerId: "first");
+        await Inbox.File(first.Id, new FileBankTransactionRequest(), Ct);
+
+        await Row(82.14m, on: Dinner, providerId: "second");
+
+        var held = await Inbox.Summary(withDuplicates: true, Ct);
+
+        Assert.Equal(1, held.NewCount);
+        Assert.Equal(0, held.PossibleDuplicates);
+
+        first.RemovedAt = DateTimeOffset.UtcNow;
+        await DbContext.SaveChangesAsync(Ct);
+
+        Assert.Equal(1, (await Inbox.Summary(withDuplicates: true, Ct)).PossibleDuplicates);
+    }
+
     // ---- setup ---------------------------------------------------------------------------
 
     /// <summary>One shared place money gets spent, as the sync would have made it.</summary>
@@ -288,7 +361,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     /// <summary>One imported row on the caller's own connection, waiting in the inbox.</summary>
     private async Task<BankTransaction> Row(decimal amount, DateOnly on, Merchant? at = null,
-        bool pending = false, string providerId = "t1")
+        bool pending = false, string providerId = "t1", string currency = "USD")
     {
         var connection = await DbContext.Set<BankConnection>()
             .Include(candidate => candidate.Accounts)
@@ -323,7 +396,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             ProviderTransactionId = providerId,
             Date = on,
             Amount = amount,
-            Currency = "USD",
+            Currency = currency,
             Description = "CARD PURCHASE",
             MerchantName = at?.Name,
             MerchantId = at?.Id,

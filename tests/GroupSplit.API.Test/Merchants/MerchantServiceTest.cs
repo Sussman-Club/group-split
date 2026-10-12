@@ -206,6 +206,30 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEqual(me.Id, friend.Id);
     }
 
+    /// <summary>
+    /// Somewhere I paid stays mine after I leave the group I paid it in. Only one of the
+    /// three ways a place becomes mine says so -- the group's expenses are no longer -- so
+    /// this is the test that notices if that branch goes missing.
+    /// </summary>
+    [Fact]
+    public async Task A_place_i_paid_in_a_group_i_have_left_is_still_mine_to_see()
+    {
+        var me = GetService<ICurrentUser>().User;
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Old flat" }, Ct);
+
+        var merchant = await Place("Lidl");
+        await ExpenseAt(merchant, me, group.Id);
+
+        var membership = await DbContext.Set<GroupMembership>()
+            .FirstAsync(row => row.GroupId == group.Id && row.UserId == me.Id, Ct);
+        membership.LeftAt = DateTimeOffset.UtcNow;
+        membership.LeftReason = LeftReason.Left;
+        await DbContext.SaveChangesAsync(Ct);
+
+        var listed = Assert.Single(await (await Merchants.List("lid", Ct)).ToListAsync(Ct));
+        Assert.Equal(merchant.Id, listed.Id);
+    }
+
     [Fact]
     public async Task A_place_my_own_bank_imported_is_mine_to_see()
     {

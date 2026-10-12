@@ -16,7 +16,6 @@ public interface IInboxService
     /// </summary>
     Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default);
 
-    /// <summary>How many rows are waiting, for the badge.</summary>
     /// <summary>
     /// How many rows are waiting, and -- when asked -- how many of those look like an
     /// expense already recorded.
@@ -119,18 +118,15 @@ public sealed class InboxService(
     public async Task<InboxSummaryResponse> Summary(bool withDuplicates = false,
         CancellationToken ct = default)
     {
-        var waiting = await Owned()
-            .Where(row => row.Status == BankTransactionStatus.New)
-            .ToListAsync(ct);
+        // Counted where the rows are. A first bank link brings in about two years of them, and
+        // this is read on every page and again after every write.
+        var waiting = Owned().Where(row => row.Status == BankTransactionStatus.New);
+        var count = await waiting.CountAsync(ct);
 
         if (!withDuplicates)
-            return new InboxSummaryResponse(waiting.Count);
+            return new InboxSummaryResponse(count);
 
-        var matches = await matcher.ExpensesLike(waiting, ct);
-
-        return new InboxSummaryResponse(
-            waiting.Count,
-            matches.Count(row => row.Value.Any(match => match.Confidence == MatchConfidence.Confident)));
+        return new InboxSummaryResponse(count, await matcher.CountConfident(waiting, ct));
     }
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)

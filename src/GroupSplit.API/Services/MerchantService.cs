@@ -155,15 +155,41 @@ public class MerchantService(ICurrentUser userContext, AppDbContext dbContext, T
     /// <summary>
     /// The places the caller already has something at.
     /// </summary>
+    /// <remarks>
+    /// Worked out from the caller's side: the ids their own expenses, their groups' and their
+    /// bank's rows name, and only then the merchants with those ids. Asked the other way --
+    /// every merchant whose name matches, then whether the caller has anything there -- a
+    /// search for "caf" checked ten thousand places one at a time against the expenses table
+    /// to find the fifteen that were theirs, and cost the same with or without an index on
+    /// the name. This way it is bounded by what one person has, not by every place every
+    /// bank has reported.
+    /// <para>
+    /// Three branches rather than <see cref="Transactions"/>'s one, because its "in my
+    /// groups or paid by me" is an OR no single index answers: Postgres read the whole
+    /// expenses table for it. Apart, each is an index lookup.
+    /// </para>
+    /// </remarks>
     private IQueryable<Merchant> Mine()
     {
-        var userId = userContext.User.Id;
-        var transactions = Transactions();
-        var rows = dbContext.Set<BankTransaction>().Where(row => row.Account.Connection.UserId == userId);
+        var currentUser = userContext.User;
+        var userId = currentUser.Id;
+        var groups = dbContext.Entry(currentUser).Collection(user => user.Groups).Query().Select(group => group.Id);
 
-        return dbContext.Set<Merchant>().Where(merchant =>
-            transactions.Any(transaction => transaction.MerchantId == merchant.Id)
-            || rows.Any(row => row.MerchantId == merchant.Id));
+        var inMyGroups = dbContext.Set<Transaction>()
+            .Where(transaction => groups.Contains(transaction.GroupId))
+            .Select(transaction => transaction.MerchantId);
+
+        var paidByMe = dbContext.Set<Transaction>()
+            .Where(transaction => transaction.UserId == userId)
+            .Select(transaction => transaction.MerchantId);
+
+        var imported = dbContext.Set<BankTransaction>()
+            .Where(row => row.Account.Connection.UserId == userId)
+            .Select(row => row.MerchantId);
+
+        var places = inMyGroups.Union(paidByMe).Union(imported);
+
+        return dbContext.Set<Merchant>().Where(merchant => places.Contains(merchant.Id));
     }
 
     /// <summary>
