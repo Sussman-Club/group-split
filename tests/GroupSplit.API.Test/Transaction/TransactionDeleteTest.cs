@@ -105,7 +105,7 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         await JoinGroup(group.Id, other);
 
-        await groupService.Settle(
+        await GetService<ISettlementService>().Settle(
             group.Id,
             new SettleRequest { UserId = other.Id, Amount = 20m },
             TestContext.Current.CancellationToken);
@@ -156,7 +156,7 @@ public class TransactionDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         await JoinGroup(group.Id, other);
 
-        await groupService.Settle(
+        await GetService<ISettlementService>().Settle(
             group.Id,
             new SettleRequest { UserId = other.Id, Amount = 30m },
             TestContext.Current.CancellationToken);

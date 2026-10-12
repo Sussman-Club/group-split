@@ -184,7 +184,7 @@ public class TransactionShareTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Expense(home, "Dinner", 90m, paidBy: other.Id);
 
-        await GetService<IGroupService>().Settle(home, new SettleRequest
+        await GetService<ISettlementService>().Settle(home, new SettleRequest
         {
             UserId = other.Id,
             Amount = 45m,

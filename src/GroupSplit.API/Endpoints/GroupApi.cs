@@ -578,10 +578,10 @@ public static class GroupApi
             return group.MapPost("{groupId:guid}/settle", async (
                 Guid groupId,
                 SettleRequest request,
-                IGroupService groupService,
+                ISettlementService settlements,
                 CancellationToken ct) =>
             {
-                await groupService.Settle(groupId, request, ct);
+                await settlements.Settle(groupId, request, ct);
                 return Results.NoContent();
             })
             .WithName("SettleGroupDebts")

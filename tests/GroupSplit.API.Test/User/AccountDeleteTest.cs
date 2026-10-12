@@ -59,7 +59,8 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await JoinGroup(group.Id, third);
 
         // Settling against a debt that is not there leaves both sides out by the amount.
-        await groups.Settle(group.Id, new SettleRequest { UserId = third.Id, Amount = 50 }, ct);
+        await scope.ServiceProvider.GetRequiredService<ISettlementService>()
+            .Settle(group.Id, new SettleRequest { UserId = third.Id, Amount = 50 }, ct);
 
         return (stranger, group);
     }
@@ -316,7 +317,7 @@ public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Settling against a debt that is not there leaves both sides out by the amount,
         // which is the cheapest way to a group nobody has squared up.
-        await groups.Settle(group.Id, new SettleRequest { UserId = other.Id, Amount = 50 }, ct);
+        await GetService<ISettlementService>().Settle(group.Id, new SettleRequest { UserId = other.Id, Amount = 50 }, ct);
 
         var outstanding = await Delete();
 

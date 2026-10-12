@@ -64,7 +64,8 @@ public class SplitRuleService(
     AppDbContext dbContext,
     ISplitRuleHandler handlers,
     ISplitRuleFactory factory,
-    IGroupParticipants participants) : ISplitRuleService
+    IGroupParticipants participants,
+    TimeProvider clock) : ISplitRuleService
 {
     public Task<IQueryable<SplitRule>> List(Guid? groupId, CancellationToken ct = default)
     {
@@ -181,7 +182,7 @@ public class SplitRuleService(
 
         if (!handlers.SameAs(current, proposed))
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = clock.GetUtcNow();
 
             current.SupersededAt = now;
             proposed.StartedAt = now;
@@ -233,7 +234,7 @@ public class SplitRuleService(
         // history says it has not started: the rule's own account of itself and today's
         // spending would disagree. Only the last is checked because the entries strictly
         // increase above, so it is the latest of them.
-        if (versions[^1].From > DateTimeOffset.UtcNow)
+        if (versions[^1].From > clock.GetUtcNow())
             throw new ValidationException(ErrorCodes.SplitRuleHistoryInvalid,
                     "A history says what a rule has already stood for, so no entry can start " +
                     "in the future.")

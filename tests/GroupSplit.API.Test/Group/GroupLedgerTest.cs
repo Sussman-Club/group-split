@@ -328,12 +328,12 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     /// <summary>A repayment from <paramref name="friend"/> to the caller.</summary>
     private Task Settle(Guid groupId, Data.Entities.User friend, decimal amount, DateTimeOffset? at = null) =>
-        GetService<IGroupService>().Settle(groupId,
+        GetService<ISettlementService>().Settle(groupId,
             new SettleRequest { UserId = friend.Id, Amount = amount, Date = at }, Ct);
 
     /// <summary>The other direction: the caller paying <paramref name="friend"/> back.</summary>
     private Task Repay(Guid groupId, Data.Entities.User friend, decimal amount, DateTimeOffset? at = null) =>
-        GetService<IGroupService>().Settle(groupId,
+        GetService<ISettlementService>().Settle(groupId,
             new SettleRequest
             {
                 UserId = friend.Id,

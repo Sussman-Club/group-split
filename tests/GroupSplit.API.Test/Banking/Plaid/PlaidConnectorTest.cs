@@ -28,7 +28,8 @@ public class PlaidConnectorTest
         new(_plaid.Client(),
             new PlaidWebhookVerifier(_plaid.Client(), TimeProvider.System, NullLogger<PlaidWebhookVerifier>.Instance),
             Options.Create(options ?? new PlaidConnectorOptions()),
-            NullLogger<PlaidConnector>.Instance);
+            NullLogger<PlaidConnector>.Instance,
+            TimeProvider.System);
 
     [Fact]
     public async Task A_page_of_transactions_arrives_in_the_apps_own_terms()
