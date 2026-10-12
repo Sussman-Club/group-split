@@ -724,9 +724,9 @@
     /// the group.
     /// <para>
     /// Otherwise an even division, truncated to the cent with the odd pennies going to
-    /// whoever paid. That mirrors what the API does, but it is not relied on to: it is a
-    /// starting point somebody is about to edit, and the only property it actually needs
-    /// is the one the remaining line above checks -- that it adds up.
+    /// whoever paid -- <see cref="SplitCalculator"/>, the division the API runs, and not a
+    /// copy of it. It is a starting point somebody is about to edit, and the only property
+    /// it actually needs is the one the remaining line above checks -- that it adds up.
     /// </para>
     /// </remarks>
     private List<SplitInput> StartingPoint()
@@ -746,22 +746,14 @@
         if (Members.Count == 0)
             return [];
 
-        var each = Math.Truncate(Amount / Members.Count * 100m) / 100m;
-
         // Whoever paid, when they are in the group at all; otherwise the first member, so
         // that the shares add up either way and nobody has to hunt for a stray cent.
-        var carriesTheRemainder = Members.Any(member => member.Id == PayerId)
-            ? PayerId
+        var carriesTheRemainder = PayerId is { } payer && Members.Any(member => member.Id == payer)
+            ? payer
             : Members[0].Id;
 
-        return Members
-            .Select(member => new SplitInput
-            {
-                UserId = member.Id,
-                Amount = member.Id == carriesTheRemainder
-                    ? Amount - each * (Members.Count - 1)
-                    : each
-            })
+        return SplitCalculator.DivideEvenly(Amount, carriesTheRemainder, Members.Select(member => member.Id))
+            .Select(split => new SplitInput { UserId = split.UserId, Amount = split.Amount })
             .ToList();
     }
 }

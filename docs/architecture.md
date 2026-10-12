@@ -383,7 +383,7 @@ that divided it.
 What each person owed is a `TransactionSplit` row, one per person per transaction, and the
 splits of a transaction sum to its amount. They are worked out when the transaction is
 written ([`ExpenseSplitter`](../src/GroupSplit.API/Services/ExpenseSplitter.cs), over
-[`SplitCalculator`](../src/GroupSplit.API/Services/SplitCalculator.cs)) and stored, so a
+[`SplitCalculator`](../src/GroupSplit.Shared/Transactions/SplitCalculator.cs)) and stored, so a
 balance is two sums over indexed columns: what somebody paid, minus what their splits say they
 owed. `SplitCalculator` truncates every share to the cent and gives the remainder to the payer,
 or, when the payer is not a participant, to the largest weight with ties broken by the smaller
@@ -492,9 +492,10 @@ splits and does not replace them.
 
 **The division arithmetic exists once.** It used to be written three times (in LINQ for the
 balance query, in memory, and as a shares-to-percent conversion), and the three disagreed
-about the last cent. `SplitCalculator` is the only copy, it lives in the API, and the seeder
-calls it too, because seed data divided differently from the app gives every developer
-balances no sequence of user actions could produce. Percent and shares hand their weights to
+about the last cent. `SplitCalculator` is the only copy. It lives in `GroupSplit.Shared`, so
+the even starting point the expense editor fills its fields with is the same division, and
+the seeder calls it too, because seed data divided differently from the app gives every
+developer balances no sequence of user actions could produce. Percent and shares hand their weights to
 it unchanged, with no conversion between them.
 
 **Behaviour is dispatched by type, not by a `Kind` column.** A rule version is data, and what
