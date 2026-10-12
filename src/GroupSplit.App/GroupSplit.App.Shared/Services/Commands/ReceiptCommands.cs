@@ -33,7 +33,13 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
     {
         try { return await receipts.GetReceiptAsync(transactionId, ct); }
         catch (OperationCanceledException) { throw; }
-        catch { return null; }
+        // A 404 is an expense with no bill, which is most of them. Anything else is reported.
+        catch (ApiException api) when (api.StatusCode == 404) { return null; }
+        catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
+        {
+            await errors.ShowAsync(ApiErrors.Read(exception), "Could not load the receipt.");
+            return null;
+        }
     }
     public async Task<ReceiptResponse?> SaveAsync(Guid transactionId, SaveReceiptRequest request, CancellationToken ct = default)
     {

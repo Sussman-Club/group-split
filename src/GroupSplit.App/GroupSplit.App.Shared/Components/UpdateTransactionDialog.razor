@@ -655,8 +655,8 @@
         // the way into a second step that no longer exists.
         await RefreshPreviewAsync();
 
-        // Null for nearly every expense, which has no bill, and null for a failure just the
-        // same: there is nothing to report either way, and "By its bill" stays disabled.
+        // Null for nearly every expense, which has no bill, and null for a failure once the
+        // snackbar has said so: either way "By its bill" stays disabled.
         // The option is drawn either way -- see SplitEditor.ShowByBill -- so this arriving
         // late enables a button rather than adding one.
         _receipt = await bill;
