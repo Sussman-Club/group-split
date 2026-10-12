@@ -495,8 +495,8 @@ balance query, in memory, and as a shares-to-percent conversion), and the three 
 about the last cent. `SplitCalculator` is the only copy. It lives in `GroupSplit.Shared`, so
 the even starting point the expense editor fills its fields with is the same division, and
 the seeder calls it too, because seed data divided differently from the app gives every
-developer balances no sequence of user actions could produce. Percent and shares hand their weights to
-it unchanged, with no conversion between them.
+developer balances no sequence of user actions could produce. Percent and shares hand their
+weights to it unchanged, with no conversion between them.
 
 **Behaviour is dispatched by type, not by a `Kind` column.** A rule version is data, and what
 it does belongs to a handler resolved from its runtime type. Without that, turning a wire DTO
