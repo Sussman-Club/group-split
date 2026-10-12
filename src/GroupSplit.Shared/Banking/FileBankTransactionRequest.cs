@@ -43,7 +43,7 @@ public record FileBankTransactionRequest
     /// <summary>
     /// What to call the expense. Defaults to the merchant the bank named.
     /// </summary>
-    [StringLength(124, ErrorMessage = "Name must be less than 124 characters.")]
+    [StringLength(TransactionNames.MaxLength, ErrorMessage = "Name must be at most {1} characters.")]
     public string? Name { get; set; }
 
     [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]

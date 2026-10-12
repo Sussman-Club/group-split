@@ -727,7 +727,7 @@
     {
         var names = receipt.Items.Select(item => item.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Take(2);
         var name = string.Join(", ", names);
-        return string.IsNullOrWhiteSpace(name) ? "Receipt" : name[..Math.Min(name.Length, 124)];
+        return string.IsNullOrWhiteSpace(name) ? "Receipt" : name[..Math.Min(name.Length, TransactionNames.MaxLength)];
     }
 
     private void Submit()
