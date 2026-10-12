@@ -31,7 +31,7 @@
     {
         <MudAlert Severity="Severity.Warning" Dense="true">
             Could not load the split rules to divide these lines by.
-            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Load">Try again</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Open">Try again</MudButton>
         </MudAlert>
     }
     else
@@ -168,6 +168,13 @@
                             <MudSelectItem T="Guid?" Value="@((Guid?)rule.VersionId)">@rule.Name</MudSelectItem>
                         }
                     </MudSelect>
+
+                    @* Said quietly, so the lines somebody answered are told apart from the ones
+                       that were started on the default and may be worth a look. *@
+                    @if (_defaulted.Contains(item.Id) && item.SplitRuleVersionId == _default?.VersionId)
+                    {
+                        <span class="gs-divide-line-note">@DefaultedFrom</span>
+                    }
                 </li>
             }
         </ul>
@@ -251,7 +258,26 @@
     /// </remarks>
     [Parameter] public EventCallback<ReceiptResponse> ReceiptChanged { get; set; }
 
+    /// <summary>The rule the expense's category divides by, or null under no category.</summary>
+    /// <remarks>
+    /// What a line nobody has answered starts on: most of a bill divides the way the group
+    /// always divides that kind of expense, and only a few lines are exceptions.
+    /// </remarks>
+    [Parameter] public Guid? CategoryRuleId { get; set; }
+
+    /// <summary>The category's name, for the hint on a line started on its rule.</summary>
+    [Parameter] public string? CategoryName { get; set; }
+
+    /// <summary>
+    /// The group's Even rule, which a line starts on when the category names no rule or one a
+    /// line cannot use.
+    /// </summary>
+    [Parameter] public Guid? EvenRuleId { get; set; }
+
     private readonly List<SplitRuleDetailsResponse> _rules = [];
+    private readonly HashSet<Guid> _defaulted = [];
+    private SplitRuleDetailsResponse? _default;
+    private bool _started;
     private bool _busy;
     private bool _loading;
     private bool _ready;
@@ -302,7 +328,84 @@
     /// nearly all of them -- must not pay for them. This component only exists while somebody
     /// is actually dividing by a bill.
     /// </remarks>
-    protected override Task OnInitializedAsync() => Load();
+    protected override Task OnInitializedAsync() => Open();
+
+    private async Task Open()
+    {
+        await Load();
+        await StartOnTheDefault();
+    }
+
+    /// <summary>
+    /// Puts every line nobody has answered on the category's rule, or on Even when the
+    /// category names none a line can use.
+    /// </summary>
+    /// <remarks>
+    /// Once, when the bill is first divided here, and only lines with no rule: a line
+    /// somebody pointed somewhere -- or cleared on purpose since -- is theirs. Written as a
+    /// pick would be, because that is what it stands in for, and a line that only looked
+    /// answered would still stop the division at Save.
+    /// </remarks>
+    private async Task StartOnTheDefault()
+    {
+        if (!_ready || _busy || _started) return;
+
+        _started = true;
+        _default = Usable(CategoryRuleId) ?? Usable(EvenRuleId);
+
+        var wanting = Receipt.Items.Where(item => item.SplitRuleVersionId is null).Select(item => item.Id).ToList();
+        if (_default is null || wanting.Count == 0) return;
+
+        _busy = true;
+
+        try
+        {
+            ReceiptResponse? bill = null;
+
+            foreach (var itemId in wanting)
+            {
+                // A refusal has already been shown; the lines after it stay for a person.
+                if (await Bills.SetRuleAsync(TransactionId, itemId, _default.VersionId) is not { } answered)
+                    break;
+
+                bill = answered;
+                _defaulted.Add(itemId);
+            }
+
+            if (bill is not null)
+            {
+                Receipt = bill;
+                await ReceiptChanged.InvokeAsync(bill);
+            }
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>
+    /// The rule, when a line can divide by it: one of the rules offered here -- so not the
+    /// bill rule itself -- naming nobody who has left the group.
+    /// </summary>
+    private SplitRuleDetailsResponse? Usable(Guid? ruleId)
+    {
+        if (ruleId is not { } id || _rules.FirstOrDefault(rule => rule.Id == id) is not { } rule)
+            return null;
+
+        var members = Members.Select(member => member.Id).ToHashSet();
+        IEnumerable<Guid> named = rule.Definition switch
+        {
+            EvenSplitRuleDto even => even.Among,
+            PercentSplitRuleDto percent => percent.Percentages.Keys,
+            SharesSplitRuleDto shares => shares.Shares.Keys,
+            SoleSplitRuleDto sole => [sole.UserId],
+            _ => []
+        };
+
+        return members.Count == 0 || named.All(members.Contains) ? rule : null;
+    }
+
+    /// <summary>Where a line started on the default got its rule from.</summary>
+    private string DefaultedFrom =>
+        _default?.Id == CategoryRuleId ? $"from {CategoryName ?? "the category"}" : "even, by default";
 
     private async Task Load()
     {
@@ -363,6 +466,7 @@
             if (await Bills.SetRuleAsync(TransactionId, itemId, versionId) is { } bill)
             {
                 Receipt = bill;
+                _defaulted.Remove(itemId);
 
                 // Answering the last one takes the toggle away with it, and a filter left
                 // latched on with nothing to show is a screen saying the bill is empty.

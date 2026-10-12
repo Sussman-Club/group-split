@@ -177,6 +177,8 @@
                                      Bill="@_receipt"
                                      SavedAmount="@Original.Amount"
                                      BillRuleId="@_billRuleId"
+                                     CategoryRuleId="@FiledUnder?.RuleId"
+                                     CategoryName="@FiledUnder?.Name"
                                      TransactionId="@Original.Id"
                                      GroupId="@_model.GroupId"
                                      BillChanged="@OnBillChangedAsync"
@@ -336,6 +338,10 @@
     /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
     private Guid? _evenRuleId;
+
+    /// <summary>The category the expense is filed under as the form stands, if any.</summary>
+    private CategoryInfo? FiledUnder =>
+        _model.CategoryId is { } filed ? _categories.FirstOrDefault(category => category.CategoryId == filed) : null;
 
     private DateTime? _selectedDate;
     private TimeSpan? _selectedTime;
@@ -786,7 +792,8 @@
             // write, and in sequence each one lands as its own re-render on a dialog that is
             // already on screen.
             var categories = CategoriesClient.GetCategoriesAsAsyncEnumerable(id)
-                .Select(category => new CategoryInfo(category.Id, category.Name, category.DefaultSplitRuleName))
+                .Select(category => new CategoryInfo(category.Id, category.Name, category.DefaultSplitRuleName,
+                    category.DefaultSplitRuleId))
                 .ToListAsync()
                 .AsTask();
 
@@ -1225,7 +1232,8 @@
     /// The rule it points at, or null when it names none -- which is not a gap but an
     /// answer, and <see cref="Splits"/> says it in words.
     /// </param>
-    internal record CategoryInfo(Guid CategoryId, string Name, string? Rule)
+    /// <param name="RuleId">That rule's id, which the lines of a bill start on.</param>
+    internal record CategoryInfo(Guid CategoryId, string Name, string? Rule, Guid? RuleId = null)
     {
         /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
         public string Splits => Rule is { Length: > 0 } named ? named : "even split";
