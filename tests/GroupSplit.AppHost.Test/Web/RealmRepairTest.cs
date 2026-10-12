@@ -203,7 +203,15 @@ public class RealmRepairTest(AppHostFixture appHost)
 /// the password sign-ins a re-pointed browser flow would break. They share one realm, so
 /// they run one at a time.
 /// </summary>
-[CollectionDefinition(Collection)]
+/// <remarks>
+/// And with nothing else running: every test that signs in with a password shares the realm
+/// too. <c>ReturnUrlRedirectTest</c> sat outside this collection and timed out on Keycloak's
+/// password step whenever its sign-in landed while <c>RealmBindingsAndCliClientTest</c> had
+/// the browser flow re-pointed; <c>AccountDeletionTest</c> and <c>KeycloakEventsTest</c> sign
+/// in the same way. Joining each of them here would leave the next sign-in test to remember
+/// the same; running the collection on its own covers them all.
+/// </remarks>
+[CollectionDefinition(Collection, DisableParallelization = true)]
 public sealed class GoogleFirstBrokerLogin
 {
     public const string Collection = "Google first broker login";
