@@ -107,9 +107,9 @@ with `--coverage-settings`; nothing picks it up by itself. It measures the `Grou
 assemblies, less:
 
 - the test assemblies and `GroupSplit.Data.PostgreSQL.Migrations`;
-- `GroupSplit.App.Shared` (see below);
 - every source file under `obj/`, which is where the OpenAPI and validation generators and
-  the Razor compiler write;
+  the Razor compiler write. Razor maps a component's lines back to its `.razor` file, so
+  the components themselves are still measured;
 - anything marked `[ExcludeFromCodeCoverage]` or `[GeneratedCode]`.
 
 Without the `obj/` filter the API's generated code, about four times the size of the
@@ -124,22 +124,10 @@ Only the unit job is gated. The integration job collects coverage too, into its 
 but no floor applies to it, so code that only `GroupSplit.AppHost.Test` reaches counts toward
 nothing.
 
-#### Known gap: the component library is not measured
-
-`GroupSplit.App.Shared`, the Razor class library holding the app's pages and components, is
-excluded by `<ModulePath>GroupSplit\.App\.Shared\.dll$</ModulePath>` in `coverage.config`.
-It is excluded because it is unmeasured, not because it is covered. It first entered the
-report when a contract test loaded one serializer helper out of it, and the reported figure
-fell 25 points without a line of production code changing. A floor that moves on which
-assemblies happen to be loaded is not a ratchet.
-
-The component tests in
-[`GroupSplit.App.Web.Test/Components`](../tests/GroupSplit.App.Web.Test/Components) do not
-change that yet. A `.razor` file compiles into `obj/`, which the source filter drops as
-generated, so what they cover barely shows in the report; and removing the exclusion would
-bring the library's other ~1,260 lines in at once and take the build under its floor. Taking
-the exclusion out needs both halves: component code the report can see, and enough of it
-covered to stay above the floors.
+`GroupSplit.App.Shared`, the Razor class library holding the app's pages and components, was
+excluded until #326 and is now gated like everything else. On the day it went in, its
+`.razor` files and services measured about 77% of lines and 69% of branches, and the merged
+figure stayed well above both floors.
 
 ### The CSS check
 
