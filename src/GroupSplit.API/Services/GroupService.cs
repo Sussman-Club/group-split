@@ -46,6 +46,20 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <paramref name="groups"/> as the current user sees them.
+    /// </summary>
+    /// <remarks>
+    /// The current user says whose list this is being read for: archiving is personal, so
+    /// IsArchive is true only when that person archived it. Reading it off the group would
+    /// tell every member what one of them had tidied away.
+    /// <para>
+    /// The reader's personal group comes first, which is the only order the list has: it
+    /// is the one group everybody has, and the one they reach for most.
+    /// </para>
+    /// </remarks>
+    IQueryable<GroupResponse> Describe(IQueryable<Group> groups);
+
     Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
 
     ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request,
@@ -74,6 +88,11 @@ public interface IGroupService
     /// list for new money.
     /// </remarks>
     Task<IQueryable<User>> GetGroupPastMembers(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="GetGroupPastMembers"/>'s rows as the past-members listing shows them.
+    /// </summary>
+    IQueryable<UserInfo> DescribePastMembers(IQueryable<User> pastMembers, Guid groupId);
 
 
 
@@ -288,6 +307,26 @@ public class GroupService(
                select g;
     }
 
+    public IQueryable<GroupResponse> Describe(IQueryable<Group> groups)
+    {
+        var userId = userContext.User.Id;
+
+        return from @group in groups
+            join membership in context.Set<GroupMembership>()
+                on new { GroupId = @group.Id, UserId = userId }
+                equals new { membership.GroupId, membership.UserId }
+            orderby @group.Id == userId descending
+            select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
+                membership.ArchivedAt != null)
+            {
+                Currency = @group.Currency,
+                DefaultSplitRuleId = @group.DefaultSplitRuleId,
+                DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                DefaultPeriod = @group.DefaultPeriod,
+                IsPersonal = @group.Id == userId
+            };
+    }
+
     public async Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
     {
         return await (from t in await GetGroupById(id, ct)
@@ -402,6 +441,18 @@ public class GroupService(
                orderby user.FirstName, user.LastName, user.Email
                select user;
     }
+
+    public IQueryable<UserInfo> DescribePastMembers(IQueryable<User> pastMembers, Guid groupId) =>
+        pastMembers
+            // A guest only when the history says this group removed them as one.
+            // Being a stand-in is not enough: one left behind by an invitation
+            // that was claimed or withdrawn before guests existed is named by old
+            // rule versions and nothing else, and was never removed from anything.
+            .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
+                context.Set<GroupMembershipEvent>().Any(change =>
+                    change.GroupId == groupId && change.UserId == user.Id &&
+                    change.Kind == MembershipEventKind.GuestRemoved),
+                true));
 
     public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
         CancellationToken cancellationToken = default)
