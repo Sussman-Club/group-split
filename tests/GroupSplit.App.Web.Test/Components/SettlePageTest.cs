@@ -252,23 +252,125 @@ public class SettlePageTest : ComponentTest
 
     /// <summary>
     /// A plan that never arrived is not a plan with nothing in it: the error says the plan
-    /// could not be loaded, and the page does not offer the empty state's reassurance.
+    /// could not be loaded, and nothing on the page says the reader is square (#435). The
+    /// hero used to, because a missing plan made the net figure zero.
     /// </summary>
     [Fact]
     public async Task A_plan_that_could_not_be_loaded_is_not_shown_as_nothing_owed()
     {
-        _users
-            .Setup(client => client.GetSettlementPlanAsync(It.IsAny<DateOnly?>(), It.IsAny<int?>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new HttpRequestException("the server could not be reached"));
+        PlanUnreachable();
 
         var (page, _) = await Open();
 
         VerifyError("Could not load your settlement plan.");
 
         Assert.Empty(page.FindAll(".gs-settle-row"));
+        Assert.DoesNotContain("All settled", page.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing owed either way, in any group", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Not loaded", Hero(page), StringComparison.Ordinal);
+        Assert.Contains("Could not load what you owe and are owed.", Hero(page), StringComparison.Ordinal);
+        Assert.Contains("Could not work out what clears everything.", page.Markup, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Trying_the_plan_again_shows_it_once_it_loads()
+    {
+        PlanUnreachable();
+        var (page, _) = await Open();
+
+        _plan = new SettlementPlanResponse(-90m, 0m, 90m, [OmarAcrossBoth], [], null);
+        _users
+            .Setup(client => client.GetSettlementPlanAsync(It.IsAny<DateOnly?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => _plan);
+
+        await TryAgainAsync(page, ".gs-hero");
+
+        page.WaitForAssertion(() => Assert.Contains("Overall, you owe", Hero(page), StringComparison.Ordinal));
+        Assert.Single(page.FindAll(".gs-settle-row"));
+        Assert.DoesNotContain("Not loaded", page.Markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>Before the plan has answered, the hero says nothing about where anybody stands.</summary>
+    [Fact]
+    public void A_plan_still_being_read_is_not_shown_as_all_settled()
+    {
+        var answer = new TaskCompletionSource<SettlementPlanResponse>();
+
+        _users
+            .Setup(client => client.GetSettlementPlanAsync(It.IsAny<DateOnly?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(answer.Task);
+
+        var page = Render<Settle>();
+
+        Assert.DoesNotContain("All settled", page.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Not loaded", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Working out what clears everything.", page.Markup, StringComparison.Ordinal);
+
+        answer.SetResult(new SettlementPlanResponse(-90m, 0m, 90m, [OmarAcrossBoth], [], null));
+
+        page.WaitForAssertion(() => Assert.Contains("Overall, you owe", Hero(page), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A history that did not load says so, rather than "Loading…" for good with nothing in
+    /// flight (#435).
+    /// </summary>
+    [Fact]
+    public async Task A_history_that_could_not_be_loaded_says_so_rather_than_loading_for_good()
+    {
+        _plan = new SettlementPlanResponse(-90m, 0m, 90m, [OmarAcrossBoth], [], null);
+        HistoryUnreachable();
+
+        var (page, _) = await Open();
+
+        VerifyError("Could not load your settlements.");
+
+        Assert.DoesNotContain("Loading…", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Could not load your settlements.", page.Markup, StringComparison.Ordinal);
+
+        // A separate read, drawn as usual.
+        Assert.Contains("Overall, you owe", Hero(page), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Trying_the_history_again_shows_it_once_it_loads()
+    {
+        HistoryUnreachable();
+        var (page, _) = await Open();
+
+        _history = [Paid("You", "Omar", byYou: true, "Home")];
+        _users
+            .Setup(client => client.GetSettlementsAsync(It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int? _, int? pageSize, CancellationToken _) =>
+                new PagedResponseOfSettlementResponse([.. _history], 1, pageSize ?? 5, _history.Count));
+
+        await TryAgainAsync(page, ".gs-card-pad .gs-empty");
+
+        page.WaitForAssertion(() => Assert.Equal([("You paid Omar", "Home")], HistoryRows(page)));
+        Assert.DoesNotContain("Could not load your settlements.", page.Markup, StringComparison.Ordinal);
+    }
+
+    private void PlanUnreachable() =>
+        _users
+            .Setup(client => client.GetSettlementPlanAsync(It.IsAny<DateOnly?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the server could not be reached"));
+
+    private void HistoryUnreachable() =>
+        _users
+            .Setup(client => client.GetSettlementsAsync(It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("the server could not be reached"));
+
+    private static string Hero(IRenderedComponent<Settle> page) => page.Find(".gs-hero").TextContent;
+
+    private static Task TryAgainAsync(IRenderedComponent<Settle> page, string within) =>
+        page.Find(within).QuerySelectorAll("button")
+            .Single(button => button.TextContent.Trim() == "Try again")
+            .ClickAsync(new());
 
     /// <summary>
     /// Nothing owed either way is said once, in the empty state, with when it last was not
