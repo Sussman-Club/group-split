@@ -1,7 +1,6 @@
 ﻿using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
-using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
@@ -83,12 +82,10 @@ public static class GroupApi
         {
             return group.MapGet(string.Empty, async (
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var groups = await groupService.GetAllGroups(ct);
-                    var groupResponses = await groups.SelectDto(context, currentUser.User.Id)
+                    var groupResponses = await groupService.Describe(groups)
                         .ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
@@ -101,12 +98,10 @@ public static class GroupApi
             return group.MapGet("{id:guid}", async (
                     Guid id,
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var group = await groupService.GetGroupById(id, ct);
-                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+                    var groupResponse = await groupService.Describe(group).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -124,8 +119,6 @@ public static class GroupApi
                     Guid id,
                     JsonPatchDocument<CreateGroupRequest> patchDocument,
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var groupUpdateRequest = await groupService.GetUpdateModel(id, ct);
@@ -150,7 +143,7 @@ public static class GroupApi
                     await groupService.UpdateGroup(id, groupUpdateRequest, ct);
 
                     var group = await groupService.GetGroupById(id, ct);
-                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+                    var groupResponse = await groupService.Describe(group).FirstOrDefaultAsync(ct);
 
                     return Results.Ok(groupResponse);
                 })
@@ -236,20 +229,10 @@ public static class GroupApi
             return group.MapGet("{id:guid}/past-members", async (
                     Guid id,
                     IGroupService groupService,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var pastMembers = await groupService.GetGroupPastMembers(id, ct);
-                    var userResponse = await pastMembers
-                        // A guest only when the history says this group removed them as one.
-                        // Being a stand-in is not enough: one left behind by an invitation
-                        // that was claimed or withdrawn before guests existed is named by old
-                        // rule versions and nothing else, and was never removed from anything.
-                        .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
-                            context.Set<GroupMembershipEvent>().Any(change =>
-                                change.GroupId == id && change.UserId == user.Id &&
-                                change.Kind == MembershipEventKind.GuestRemoved),
-                            true))
+                    var userResponse = await groupService.DescribePastMembers(pastMembers, id)
                         .ToListAsync(ct);
                     return Results.Ok(userResponse);
                 })
@@ -527,12 +510,10 @@ public static class GroupApi
                     Guid groupId,
                     Guid userId,
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var group = await groupService.RemoveGroupMember(groupId, userId, ct);
-                    var groupResponse = await group.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+                    var groupResponse = await groupService.Describe(group).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -642,12 +623,10 @@ public static class GroupApi
             return group.MapPost("{id:guid}/archive", async (
                     Guid id,
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var archived = await groupService.Archive(id, ct);
-                    var groupResponse = await archived.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+                    var groupResponse = await groupService.Describe(archived).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -664,12 +643,10 @@ public static class GroupApi
             return group.MapDelete("{id:guid}/archive", async (
                     Guid id,
                     IGroupService groupService,
-                    ICurrentUser currentUser,
-                    AppDbContext context,
                     CancellationToken ct) =>
                 {
                     var unarchived = await groupService.Unarchive(id, ct);
-                    var groupResponse = await unarchived.SelectDto(context, currentUser.User.Id).FirstOrDefaultAsync(ct);
+                    var groupResponse = await groupService.Describe(unarchived).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
@@ -679,36 +656,6 @@ public static class GroupApi
                 .WithName("UnarchiveGroup")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
-        }
-    }
-
-    extension(IQueryable<Group> groups)
-    {
-        /// <summary>
-        /// <paramref name="context"/> says whose list this is being read for: archiving is
-        /// personal, so IsArchive is true only when that person archived it. Reading it off
-        /// the group would tell every member what one of them had tidied away.
-        /// <para>
-        /// The reader's personal group comes first, which is the only order the list has: it
-        /// is the one group everybody has, and the one they reach for most.
-        /// </para>
-        /// </summary>
-        private IQueryable<GroupResponse> SelectDto(AppDbContext context, Guid userId)
-        {
-            return from @group in groups
-                join membership in context.Set<GroupMembership>()
-                    on new { GroupId = @group.Id, UserId = userId }
-                    equals new { membership.GroupId, membership.UserId }
-                orderby @group.Id == userId descending
-                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
-                    membership.ArchivedAt != null)
-                {
-                    Currency = @group.Currency,
-                    DefaultSplitRuleId = @group.DefaultSplitRuleId,
-                    DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
-                    DefaultPeriod = @group.DefaultPeriod,
-                    IsPersonal = @group.Id == userId
-                };
         }
     }
 
