@@ -60,7 +60,49 @@ public record PersonSettlement(
     string UserName,
     decimal Amount,
     IReadOnlyList<GroupDebt> Groups,
-    bool IsGuest = false);
+    bool IsGuest = false)
+{
+    /// <summary>
+    /// Spends one payment over the groups the debt spans, largest group first.
+    /// </summary>
+    /// <remarks>
+    /// The caller does not choose, and that is the point of the screen: which group a
+    /// payment lands in is bookkeeping, and the person handing over the money should not
+    /// have to do it. Largest first clears whole groups soonest, so a partial payment
+    /// leaves the fewest groups half-settled.
+    /// <para>
+    /// Anything beyond what is outstanding -- somebody rounding up -- goes onto the largest
+    /// group. It has to land somewhere, and that is where an overpayment is least
+    /// surprising to find.
+    /// </para>
+    /// <para>
+    /// Here rather than in the API so the CLI's confirmation runs the rule the API writes
+    /// with, instead of a copy that has to agree with it.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<GroupDebt> Allocate(decimal amount)
+    {
+        var allocations = new List<GroupDebt>(Groups.Count);
+        var remaining = amount;
+
+        // The plan already lists them largest first; sorted again so the rule does not
+        // depend on the order a list arrived in.
+        foreach (var @group in Groups.OrderByDescending(@group => @group.Amount))
+        {
+            if (remaining <= 0)
+                break;
+
+            var part = Math.Min(remaining, @group.Amount);
+            allocations.Add(@group with { Amount = part });
+            remaining -= part;
+        }
+
+        if (remaining > 0 && allocations.Count > 0)
+            allocations[0] = allocations[0] with { Amount = allocations[0].Amount + remaining };
+
+        return allocations;
+    }
+}
 
 /// <summary>One group's part of what two people owe each other.</summary>
 public record GroupDebt(Guid GroupId, string GroupName, decimal Amount);
