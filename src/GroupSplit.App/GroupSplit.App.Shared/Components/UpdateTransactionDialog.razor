@@ -81,6 +81,7 @@
                               Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
+                              @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
                               Label="What was it?"
                               Variant="Variant.Outlined"
@@ -1027,6 +1028,32 @@
     }
 
     /// <summary>
+    /// What the preview still needs before it is worth asking for, or null when nothing.
+    /// Both, as on create: the preview is validated like the save, so a blank name comes
+    /// back a 400 just as a zero amount does.
+    /// </summary>
+    private string? Missing()
+    {
+        if (_model.Amount == 0m)
+            return "Enter an amount to see how it divides.";
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+            return "Name it to see how it divides.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Asks again only when the name decides whether there is anything to ask. The field
+    /// is immediate, and the name has no part in the answer, only in whether there is one.
+    /// </summary>
+    private async Task OnNameChangedAsync()
+    {
+        if (Missing() != _awaiting)
+            await RefreshPreviewAsync();
+    }
+
+    /// <summary>
     /// Asks the API what this edit would come to. The endpoint the edit uses, not the one
     /// the create dialog uses: this one divides by the version of the rule the expense was
     /// written under, which is what the save will do.
@@ -1038,7 +1065,7 @@
         // answers about a different day than the one the save will store.
         ApplyDate();
 
-        _awaiting = _model.Amount == 0m ? "Enter an amount to see how it divides." : null;
+        _awaiting = Missing();
 
         if (!IsShared || _awaiting is not null || CurrencyRefusal is not null)
         {
