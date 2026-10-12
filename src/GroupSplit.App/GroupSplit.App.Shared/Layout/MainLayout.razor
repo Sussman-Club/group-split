@@ -39,11 +39,17 @@
     <div class="gs-main">
         <AppBar />
         <main class="gs-content">
-            <div class="gs-page" @key="_path">
+            <div class="gs-page" @key="(_path, Clock.Offset)">
                 @* The last resort, for bugs. Rejected requests never reach it: the API's
                    refusals are read by ApiErrorPresenter and shown as messages, so what
                    lands here is an exception nothing expected. Re-keyed with the page, so
-                   a navigation starts clean. *@
+                   a navigation starts clean.
+
+                   Keyed on the clock's offset too. On the server the browser's offset
+                   arrives after the page's first render, and redrawing this layout does not
+                   redraw a page whose parameters did not change: it kept the days it drew
+                   with the server's offset, and the spans it had read with it (#434). A new
+                   key builds the page again, so it draws and reads with the person's. *@
                 <ErrorBoundary @ref="_errorBoundary">
                     <ChildContent>
                         @Body
@@ -128,7 +134,7 @@
 
         // On WebAssembly the clock already asked the browser synchronously; on the server
         // this is the first chance to. A changed offset means every date on screen was
-        // drawn a zone off, so the page is drawn again.
+        // drawn a zone off, so the page is built again: see the key on .gs-page.
         if (await Clock.InitializeAsync())
             StateHasChanged();
     }
