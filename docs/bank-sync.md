@@ -126,6 +126,7 @@ the connection up again.
 | `GET /inbox` | `GetInbox` | A page of rows, filtered by `status` (default `New`) and an optional `from`/`to` span, newest first, each with its possible duplicates. |
 | `GET /inbox/summary` | `GetInboxSummary` | The waiting count for the badge; with `withDuplicates`, how many have a confident match. |
 | `GET /inbox/{id}/matches` | `GetBankTransactionMatches` | Expenses this row could already be. |
+| `POST /inbox/suggestions` | `SuggestBankTransactionFilings` | A suggested group and category for each of up to 50 rows that gets one. See [Suggested group and category](#suggested-group-and-category). |
 | `POST /inbox/{id}/file` | `FileBankTransaction` | 201, the new expense. |
 | `POST /inbox/{id}/link` | `LinkBankTransaction` | The existing expense, now linked to the row. |
 | `POST /inbox/{id}/dismiss-match` | `DismissBankTransactionMatch` | 204. |
@@ -278,10 +279,11 @@ Add to group opens
 [`FileBankTransactionDialog`](../src/GroupSplit.App/GroupSplit.App.Shared/Components/FileBankTransactionDialog.razor),
 which is also the one screen recording any expense goes through (#251): Personal or a group,
 the category, the shares, and a receipt. The bank's amount, date and currency are shown as text
-rather than as disabled fields, because they are the bank's facts and not questions. The
-category is preselected when one of the group's category names matches Plaid's category label
-(`FOOD_AND_DRINK` reads "Food and drink"). The API does not guess: a suggestion needs a group,
-and the row has none until the person picks one.
+rather than as disabled fields, because they are the bank's facts and not questions. When the row has a [suggested group and category](#suggested-group-and-category), both
+arrive preselected. Otherwise the category is preselected when one of the group's category
+names matches Plaid's category label (`FOOD_AND_DRINK` reads "Food and drink"). Reading a
+receipt in the dialog asks for a suggestion again with the receipt's items, and moves the
+selection unless the person has already picked a group or category themselves.
 
 `POST /inbox/{id}/file` goes through `TransactionService.Create`, the same method a typed
 expense takes, so the category's default split, the even fallback, membership and the
@@ -336,6 +338,44 @@ out credits and every row carrying a possible match, and says how many it left. 
 is the same payment as an existing expense is answered one row at a time, and a bulk action
 would have to assert `fileAnyway` on the person's behalf. Adding to a group is one row at a
 time for the same reason.
+
+### Suggested group and category
+
+A waiting row can carry a suggested group and category (#437). The suggester is
+[`FilingSuggester`](../src/GroupSplit.API/Services/Banking/Suggestions/FilingSuggester.cs),
+which asks a Microsoft-Decision-1 deployment one multiple-choice question per row. The options
+are every unarchived category in the caller's groups whose currency takes the row's (Personal
+takes any), labelled `Group · Category`, plus `cannot tell`. The model judges the merchant, the
+bank's description and categories, the amount and date, the account, what the caller's last
+ten charges from the same merchant were filed under, and the receipt's merchant and item
+names when the client sends them. Member names are not sent.
+
+It answers with one option and a confidence. The answer is dropped when it is `cannot tell`,
+when the confidence is under 0.6, or when it is not one of the options sent. A failed or slow
+call (10 seconds) is dropped too, so the inbox looks as it did before suggestions existed.
+
+`POST /inbox/suggestions` takes up to 50 rows, each with an optional receipt, and answers for
+the ones that get a suggestion. Rows that are not waiting, credits, and rows with a possible
+duplicate are never asked about. The listing does not carry suggestions, so the inbox never
+waits on the model: `InboxStateService` asks once the rows are shown, remembers the answer for
+each row, and does not ask about a row again when the inbox is read after a write.
+
+The row does not show the suggestion: Add to group opens the dialog with it preselected, and
+the person files from there. Nothing is filed without the dialog.
+
+The `azure-openai` resource is a Microsoft Foundry account reached by its key. The AppHost
+models Decision-1 on it as a Foundry model, `filing-suggestions`, named by the parameter
+`azure-openai-decision-deployment`, and the API
+reads the endpoint, key and deployment from that connection. It runs only when the deployment
+is set and Azure OpenAI is enabled. The call goes to
+`{resource}/providers/microsoft/v1/systemone`, with the body sent whole: the service refuses
+one without a `Content-Length`.
+
+Each call is a GenAI client span, `decide {deployment}`, from the `GroupSplit.FilingSuggestions`
+source: the provider, model, token usage, the answer and its confidence, and the number of
+options. With `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true` it also carries what was
+asked and answered, which the dashboard's GenAI view shows as a conversation. The AppHost turns
+that on for local runs only, since it is people's merchants and amounts.
 
 ## Duplicate detection
 

@@ -53,6 +53,7 @@ public static class InboxApi
             group.MapList();
             group.MapSummary();
             group.MapMatches();
+            group.MapSuggestions();
             group.MapFile();
             group.MapLink();
             group.MapDismissMatch();
@@ -128,6 +129,29 @@ public static class InboxApi
                 .WithName("GetBankTransactionMatches")
                 .Produces<IReadOnlyList<ExpenseMatchResponse>>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Where these rows probably go, asked separately from the listing so a page of the
+        /// inbox never waits on a model.
+        /// </summary>
+        /// <remarks>
+        /// A POST because a row can bring the receipt read for it, which is not stored
+        /// anywhere the server could look it up. Rows that get no suggestion are left out,
+        /// and with no model configured the answer is always empty.
+        /// </remarks>
+        private RouteHandlerBuilder MapSuggestions()
+        {
+            return group.MapPost("suggestions", async (
+                    SuggestFilingsRequest request,
+                    IInboxService inbox,
+                    CancellationToken ct) =>
+                {
+                    return Results.Ok(await inbox.Suggest(request, ct));
+                })
+                .WithName("SuggestBankTransactionFilings")
+                .Produces<IReadOnlyList<FilingSuggestionResponse>>()
+                .ProducesValidationProblem();
         }
 
         /// <summary>

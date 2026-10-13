@@ -130,6 +130,7 @@ jobs:
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_MODEL: ${{ secrets.AZURE_OPENAI_MODEL }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_DECISION_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DECISION_DEPLOYMENT }}
         shell: bash
         run: |
           set -euo pipefail
@@ -347,6 +348,7 @@ jobs:
             VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
             VERYFI_LOG_RAW_RESPONSES
             AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
+            AZURE_OPENAI_DECISION_DEPLOYMENT
           "
 
           for name in $parameters; do

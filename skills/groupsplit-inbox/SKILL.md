@@ -80,8 +80,10 @@ For each row, in order:
    changes nothing. At most three candidates come back, each with `transactionId`, `name`,
    `amount`, `daysApart`, `amountDifference` and `confidence`, so a person can see *why* it
    was offered instead of taking it on trust.
-2. **Nothing came back** → file it. `groupsplit inbox file <row-id> [--group <id>]
-   [--category-id <id>]`.
+2. **Nothing came back** → file it. Ask where it goes, or offer the
+   [suggested group and category](#where-a-row-goes) when there is one:
+   `groupsplit inbox file <row-id> [--group <id>] [--category-id <id>]`, or
+   `groupsplit inbox file <row-id> --accept-suggestion` once the user agrees.
 3. **Something came back** → show the candidates to the user with their amounts and how far
    apart they are, and ask. There are three answers, each with its own command:
 
@@ -93,6 +95,30 @@ For each row, in order:
 
 Do not pick for them. The three are not interchangeable, and the wrong one does not look
 wrong afterwards.
+
+## Where a row goes
+
+`inbox suggest <row-id> --json` returns at most one suggestion: `groupId`, `groupName`,
+`isPersonal`, `categoryId`, `categoryName`, `destination` (`"Home · Groceries"`) and
+`confidence` from 0 to 1. An empty array means none: the model could not tell, the row could
+already be recorded, or no model is configured. `inbox list --suggest --json` puts the same
+object on each waiting row as `suggestion`, for a page at once.
+
+```bash
+groupsplit inbox suggest <row-id> --json
+groupsplit inbox file <row-id> --accept-suggestion        # files it in groupId / categoryId
+```
+
+- A suggestion is a proposal to the user, not an answer. Say where it would go and file it
+  only once they agree. Nothing is ever filed on the strength of one.
+- `--accept-suggestion` files exactly as `--group <groupId> --category-id <categoryId>`
+  would, and the category's rule divides it. It is refused (exit 3) when there is no
+  suggestion; then ask.
+- A row with a possible duplicate never gets one. Answer the match first.
+- A receipt makes it better. Reading one is not stored until the row is filed, so pass its
+  items back: run `inbox attachments transcribe <row-id> <attachment-id> --json`, then
+  `inbox suggest <row-id> --receipt-merchant <merchant> --receipt-item <name> ...` with the
+  item names it printed.
 
 ## A charge is one expense
 

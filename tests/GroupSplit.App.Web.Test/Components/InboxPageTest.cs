@@ -441,4 +441,73 @@ public class InboxPageTest : ComponentTest
 
         Assert.Empty(Checkboxes(page));
     }
+
+    // ---- suggestions (#437) ---------------------------------------------------------
+
+    private void Suggests(params FilingSuggestionResponse[] suggestions) =>
+        _inbox
+            .Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SuggestFilingsRequest asked, CancellationToken _) =>
+                [.. suggestions.Where(suggestion => asked.Rows.Any(row => row.Id == suggestion.BankTransactionId))]);
+
+    /// <summary>
+    /// The suggestion arrives after the rows -- the inbox never waits on the model -- and
+    /// rides on the row to the filing dialog. The row itself offers no way to file with it.
+    /// </summary>
+    [Fact]
+    public void A_suggestion_reaches_the_row_but_the_row_files_nothing_with_it()
+    {
+        var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
+        var groceries = Guid.NewGuid();
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Home", false, groceries, "Groceries", 0.9));
+
+        var page = Render<Inbox>();
+        var state = Services.GetRequiredService<IInboxStateService>();
+
+        page.WaitForAssertion(() => Assert.Equal(groceries, Assert.Single(state.Rows).Suggestion?.CategoryId));
+
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Home · Groceries"));
+        _bank.Verify(bank => bank.FileAsync(It.IsAny<Guid>(), It.IsAny<FileBankTransactionRequest>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// No suggestion on a row that could already be recorded: the question there is
+    /// whether to record anything, so the model is not even asked.
+    /// </summary>
+    [Fact]
+    public void A_row_that_could_already_be_recorded_is_not_asked_about()
+    {
+        _rows = [Possibly("Trattoria da Enzo", 46m)];
+        Suggests();
+
+        Render<Inbox>();
+
+        _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The rows are read again after every write in the app. A row is asked about once,
+    /// or each filing would be a call to the model for every row on the page.
+    /// </summary>
+    [Fact]
+    public async Task A_row_is_asked_about_once_however_often_the_inbox_is_read_again()
+    {
+        var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", 0.9));
+
+        var page = Render<Inbox>();
+        var state = Services.GetRequiredService<IInboxStateService>();
+        page.WaitForAssertion(() => Assert.NotNull(Assert.Single(state.Rows).Suggestion));
+
+        await page.InvokeAsync(() => state.RefreshAsync());
+
+        _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(Assert.Single(state.Rows).Suggestion);
+    }
 }

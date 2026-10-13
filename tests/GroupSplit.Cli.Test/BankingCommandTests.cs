@@ -281,6 +281,127 @@ public sealed class BankingCommandTests : IDisposable
         Assert.Equal("Flat groceries", body.GetProperty("description").GetString());
     }
 
+    // ---- suggestions (#437) ------------------------------------------------------------
+
+    [Fact]
+    public async Task Inbox_list_asks_for_suggestions_only_when_told_to()
+    {
+        _api.Returns("/api/inbox", Page(Row("Lidl", 30m)));
+
+        await Cli.RunAsync("inbox", "list");
+
+        Assert.DoesNotContain(_api.Requests, r => r.Path == "/api/inbox/suggestions");
+    }
+
+    [Fact]
+    public async Task Inbox_list_with_suggest_puts_each_suggestion_on_its_row()
+    {
+        var lidl = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var group = Guid.NewGuid();
+        var groceries = Guid.NewGuid();
+
+        _api.Returns("/api/inbox", Page(Row("Lidl", 30m, id: lidl), Row("Mystery", 12m, id: other)));
+        _api.Returns("/api/inbox/suggestions", new[] { Suggestion(lidl, group, groceries) }, method: "POST");
+
+        var result = await Cli.RunAsync("inbox", "list", "--suggest");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var items = result.Json.GetProperty("items");
+        var suggestion = items[0].GetProperty("suggestion");
+        Assert.Equal(groceries, suggestion.GetProperty("categoryId").GetGuid());
+        Assert.Equal("Home · Groceries", suggestion.GetProperty("destination").GetString());
+        Assert.False(items[1].TryGetProperty("suggestion", out _));
+
+        var asked = _api.Requests.Single(r => r.Path == "/api/inbox/suggestions").Json.GetProperty("rows");
+        Assert.Equal(2, asked.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Inbox_list_with_suggest_does_not_ask_about_a_row_that_may_already_be_recorded()
+    {
+        _api.Returns("/api/inbox", Page(Row("Lidl", 30m, matches: [Match("Lidl", 30m)])));
+
+        await Cli.RunAsync("inbox", "list", "--suggest");
+
+        Assert.DoesNotContain(_api.Requests, r => r.Path == "/api/inbox/suggestions");
+    }
+
+    [Fact]
+    public async Task Inbox_suggest_sends_the_receipt_items()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns("/api/inbox/suggestions", new[] { Suggestion(id, Guid.NewGuid(), Guid.NewGuid()) }, method: "POST");
+
+        var result = await Cli.RunAsync("inbox", "suggest", id.ToString(),
+            "--receipt-merchant", "LIDL", "--receipt-item", "Nappies", "--receipt-item", "Whole milk");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var row = _api.Requests.Single(r => r.Path == "/api/inbox/suggestions").Json.GetProperty("rows")[0];
+        Assert.Equal(id, row.GetProperty("id").GetGuid());
+        Assert.Equal("LIDL", row.GetProperty("receipt").GetProperty("merchantName").GetString());
+        Assert.Equal(2, row.GetProperty("receipt").GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Inbox_file_accept_suggestion_files_in_the_suggested_group_and_category()
+    {
+        var id = Guid.NewGuid();
+        var group = Guid.NewGuid();
+        var groceries = Guid.NewGuid();
+        _api.Returns("/api/inbox/suggestions", new[] { Suggestion(id, group, groceries) }, method: "POST");
+        _api.Returns($"/api/inbox/{id}/file", Transaction("Lidl", 30m, group), status: 201);
+
+        var result = await Cli.RunAsync("inbox", "file", id.ToString(), "--accept-suggestion");
+
+        Assert.Equal(ExitCodes.Success, result.ExitCode);
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/inbox/{id}/file").Json;
+        Assert.Equal(group, body.GetProperty("groupId").GetGuid());
+        Assert.Equal(groceries, body.GetProperty("categoryId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Inbox_file_accept_suggestion_sends_a_personal_one_as_no_group()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns("/api/inbox/suggestions", new[] { Suggestion(id, Guid.NewGuid(), Guid.NewGuid(), personal: true) },
+            method: "POST");
+        _api.Returns($"/api/inbox/{id}/file", Transaction("Lidl", 30m, null), status: 201);
+
+        await Cli.RunAsync("inbox", "file", id.ToString(), "--accept-suggestion");
+
+        var body = _api.Requests.Single(r => r.Path == $"/api/inbox/{id}/file").Json;
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, body.GetProperty("groupId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Inbox_file_accept_suggestion_is_refused_when_there_is_none()
+    {
+        var id = Guid.NewGuid();
+        _api.Returns("/api/inbox/suggestions", Array.Empty<object>(), method: "POST");
+
+        var result = await Cli.RunAsync("inbox", "file", id.ToString(), "--accept-suggestion");
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Contains("--category-id", result.Error.GetProperty("remediation").GetString());
+        Assert.DoesNotContain(_api.Requests, r => r.Path == $"/api/inbox/{id}/file");
+    }
+
+    [Fact]
+    public async Task Inbox_file_accept_suggestion_and_a_named_group_contradict_each_other()
+    {
+        var id = Guid.NewGuid();
+
+        var result = await Cli.RunAsync("inbox", "file", id.ToString(), "--accept-suggestion",
+            "--group", Guid.NewGuid().ToString());
+
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
+    }
+
     [Fact]
     public async Task Inbox_file_sends_no_splits_at_all_when_none_were_named()
     {
@@ -775,9 +896,10 @@ public sealed class BankingCommandTests : IDisposable
         DateOnly? date = null,
         DateOnly? authorized = null,
         string status = "New",
-        object[]? matches = null) => new
+        object[]? matches = null,
+        Guid? id = null) => new
     {
-        id = Guid.NewGuid(),
+        id = id ?? Guid.NewGuid(),
         date = date ?? new DateOnly(2026, 3, 9),
         amount,
         currency = "GBP",
@@ -796,6 +918,17 @@ public sealed class BankingCommandTests : IDisposable
         accountName = "Current account",
         institutionName = "Monzo",
         possibleDuplicates = matches ?? []
+    };
+
+    private static object Suggestion(Guid rowId, Guid groupId, Guid categoryId, bool personal = false) => new
+    {
+        bankTransactionId = rowId,
+        groupId,
+        groupName = personal ? "Personal" : "Home",
+        isPersonal = personal,
+        categoryId,
+        categoryName = "Groceries",
+        confidence = 0.91
     };
 
     private static object Page(params object[] items) => new

@@ -1,4 +1,5 @@
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -64,6 +65,12 @@ public static class BankingServiceExtensions
             services.AddScoped<IDuplicateMatcher, DuplicateMatcher>();
             services.AddScoped<IMerchantDirectory, MerchantDirectory>();
             services.AddScoped<IInboxService, InboxService>();
+
+            // Off until a host binds a deployment to it (AddFilingSuggestions); unconfigured,
+            // the suggester answers nothing without calling anybody.
+            services.AddOptions<FilingSuggestionOptions>();
+            services.AddHttpClient<IDecisionClient, DecisionClient>();
+            services.AddScoped<IFilingSuggester, FilingSuggester>();
 
             services.AddJobs()
                 .Handlers

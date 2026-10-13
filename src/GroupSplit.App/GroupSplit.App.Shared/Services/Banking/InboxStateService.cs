@@ -148,6 +148,16 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// </summary>
     private int _written;
 
+    /// <summary>
+    /// What has been asked about each row and what came back, null for no suggestion.
+    /// </summary>
+    /// <remarks>
+    /// The rows are read again after every write anywhere in the app, and asking the model
+    /// about the same twenty-five rows each time would be twenty-five calls per filing. A
+    /// row is asked about once; every later read of it is given the answer already had.
+    /// </remarks>
+    private readonly Dictionary<Guid, FilingSuggestionResponse?> _suggestions = [];
+
     public InboxStateService(
         IInboxClient inbox,
         IBankConnectionsClient connections,
@@ -298,11 +308,12 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             // last one shown onto this page as well. Shown once.
             var shown = Rows.Select(row => row.Id).ToHashSet();
 
-            Rows = [.. Rows, .. next.Items.Where(row => !shown.Contains(row.Id))];
+            Rows = WithSuggestions([.. Rows, .. next.Items.Where(row => !shown.Contains(row.Id))]);
             TotalCount = next.TotalCount;
             _written = version;
 
             Announce();
+            _ = SuggestAsync();
         }, "your bank inbox");
 
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
@@ -384,14 +395,69 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             if (shown is { } read)
             {
-                Rows = read.Rows;
+                Rows = WithSuggestions(read.Rows);
                 TotalCount = read.TotalCount;
             }
 
             _written = version;
 
             Announce();
+            _ = SuggestAsync();
         }, "your bank inbox");
+
+    /// <summary>The rows, each carrying the suggestion already had for it.</summary>
+    private IReadOnlyList<BankTransactionResponse> WithSuggestions(IReadOnlyList<BankTransactionResponse> rows) =>
+        [.. rows.Select(row => _suggestions.GetValueOrDefault(row.Id) is { } suggestion
+            ? row with { Suggestion = suggestion }
+            : row)];
+
+    /// <summary>
+    /// Asks where the waiting rows on screen probably go, after they are shown rather than
+    /// before: the inbox never waits on the model. The row carries the answer to the filing
+    /// dialog, which opens with it preselected.
+    /// </summary>
+    /// <remarks>
+    /// Not for a row that could already be recorded -- the question there is whether to
+    /// record anything -- nor for money coming in, which cannot be filed. A failure is the
+    /// same as no suggestion, which is how the inbox looked before there were any.
+    /// </remarks>
+    private async Task SuggestAsync()
+    {
+        var wanted = Rows
+            .Where(row => row.Status == InboxStatus.New
+                          && !row.IsCredit
+                          && row.PossibleDuplicates.Count == 0
+                          && !_suggestions.ContainsKey(row.Id))
+            .Select(row => row.Id)
+            .ToList();
+
+        if (wanted.Count == 0)
+            return;
+
+        foreach (var id in wanted)
+            _suggestions[id] = null;
+
+        foreach (var chunk in wanted.Chunk(SuggestFilingsRequest.MaxRows))
+        {
+            try
+            {
+                var answers = await _inbox.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
+                {
+                    Rows = [.. chunk.Select(id => new SuggestFilingRow { Id = id })]
+                });
+
+                foreach (var answer in answers)
+                    _suggestions[answer.BankTransactionId] = answer;
+            }
+            catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+            {
+                continue;
+            }
+
+            Rows = WithSuggestions(Rows);
+            Announce();
+        }
+    }
 
     private void Announce() => OnChanged?.Invoke();
 

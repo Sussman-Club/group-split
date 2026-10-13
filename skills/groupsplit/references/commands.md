@@ -418,15 +418,16 @@ Imported bank rows waiting to be filed.
 
 | Command | |
 | --- | --- |
-| `inbox list` | List imported rows, newest first. |
+| `inbox list` | List imported rows, newest first. `--suggest` adds each waiting row's suggested group and category. |
 | `inbox summary` | Count the rows still waiting to be filed, and how many of those may already be recorded. |
 | `inbox matches <row-id>` | List the expenses already recorded that an imported row could be. |
+| `inbox suggest <row-id>` | Suggest a group and category for a row. `--receipt-item` (repeatable) and `--receipt-merchant` pass what a read receipt says. Files nothing. |
 | `inbox attachments list <row-id>` | List source receipt files attached to a pending bank row. |
 | `inbox attachments upload <row-id> <file>` | Attach a source receipt file while the row is still pending. |
 | `inbox attachments download <row-id> <attachment-id> <destination>` | Download a pending source file to a new local path. |
 | `inbox attachments transcribe <row-id> <attachment-id>` | Read a pending source file into an editable draft. Saves no itemised bill or expense. |
 | `inbox attachments delete <row-id> <attachment-id>` | Delete a pending row's source file. Confirmation required. |
-| `inbox file <row-id>` | File an imported row as an expense. |
+| `inbox file <row-id>` | File an imported row as an expense. `--accept-suggestion` files it where `inbox suggest` says. |
 | `inbox link <row-id> <transaction-id>` | Attach an imported row to an expense already recorded, instead of filing a second one. |
 | `inbox dismiss-match <row-id> <transaction-id>` | Say an imported row and a suggested expense are not the same money. |
 | `inbox ignore <row-id>` | Keep a row out of the inbox without filing it. |
@@ -437,6 +438,8 @@ Filing rows without recording the same money twice, and what to do about a
 
 ```bash
 groupsplit inbox file <row-id> --group <group-id> --category-id <category-id>
+groupsplit inbox suggest <row-id>                          # where it probably goes
+groupsplit inbox file <row-id> --accept-suggestion         # file it there
 groupsplit inbox ignore <row-id>                           # undone by inbox restore
 groupsplit inbox link <row-id> <transaction-id>            # it is the same payment
 groupsplit inbox dismiss-match <row-id> <transaction-id>   # not a match at all

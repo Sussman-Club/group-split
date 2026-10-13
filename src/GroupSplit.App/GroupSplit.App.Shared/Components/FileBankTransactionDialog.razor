@@ -7,6 +7,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ICategoriesClient CategoriesClient
+@inject IInboxClient InboxClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
@@ -285,6 +286,19 @@
     private TransactionResponse? _searchedExpense;
 
     private Guid? _categoryId;
+
+    /// <summary>
+    /// Where the classifier thinks this goes, from the inbox row and then again once a
+    /// receipt has been read. Null when it abstained, or there is no model.
+    /// </summary>
+    private FilingSuggestionResponse? _suggestion;
+
+    /// <summary>
+    /// Whether the person has picked a group or category themselves. From then on a
+    /// suggestion arriving late -- after a receipt is read -- does not move their answer.
+    /// </summary>
+    private bool _pickedByHand;
+
     private string _name = string.Empty;
     private string? _description;
     private IReadOnlyList<SplitInput>? _splits;
@@ -363,6 +377,7 @@
 
     private async Task OnGroupPickedAsync(Guid? id)
     {
+        _pickedByHand = true;
         _groupId = id;
         _chosen = true;
 
@@ -371,6 +386,7 @@
 
     private async Task OnCategoryPickedAsync(Guid? id)
     {
+        _pickedByHand = true;
         _categoryId = id;
 
         // Which is the whole reason this is on one screen: the category is how it divides,
@@ -380,6 +396,8 @@
 
     private string CategoryHint => !_chosen
         ? "Pick a group first."
+        : _suggestion is { } suggestion && _categoryId == suggestion.CategoryId && SuggestionFits(suggestion)
+            ? "Suggested for this payment. Change it if it is not right."
         : Row.CategoryLabel is { Length: > 0 } label
             ? $"Your bank called this \"{label}\"."
             : IsShared
@@ -405,7 +423,78 @@
         }
 
         _receiptAttachment = (await ReceiptAttachments.GetForBankAsync(Row.Id)).FirstOrDefault();
+
+        _suggestion = Row.Suggestion;
+        await ApplySuggestionAsync();
     }
+
+    /// <summary>
+    /// Preselects the suggested group, and through <see cref="Suggested"/> its category,
+    /// unless the person has already said otherwise. Only a preselection: whatever is
+    /// selected when the button is pressed is what gets sent.
+    /// </summary>
+    private async Task ApplySuggestionAsync()
+    {
+        if (_suggestion is not { } suggestion || _pickedByHand)
+            return;
+
+        if (suggestion.IsPersonal)
+            _groupId = null;
+        else if (_groups.Any(group => group.Id == suggestion.GroupId))
+            _groupId = suggestion.GroupId;
+        else
+            return;
+
+        _chosen = true;
+
+        await OnGroupChangedAsync();
+    }
+
+    /// <summary>
+    /// Asks again with what the receipt says was bought, which is better evidence than the
+    /// bank's line: a supermarket receipt of nappies and a supermarket receipt of beer go
+    /// to different places.
+    /// </summary>
+    private async Task SuggestFromReceiptAsync(SaveReceiptRequest receipt)
+    {
+        if (HasMatches)
+            return;
+
+        try
+        {
+            var answers = await InboxClient.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
+            {
+                Rows =
+                [
+                    new SuggestFilingRow
+                    {
+                        Id = Row.Id,
+                        Receipt = new FilingReceipt
+                        {
+                            MerchantName = receipt.MerchantName,
+                            Items = [.. receipt.Items.Select(item => item.Name).Take(FilingReceipt.MaxItems)]
+                        }
+                    }
+                ]
+            });
+
+            if (answers.FirstOrDefault() is not { } suggestion)
+                return;
+
+            _suggestion = suggestion;
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            // No suggestion is what the dialog had before there were any.
+            return;
+        }
+
+        await ApplySuggestionAsync();
+    }
+
+    /// <summary>Whether the suggestion is about the group currently chosen.</summary>
+    private bool SuggestionFits(FilingSuggestionResponse suggestion) =>
+        suggestion.IsPersonal ? _groupId is null : _groupId == suggestion.GroupId;
 
     private async Task OnGroupChangedAsync()
     {
@@ -550,12 +639,20 @@
     }
 
     /// <summary>
-    /// The group's category whose name reads like the bank's label. Deliberately plain: a
+    /// The suggested category when the suggestion is about this group; otherwise the
+    /// group's category whose name reads like the bank's label. Deliberately plain: a
     /// synonym table would be a thing to maintain and would still be wrong for somebody,
     /// and the selection is right there to change.
     /// </summary>
     private CategoryResponse? Suggested()
     {
+        if (_suggestion is { } suggestion
+            && SuggestionFits(suggestion)
+            && _categories.FirstOrDefault(category => category.Id == suggestion.CategoryId) is { } suggested)
+        {
+            return suggested;
+        }
+
         if (Row.CategoryLabel is not { Length: > 0 } label)
             return null;
 
@@ -722,6 +819,8 @@
 
             _receipt = receipt;
             _name = string.IsNullOrWhiteSpace(_name) ? CreateTransactionDialog.SuggestedName(receipt) : _name;
+
+            await SuggestFromReceiptAsync(receipt);
         }
         finally
         {

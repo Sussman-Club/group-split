@@ -12,13 +12,15 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
     private const string EndpointParameterName = "azure-openai-endpoint";
     private const string ModelParameterName = "azure-openai-model";
     private const string ApiKeyParameterName = "azure-openai-api-key";
+    private const string DecisionDeploymentParameterName = "azure-openai-decision-deployment";
 
     public sealed record Parameters(
         IResourceBuilder<ParameterResource> Provider,
         IResourceBuilder<ParameterResource> Enabled,
         IResourceBuilder<ParameterResource> Endpoint,
         IResourceBuilder<ParameterResource> Model,
-        IResourceBuilder<ParameterResource> ApiKey);
+        IResourceBuilder<ParameterResource> ApiKey,
+        IResourceBuilder<ParameterResource> DecisionDeployment);
 
     public static Parameters AddAzureOpenAIReceiptTranscriptionParameters(
         this IDistributedApplicationBuilder builder)
@@ -33,6 +35,9 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
             .WithDescription("Azure OpenAI deployment/model name.");
         var apiKey = builder.AddOptionalParameter(ApiKeyParameterName, string.Empty, secret: true)
             .WithDescription("Azure OpenAI API key.");
+        var decisionDeployment = builder.AddOptionalParameter(DecisionDeploymentParameterName, string.Empty)
+            .WithDescription("Microsoft-Decision-1 deployment on the same resource, for suggesting where an "
+                             + "imported bank row goes. Empty leaves suggestions off.");
 
         builder.Pipeline.AddStep(
             "validate-azure-openai",
@@ -40,7 +45,7 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
             dependsOn: WellKnownPipelineSteps.ProcessParameters,
             requiredBy: WellKnownPipelineSteps.BuildPrereq);
 
-        return new Parameters(provider, enabled, endpoint, model, apiKey);
+        return new Parameters(provider, enabled, endpoint, model, apiKey, decisionDeployment);
     }
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment

@@ -97,7 +97,29 @@ public static class OpenAIExtensions
         /// </summary>
         public IResourceBuilder<IResourceWithConnectionString> WithModel(
             [ResourceName] string name,
-            IResourceBuilder<ParameterResource> modelParameter)
+            IResourceBuilder<ParameterResource> modelParameter) =>
+            builder.WithDeployment(name, modelParameter, "OpenAI Model", "OpenAI Models");
+
+        /// <summary>
+        /// Adds a deployment of a model that is not an OpenAI one -- Microsoft-Decision-1, say --
+        /// on the same Foundry account, read with the same key.
+        /// </summary>
+        /// <remarks>
+        /// The connection string has the same shape as <see cref="WithModel"/>'s, so the account's
+        /// endpoint, its key and the deployment name reach the app the same way; what differs is
+        /// what the dashboard calls it, and that the app calls it on the Foundry route rather than
+        /// the OpenAI one.
+        /// </remarks>
+        public IResourceBuilder<IResourceWithConnectionString> WithFoundryModel(
+            [ResourceName] string name,
+            IResourceBuilder<ParameterResource> deploymentParameter) =>
+            builder.WithDeployment(name, deploymentParameter, "Foundry Model", "Microsoft Foundry");
+
+        private IResourceBuilder<IResourceWithConnectionString> WithDeployment(
+            string name,
+            IResourceBuilder<ParameterResource> modelParameter,
+            string resourceType,
+            string source)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentException.ThrowIfNullOrEmpty(name);
@@ -123,12 +145,12 @@ public static class OpenAIExtensions
                 .WithIconName("BrainCircuit")
                 .WithInitialState(new()
                 {
-                    ResourceType = "OpenAI Model",
+                    ResourceType = resourceType,
                     CreationTimeStamp = DateTime.UtcNow,
                     State = KnownResourceStates.Waiting,
                     Properties =
                     [
-                        new(CustomResourceKnownProperties.Source, "OpenAI Models")
+                        new(CustomResourceKnownProperties.Source, source)
                     ]
                 })
                 .OnInitializeResource(async (r, evt, ct) =>
