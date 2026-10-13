@@ -40,7 +40,7 @@ and a bearer token.
 | `split-rules` | `list`, `show`, `versions`, `versions set`, `create`, `update`, `delete` |
 | `invitations` | `list`, `show`, `claim`, `decline`, `link`, `join` |
 | `bank` | `list`, `link-token`, `link`, `refresh`, `sync`, `unlink` |
-| `inbox` | `list`, `summary`, `matches`, `file`, `link`, `attachments list\|upload\|download\|transcribe\|delete`, `dismiss-match`, `ignore`, `restore` |
+| `inbox` | `list`, `summary`, `matches`, `suggest`, `file`, `link`, `attachments list\|upload\|download\|transcribe\|delete`, `dismiss-match`, `ignore`, `restore` |
 | `users` | `me`, `position`, `delete` |
 | `settle` | `plan`, `pay`, `history` |
 | `config` | `list`, `get`, `set`, `unset`, `profiles`, `path` |

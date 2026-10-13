@@ -1,5 +1,6 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -62,6 +63,13 @@ public interface IInboxService
     /// </summary>
     Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Where each of these rows probably goes. Only rows still waiting, going out, and not
+    /// possibly recorded already are asked about -- the question for a possible duplicate
+    /// is whether to record anything at all -- and the rest are simply not in the answer.
+    /// </summary>
+    Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(SuggestFilingsRequest request, CancellationToken ct = default);
+
     /// <summary>Takes a row out of the inbox without making anything of it.</summary>
     Task Ignore(Guid id, CancellationToken ct = default);
 
@@ -91,7 +99,8 @@ public sealed class InboxService(
     AppDbContext dbContext,
     ITransactionService transactions,
     IDuplicateMatcher matcher,
-    IReceiptAttachmentService receiptAttachments) : IInboxService
+    IReceiptAttachmentService receiptAttachments,
+    IFilingSuggester suggester) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -327,6 +336,31 @@ public sealed class InboxService(
             attachment.BankTransaction = row;
             attachment.BankTransactionId = row.Id;
         }
+    }
+
+    public async Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(
+        SuggestFilingsRequest request, CancellationToken ct = default)
+    {
+        var receipts = request.Rows
+            .GroupBy(row => row.Id)
+            .ToDictionary(same => same.Key, same => same.First().Receipt);
+
+        var ids = receipts.Keys.ToList();
+
+        var rows = await Owned()
+            .Include(row => row.Account)
+            .Where(row => ids.Contains(row.Id)
+                          && row.Status == BankTransactionStatus.New
+                          && row.Amount >= 0)
+            .ToListAsync(ct);
+
+        var duplicates = await matcher.ExpensesLike(rows, ct);
+
+        return await suggester.Suggest(
+            [.. rows
+                .Where(row => duplicates.GetValueOrDefault(row.Id) is not { Count: > 0 })
+                .Select(row => (row, receipts[row.Id]))],
+            ct);
     }
 
     public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)

@@ -50,6 +50,7 @@ builder.AddKeycloakAdminClient();
 builder.AddPostgreSqlAppDbContext("db");
 builder.Services.AddReceiptStorage(builder.Configuration);
 builder.Services.AddReceiptTranscription(builder.Configuration);
+builder.Services.AddFilingSuggestions(builder.Configuration);
 builder.Services.AddDomainServices();
 
 // The Data Protection key ring the bank access tokens are encrypted with, in the app

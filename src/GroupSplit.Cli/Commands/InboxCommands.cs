@@ -30,6 +30,7 @@ public static class InboxCommands
         inbox.Subcommands.Add(List());
         inbox.Subcommands.Add(Summary());
         inbox.Subcommands.Add(Matches());
+        inbox.Subcommands.Add(Suggest());
         inbox.Subcommands.Add(File());
         inbox.Subcommands.Add(Link());
         inbox.Subcommands.Add(Attachments());
@@ -231,9 +232,15 @@ public static class InboxCommands
             Description = "Rows per page. The server caps this."
         };
 
+        var suggest = new Option<bool>("--suggest")
+        {
+            Description = "Also ask where each waiting row probably goes: a group and category, "
+                          + "with the model's confidence. Slower; nothing when no model is configured."
+        };
+
         var command = new Command("list", "List imported rows, newest first.")
         {
-            status, from, to, sortBy, order, page, pageSize
+            status, from, to, sortBy, order, page, pageSize, suggest
         };
 
         command.SetHandler(async (context, ct) =>
@@ -250,6 +257,9 @@ public static class InboxCommands
                 pageSize: parse.GetValue(pageSize),
                 cancellationToken: ct);
 
+            if (parse.GetValue(suggest))
+                rows = await WithSuggestionsAsync(context, rows, ct);
+
             context.Output.Write(rows, value =>
             {
                 if (value.Items.Count == 0)
@@ -260,7 +270,10 @@ public static class InboxCommands
                 // No status column: every row on a page shares one, because the status is
                 // what the listing was filtered by. It would be 10 columns of nothing on a
                 // table already wide enough to wrap around a row id.
-                var table = Tables.Grid("Id", "Spent on", "Title", "Amount", "Account");
+                var suggested = parse.GetValue(suggest);
+                var table = suggested
+                    ? Tables.Grid("Id", "Spent on", "Title", "Amount", "Suggested")
+                    : Tables.Grid("Id", "Spent on", "Title", "Amount", "Account");
 
                 foreach (var row in value.Items)
                 {
@@ -269,7 +282,13 @@ public static class InboxCommands
                         row.SpentOn.ToString("yyyy-MM-dd"),
                         Title(row),
                         Tables.Money(row.Amount, row.Currency),
-                        Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
+                        // The account gives way to the suggestion when one was asked for:
+                        // five columns already fill 80, and the suggestion is what was asked.
+                        suggested
+                            ? row.Suggestion is { } suggestion
+                                ? $"{Markup.Escape(suggestion.Destination)} [grey]{suggestion.Confidence:P0}[/]"
+                                : "[grey]-[/]"
+                            : Markup.Escape($"{row.InstitutionName} · {row.AccountName}"));
                 }
 
                 // The listing already carries the suggestions, so saying so costs nothing
@@ -440,6 +459,113 @@ public static class InboxCommands
     }
 
     /// <summary>
+    /// Where a row probably goes, optionally told what its receipt says was bought.
+    /// </summary>
+    /// <remarks>
+    /// The receipt is passed in rather than looked up because reading one is not stored
+    /// until the row is filed: <c>inbox attachments transcribe</c> prints the items, and
+    /// they come back here.
+    /// </remarks>
+    private static Command Suggest()
+    {
+        var merchant = new Option<string?>("--receipt-merchant")
+        {
+            Description = "The merchant the receipt names, from `groupsplit inbox attachments transcribe`."
+        };
+
+        var items = new Option<string[]>("--receipt-item")
+        {
+            Description = $"A line item's name from the receipt, repeatable, up to {FilingReceipt.MaxItems}.",
+            AllowMultipleArgumentsPerToken = true
+        };
+
+        var command = new Command("suggest",
+            "Suggest a group and category for an imported row. Nothing is filed.")
+        {
+            RowId, merchant, items
+        };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var rowId = parse.GetValue(RowId);
+            var named = parse.GetValue(items) ?? [];
+            var merchantName = parse.GetValue(merchant);
+
+            if (named.Length > FilingReceipt.MaxItems)
+            {
+                throw CliException.Input($"At most {FilingReceipt.MaxItems} --receipt-item values.",
+                    "Pass the items that say most about what was bought.");
+            }
+
+            var suggestions = await new Api.InboxClient(context.ApiHttpClient).SuggestBankTransactionFilingsAsync(
+                new SuggestFilingsRequest
+                {
+                    Rows =
+                    [
+                        new SuggestFilingRow
+                        {
+                            Id = rowId,
+                            Receipt = named.Length == 0 && merchantName is null
+                                ? null
+                                : new FilingReceipt { MerchantName = merchantName, Items = named }
+                        }
+                    ]
+                }, ct);
+
+            context.Output.Write(suggestions, value => value.FirstOrDefault() is { } suggestion
+                ? new Markup(
+                    $"[bold]{Markup.Escape(suggestion.Destination)}[/] [grey]{suggestion.Confidence:P0}[/]\n"
+                    + $"[grey]  groupsplit inbox file {rowId} --accept-suggestion[/]\n")
+                : new Markup(
+                    "[grey]No suggestion: the model could not tell, the row may already be recorded, "
+                    + "or no model is configured.[/]\n"));
+
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// The page, with each waiting row carrying where it probably goes. Asked after the
+    /// listing and in turns of <see cref="SuggestFilingsRequest.MaxRows"/>, the most the API
+    /// takes at once.
+    /// </summary>
+    private static async Task<PagedResponseOfBankTransactionResponse> WithSuggestionsAsync(
+        CliContext context, PagedResponseOfBankTransactionResponse page, CancellationToken ct)
+    {
+        var wanted = page.Items
+            .Where(row => row.Status == InboxStatus.New && !row.IsCredit && row.PossibleDuplicates.Count == 0)
+            .Select(row => row.Id)
+            .ToList();
+
+        if (wanted.Count == 0)
+            return page;
+
+        var client = new Api.InboxClient(context.ApiHttpClient);
+        var found = new Dictionary<Guid, FilingSuggestionResponse>();
+
+        foreach (var chunk in wanted.Chunk(SuggestFilingsRequest.MaxRows))
+        {
+            var answers = await client.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
+            {
+                Rows = [.. chunk.Select(id => new SuggestFilingRow { Id = id })]
+            }, ct);
+
+            foreach (var answer in answers)
+                found[answer.BankTransactionId] = answer;
+        }
+
+        return page with
+        {
+            Items = [.. page.Items.Select(row => found.TryGetValue(row.Id, out var suggestion)
+                ? row with { Suggestion = suggestion }
+                : row)]
+        };
+    }
+
+    /// <summary>
     /// Which grade a candidate is, said on its own line rather than left to be inferred from
     /// the numbers underneath it.
     /// </summary>
@@ -515,9 +641,15 @@ public static class InboxCommands
                           + "same payment. You really did pay twice."
         };
 
+        var acceptSuggestion = new Option<bool>("--accept-suggestion")
+        {
+            Description = "File it in the group and category `groupsplit inbox suggest` gives, "
+                          + "instead of naming them. Refused when there is no suggestion."
+        };
+
         var command = new Command("file", "File an imported row as an expense.")
         {
-            RowId, group, category, paidBy, splitRule, splits, name, description, fileAnyway
+            RowId, group, category, paidBy, splitRule, splits, name, description, fileAnyway, acceptSuggestion
         };
 
         command.SetHandler(async (context, ct) =>
@@ -533,10 +665,35 @@ public static class InboxCommands
                     + "The API refuses both in one request.");
             }
 
+            var groupId = parse.GetValue(group);
+            var categoryId = parse.GetValue(category);
+
+            if (parse.GetValue(acceptSuggestion))
+            {
+                if (parse.GetResult(group) is not null || parse.GetResult(category) is not null)
+                {
+                    throw CliException.Input(
+                        "--accept-suggestion and --group/--category-id contradict each other.",
+                        "Accept the suggestion, or name the group and category yourself.");
+                }
+
+                var suggestions = await new Api.InboxClient(context.ApiHttpClient).SuggestBankTransactionFilingsAsync(
+                    new SuggestFilingsRequest { Rows = [new SuggestFilingRow { Id = parse.GetValue(RowId) }] }, ct);
+
+                var suggestion = suggestions.FirstOrDefault()
+                    ?? throw CliException.Input(
+                        "There is no suggestion for this row.",
+                        "Name the group and category: groupsplit inbox file <row-id> --group <group-id> --category-id <category-id>");
+
+                // Personal goes as no group, the way every other client sends it.
+                groupId = suggestion.IsPersonal ? null : suggestion.GroupId;
+                categoryId = suggestion.CategoryId;
+            }
+
             var request = new FileBankTransactionRequest
             {
-                GroupId = parse.GetValue(group),
-                CategoryId = parse.GetValue(category),
+                GroupId = groupId,
+                CategoryId = categoryId,
                 PaidByUserId = parse.GetValue(paidBy),
                 SplitRuleId = parse.GetValue(splitRule),
                 // Null, not empty: an empty list is "divide it between nobody", which the
