@@ -360,9 +360,8 @@ duplicate are never asked about. The listing does not carry suggestions, so the 
 waits on the model: `InboxStateService` asks once the rows are shown, remembers the answer for
 each row, and does not ask about a row again when the inbox is read after a write.
 
-On the row, the suggestion is a button naming the destination. Pressing it files the row
-there with the category's split rule, the same request picking both in the dialog sends. Add
-to group opens the dialog with the suggestion preselected.
+The row does not show the suggestion: Add to group opens the dialog with it preselected, and
+the person files from there. Nothing is filed without the dialog.
 
 The `azure-openai` resource is a Microsoft Foundry account reached by its key. The AppHost
 models Decision-1 on it as a Foundry model, `filing-suggestions`, named by the parameter

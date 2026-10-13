@@ -413,8 +413,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     /// <summary>
     /// Asks where the waiting rows on screen probably go, after they are shown rather than
-    /// before: the inbox never waits on the model, and a suggestion appears on its row when
-    /// it arrives.
+    /// before: the inbox never waits on the model. The row carries the answer to the filing
+    /// dialog, which opens with it preselected.
     /// </summary>
     /// <remarks>
     /// Not for a row that could already be recorded -- the question there is whether to
