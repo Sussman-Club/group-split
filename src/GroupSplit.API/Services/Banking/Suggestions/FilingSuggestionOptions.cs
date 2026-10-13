@@ -39,6 +39,14 @@ public sealed class FilingSuggestionOptions
 
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// Whether each call's span carries what the model was asked and what it answered, so
+    /// the dashboard's GenAI view can show them. Off unless
+    /// <c>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</c> is <c>true</c>: the content
+    /// is a person's merchants, amounts and receipt items.
+    /// </summary>
+    public bool CaptureMessageContent { get; set; }
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Deployment)
         && Endpoint is not null

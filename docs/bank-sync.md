@@ -372,6 +372,12 @@ is set and Azure OpenAI is enabled. The call goes to
 `{resource}/providers/microsoft/v1/systemone`, with the body sent whole: the service refuses
 one without a `Content-Length`.
 
+Each call is a GenAI client span, `decide {deployment}`, from the `GroupSplit.FilingSuggestions`
+source: the provider, model, token usage, the answer and its confidence, and the number of
+options. With `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true` it also carries what was
+asked and answered, which the dashboard's GenAI view shows as a conversation. The AppHost turns
+that on for local runs only, since it is people's merchants and amounts.
+
 ## Duplicate detection
 
 Two paths put an expense in the ledger: somebody types one, and somebody files a row the bank

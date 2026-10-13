@@ -12,6 +12,9 @@ public static class FilingSuggestionExtensions
     /// <summary>The connection the AppHost gives the Decision-1 deployment.</summary>
     public const string ConnectionName = "filing-suggestions";
 
+    /// <summary>Records GenAI message content on spans when <c>true</c>.</summary>
+    public const string CaptureMessageContentVariable = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT";
+
     /// <summary>
     /// The endpoint, key and deployment come from the <c>filing-suggestions</c> connection,
     /// and only while Azure OpenAI is switched on, so turning it off stops every call to
@@ -23,6 +26,10 @@ public static class FilingSuggestionExtensions
             .Bind(configuration.GetSection(FilingSuggestionOptions.SectionName))
             .PostConfigure(options =>
             {
+                // The OpenTelemetry GenAI switch, the one the receipt reader's instrumentation
+                // and every other GenAI library reads, rather than a setting of our own.
+                options.CaptureMessageContent |= configuration.GetValue<bool>(CaptureMessageContentVariable);
+
                 var azure = configuration.GetSection(AzureOpenAIReceiptTranscriptionOptions.SectionName)
                     .Get<AzureOpenAIReceiptTranscriptionOptions>();
 
