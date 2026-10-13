@@ -28,12 +28,21 @@ var storage = storageServer.AddBucket(receiptsBucket);
 
 var azureOpenAiParameters = builder.AddAzureOpenAIReceiptTranscriptionParameters();
 
+// A Microsoft Foundry account, reached by its key. Receipt reading uses its OpenAI-compatible
+// route; the name and parameters say Azure OpenAI because that is what they were first used for,
+// and the deployment's secrets are named after them.
 var azureOpenAi = OpenAIExtensions.AddOpenAI(builder, "azure-openai")
     .WithApiKey(azureOpenAiParameters.ApiKey)
     .WithEndpoint(azureOpenAiParameters.Endpoint);
 
 var azureOpenAiReceiptModel = azureOpenAi.WithModel(
     "receipt-transcription", azureOpenAiParameters.Model);
+
+// Microsoft-Decision-1, which suggests a group and category for an imported bank row. Not an
+// OpenAI model: a Microsoft one on the same Foundry account, read with the same key. Empty
+// leaves the suggestions off.
+var azureOpenAiFilingModel = azureOpenAi.WithFoundryModel(
+    "filing-suggestions", azureOpenAiParameters.DecisionDeployment);
 
 // Veryfi remains SaaS-managed; this external resource gives its API calls a named dependency in
 // the Aspire dashboard without routing or persisting receipt content there.
@@ -98,6 +107,7 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WithReference(veryfi)
     .WithReference(plaid)
     .WithReference(azureOpenAiReceiptModel)
+    .WithReference(azureOpenAiFilingModel)
     .WaitFor(storage)
     .WaitFor(keycloak)
     .WaitForCompletion(migrations)

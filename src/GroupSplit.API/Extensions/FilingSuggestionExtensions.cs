@@ -5,14 +5,17 @@ using GroupSplit.API.Services.ReceiptTranscription.AzureOpenAI;
 namespace GroupSplit.API.Extensions;
 
 /// <summary>
-/// Points the filing suggester at the Azure resource receipt reading already uses.
+/// Points the filing suggester at its own model reference.
 /// </summary>
 public static class FilingSuggestionExtensions
 {
+    /// <summary>The connection the AppHost gives the Decision-1 deployment.</summary>
+    public const string ConnectionName = "filing-suggestions";
+
     /// <summary>
-    /// The deployment comes from <c>FilingSuggestions:Deployment</c>; the endpoint and key
-    /// from the receipt connection, and only while Azure OpenAI is switched on, so turning
-    /// it off stops every call to Azure and not just the receipt ones.
+    /// The endpoint, key and deployment come from the <c>filing-suggestions</c> connection,
+    /// and only while Azure OpenAI is switched on, so turning it off stops every call to
+    /// Azure and not just the receipt ones.
     /// </summary>
     public static IServiceCollection AddFilingSuggestions(this IServiceCollection services, IConfiguration configuration)
     {
@@ -29,16 +32,16 @@ public static class FilingSuggestionExtensions
                     return;
                 }
 
-                if (options.Endpoint is not null && !string.IsNullOrWhiteSpace(options.Key))
-                    return;
-
                 var connection = new DbConnectionStringBuilder
                 {
-                    ConnectionString = configuration.GetConnectionString(ReceiptTranscriptionExtensions.ChatClientName) ?? string.Empty
+                    ConnectionString = configuration.GetConnectionString(ConnectionName) ?? string.Empty
                 };
 
-                // The receipt endpoint is the OpenAI v1 base, ending in /openai/v1/; the
-                // decision route hangs off the resource itself.
+                if (string.IsNullOrWhiteSpace(options.Deployment) && connection.TryGetValue("Model", out var model))
+                    options.Deployment = model?.ToString();
+
+                // The endpoint is the OpenAI v1 base, ending in /openai/v1/; the decision
+                // route hangs off the resource itself.
                 if (options.Endpoint is null
                     && connection.TryGetValue("Endpoint", out var endpoint)
                     && Uri.TryCreate(endpoint?.ToString(), UriKind.Absolute, out var uri))

@@ -364,10 +364,13 @@ On the row, the suggestion is a button naming the destination. Pressing it files
 there with the category's split rule, the same request picking both in the dialog sends. Add
 to group opens the dialog with the suggestion preselected.
 
-It runs only when `FilingSuggestions:Deployment` is set (the AppHost parameter
-`azure-openai-decision-deployment`) and Azure OpenAI is enabled. The endpoint and key come from
-the `receipt-transcription` connection; the call goes to
-`{resource}/providers/microsoft/v1/systemone`.
+The `azure-openai` resource is a Microsoft Foundry account reached by its key. The AppHost
+models Decision-1 on it as a Foundry model, `filing-suggestions`, named by the parameter
+`azure-openai-decision-deployment`, and the API
+reads the endpoint, key and deployment from that connection. It runs only when the deployment
+is set and Azure OpenAI is enabled. The call goes to
+`{resource}/providers/microsoft/v1/systemone`, with the body sent whole: the service refuses
+one without a `Content-Length`.
 
 ## Duplicate detection
 

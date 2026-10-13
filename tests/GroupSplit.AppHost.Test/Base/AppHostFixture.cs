@@ -77,7 +77,7 @@ public class AppHostFixture : IAsyncLifetime
             ["azure-openai-endpoint"] = "https://azure-openai.test/openai/v1/",
             ["azure-openai-model"] = "test-receipt-model",
             ["azure-openai-api-key"] = "test-azure-openai-key",
-            ["azure-openai-decision-deployment"] = "",
+            ["azure-openai-decision-deployment"] = "test-decision-model",
             ["veryfi-enabled"] = "false",
             ["veryfi-client-id"] = "test-veryfi-client-id",
             ["veryfi-username"] = "test-veryfi-username",

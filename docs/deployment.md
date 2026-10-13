@@ -249,7 +249,7 @@ does not name never reaches the AppHost, which falls back to its default.
 | `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
 | `azure-openai-endpoint`, `azure-openai-model` | secrets `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
 | `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
-| `azure-openai-decision-deployment` | variable `AZURE_OPENAI_DECISION_DEPLOYMENT` | no, empty leaves it off | A Microsoft-Decision-1 deployment on the same Azure resource, which suggests a group and category for inbox rows. It uses the endpoint and key above and only runs while `azure-openai-enabled` is `true`. See [Suggested group and category](bank-sync.md#suggested-group-and-category). |
+| `azure-openai-decision-deployment` | variable `AZURE_OPENAI_DECISION_DEPLOYMENT` | no, empty leaves it off | A Microsoft-Decision-1 deployment on the same Azure resource, which suggests a group and category for inbox rows. The AppHost gives it to the API as the `filing-suggestions` model reference, with the endpoint and key above, and it only runs while `azure-openai-enabled` is `true`. See [Suggested group and category](bank-sync.md#suggested-group-and-category). |
 
 Optional values are declared with [`AddOptionalParameter`](../src/GroupSplit.AppHost/Extensions/OptionalParameterExtensions.cs),
 which supplies the default when configuration has no value. The switches decide whether an

@@ -7,8 +7,8 @@ namespace GroupSplit.API.Services.Banking.Suggestions;
 /// It runs on the Azure resource receipt reading already uses, through its own deployment:
 /// Microsoft-Decision-1 answers a multiple-choice question with a probability for each
 /// option, which is exactly a discriminator between the person's own groups and
-/// categories -- it cannot invent one. The endpoint and key are the receipt connection's;
-/// what this adds is which deployment to ask.
+/// categories -- it cannot invent one. The AppHost gives it to the API as its own model
+/// reference, <c>filing-suggestions</c>.
 /// </remarks>
 public sealed class FilingSuggestionOptions
 {

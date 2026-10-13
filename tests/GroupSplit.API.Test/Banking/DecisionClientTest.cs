@@ -40,6 +40,10 @@ public class DecisionClientTest
         Assert.Equal("https://resource.openai.azure.com/providers/microsoft/v1/systemone", handler.Uri?.ToString());
         Assert.Equal("test-key", handler.ApiKey);
 
+        // The live service answers 400 no_content_length_header to a streamed body.
+        Assert.NotNull(handler.ContentLength);
+        Assert.Equal(handler.ContentLength, Encoding.UTF8.GetByteCount(handler.Body!));
+
         using var body = JsonDocument.Parse(handler.Body!);
         Assert.Equal("Decision-1", body.RootElement.GetProperty("model").GetString());
         Assert.Equal("Lidl", body.RootElement.GetProperty("state").GetProperty("merchant").GetString());
@@ -60,17 +64,17 @@ public class DecisionClientTest
     }
 
     [Fact]
-    public void The_endpoint_and_key_come_from_the_receipt_connection()
+    public void The_endpoint_key_and_deployment_come_from_the_model_reference()
     {
         var options = Options(new Dictionary<string, string?>
         {
             ["AzureOpenAI:Enabled"] = "true",
-            ["FilingSuggestions:Deployment"] = "Decision-1",
-            ["ConnectionStrings:receipt-transcription"] =
-                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model=gpt-6-luna"
+            ["ConnectionStrings:filing-suggestions"] =
+                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model=Decision-1"
         });
 
         Assert.True(options.IsConfigured);
+        Assert.Equal("Decision-1", options.Deployment);
         Assert.Equal(new Uri("https://resource.openai.azure.com/"), options.Endpoint);
         Assert.Equal("secret", options.Key);
     }
@@ -81,9 +85,8 @@ public class DecisionClientTest
         var options = Options(new Dictionary<string, string?>
         {
             ["AzureOpenAI:Enabled"] = "false",
-            ["FilingSuggestions:Deployment"] = "Decision-1",
-            ["ConnectionStrings:receipt-transcription"] =
-                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model=gpt-6-luna"
+            ["ConnectionStrings:filing-suggestions"] =
+                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model=Decision-1"
         });
 
         Assert.False(options.IsConfigured);
@@ -95,8 +98,8 @@ public class DecisionClientTest
         var options = Options(new Dictionary<string, string?>
         {
             ["AzureOpenAI:Enabled"] = "true",
-            ["ConnectionStrings:receipt-transcription"] =
-                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model=gpt-6-luna"
+            ["ConnectionStrings:filing-suggestions"] =
+                "Endpoint=https://resource.openai.azure.com/openai/v1/;Key=secret;Model="
         });
 
         Assert.False(options.IsConfigured);
@@ -127,12 +130,15 @@ public class DecisionClientTest
         public Uri? Uri { get; private set; }
         public string? ApiKey { get; private set; }
         public string? Body { get; private set; }
+        public long? ContentLength { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Method = request.Method;
             Uri = request.RequestUri;
             ApiKey = request.Headers.TryGetValues("api-key", out var keys) ? keys.Single() : null;
+            // Before reading, which would buffer it and make up a length the wire never had.
+            ContentLength = request.Content?.Headers.ContentLength;
             Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
 
             return new HttpResponseMessage(status)

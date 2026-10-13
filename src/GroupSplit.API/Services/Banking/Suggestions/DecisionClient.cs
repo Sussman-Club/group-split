@@ -51,16 +51,29 @@ public sealed class DecisionClient(HttpClient http, IOptions<FilingSuggestionOpt
             new Uri(settings.Endpoint!, "providers/microsoft/v1/systemone"));
 
         request.Headers.Add("api-key", settings.Key);
-        request.Content = JsonContent.Create(new DecisionRequest(
+
+        // Serialized up front rather than streamed: the service refuses a body sent without a
+        // Content-Length, which a streamed JsonContent never has.
+        request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(new DecisionRequest(
             settings.Deployment!,
             state,
             new Dictionary<string, DecisionQuestion>
             {
                 [Question] = new("choice", instructions, choices)
-            }), options: Json);
+            }), Json));
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
         using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+
+        // The service says what it refused in the body, and a bare status code in the log
+        // leaves nobody able to tell a bad option list from a missing deployment.
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Decision-1 answered {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync(ct)}",
+                inner: null,
+                response.StatusCode);
+        }
 
         var body = await response.Content.ReadFromJsonAsync<DecisionResponse>(Json, ct);
 

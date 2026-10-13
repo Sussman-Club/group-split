@@ -54,13 +54,8 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
         /// Passes the provider selector and Azure OpenAI feature switch to the API.
         /// The endpoint, key, and model continue to flow through the model reference.
         /// </summary>
-        /// <remarks>
-        /// The filing suggester's deployment goes along too: it is a second deployment on the
-        /// same resource, read with the same key, so the reference already carries the rest.
-        /// </remarks>
         public IResourceBuilder<T> WithAzureOpenAIReceiptTranscription(Parameters parameters) => resource
             .WithEnvironment("ReceiptTranscription__Provider", parameters.Provider)
-            .WithEnvironment("AzureOpenAI__Enabled", parameters.Enabled)
-            .WithEnvironment("FilingSuggestions__Deployment", parameters.DecisionDeployment);
+            .WithEnvironment("AzureOpenAI__Enabled", parameters.Enabled);
     }
 }
