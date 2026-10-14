@@ -126,6 +126,11 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
 
         builder.Services.AddAuthorizationBuilder();
 
+        // Filing suggestions use HybridCache in production. Keep the endpoint host
+        // self-contained while exercising the same service graph.
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddHybridCache();
+
         // One database per host, so tests cannot see each other's rows.
         var databaseName = $"EndpointDb_{Guid.NewGuid()}";
         // Transactions are Postgres's concern; here they are a no-op, not a failure.
