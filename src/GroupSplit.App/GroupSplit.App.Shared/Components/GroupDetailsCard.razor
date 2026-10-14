@@ -48,6 +48,23 @@
                               Immediate="true" />
             </div>
 
+            <div class="gs-group-setting-section" aria-labelledby="group-description-heading">
+                <div class="gs-group-setting-heading">
+                    <div>
+                        <h3 id="group-description-heading" class="gs-group-setting-title">Description</h3>
+                        <span class="gs-group-setting-description">What this group is for.</span>
+                    </div>
+                </div>
+                <MudTextField @bind-Value="_edit.Description"
+                              For="@(() => _edit.Description)"
+                              Label="Description"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="2"
+                              MaxLength="256"
+                              Immediate="true" />
+            </div>
+
             @* The group's and not the reader's: whether it is a trip or a household is true
                for everybody in it. Picking a span on the Activity tab itself never saves here. *@
             <div class="gs-group-setting-section" aria-labelledby="default-period-heading">
@@ -192,7 +209,7 @@
               ?? "";
 
     private bool Dirty =>
-        _edit.Name != _original.Name || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId
+        _edit.Name != _original.Name || _edit.Description != _original.Description || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId
         || _edit.DefaultPeriod != _original.DefaultPeriod;
 
     /// <summary>
@@ -203,13 +220,14 @@
     /// </summary>
     protected override void OnParametersSet()
     {
-        if (Group.Name == _original.Name && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId
+        if (Group.Name == _original.Name && Group.Description == _original.Description && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId
             && Group.DefaultPeriod == _original.DefaultPeriod)
             return;
 
         _original = new CreateGroupRequest
         {
             Name = Group.Name,
+            Description = Group.Description,
             DefaultSplitRuleId = Group.DefaultSplitRuleId,
             DefaultPeriod = Group.DefaultPeriod
         };
@@ -229,6 +247,9 @@
 
         if (_original.Name != _edit.Name)
             patch.Replace(request => request.Name, _edit.Name);
+
+        if (_original.Description != _edit.Description)
+            patch.Replace(request => request.Description, _edit.Description);
 
         if (_original.DefaultSplitRuleId != _edit.DefaultSplitRuleId)
             patch.Replace(request => request.DefaultSplitRuleId, _edit.DefaultSplitRuleId);

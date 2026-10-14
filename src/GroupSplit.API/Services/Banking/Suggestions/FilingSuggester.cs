@@ -1,7 +1,11 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Services.Banking.Suggestions;
@@ -41,6 +45,7 @@ public sealed class FilingSuggester(
     IGroupService groups,
     AppDbContext dbContext,
     IDecisionClient decisions,
+    HybridCache cache,
     IOptions<FilingSuggestionOptions> options,
     ILogger<FilingSuggester> logger) : IFilingSuggester
 {
@@ -49,6 +54,12 @@ public sealed class FilingSuggester(
 
     /// <summary>One more than this is the most options a question may have.</summary>
     private const int MaxDestinations = 254;
+
+    private static readonly HybridCacheEntryOptions CacheOptions = new()
+    {
+        Expiration = TimeSpan.FromDays(7),
+        LocalCacheExpiration = TimeSpan.FromDays(7)
+    };
 
     internal const string Instructions =
         "This is one card or bank charge belonging to the account holder. Which of their own "
@@ -119,6 +130,41 @@ public sealed class FilingSuggester(
         var choices = labelled.ToDictionary(pair => pair.Key, pair => pair.Value.Description);
         choices[CannotTell] = "None of these fits, or there is not enough to go on.";
 
+        var key = CacheKey(row, receipt, destinations, fitting, earlier, settings);
+        var modelWasCalled = false;
+
+        try
+        {
+            var cached = await cache.GetOrCreateAsync(
+                key,
+                async token =>
+                {
+                    modelWasCalled = true;
+                    return new CachedSuggestion(await AskAsync(row, receipt, earlier, labelled, choices, settings, token));
+                },
+                CacheOptions,
+                cancellationToken: ct);
+
+            // A hit deliberately creates no Decision-1 span: no request left this service.
+            Activity.Current?.SetTag("groupsplit.filing_suggestion.cache_hit", !modelWasCalled);
+            return cached.Value;
+        }
+        catch (DecisionFailedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Calls the classifier. A failure is not a cacheable abstention.</summary>
+    private async Task<FilingSuggestionResponse?> AskAsync(
+        BankTransaction row,
+        FilingReceipt? receipt,
+        IReadOnlyList<Destination> earlier,
+        IReadOnlyDictionary<string, Destination> labelled,
+        IReadOnlyDictionary<string, string> choices,
+        FilingSuggestionOptions settings,
+        CancellationToken ct)
+    {
         DecisionAnswer? answer;
 
         try
@@ -129,11 +175,11 @@ public sealed class FilingSuggester(
             answer = await decisions.ChooseAsync(State(row, receipt, earlier), Instructions, choices, timeout.Token);
         }
         catch (Exception exception) when (
-            exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException
+            exception is HttpRequestException or TaskCanceledException or JsonException
             && !ct.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Filing suggestion for bank row {BankTransactionId} failed; none given.", row.Id);
-            return null;
+            throw new DecisionFailedException();
         }
 
         if (answer is null
@@ -151,6 +197,54 @@ public sealed class FilingSuggester(
             chosen.CategoryId,
             chosen.CategoryName,
             answer.Confidence);
+    }
+
+    /// <summary>
+    /// Hashes precisely what can change the answer, without putting private merchant or
+    /// receipt details into Redis keys. Each change naturally names a fresh cache entry.
+    /// </summary>
+    private static string CacheKey(
+        BankTransaction row,
+        FilingReceipt? receipt,
+        IReadOnlyList<Destination> allDestinations,
+        IReadOnlyList<Destination> destinations,
+        IReadOnlyList<Destination> earlier,
+        FilingSuggestionOptions settings)
+    {
+        var inputs = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            row = row.Id,
+            // The entire caller-visible set participates too. A newly added category gets a
+            // fresh answer even if the request's size cap would not offer it this time.
+            allDestinations = allDestinations.Select(destination => new
+            {
+                destination.GroupId,
+                destination.GroupName,
+                destination.GroupDescription,
+                destination.IsPersonal,
+                destination.Currency,
+                destination.CategoryId,
+                destination.CategoryName,
+                destination.CategoryDescription
+            }),
+            destinations = destinations.Select(destination => new
+            {
+                destination.GroupId,
+                destination.GroupName,
+                destination.GroupDescription,
+                destination.IsPersonal,
+                destination.Currency,
+                destination.CategoryId,
+                destination.CategoryName,
+                destination.CategoryDescription
+            }),
+            earlier = earlier.Select(destination => new { destination.GroupId, destination.CategoryId }),
+            receipt = receipt is null ? null : new { receipt.MerchantName, receipt.Items },
+            settings.Deployment,
+            settings.Threshold
+        });
+
+        return "filing-suggestion:v1:" + Convert.ToHexString(SHA256.HashData(inputs));
     }
 
     /// <summary>
@@ -219,19 +313,23 @@ public sealed class FilingSuggester(
             {
                 GroupId = category.Group.Id,
                 GroupName = category.Group.Name,
+                GroupDescription = category.Group.Description,
                 category.Group.Currency,
                 CategoryId = category.Id,
-                CategoryName = category.Name
+                CategoryName = category.Name,
+                CategoryDescription = category.Description
             })
             .ToListAsync(ct);
 
         return [.. found.Select(category => new Destination(
             category.GroupId,
             category.GroupId == me ? "Personal" : category.GroupName,
+            category.GroupDescription,
             category.GroupId == me,
             category.Currency,
             category.CategoryId,
-            category.CategoryName))];
+            category.CategoryName,
+            category.CategoryDescription))];
     }
 
     /// <summary>
@@ -277,15 +375,26 @@ public sealed class FilingSuggester(
     internal sealed record Destination(
         Guid GroupId,
         string GroupName,
+        string GroupDescription,
         bool IsPersonal,
         string Currency,
         Guid CategoryId,
-        string CategoryName)
+        string CategoryName,
+        string CategoryDescription)
     {
         public string Label => $"{GroupName} · {CategoryName}";
 
-        public string Description => IsPersonal
+        public string Description => (IsPersonal
             ? $"The account holder's own expenses, category \"{CategoryName}\". Nobody else shares it."
-            : $"The shared group \"{GroupName}\", category \"{CategoryName}\".";
+            : $"The shared group \"{GroupName}\", category \"{CategoryName}\".")
+            + OptionalDescription("Group", GroupDescription)
+            + OptionalDescription("Category", CategoryDescription);
+
+        private static string OptionalDescription(string kind, string description) =>
+            string.IsNullOrWhiteSpace(description) ? string.Empty : $" {kind}: \"{description}\".";
     }
+
+    private sealed record CachedSuggestion(FilingSuggestionResponse? Value);
+
+    private sealed class DecisionFailedException : Exception;
 }

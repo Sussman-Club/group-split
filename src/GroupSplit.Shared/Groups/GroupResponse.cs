@@ -2,6 +2,7 @@ namespace GroupSplit.Shared;
 
 public record GroupResponse(Guid Id, string Name, int MemberCount, bool IsArchive = false)
 {
+    public string Description { get; init; } = string.Empty;
     public string Currency { get; init; } = "USD";
     public Guid? DefaultSplitRuleId { get; init; }
     public string? DefaultSplitRuleName { get; init; }

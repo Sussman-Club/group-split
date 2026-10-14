@@ -175,6 +175,9 @@ public static class CategoriesApi
                 category.Name,
                 category.DefaultSplitRuleId,
                 category.DefaultSplitRule != null ? category.DefaultSplitRule.Name : null,
-                category.ArchivedAt != null);
+                category.ArchivedAt != null)
+            {
+                Description = category.Description
+            };
     }
 }

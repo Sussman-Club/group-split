@@ -67,6 +67,7 @@ public static class GroupApi
                     var groupInfo = new GroupResponse(createdGroup.Id, createdGroup.Name, 1)
                     {
                         Currency = createdGroup.Currency,
+                        Description = createdGroup.Description,
                         DefaultSplitRuleId = createdGroup.DefaultSplitRuleId,
                         DefaultSplitRuleName = createdGroup.DefaultSplitRule?.Name,
                         DefaultPeriod = createdGroup.DefaultPeriod

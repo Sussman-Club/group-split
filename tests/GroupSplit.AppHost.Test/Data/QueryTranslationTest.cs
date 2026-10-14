@@ -58,6 +58,8 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         services.AddDbContext<AppDbContext, PostgreSqlAppDbContext>(
             options => options.UseNpgsql(connectionString));
         services.AddDomainServices();
+        services.AddDistributedMemoryCache();
+        services.AddHybridCache();
 
         // These tests execute inbox queries, not attachment operations. InboxService still
         // needs the attachment service in its production graph, so provide the same inert
