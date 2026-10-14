@@ -221,6 +221,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("DefaultSplitRuleId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -260,6 +264,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.Property<Guid?>("DefaultSplitRuleId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()

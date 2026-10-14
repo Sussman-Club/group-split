@@ -72,6 +72,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         {
             Group = group,
             Name = request.Name,
+            Description = request.Description,
             DefaultSplitRule = await RuleOf(group, request.DefaultSplitRuleId, ct)
         };
 
@@ -88,6 +89,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         await RefuseDuplicateName(category.Group.Id, request.Name, id, ct);
 
         category.Name = request.Name;
+        category.Description = request.Description;
 
         // Re-pointing a category at a different rule changes what the next expense is
         // pre-filled with, and nothing already recorded: a past expense holds both the

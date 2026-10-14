@@ -453,24 +453,39 @@ public class InboxPageTest : ComponentTest
 
     /// <summary>
     /// The suggestion arrives after the rows -- the inbox never waits on the model -- and
-    /// rides on the row to the filing dialog. The row itself offers no way to file with it.
+    /// one press files it with the same group and category the dialog would use.
     /// </summary>
     [Fact]
-    public void A_suggestion_reaches_the_row_but_the_row_files_nothing_with_it()
+    public async Task A_suggestion_lands_on_its_row_and_one_press_files_it_there()
     {
         var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
+        var home = Guid.NewGuid();
         var groceries = Guid.NewGuid();
         _rows = [row];
-        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Home", false, groceries, "Groceries", 0.9));
+        Suggests(new FilingSuggestionResponse(row.Id, home, "Home", false, groceries, "Groceries", 0.9));
 
         var page = Render<Inbox>();
-        var state = Services.GetRequiredService<IInboxStateService>();
+        await page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']").ClickAsync(new());
 
-        page.WaitForAssertion(() => Assert.Equal(groceries, Assert.Single(state.Rows).Suggestion?.CategoryId));
+        _bank.Verify(bank => bank.FileAsync(row.Id,
+            It.Is<FileBankTransactionRequest>(request => request.GroupId == home && request.CategoryId == groceries),
+            "Home", It.IsAny<CancellationToken>()), Times.Once);
+    }
 
-        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Home · Groceries"));
-        _bank.Verify(bank => bank.FileAsync(It.IsAny<Guid>(), It.IsAny<FileBankTransactionRequest>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    [Fact]
+    public async Task A_personal_suggestion_files_with_no_group()
+    {
+        var row = Row("Netflix", 15m, DateOnly.FromDateTime(Today));
+        var subscriptions = Guid.NewGuid();
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Personal", true, subscriptions, "Subscriptions", 0.8));
+
+        var page = Render<Inbox>();
+        await page.WaitForElement("button[aria-label='File Netflix in Personal · Subscriptions']").ClickAsync(new());
+
+        _bank.Verify(bank => bank.FileAsync(row.Id,
+            It.Is<FileBankTransactionRequest>(request => request.GroupId == null && request.CategoryId == subscriptions),
+            "your own expenses", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -502,12 +517,12 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
         var state = Services.GetRequiredService<IInboxStateService>();
-        page.WaitForAssertion(() => Assert.NotNull(Assert.Single(state.Rows).Suggestion));
+        page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']");
 
         await page.InvokeAsync(() => state.RefreshAsync());
 
         _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        Assert.NotNull(Assert.Single(state.Rows).Suggestion);
+        Assert.NotNull(page.Find("button[aria-label='File Lidl in Home · Groceries']"));
     }
 }

@@ -360,8 +360,16 @@ duplicate are never asked about. The listing does not carry suggestions, so the 
 waits on the model: `InboxStateService` asks once the rows are shown, remembers the answer for
 each row, and does not ask about a row again when the inbox is read after a write.
 
-The row does not show the suggestion: Add to group opens the dialog with it preselected, and
-the person files from there. Nothing is filed without the dialog.
+When there is a suggestion, the row also has a sparkle button naming that destination. It files
+the row with the suggested group and category in one press, so the category's normal split rule
+applies exactly as it would from the dialog. Add to group remains beside it and opens the dialog
+with the same values preselected.
+
+Groups and categories may carry a short optional description. It is shown to Decision-1 with
+the option when present; a blank description leaves the option wording unchanged. Suggestions
+are cached in Redis for seven days. The cache key hashes the row, offered destinations (including
+descriptions), relevant filing history, receipt details, deployment and confidence threshold, so
+any change naturally asks the model again. Model failures are never cached.
 
 The `azure-openai` resource is a Microsoft Foundry account reached by its key. The AppHost
 models Decision-1 on it as a Foundry model, `filing-suggestions`, named by the parameter

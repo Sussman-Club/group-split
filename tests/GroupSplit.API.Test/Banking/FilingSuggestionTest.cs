@@ -191,6 +191,53 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task A_description_is_sent_with_the_option_when_one_is_set()
+    {
+        var (group, groceries) = await Home();
+        var category = await DbContext.Set<Category>().SingleAsync(candidate => candidate.Id == groceries, Ct);
+        group.Description = "The flat we share near the station";
+        category.Description = "Food and household supplies";
+        await DbContext.SaveChangesAsync(Ct);
+        var row = await Row(30m);
+        _model.Answer("Home � Groceries", 0.9);
+
+        await Suggest(row);
+
+        var options = Assert.Single(_model.Asked).Options.Values;
+        Assert.Contains(options, option => option.Contains("The flat we share near the station"));
+        Assert.Contains(options, option => option.Contains("Food and household supplies"));
+    }
+
+    [Fact]
+    public async Task The_same_inputs_are_answered_from_the_cache()
+    {
+        await Home();
+        var row = await Row(30m);
+        _model.Answer("Home � Groceries", 0.9);
+
+        await Suggest(row);
+        await Suggest(row);
+
+        Assert.Single(_model.Asked);
+    }
+
+    [Fact]
+    public async Task Changing_a_destination_description_gets_a_fresh_answer()
+    {
+        var (_, groceries) = await Home();
+        var row = await Row(30m);
+        _model.Answer("Home � Groceries", 0.9);
+
+        await Suggest(row);
+        var category = await DbContext.Set<Category>().SingleAsync(candidate => candidate.Id == groceries, Ct);
+        category.Description = "Food for everybody in the flat";
+        await DbContext.SaveChangesAsync(Ct);
+        await Suggest(row);
+
+        Assert.Equal(2, _model.Asked.Count);
+    }
+
+    [Fact]
     public async Task Member_names_never_go_to_the_model()
     {
         var (group, _) = await Home();
@@ -220,6 +267,20 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         _model.Fail();
 
         Assert.Empty(await Suggest(row));
+    }
+
+    [Fact]
+    public async Task A_failed_call_is_not_cached()
+    {
+        await Home();
+        var row = await Row(30m);
+        _model.Fail();
+
+        Assert.Empty(await Suggest(row));
+
+        _model.AnswerWithFirstOption(0.9);
+        Assert.Single(await Suggest(row));
+        Assert.Equal(2, _model.Asked.Count);
     }
 
     [Fact]
@@ -351,10 +412,23 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         private DecisionAnswer? _answer;
         private bool _fail;
+        private double? _firstOptionConfidence;
 
         public List<(string State, IReadOnlyDictionary<string, string> Options)> Asked { get; } = [];
 
-        public void Answer(string choice, double confidence) => _answer = new DecisionAnswer(choice, confidence);
+        public void Answer(string choice, double confidence)
+        {
+            _fail = false;
+            _firstOptionConfidence = null;
+            _answer = new DecisionAnswer(choice, confidence);
+        }
+
+        public void AnswerWithFirstOption(double confidence)
+        {
+            _fail = false;
+            _answer = null;
+            _firstOptionConfidence = confidence;
+        }
 
         public void Fail() => _fail = true;
 
@@ -366,7 +440,9 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
             return _fail
                 ? Task.FromException<DecisionAnswer?>(new HttpRequestException("model unavailable"))
-                : Task.FromResult(_answer);
+                : Task.FromResult(_firstOptionConfidence is { } confidence
+                    ? new DecisionAnswer(options.Keys.First(choice => choice != FilingSuggester.CannotTell), confidence)
+                    : _answer);
         }
     }
 }

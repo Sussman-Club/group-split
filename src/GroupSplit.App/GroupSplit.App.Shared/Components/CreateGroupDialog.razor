@@ -17,6 +17,14 @@
                 Variant="Variant.Outlined"
                 Immediate="true"
             />
+            <MudTextField @bind-Value="model.Description"
+                          For="@(() => model.Description)"
+                          Label="Description"
+                          HelperText="What this group is for."
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          MaxLength="256"
+                          Immediate="true" />
         </MudForm>
     </DialogContent>
 

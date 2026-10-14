@@ -55,8 +55,8 @@ public static class CategoryCommands
                 // The column only when it can say something. Without --archived every row
                 // would read "no", which is a column of one answer.
                 var table = showArchived
-                    ? Tables.Grid("Id", "Name", "Default rule", "Archived")
-                    : Tables.Grid("Id", "Name", "Default rule");
+                    ? Tables.Grid("Id", "Name", "Description", "Default rule", "Archived")
+                    : Tables.Grid("Id", "Name", "Description", "Default rule");
 
                 foreach (var category in value)
                 {
@@ -64,6 +64,7 @@ public static class CategoryCommands
                     {
                         category.Id.ToString(),
                         Markup.Escape(category.Name),
+                        Markup.Escape(string.IsNullOrWhiteSpace(category.Description) ? "-" : category.Description),
                         Markup.Escape(category.DefaultSplitRuleName ?? "-")
                     };
 
@@ -141,7 +142,12 @@ public static class CategoryCommands
                           + "Omit to divide evenly."
         };
 
-        var command = new Command("create", "Create a category.") { name, group, rule };
+        var description = new Option<string?>("--description")
+        {
+            Description = "Optional context for the category, such as what belongs in it."
+        };
+
+        var command = new Command("create", "Create a category.") { name, group, rule, description };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -152,6 +158,7 @@ public static class CategoryCommands
                 {
                     GroupId = parse.GetValue(group),
                     Name = parse.GetValue(name)!,
+                    Description = parse.GetValue(description) ?? string.Empty,
                     DefaultSplitRuleId = parse.GetValue(rule)
                 },
                 ct);
@@ -178,10 +185,14 @@ public static class CategoryCommands
         {
             Description = "Clear the default rule, so expenses in it divide evenly."
         };
+        var description = new Option<string?>("--description")
+        {
+            Description = "Replace the optional category description. Pass an empty value to clear it."
+        };
 
         var command = new Command("update", "Change a category's name or its default rule.")
         {
-            CategoryId, name, rule, noRule
+            CategoryId, name, rule, noRule, description
         };
 
         command.SetHandler(async (context, ct) =>
@@ -220,6 +231,9 @@ public static class CategoryCommands
                 new UpdateCategoryRequest
                 {
                     Name = parse.GetValue(name) ?? current.Name,
+                    Description = parse.GetResult(description) is null
+                        ? current.Description
+                        : parse.GetValue(description) ?? string.Empty,
                     DefaultSplitRuleId = parse.GetValue(noRule)
                         ? null
                         : parse.GetValue(rule) ?? current.DefaultSplitRuleId
