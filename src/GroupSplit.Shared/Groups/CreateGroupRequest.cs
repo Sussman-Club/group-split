@@ -8,6 +8,9 @@ public record CreateGroupRequest
     [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
     public string Name { get; set; } = null!;
 
+    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    public string Description { get; set; } = string.Empty;
+
     /// <summary>The fallback rule for uncategorized expenses.</summary>
     /// <remarks>New groups always start with Even; this is changed through the group PATCH.</remarks>
     public Guid? DefaultSplitRuleId { get; set; }

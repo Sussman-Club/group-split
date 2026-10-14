@@ -252,6 +252,7 @@ public class GroupService(
                 user
             },
             Name = request.Name,
+            Description = request.Description,
             DefaultPeriod = request.DefaultPeriod
         };
 
@@ -320,6 +321,7 @@ public class GroupService(
                 membership.ArchivedAt != null)
             {
                 Currency = @group.Currency,
+                Description = @group.Description,
                 DefaultSplitRuleId = @group.DefaultSplitRuleId,
                 DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
                 DefaultPeriod = @group.DefaultPeriod,
@@ -333,6 +335,7 @@ public class GroupService(
                       select new CreateGroupRequest
                       {
                           Name = t.Name,
+                          Description = t.Description,
                           DefaultSplitRuleId = t.DefaultSplitRuleId,
                           DefaultPeriod = t.DefaultPeriod
                       }).FirstOrDefaultAsync(ct);
@@ -350,6 +353,7 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
+        existingGroup.Description = request.Description;
         existingGroup.DefaultPeriod = request.DefaultPeriod;
 
         // The property was added to the existing update contract, so callers from before the

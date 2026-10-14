@@ -51,6 +51,13 @@ public class Group : Entity
     public required string Name { get; set; }
 
     /// <summary>
+    /// Optional context for people and the filing suggester, such as which trip this is.
+    /// Kept non-null so existing groups describe themselves as nothing rather than as an
+    /// unknown value while the database is upgraded.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
     /// ISO 4217, and the currency every balance in this group is stated in.
     /// </summary>
     /// <remarks>

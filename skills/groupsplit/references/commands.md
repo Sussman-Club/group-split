@@ -62,8 +62,8 @@ Groups you belong to, their members and their balances.
 | --- | --- |
 | `groups list` | List every group you are a member of. Your personal group comes first, state `personal` (`isPersonal` in JSON); its id is your user id. |
 | `groups show <group-id>` | Show one group. |
-| `groups create <name>` | Create a group. |
-| `groups rename <group-id> <name>` | Rename a group. |
+| `groups create <name>` | Create a group. `--description` adds optional short context, such as which trip it is. |
+| `groups rename <group-id> <name>` | Rename a group. `--description` also replaces its optional context; pass an empty value to clear it. |
 | `groups set-default-split <group-id> <rule-id>` | Choose what an uncategorized expense in this group divides by. Refused for the group's "divide it by the bill" rule (`SPLIT_RULE_INVALID`). |
 | `groups set-default-period <group-id> <period>` | Choose which span the group's Activity tab opens on in the app, for every member: `all-time`, `this-month` (the default), `last-month`, `last-3-months` or `this-year`. `groups show` prints it; JSON carries it as `defaultPeriod`. Nothing in the CLI reads it. |
 | `groups members <group-id>` | List a group's people: its members and its guests. The `Status` column, and `isGuest` in JSON, say which. |
@@ -136,8 +136,8 @@ Expense categories and their default split rules.
 | Command | |
 | --- | --- |
 | `categories list` | List categories. `--archived` includes the ones the group has retired. |
-| `categories create <name>` | Create a category. |
-| `categories update <category-id>` | Change a category's name or its default rule. `--no-rule` clears the rule, which `--rule` cannot: a flag with no value cannot say the difference between "leave it" and "clear it". |
+| `categories create <name>` | Create a category. `--description` adds optional short context about what belongs in it. |
+| `categories update <category-id>` | Change a category's name, description or default rule. `--description` replaces the optional context (an empty value clears it). `--no-rule` clears the rule, which `--rule` cannot: a flag with no value cannot say the difference between "leave it" and "clear it". |
 | `categories archive <category-id>` | Stop offering a category. It leaves every listing; the expenses filed under it keep it. What people mean by deleting one they have used. |
 | `categories unarchive <category-id>` | Offer a retired category again. |
 | `categories delete <category-id>` | Delete a category. Refused once anything is filed under it (`CATEGORY_IN_USE`) -- archive it instead. |

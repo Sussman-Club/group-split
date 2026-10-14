@@ -23,7 +23,10 @@ public record CategoryResponse(
     string Name,
     Guid? DefaultSplitRuleId,
     string? DefaultSplitRuleName,
-    bool IsArchive = false);
+    bool IsArchive = false)
+{
+    public string Description { get; init; } = string.Empty;
+}
 
 public record CreateCategoryRequest
 {
@@ -33,6 +36,9 @@ public record CreateCategoryRequest
     [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
     public string Name { get; init; } = null!;
 
+    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    public string Description { get; init; } = string.Empty;
+
     public Guid? DefaultSplitRuleId { get; init; }
 }
 
@@ -41,6 +47,9 @@ public record UpdateCategoryRequest
     [Required(ErrorMessage = "Name is required")]
     [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
     public string Name { get; set; } = null!;
+
+    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    public string Description { get; set; } = string.Empty;
 
     public Guid? DefaultSplitRuleId { get; set; }
 }
