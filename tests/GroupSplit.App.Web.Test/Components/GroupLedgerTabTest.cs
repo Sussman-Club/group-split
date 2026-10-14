@@ -69,9 +69,10 @@ public class GroupLedgerTabTest : ComponentTest
         _groups
             .Setup(client => client.GetGroupTransactionsSummaryAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(),
-                It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(),
+                It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<string>(),
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .Returns((Guid _, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string _, bool? _,
+            .Returns((Guid _, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, bool? _,
                 string search, CancellationToken _) =>
             {
                 var ask = new Ask(from, to, search);
@@ -81,12 +82,19 @@ public class GroupLedgerTabTest : ComponentTest
             });
 
         _groups
+            .Setup(client => client.GetGroupSpendingByCategoryAsync(
+                It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(),
+                It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CategorySpendingSummaryResponse([]));
+
+        _groups
             .Setup(client => client.GetGroupActivityAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<CancellationToken>()))
-            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, string _,
-                bool? _, int? _, int? _, CancellationToken _) =>
+                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, Guid? _,
+                bool? _, Guid? _, string _, bool? _, int? _, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
 

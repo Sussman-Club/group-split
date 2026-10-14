@@ -32,7 +32,7 @@ and a bearer token.
 | | |
 | --- | --- |
 | `auth` | `login`, `logout`, `status`, `token` |
-| `groups` | `list`, `show`, `create`, `rename`, `set-default-split`, `set-default-period`, `members`, `remove-member`, `balances`, `settle`, `settle-between`, `settle-up`, `activity`, `archive`, `unarchive`, `leave`, `add-guest`, `guests`, `guest-link create\|revoke`, `link show\|create\|revoke`, and the deprecated `invite`, `invitations`, `withdraw-invitation` |
+| `groups` | `list`, `show`, `create`, `rename`, `set-default-split`, `set-default-period`, `members`, `remove-member`, `balances`, `settle`, `settle-between`, `settle-up`, `activity`, `spending`, `archive`, `unarchive`, `leave`, `add-guest`, `guests`, `guest-link create\|revoke`, `link show\|create\|revoke`, and the deprecated `invite`, `invitations`, `withdraw-invitation` |
 | `transactions` (`tx`) | `list`, `show`, `create`, `update`, `summary`, `monthly`, `shares list\|summary`, `bank-matches`, `delete` |
 | `categories` | `list`, `create`, `update`, `archive`, `unarchive`, `delete` |
 | `merchants` | `list`, `show`, `create`, `update`, `delete` |

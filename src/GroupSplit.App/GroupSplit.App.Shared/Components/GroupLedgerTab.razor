@@ -7,7 +7,6 @@
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
-@inject ITransactionsClient TransactionsClient
 @inject ITransactionsPageStateService TransactionsService
 @inject ITransactionCommands Transactions
 @inject IDepartedDeleteGuard DeleteGuard
@@ -56,6 +55,18 @@
             }
 
             <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+
+            @if (!Personal)
+            {
+                <MudSelect T="Guid?" Value="@_paidBy" ValueChanged="SetPaidByAsync" Label="Paid by"
+                           Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" style="min-width: 150px">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Everyone</MudSelectItem>
+                    @foreach (var payer in _payers)
+                    {
+                        <MudSelectItem T="Guid?" Value="@payer.Id">@payer.FullName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
         </div>
 
         @* "Search" and nothing more in the box; what it reaches is in the label a screen
@@ -95,6 +106,46 @@
             }
         </div>
     </div>
+
+    <section class="gs-card gs-stack" aria-label="Spending by category" style="gap: 10px; padding: 18px">
+        <div class="gs-inline" style="justify-content: space-between">
+            <div>
+                <div class="gs-eyebrow">Spending</div>
+                <h3 style="margin: 2px 0 0">By category</h3>
+            </div>
+            <span class="gs-muted" style="font-size: .8125rem">@Span</span>
+        </div>
+        @if (_byCategory is { Categories.Count: > 0 } spending)
+        {
+            @foreach (var category in spending.Categories)
+            {
+                <button type="button" class="gs-row-open" style="width: 100%; text-align: left"
+                        aria-pressed="@(_categoryId == category.CategoryId && (_categoryId is not null || _uncategorized))"
+                        @onclick="@(() => SetCategoryAsync(category.CategoryId))">
+                    <span class="gs-inline" style="justify-content: space-between; width: 100%; gap: 12px">
+                        <span style="min-width: 0">
+                            <span style="display: block; font-weight: 700">@category.Name</span>
+                            <span class="gs-muted" style="font-size: .8125rem">@category.Count expense@(category.Count == 1 ? "" : "s")</span>
+                            <span aria-hidden="true" style="display: block; height: 4px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: var(--mud-palette-lines-default)">
+                                <span style="display: block; height: 100%; width: @CategoryShareWidth(category.Total, spending.Categories); border-radius: inherit; background: var(--mud-palette-primary)"></span>
+                            </span>
+                        </span>
+                        <span class="gs-right">
+                            <Money Value="category.Total" />
+                            @if (!Personal)
+                            {
+                                <span class="gs-muted" style="display: block; font-size: .75rem">your share @category.Share.ToMoney()</span>
+                            }
+                        </span>
+                    </span>
+                </button>
+            }
+        }
+        else
+        {
+            <span class="gs-muted">No spending matches these filters.</span>
+        }
+    </section>
 
     <div class="gs-reveal" style="--i: 2">
         @* Keyed so a URL arriving from outside rebuilds the grid on the page and sort it
@@ -298,6 +349,8 @@
     [Parameter, SupplyParameterFromQuery(Name = "size")] public string? SizeParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "sort")] public string? SortParameter { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "expense")] public string? ExpenseParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "category")] public string? CategoryParameter { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "paidBy")] public string? PaidByParameter { get; set; }
 
     /// <summary>
     /// Whether this is the caller's personal group: nothing is settled in it and every
@@ -320,6 +373,11 @@
     ];
 
     private string _searchString = "";
+    private Guid? _categoryId;
+    private bool _uncategorized;
+    private Guid? _paidBy;
+    private IReadOnlyList<UserInfo> _payers = [];
+    private Guid? _payersFor;
     /// <summary>
     /// The span the tab opens on: the group's own default, which is the current month
     /// unless a member chose otherwise. A household's ledger going back three years opens
@@ -351,14 +409,15 @@
     private bool _reloadAgain;
 
     private TransactionSummaryResponse? _spending;
-    private ExpenseShareSummaryResponse? _shares;
+    private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
     private long _summaryVersion;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
-    private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null;
+    private bool IsNarrowed => IsSearching || !_range.IsAllTime || Kind is not null || _categoryId is not null ||
+                               _uncategorized || _paidBy is not null;
 
     /// <summary>
     /// Whether the reader narrowed this, as opposed to the tab opening narrowed.
@@ -370,7 +429,8 @@
     /// time, which is the widest the tab goes rather than a narrowing.
     /// </remarks>
     private bool IsNarrowedByHand =>
-        IsSearching || Kind is not null || (!_range.IsAllTime && _range != OpensOn);
+        IsSearching || Kind is not null || _categoryId is not null || _uncategorized || _paidBy is not null ||
+        (!_range.IsAllTime && _range != OpensOn);
 
     private string? Search => IsSearching ? _searchString.Trim() : null;
 
@@ -410,7 +470,14 @@
 
     private int ExpenseCount => _spending?.Count ?? 0;
     private decimal Spent => _spending?.Total ?? 0m;
-    private decimal YourShare => _shares?.Share ?? 0m;
+    private decimal YourShare => _byCategory?.Categories.Sum(category => category.Share) ?? 0m;
+
+    private static string CategoryShareWidth(decimal amount, IReadOnlyList<CategorySpendingResponse> categories)
+    {
+        var total = categories.Sum(category => category.Total);
+        var percent = total == 0m ? 0m : Math.Clamp(amount * 100m / total, 0m, 100m);
+        return $"{percent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
 
     /// <summary>
     /// What the two figures are of. It never mentions the kind chips, because the figures
@@ -439,9 +506,10 @@
     /// equal and one arrived at differently does not. The kind is absent on purpose: it does
     /// not move these figures, so a chip click must not send a request for them.
     /// </summary>
-    private sealed record SummaryKey(Guid Group, DateFilter Range, string? Search);
+    private sealed record SummaryKey(Guid Group, DateFilter Range, string? Search, Guid? CategoryId,
+        bool Uncategorized, Guid? PaidBy);
 
-    private SummaryKey CurrentKey => new(GroupId, _range, Search);
+    private SummaryKey CurrentKey => new(GroupId, _range, Search, _categoryId, _uncategorized, _paidBy);
 
     private async Task<GridData<GroupLedgerEntryResponse>> LoadPageAsync(
         GridState<GroupLedgerEntryResponse> state, CancellationToken cancellationToken)
@@ -460,6 +528,9 @@
             to: bounds.To,
             kind: (int?)Kind,
             search: Search,
+            categoryId: _categoryId,
+            uncategorized: _uncategorized ? true : null,
+            paidBy: _paidBy,
             sortBy: sort is null ? "dateTime" : Camel(sort.SortBy),
             sortDescending: sort?.Descending ?? true,
             page: state.Page + 1,
@@ -507,6 +578,45 @@
 
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
+    }
+
+    /// <summary>Clicking the selected row clears it; every other row becomes the category filter.</summary>
+    private async Task SetCategoryAsync(Guid? categoryId)
+    {
+        var selectingCurrent = categoryId == _categoryId && (categoryId is not null || _uncategorized);
+        _categoryId = selectingCurrent ? null : categoryId;
+        _uncategorized = !selectingCurrent && categoryId is null;
+
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private async Task SetPaidByAsync(Guid? userId)
+    {
+        if (_paidBy == userId)
+            return;
+
+        _paidBy = userId;
+        await ReadSummaryAsync();
+        await BackToFirstPageAsync();
+    }
+
+    private async Task LoadPayersAsync()
+    {
+        if (Personal || _payersFor == GroupId)
+            return;
+
+        _payersFor = GroupId;
+        try
+        {
+            _payers = [.. (await GroupsClient.GetGroupMembersAsync(GroupId) ?? [])];
+        }
+        catch
+        {
+            // The activity itself remains useful when the picker cannot load; the server
+            // still honours a payer id in a shared link.
+            _payers = [];
+        }
     }
 
     private Task BackToFirstPageAsync()
@@ -579,21 +689,20 @@
             var bounds = key.Range.Bounds(Clock.Offset, Clock.Today);
 
             var spending = await ReadAsync(() => GroupsClient.GetGroupTransactionsSummaryAsync(
-                key.Group, from: bounds.From, to: bounds.To, search: key.Search));
+                key.Group, from: bounds.From, to: bounds.To, paidBy: key.PaidBy,
+                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search));
 
-            // The caller's own share of the same set, read through the shares summary narrowed
-            // to this group. It is the one figure on the screen that is about the reader rather
-            // than about the group.
-            var shares = await ReadAsync(() => TransactionsClient.GetTransactionSharesSummaryAsync(
-                from: bounds.From, to: bounds.To, groupId: key.Group, search: key.Search));
+            var byCategory = await ReadAsync(() => GroupsClient.GetGroupSpendingByCategoryAsync(
+                key.Group, from: bounds.From, to: bounds.To, paidBy: key.PaidBy,
+                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search));
 
             // A failed read must not count as an answer, and an answer from an older request
             // must not overwrite the figures after a write invalidated the same question.
-            if (version != _summaryVersion || key != CurrentKey || spending is null || shares is null)
+            if (version != _summaryVersion || key != CurrentKey || spending is null || byCategory is null)
                 return;
 
             _spending = spending;
-            _shares = shares;
+            _byCategory = byCategory;
             _asked = key;
         }
         finally
@@ -834,7 +943,7 @@
 
     /// <summary>The tab's narrowing as it is spelled in the query string.</summary>
     private sealed record Query(string? Kind, string? Search, string? Range, string? From, string? To,
-        string? Page, string? Size, string? Sort, string? Expense);
+        string? Page, string? Size, string? Sort, string? Expense, string? Category, string? PaidBy);
 
     /// <summary>
     /// The query this tab last read or wrote. A parameter set that brings the same one back
@@ -851,7 +960,7 @@
     };
 
     private Query Asked => new(KindQuery(Kind), SearchParameter, RangeParameter, FromParameter, ToParameter,
-        PageParameter, SizeParameter, SortParameter, ExpenseParameter);
+        PageParameter, SizeParameter, SortParameter, ExpenseParameter, CategoryParameter, PaidByParameter);
 
     /// <summary>What is on the tab, spelled for the URL, with its opening state left out.</summary>
     private Query Current
@@ -864,7 +973,7 @@
                 ListingQuery.FormatPage(_page),
                 ListingQuery.FormatPageSize(_pageSize),
                 ListingQuery.FormatSort(_sort),
-                _expense?.ToString());
+                _expense?.ToString(), _uncategorized ? "uncategorized" : _categoryId?.ToString(), _paidBy?.ToString());
         }
     }
 
@@ -889,7 +998,9 @@
             ["page"] = query.Page,
             ["size"] = query.Size,
             ["sort"] = query.Sort,
-            ["expense"] = query.Expense
+            ["expense"] = query.Expense,
+            ["category"] = query.Category,
+            ["paidBy"] = query.PaidBy
         });
     }
 
@@ -903,6 +1014,9 @@
         _pageSize = ListingQuery.ParsePageSize(query.Size);
         _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "amount");
         _expense = Guid.TryParse(query.Expense, out var expense) ? expense : null;
+        _categoryId = Guid.TryParse(query.Category, out var category) ? category : null;
+        _uncategorized = string.Equals(query.Category, "uncategorized", StringComparison.OrdinalIgnoreCase);
+        _paidBy = Guid.TryParse(query.PaidBy, out var paidBy) ? paidBy : null;
     }
 
     /// <summary>
@@ -925,7 +1039,7 @@
     /// A URL the tab did not write -- the Activity tab's own link back to a bare ledger, say
     /// -- replaces everything on it, and the rows are read again.
     /// </summary>
-    protected override Task OnParametersSetAsync()
+    protected override async Task OnParametersSetAsync()
     {
         if (Asked != _settled)
         {
@@ -933,7 +1047,8 @@
             _gridGeneration++;
         }
 
-        return ReadSummaryAsync();
+        await LoadPayersAsync();
+        await ReadSummaryAsync();
     }
 
     public void Dispose()

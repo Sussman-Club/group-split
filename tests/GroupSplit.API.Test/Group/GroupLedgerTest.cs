@@ -251,6 +251,31 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal("New", Assert.Single(found).Name);
     }
 
+    [Fact]
+    public async Task CategoryAndPayerFilters_NarrowTheLedger()
+    {
+        var (group, friend) = await GroupOfTwo();
+        var food = await CreateEvenCategory(group, "Food");
+        var travel = await CreateEvenCategory(group, "Travel");
+
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group, PaidByUserId = Me.Id, CategoryId = food,
+            Name = "Dinner", Amount = 100, DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group, PaidByUserId = friend.Id, CategoryId = travel,
+            Name = "Taxi", Amount = 20, DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+        await Expense(group, 10, "Loose change", paidBy: friend);
+        await Settle(group, friend, 5);
+
+        Assert.Equal("Dinner", Assert.Single(await Ledger(group, new ActivityFilter(CategoryId: food))).Name);
+        Assert.Equal("Loose change", Assert.Single(await Ledger(group, new ActivityFilter(Uncategorized: true))).Name);
+        Assert.Equal(3, (await Ledger(group, new ActivityFilter(PaidBy: friend.Id))).Count);
+    }
+
     /// <summary>
     /// The figure above the list counts expenses whatever the list is filtered to. It is
     /// what makes one tab safe: a settlement is money changing hands, not money spent, and a
