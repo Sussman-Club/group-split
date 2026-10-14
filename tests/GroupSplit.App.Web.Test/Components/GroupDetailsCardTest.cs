@@ -57,7 +57,7 @@ public class GroupDetailsCardTest : ComponentTest
         Assert.Equal(4, card.FindAll(".gs-group-setting-section").Count);
         Assert.Contains("The name your members see throughout the app.", card.Markup, StringComparison.Ordinal);
         Assert.Contains("The span every member's Activity tab starts on.", card.Markup, StringComparison.Ordinal);
-        Assert.Contains("Optional context used when suggesting where a bank row belongs.", card.Markup, StringComparison.Ordinal);
+        Assert.Contains("What this group is for.", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Default split", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Used when an expense has no category.", card.Markup, StringComparison.Ordinal);
         Assert.Contains("Categories with their own split keep using it.", card.Markup, StringComparison.Ordinal);
