@@ -17,9 +17,9 @@ public interface IInboxStateService
     /// for that count.
     /// </summary>
     /// <remarks>
-    /// Null and zero are different answers. Working it out means running the matcher over
-    /// every waiting row, which is too much for the badge on every page, so it is asked for
-    /// only where it is said out loud -- see <see cref="WantDuplicateCountAsync"/>.
+    /// Null and zero are different answers. Working it out means comparing every waiting row
+    /// with the expenses around it, which the badge on every page has no use for, so it is
+    /// asked for only where it is said out loud -- see <see cref="WantDuplicateCountAsync"/>.
     /// </remarks>
     int? PossibleDuplicates { get; }
 
@@ -123,10 +123,15 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     private bool _duplicatesWanted;
 
     /// <summary>
-    /// How many pages the inbox is showing. Re-read as one query rather than kept as a
-    /// list, so a row filed on another tab disappears from what is on screen instead of
-    /// leaving a hole that only a reload closes.
+    /// How many pages the inbox is showing. "Load more" reads only the next one and adds
+    /// it; a refresh re-reads every page shown, so a row filed on another tab disappears
+    /// from what is on screen instead of leaving a hole that only a reload closes.
     /// </summary>
+    /// <remarks>
+    /// Page by page, never as one page the size of all of them: that re-downloaded and
+    /// re-matched everything already shown on every "Load more", and stopped growing at
+    /// eight pages, where it met the server's <see cref="PageRequest.MaxPageSize"/>.
+    /// </remarks>
     private int _pages = 1;
 
     /// <summary>
@@ -135,6 +140,23 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// answer is written down only if nothing has been asked for since.
     /// </summary>
     private int _version;
+
+    /// <summary>
+    /// The read whose answer is the one on screen. Behind <see cref="_version"/> while a
+    /// read is out, or when the last one failed -- and then the rows shown are not a safe
+    /// base for "Load more" to add a page to.
+    /// </summary>
+    private int _written;
+
+    /// <summary>
+    /// What has been asked about each row and what came back, null for no suggestion.
+    /// </summary>
+    /// <remarks>
+    /// The rows are read again after every write anywhere in the app, and asking the model
+    /// about the same twenty-five rows each time would be twenty-five calls per filing. A
+    /// row is asked about once; every later read of it is given the answer already had.
+    /// </remarks>
+    private readonly Dictionary<Guid, FilingSuggestionResponse?> _suggestions = [];
 
     public InboxStateService(
         IInboxClient inbox,
@@ -248,21 +270,92 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         Range = range;
 
         // A link asks for as many pages as somebody once loaded, which is never thousands;
-        // the cap is there so a hand-edited one cannot overflow the page size it multiplies.
+        // the cap is there so a hand-edited one cannot ask for thousands of reads.
         _pages = Math.Clamp(pages, 1, MaxPages);
 
         return LoadRowsAsync(ct);
     }
 
     /// <inheritdoc />
-    public Task LoadMoreAsync(CancellationToken ct = default)
+    public async Task LoadMoreAsync(CancellationToken ct = default)
     {
         if (!HasMore)
-            return Task.CompletedTask;
+            return;
 
-        _pages++;
+        var page = ++_pages;
 
-        return RefreshAsync(ct);
+        // A read is still out, or the last one failed. Adding a page to rows that are about
+        // to be replaced, or that are not the answer to the current question, is how a page
+        // gets skipped; reading everything shown, this page included, cannot skip one.
+        if (_written != _version)
+        {
+            await RefreshAsync(ct);
+            return;
+        }
+
+        var loaded = await _guard.RunAsync(async () =>
+        {
+            var version = ++_version;
+            var filter = Filter;
+            var range = Range;
+
+            var next = await PageAsync(filter, range.Days(_clock.Today), page, ct);
+
+            if (version != _version)
+                return;
+
+            // The rows are paged by offset, so a row arriving since the last read pushes the
+            // last one shown onto this page as well. Shown once.
+            var shown = Rows.Select(row => row.Id).ToHashSet();
+
+            Rows = WithSuggestions([.. Rows, .. next.Items.Where(row => !shown.Contains(row.Id))]);
+            TotalCount = next.TotalCount;
+            _written = version;
+
+            Announce();
+            _ = SuggestAsync();
+        }, "your bank inbox");
+
+        // Not loaded, so not shown: the next "Load more" asks for this page again rather
+        // than the one after it.
+        if (!loaded && _pages == page)
+            _pages--;
+    }
+
+    /// <summary>One page of the rows the filter and span ask for.</summary>
+    private Task<PagedResponseOfBankTransactionResponse> PageAsync(
+        InboxStatus filter, DayBounds days, int page, CancellationToken ct) =>
+        _inbox.GetInboxAsync(
+            status: filter,
+            from: days.From,
+            to: days.To,
+            sortBy: null,
+            sortDescending: null,
+            page: page,
+            pageSize: PageSize,
+            cancellationToken: ct);
+
+    /// <summary>
+    /// Pages one to <paramref name="pages"/>, as one list. The first is read alone, because
+    /// it says how many there are; the rest that exist are read together.
+    /// </summary>
+    private async Task<(IReadOnlyList<BankTransactionResponse> Rows, int TotalCount)> PagesAsync(
+        InboxStatus filter, DayBounds days, int pages, CancellationToken ct)
+    {
+        var first = await PageAsync(filter, days, 1, ct);
+        var existing = Math.Min(pages, Math.Max(1, (first.TotalCount + PageSize - 1) / PageSize));
+
+        var rest = await Task.WhenAll(Enumerable.Range(2, existing - 1)
+            .Select(page => PageAsync(filter, days, page, ct)));
+
+        // A row arriving between two of the reads shifts every page after it by one, which
+        // would show the row at the boundary twice.
+        var rows = first.Items
+            .Concat(rest.SelectMany(page => page.Items))
+            .DistinctBy(row => row.Id)
+            .ToList();
+
+        return (rows, rest.Length > 0 ? rest[^1].TotalCount : first.TotalCount);
     }
 
     private Task RefreshAsync() => RefreshAsync(CancellationToken.None);
@@ -281,24 +374,14 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
             var connections = await _connections.GetBankConnectionsAsync(ct);
 
-            PagedResponse<BankTransactionResponse>? page = null;
+            (IReadOnlyList<BankTransactionResponse> Rows, int TotalCount)? shown = null;
 
             if (_rowsWanted)
             {
                 // A bank row is dated by the day the bank put on it, so the span is asked
                 // for as days. Which month "this month" is remains the person's question,
                 // which is what the clock is for.
-                var days = range.Days(_clock.Today);
-
-                page = await _inbox.GetInboxAsync(
-                    status: filter,
-                    from: days.From,
-                    to: days.To,
-                    sortBy: null,
-                    sortDescending: null,
-                    page: 1,
-                    pageSize: PageSize * pages,
-                    cancellationToken: ct);
+                shown = await PagesAsync(filter, range.Days(_clock.Today), pages, ct);
             }
 
             // Something has been asked for since this went out. That answer is the one
@@ -310,14 +393,71 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             PossibleDuplicates = summary.PossibleDuplicates;
             Connections = connections;
 
-            if (page is not null)
+            if (shown is { } read)
             {
-                Rows = page.Items;
-                TotalCount = page.TotalCount;
+                Rows = WithSuggestions(read.Rows);
+                TotalCount = read.TotalCount;
             }
 
+            _written = version;
+
             Announce();
+            _ = SuggestAsync();
         }, "your bank inbox");
+
+    /// <summary>The rows, each carrying the suggestion already had for it.</summary>
+    private IReadOnlyList<BankTransactionResponse> WithSuggestions(IReadOnlyList<BankTransactionResponse> rows) =>
+        [.. rows.Select(row => _suggestions.GetValueOrDefault(row.Id) is { } suggestion
+            ? row with { Suggestion = suggestion }
+            : row)];
+
+    /// <summary>
+    /// Asks where the waiting rows on screen probably go, after they are shown rather than
+    /// before: the inbox never waits on the model. The row carries the answer to the filing
+    /// dialog, which opens with it preselected.
+    /// </summary>
+    /// <remarks>
+    /// Not for a row that could already be recorded -- the question there is whether to
+    /// record anything -- nor for money coming in, which cannot be filed. A failure is the
+    /// same as no suggestion, which is how the inbox looked before there were any.
+    /// </remarks>
+    private async Task SuggestAsync()
+    {
+        var wanted = Rows
+            .Where(row => row.Status == InboxStatus.New
+                          && !row.IsCredit
+                          && row.PossibleDuplicates.Count == 0
+                          && !_suggestions.ContainsKey(row.Id))
+            .Select(row => row.Id)
+            .ToList();
+
+        if (wanted.Count == 0)
+            return;
+
+        foreach (var id in wanted)
+            _suggestions[id] = null;
+
+        foreach (var chunk in wanted.Chunk(SuggestFilingsRequest.MaxRows))
+        {
+            try
+            {
+                var answers = await _inbox.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
+                {
+                    Rows = [.. chunk.Select(id => new SuggestFilingRow { Id = id })]
+                });
+
+                foreach (var answer in answers)
+                    _suggestions[answer.BankTransactionId] = answer;
+            }
+            catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+            {
+                continue;
+            }
+
+            Rows = WithSuggestions(Rows);
+            Announce();
+        }
+    }
 
     private void Announce() => OnChanged?.Invoke();
 

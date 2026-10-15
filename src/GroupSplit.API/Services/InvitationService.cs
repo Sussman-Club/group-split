@@ -408,7 +408,7 @@ public sealed class InvitationService(
         {
             GuestId = guestId,
             UserId = userId,
-            OpenedAt = DateTimeOffset.UtcNow
+            OpenedAt = clock.GetUtcNow()
         });
 
         try

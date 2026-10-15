@@ -1,4 +1,5 @@
 using GroupSplit.Data;
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.Shared.Errors;
 using GroupSplit.Data.Entities;
@@ -42,6 +43,13 @@ public interface ITransactionService
     /// </para>
     /// </remarks>
     Task<IQueryable<TransactionSplit>> Shares(CancellationToken ct = default);
+
+    /// <summary>
+    /// What the caller paid and what their share came to, month by month, over the
+    /// expenses <paramref name="filter"/> keeps: the series behind
+    /// <c>GET /transactions/monthly</c>.
+    /// </summary>
+    Task<List<MonthlyExposureResponse>> MonthlyExposure(TransactionFilter filter, CancellationToken ct = default);
 
     Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default);
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
@@ -165,6 +173,68 @@ public class TransactionService(
                join expense in expenses on split.TransactionId equals expense.Id
                where split.UserId == currentUser.Id
                select split;
+    }
+
+    /// <remarks>
+    /// A currency to a row as well as a month, so the series can be drawn in one of
+    /// them: a line that added euros to dollars would plot a number that is not an
+    /// amount of anything. Its own method rather than the endpoint's body so the real
+    /// database can be asked to translate it.
+    /// </remarks>
+    public async Task<List<MonthlyExposureResponse>> MonthlyExposure(TransactionFilter filter,
+        CancellationToken ct = default)
+    {
+        var transactions = (await List(ct)).ApplyFilter(filter);
+        var shares = await Shares(ct);
+        var userId = userContext.User.Id;
+
+        var paid = await transactions
+            .Where(expense => expense.UserId == userId)
+            .GroupBy(expense => new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency })
+            .Select(month => new
+            {
+                month.Key.Year,
+                month.Key.Month,
+                month.Key.Currency,
+                Count = month.Count(),
+                Total = month.Sum(expense => expense.Amount)
+            })
+            .ToListAsync(ct);
+
+        var owed = await (from split in shares
+                          join expense in transactions on split.TransactionId equals expense.Id
+                          group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency }
+                          into month
+                          select new
+                          {
+                              month.Key.Year,
+                              month.Key.Month,
+                              month.Key.Currency,
+                              Count = month.Count(),
+                              Total = month.Sum()
+                          })
+            .ToListAsync(ct);
+
+        var currency = TransactionApi.HeadlineCurrency(
+            paid.Select(row => (row.Currency, row.Count))
+                .Concat(owed.Select(row => (row.Currency, row.Count)))
+                .GroupBy(row => row.Currency)
+                .Select(rows => (rows.Key, rows.Sum(row => row.Count))));
+
+        paid = [.. paid.Where(row => row.Currency == currency)];
+        owed = [.. owed.Where(row => row.Currency == currency)];
+
+        return paid.Select(row => (row.Year, row.Month))
+            .Union(owed.Select(row => (row.Year, row.Month)))
+            .OrderBy(month => month)
+            .Select(month => new MonthlyExposureResponse(
+                new DateOnly(month.Year, month.Month, 1),
+                paid.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m,
+                owed.FirstOrDefault(row => row.Year == month.Year && row.Month == month.Month)?.Total ?? 0m)
+            {
+                Currency = currency
+            })
+            .ToList();
     }
 
     public Task<IQueryable<Expense>> InGroup(Guid groupId, CancellationToken ct = default)

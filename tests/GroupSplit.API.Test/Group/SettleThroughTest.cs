@@ -121,7 +121,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (group, other) = await GroupOfTwo();
 
         await Expense(group, 100, On(8, 20));
-        await GetService<IGroupService>().Settle(group, new SettleRequest
+        await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
             UserId = other.Id, Amount = 40, Direction = SettlementDirection.TheyPaidYou,
             Date = On(9, 2), Through = EndOfAugust
@@ -245,7 +245,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (group, other) = await GroupOfTwo();
 
         await Expense(group, 100, On(9, 20));
-        await GetService<IGroupService>().Settle(group, new SettleRequest
+        await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
             UserId = other.Id, Amount = 50, Direction = SettlementDirection.TheyPaidYou,
             Date = On(10, 9), Through = EndOfSeptember
@@ -384,7 +384,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (group, other) = await GroupOfTwo();
 
-        await GetService<IGroupService>().Settle(group, new SettleRequest
+        await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
             UserId = other.Id,
             Amount = 10,
@@ -446,7 +446,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense(group, 60, On(8, 10), paidBy: other, between: [Me, other]);
         await Expense(group, 40, On(8, 12), paidBy: third, between: [Me, third]);
 
-        await GetService<IGroupService>().Settle(group, new SettleRequest
+        await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
             UserId = other.Id,
             Amount = 30,
@@ -624,7 +624,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// <summary>The caller paying the other member back.</summary>
     private async Task IPaidThem(Guid groupId, Data.Entities.User other, decimal amount, DateTimeOffset date)
     {
-        await GetService<IGroupService>().Settle(groupId, new SettleRequest
+        await GetService<ISettlementService>().Settle(groupId, new SettleRequest
         {
             UserId = other.Id,
             Amount = amount,
@@ -636,7 +636,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// <summary>The other member paying the caller back, with the plain Settle button.</summary>
     private async Task TheyPaidMe(Guid groupId, Data.Entities.User other, decimal amount, DateTimeOffset date)
     {
-        await GetService<IGroupService>().Settle(groupId, new SettleRequest
+        await GetService<ISettlementService>().Settle(groupId, new SettleRequest
         {
             UserId = other.Id,
             Amount = amount,
@@ -649,7 +649,7 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private async Task Settle(Guid groupId, Data.Entities.User other, SettlementDirection direction,
         DateOnly through)
     {
-        await GetService<IGroupService>().Settle(groupId, new SettleRequest
+        await GetService<ISettlementService>().Settle(groupId, new SettleRequest
         {
             UserId = other.Id,
             Amount = 10,

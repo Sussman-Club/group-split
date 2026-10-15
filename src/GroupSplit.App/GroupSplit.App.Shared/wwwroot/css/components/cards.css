@@ -26,13 +26,6 @@
     box-shadow: var(--gs-shadow-md);
 }
 
-.gs-card-link {
-    display: block;
-    color: inherit;
-    text-decoration: none;
-    cursor: pointer;
-}
-
 .gs-card-title {
     display: flex;
     align-items: center;

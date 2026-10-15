@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
+using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.API.Services;

@@ -2,12 +2,6 @@
 
 namespace GroupSplit.App.Shared.Models;
 
-public class MenuSection
-{
-    public string? Title { get; init; }
-    public List<MenuItem> Items { get; } = new();
-}
-
 public class MenuItem
 {
     public string Href { get; init; } = "";

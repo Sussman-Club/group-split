@@ -48,8 +48,13 @@ builder.Services.AddAuthorizationBuilder();
 builder.AddKeycloakAdminClient();
 
 builder.AddPostgreSqlAppDbContext("db");
+// Suggestions live longer than a browser session. HybridCache keeps their L1 quick and its
+// distributed tier in the stack's Redis, so a deployment or a second API instance reuses them.
+builder.AddRedisDistributedCache("cache");
+builder.Services.AddHybridCache();
 builder.Services.AddReceiptStorage(builder.Configuration);
 builder.Services.AddReceiptTranscription(builder.Configuration);
+builder.Services.AddFilingSuggestions(builder.Configuration);
 builder.Services.AddDomainServices();
 
 // The Data Protection key ring the bank access tokens are encrypted with, in the app

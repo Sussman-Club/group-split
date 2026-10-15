@@ -371,7 +371,11 @@
         }
     }
 
-    private static string SuggestedName(SaveReceiptRequest receipt)
+    /// <summary>
+    /// A name for an expense read off a receipt: its first two items, or "Receipt" when it
+    /// lists none, cut to the longest name a request accepts.
+    /// </summary>
+    internal static string SuggestedName(SaveReceiptRequest receipt)
     {
         var names = receipt.Items
             .Select(item => item.Name.Trim())
@@ -380,7 +384,7 @@
             .ToArray();
 
         var suggestion = names.Length == 0 ? "Receipt" : string.Join(", ", names);
-        return suggestion.Length <= 124 ? suggestion : suggestion[..124].TrimEnd();
+        return suggestion.Length <= TransactionNames.MaxLength ? suggestion : suggestion[..TransactionNames.MaxLength].TrimEnd();
     }
 
     private async Task OnCategoryPickedAsync(Guid? id)
@@ -483,12 +487,6 @@
             return _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
         }
     }
-
-    private string CategoryName =>
-        _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name ?? "uncategorized";
-
-    private string PayerName =>
-        _members.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
 
     /// <summary>
     /// The day, as a person would say it. Today and yesterday by name, because that is what

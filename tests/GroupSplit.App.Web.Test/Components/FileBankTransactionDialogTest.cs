@@ -31,6 +31,10 @@ public class FileBankTransactionDialogTest : ComponentTest
     private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<ICategoriesClient> _categories = new();
     private readonly Mock<ITransactionCommands> _commands = new();
+    private readonly Mock<IInboxClient> _inbox = new();
+
+    private static readonly Guid Rent = Guid.NewGuid();
+    private static readonly Guid Fuel = Guid.NewGuid();
 
     private static readonly BankTransactionResponse Row = new(
         Guid.NewGuid(), new DateOnly(2026, 10, 1), 100m, "USD", "LIDL 1234", "Lidl", null, null, null,
@@ -51,18 +55,20 @@ public class FileBankTransactionDialogTest : ComponentTest
 
         _categories
             .Setup(c => c.GetCategoriesAsync(Flat.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), Flat.Id, "Rent", null, null)]);
+            .ReturnsAsync([new CategoryResponse(Rent, Flat.Id, "Rent", null, null)]);
         _categories
             .Setup(c => c.GetCategoriesAsync(Trip.Id, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new CategoryResponse(Guid.NewGuid(), Trip.Id, "Fuel", null, null)]);
+            .ReturnsAsync([new CategoryResponse(Fuel, Trip.Id, "Fuel", null, null)]);
 
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_categories.Object);
+        Services.AddSingleton(_inbox.Object);
         Services.AddSingleton(Mock.Of<ISplitRuleCommands>());
         Services.AddScoped(_ => _commands.Object);
     }
 
-    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Reference)> OpenAsync()
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Reference)> OpenAsync(
+        BankTransactionResponse? row = null)
     {
         var provider = Render<MudDialogProvider>();
 
@@ -72,7 +78,7 @@ public class FileBankTransactionDialogTest : ComponentTest
             reference = await Services.GetRequiredService<IDialogService>()
                 .ShowAsync<FileBankTransactionDialog>("File it", new DialogParameters<FileBankTransactionDialog>
                 {
-                    { dialog => dialog.Row, Row }
+                    { dialog => dialog.Row, row ?? Row }
                 }));
 
         return (provider, reference!);
@@ -149,5 +155,51 @@ public class FileBankTransactionDialogTest : ComponentTest
         var editor = provider.FindComponent<SplitEditor>();
         Assert.Equal([Ana.Id, Daniel.Id], editor.Instance.Members.Select(member => member.Id));
         Assert.Equal(["Fuel"], decisions.Instance.Categories.Select(category => category.Name));
+    }
+
+    /// <summary>
+    /// The row's suggestion arrives preselected -- group and category both -- and pressing
+    /// the button with nothing changed files it there (#437).
+    /// </summary>
+    [Fact]
+    public async Task A_suggested_group_and_category_arrive_preselected()
+    {
+        var suggested = Row with
+        {
+            Suggestion = new FilingSuggestionResponse(Row.Id, Trip.Id, Trip.Name, false, Fuel, "Fuel", 0.9)
+        };
+
+        var (provider, reference) = await OpenAsync(suggested);
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
+
+        Assert.Equal(Trip.Id, answer?.Request?.GroupId);
+        Assert.Equal(Fuel, answer?.Request?.CategoryId);
+    }
+
+    /// <summary>A group picked by hand wins over the suggestion's category.</summary>
+    [Fact]
+    public async Task Picking_another_group_by_hand_leaves_the_suggestion_behind()
+    {
+        var suggested = Row with
+        {
+            Suggestion = new FilingSuggestionResponse(Row.Id, Trip.Id, Trip.Name, false, Fuel, "Fuel", 0.9)
+        };
+
+        var (provider, reference) = await OpenAsync(suggested);
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(Flat.Id));
+
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
+
+        Assert.Equal(Flat.Id, answer?.Request?.GroupId);
+        Assert.NotEqual(Fuel, answer?.Request?.CategoryId);
     }
 }

@@ -169,7 +169,7 @@ public class SettleUpTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Expense(group, 100);
 
-        await GetService<IGroupService>().Settle(group,
+        await GetService<ISettlementService>().Settle(group,
             new SettleRequest { UserId = other.Id, Amount = 30 }, Ct);
 
         var settled = await Settlements().SettleUp(group, new SettleUpRequest(), Ct);

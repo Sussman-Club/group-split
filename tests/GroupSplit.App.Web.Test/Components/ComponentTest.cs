@@ -20,17 +20,9 @@ namespace GroupSplit.App.Web.Test.Components;
 /// notifier.
 /// </summary>
 /// <remarks>
-/// These are the first component tests in the repo. Until now the Blazor library had none
-/// of any kind, which is why <c>tests/coverage.config</c> excludes it and why the defect
-/// these were written against -- the group's summary cards keeping their all-time figures
-/// while the list under them showed one month -- could not be caught by anything that ran.
-/// <para>
-/// The exclusion stays for now: a Razor component compiles into <c>obj/</c>, which the
-/// coverage config drops as generated, so these move the measured figure hardly at all
-/// while the library's other ~1,260 lines would arrive at once and take the build under
-/// its floor. Taking it out is its own piece of work, and is still tracked in
-/// <c>docs/qa/test-quality-and-coverage.md</c>.
-/// </para>
+/// The first of these were written against a defect nothing that ran could catch: the
+/// group's summary cards keeping their all-time figures while the list under them showed
+/// one month. The library they cover is now part of the coverage gate (#326).
 /// </remarks>
 public abstract class ComponentTest : BunitContext
 {

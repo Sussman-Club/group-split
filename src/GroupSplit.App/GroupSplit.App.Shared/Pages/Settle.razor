@@ -42,7 +42,14 @@
        Arriving here should feel like stepping closer to a number you were already
        looking at. The one difference is that here it is an instruction. *@
     <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
-        @if (Net > 0)
+        @if (Plan is null)
+        {
+            @* No plan is not a plan with nothing in it. Saying "All settled" here told
+               somebody who owed money that they were square whenever the read failed. *@
+            <div class="gs-eyebrow">Overall</div>
+            <div class="gs-hero-amount">@(_planFailed ? "Not loaded" : "…")</div>
+        }
+        else if (Net > 0)
         {
             <div class="gs-eyebrow">Overall, you are owed</div>
             <Money Value="Net" Animate Class="gs-hero-amount" />
@@ -58,6 +65,10 @@
             <div class="gs-hero-amount">All settled</div>
         }
         <div class="gs-hero-sub">@HeroSub</div>
+        @if (Plan is null && _planFailed)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryPlanAsync">Try again</MudButton>
+        }
     </section>
 
     @if (Nothing)
@@ -124,7 +135,14 @@
             }
         </div>
 
-        @if (History is null)
+        @if (History is null && _historyFailed)
+        {
+            <div class="gs-empty" style="padding: 24px">
+                <span>Could not load your settlements.</span>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryHistoryAsync">Try again</MudButton>
+            </div>
+        }
+        else if (History is null)
         {
             <div class="gs-empty" style="padding: 24px"><span>Loading…</span></div>
         }
@@ -178,6 +196,16 @@
 
     private bool Nothing => Plan is not null && YouPay.Count == 0 && OwedToYou.Count == 0;
 
+    /// <summary>
+    /// The first read finished with nothing to show. Kept by the page because the state
+    /// service cannot tell a read that failed from one that has not happened yet: both leave
+    /// it null.
+    /// </summary>
+    private bool _planFailed;
+
+    /// <summary>The same, for the history.</summary>
+    private bool _historyFailed;
+
     private string PositionClass => Net switch
     {
         > 0 => "",
@@ -191,7 +219,7 @@
     /// this screen exists.
     /// </summary>
     private string Summary => Plan is null
-        ? "Working out what clears everything."
+        ? (_planFailed ? "Could not work out what clears everything." : "Working out what clears everything.")
         : Nothing
             ? "Nothing owed either way, in any group."
             : YouPay.Count == 0
@@ -200,7 +228,7 @@
                   + "Recording one clears it in every group it came from.";
 
     private string HeroSub => Plan is null
-        ? ""
+        ? (_planFailed ? "Could not load what you owe and are owed." : "")
         : Plan is { OwedToYouTotal: > 0, YouOweTotal: > 0 }
             ? $"{Plan.OwedToYouTotal.ToMoney()} owed to you by {People(OwedToYou.Count)}, "
               + $"{Plan.YouOweTotal.ToMoney()} owed by you to {People(YouPay.Count)}. They do not cancel out."
@@ -253,9 +281,29 @@
     protected override async Task OnInitializedAsync()
     {
         await Settling.EnsureLoadedAsync();
+        _planFailed = Plan is null;
 
         // Only this page reads the history, so only this page asks for it.
         await Settling.LoadHistoryAsync();
+        _historyFailed = History is null;
+    }
+
+    /// <summary>
+    /// Through a refresh rather than <see cref="ISettleStateService.EnsureLoadedAsync"/>,
+    /// which reads once and would hand back the failed read again.
+    /// </summary>
+    private async Task RetryPlanAsync()
+    {
+        _planFailed = false;
+        await Settling.RefreshAsync();
+        _planFailed = Plan is null;
+    }
+
+    private async Task RetryHistoryAsync()
+    {
+        _historyFailed = false;
+        await Settling.LoadHistoryAsync();
+        _historyFailed = History is null;
     }
 
     public void Dispose() => Settling.OnChanged -= ReRender;

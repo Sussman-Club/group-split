@@ -12,8 +12,7 @@ namespace GroupSplit.API.Endpoints;
 /// </summary>
 /// <remarks>
 /// Returned whole rather than paged: categories are bounded by how many kinds of thing a
-/// group buys, and they feed a select rather than a grid. See the listing contract in the
-/// roadmap.
+/// group buys, and they feed a select rather than a grid.
 /// </remarks>
 public static class CategoriesApi
 {
@@ -176,6 +175,9 @@ public static class CategoriesApi
                 category.Name,
                 category.DefaultSplitRuleId,
                 category.DefaultSplitRule != null ? category.DefaultSplitRule.Name : null,
-                category.ArchivedAt != null);
+                category.ArchivedAt != null)
+            {
+                Description = category.Description
+            };
     }
 }

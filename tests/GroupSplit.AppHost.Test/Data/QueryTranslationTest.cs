@@ -58,6 +58,8 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         services.AddDbContext<AppDbContext, PostgreSqlAppDbContext>(
             options => options.UseNpgsql(connectionString));
         services.AddDomainServices();
+        services.AddDistributedMemoryCache();
+        services.AddHybridCache();
 
         // These tests execute inbox queries, not attachment operations. InboxService still
         // needs the attachment service in its production graph, so provide the same inert
@@ -306,7 +308,7 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
                 await transactions.List(Ct), new TransactionFilter(), me, owedOnly, Ct);
         }
 
-        var months = await (await transactions.List(Ct)).ToMonthlyExposureAsync(await transactions.Shares(Ct), me, Ct);
+        var months = await transactions.MonthlyExposure(new TransactionFilter(), Ct);
 
         Assert.All(months, month => Assert.Equal(months[0].Currency, month.Currency));
     }

@@ -92,7 +92,7 @@ public static class PlaidExtensions
                 .WithDescription(
                     "PKCS#12 certificate, base64 encoded, that the bank access-token key ring is "
                     + "encrypted with. Required whenever bank sync is on outside development. Generate one "
-                    + "with the command in docs/development-and-deployment.md.");
+                    + "with the command in docs/deployment.md.");
 
             builder.Pipeline.AddStep(
                 "validate-plaid",

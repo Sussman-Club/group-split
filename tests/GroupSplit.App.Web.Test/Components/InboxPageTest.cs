@@ -441,4 +441,88 @@ public class InboxPageTest : ComponentTest
 
         Assert.Empty(Checkboxes(page));
     }
+
+    // ---- suggestions (#437) ---------------------------------------------------------
+
+    private void Suggests(params FilingSuggestionResponse[] suggestions) =>
+        _inbox
+            .Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SuggestFilingsRequest asked, CancellationToken _) =>
+                [.. suggestions.Where(suggestion => asked.Rows.Any(row => row.Id == suggestion.BankTransactionId))]);
+
+    /// <summary>
+    /// The suggestion arrives after the rows -- the inbox never waits on the model -- and
+    /// one press files it with the same group and category the dialog would use.
+    /// </summary>
+    [Fact]
+    public async Task A_suggestion_lands_on_its_row_and_one_press_files_it_there()
+    {
+        var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
+        var home = Guid.NewGuid();
+        var groceries = Guid.NewGuid();
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, home, "Home", false, groceries, "Groceries", 0.9));
+
+        var page = Render<Inbox>();
+        await page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']").ClickAsync(new());
+
+        _bank.Verify(bank => bank.FileAsync(row.Id,
+            It.Is<FileBankTransactionRequest>(request => request.GroupId == home && request.CategoryId == groceries),
+            "Home", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_personal_suggestion_files_with_no_group()
+    {
+        var row = Row("Netflix", 15m, DateOnly.FromDateTime(Today));
+        var subscriptions = Guid.NewGuid();
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Personal", true, subscriptions, "Subscriptions", 0.8));
+
+        var page = Render<Inbox>();
+        await page.WaitForElement("button[aria-label='File Netflix in Personal · Subscriptions']").ClickAsync(new());
+
+        _bank.Verify(bank => bank.FileAsync(row.Id,
+            It.Is<FileBankTransactionRequest>(request => request.GroupId == null && request.CategoryId == subscriptions),
+            "your own expenses", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// No suggestion on a row that could already be recorded: the question there is
+    /// whether to record anything, so the model is not even asked.
+    /// </summary>
+    [Fact]
+    public void A_row_that_could_already_be_recorded_is_not_asked_about()
+    {
+        _rows = [Possibly("Trattoria da Enzo", 46m)];
+        Suggests();
+
+        Render<Inbox>();
+
+        _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The rows are read again after every write in the app. A row is asked about once,
+    /// or each filing would be a call to the model for every row on the page.
+    /// </summary>
+    [Fact]
+    public async Task A_row_is_asked_about_once_however_often_the_inbox_is_read_again()
+    {
+        var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
+        _rows = [row];
+        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", 0.9));
+
+        var page = Render<Inbox>();
+        var state = Services.GetRequiredService<IInboxStateService>();
+        page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']");
+
+        await page.InvokeAsync(() => state.RefreshAsync());
+
+        _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(page.Find("button[aria-label='File Lidl in Home · Groceries']"));
+    }
 }

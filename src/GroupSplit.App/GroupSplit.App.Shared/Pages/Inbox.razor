@@ -213,6 +213,16 @@
                                     }
                                     else
                                     {
+                                        @if (row.Suggestion is { } suggestion)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                                       Class="gs-btn-pill"
+                                                       StartIcon="@Icons.Material.Rounded.AutoAwesome"
+                                                       Disabled="@(_busy == row.Id)"
+                                                       title="@($"File it in {suggestion.Destination}")"
+                                                       aria-label="@($"File {row.Title} in {suggestion.Destination}")"
+                                                       OnClick="@(() => AcceptSuggestionAsync(row, suggestion))">@suggestion.Destination</MudButton>
+                                        }
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                    Class="gs-btn-pill"
                                                    Disabled="@(_busy == row.Id)"
@@ -657,6 +667,15 @@
     private async Task KeepPersonalAsync(BankTransactionResponse row) =>
         await FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
             "your own expenses");
+
+    /// <summary>Files the row exactly as choosing this suggestion in the dialog would.</summary>
+    private async Task AcceptSuggestionAsync(BankTransactionResponse row, FilingSuggestionResponse suggestion) =>
+        await FileAsync(row, new FileBankTransactionRequest
+            {
+                GroupId = suggestion.IsPersonal ? null : suggestion.GroupId,
+                CategoryId = suggestion.CategoryId
+            },
+            suggestion.IsPersonal ? "your own expenses" : suggestion.GroupName);
 
     private async Task<TransactionResponse?> AttachAsync(BankTransactionResponse row, Guid transactionId)
     {

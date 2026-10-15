@@ -447,8 +447,8 @@
 
         _failedMerchantLogoUrl = null;
 
-        // Null for most expenses, which have no bill, and null for a failure just the same:
-        // there is nothing to report either way and the strip simply does not appear.
+        // Null for most expenses, which have no bill, and null for a failure once the snackbar
+        // has said so: either way the strip simply does not appear.
         receipt = await bill;
         if (details is { Kind: ActivityKind.Expense })
         {

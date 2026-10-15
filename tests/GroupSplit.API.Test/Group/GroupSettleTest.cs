@@ -42,7 +42,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         };
 
         // Act
-        await groupService.Settle(
+        await GetService<ISettlementService>().Settle(
             group.Id,
             request,
             TestContext.Current.CancellationToken);
@@ -94,7 +94,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var endOfSeptember = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
 
-        await groupService.Settle(
+        await GetService<ISettlementService>().Settle(
             group.Id,
             new SettleRequest
             {
@@ -130,7 +130,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var before = DateTimeOffset.UtcNow;
 
-        await groupService.Settle(
+        await GetService<ISettlementService>().Settle(
             group.Id,
             new SettleRequest { UserId = otherUser.Id, Amount = 50 },
             TestContext.Current.CancellationToken);
@@ -158,7 +158,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             TestContext.Current.CancellationToken);
 
         var exception = await Assert.ThrowsAsync<ConflictException>(() =>
-            groupService.Settle(group.Id,
+            GetService<ISettlementService>().Settle(group.Id,
                 new SettleRequest { UserId = currentUser.Id, Amount = 50 },
                 TestContext.Current.CancellationToken));
 
@@ -184,17 +184,17 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act + Assert
         var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
-            groupService.Settle(group.Id, request,
+            GetService<ISettlementService>().Settle(group.Id, request,
                 TestContext.Current.CancellationToken));
 
-        Assert.Contains("User was not found", ex.Message);
+        Assert.Contains("The person who paid is not in this group", ex.Message);
     }
 
     [Fact]
     public async Task Settle_GroupNotFound_Throws()
     {
         // Arrange
-        var groupService = GetService<IGroupService>();
+        var settlements = GetService<ISettlementService>();
 
         var request = new SettleRequest
         {
@@ -204,7 +204,7 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Act + Assert
         var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
-            groupService.Settle(Guid.NewGuid(), request,
+            settlements.Settle(Guid.NewGuid(), request,
                 TestContext.Current.CancellationToken));
 
         Assert.Contains("Group was not found", ex.Message);

@@ -49,6 +49,13 @@ public interface ISettlementService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Records one repayment between the caller and one other member, in the direction the
+    /// request states.
+    /// </summary>
+    Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Records one repayment between two members, both named, whichever of them the caller
     /// is -- including neither.
     /// </summary>
@@ -130,7 +137,8 @@ public class SettlementService(
     IGroupService groups,
     IDebtCalculationService debtCalculator,
     IGroupParticipants participants,
-    AppDbContext context) : ISettlementService
+    AppDbContext context,
+    TimeProvider clock) : ISettlementService
 {
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
@@ -158,7 +166,7 @@ public class SettlementService(
                 ? "You are already square with everybody in this group."
                 : $"You are already square with everybody in this group for everything through {cutoff.Through:d MMM yyyy}.");
 
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
 
         var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
@@ -183,42 +191,34 @@ public class SettlementService(
         };
     }
 
+    public Task Settle(Guid groupId, SettleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var callerId = userContext.User.Id;
+
+        // Both sides can record one now, and which side this is comes from the request
+        // rather than from the balance. Under "owed to you" the caller is the creditor and
+        // the money moves from the other member to them; under "you owe" they are the
+        // debtor saying they have paid, and it moves the other way. Reading the direction
+        // off the balance instead would get the debtor's case exactly backwards -- they are
+        // acting precisely while the balance still says they owe.
+        //
+        // One row either way, where a settlement used to be a matched pair of a positive
+        // and a negative transaction hung off a pseudo-rule; a pair is two chances to write
+        // half a settlement.
+        var (fromUserId, toUserId) = request.Direction is SettlementDirection.YouPaidThem
+            ? (callerId, request.UserId)
+            : (request.UserId, callerId);
+
+        return Record(groupId, fromUserId, toUserId, request.Amount, request.Date,
+            request.Description, request.Through, cancellationToken);
+    }
+
     public async Task<SettlementPayment> RecordRepayment(Guid groupId,
         RecordRepaymentRequest request, CancellationToken cancellationToken = default)
     {
-        // Scoped to the caller's own groups, as everywhere else: a group they are not in is
-        // not found, rather than one they can write repayments into.
-        var group = await (await groups.GetGroupById(groupId, cancellationToken))
-                        .FirstOrDefaultAsync(cancellationToken)
-                    ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        group.RefuseIfPersonalOf(userContext.User.Id);
-
-        if (request.FromUserId == request.ToUserId)
-            throw new ConflictException(ErrorCodes.SettlementWithSelf,
-                "A settlement needs two different people.");
-
-        // Participants, not only members, at either end: the members record what a guest
-        // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
-        var from = await participants.Find(group.Id, request.FromUserId, cancellationToken)
-                   ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                       "The person who paid is not in this group.");
-
-        var to = await participants.Find(group.Id, request.ToUserId, cancellationToken)
-                 ?? throw new NotFoundException(ErrorCodes.UserNotFound,
-                     "The person who was paid is not in this group.");
-
-        // Whatever the caller says, not what a balance implies. Nothing is checked against
-        // what is outstanding: a group entering its history writes repayments for months
-        // whose expenses are already in, and a repayment that overshoots today's balance is
-        // an ordinary thing anyway -- somebody rounding up, or paying ahead.
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
-
-        var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
-
-        context.Add(group.SettlementBetween(from, to, request.Amount, date, description));
-
-        await context.SaveChangesAsync(cancellationToken);
+        var (from, to) = await Record(groupId, request.FromUserId, request.ToUserId, request.Amount,
+            request.Date, request.Description, null, cancellationToken);
 
         return new SettlementPayment
         {
@@ -228,6 +228,52 @@ public class SettlementService(
             ToUserName = $"{to.FirstName} {to.LastName}".Trim(),
             Amount = request.Amount
         };
+    }
+
+    /// <summary>
+    /// Writes one repayment between two participants of a group: what settling with one
+    /// member and recording a repayment between any two both come down to.
+    /// </summary>
+    private async Task<(User From, User To)> Record(Guid groupId, Guid fromUserId, Guid toUserId,
+        decimal amount, DateTimeOffset? date, string? description, DateOnly? coversThrough,
+        CancellationToken cancellationToken)
+    {
+        // Scoped to the caller's own groups, as everywhere else: a group they are not in is
+        // not found, rather than one they can write repayments into.
+        var group = await (await groups.GetGroupById(groupId, cancellationToken))
+                        .FirstOrDefaultAsync(cancellationToken)
+                    ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+
+        group.RefuseIfPersonalOf(userContext.User.Id);
+
+        if (fromUserId == toUserId)
+            throw new ConflictException(ErrorCodes.SettlementWithSelf,
+                "A settlement needs two different people.");
+
+        // Participants, not only members, at either end: the members record what a guest
+        // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
+        var from = await participants.Find(group.Id, fromUserId, cancellationToken)
+                   ?? throw new NotFoundException(ErrorCodes.UserNotFound,
+                       "The person who paid is not in this group.");
+
+        var to = await participants.Find(group.Id, toUserId, cancellationToken)
+                 ?? throw new NotFoundException(ErrorCodes.UserNotFound,
+                     "The person who was paid is not in this group.");
+
+        // Whatever the caller says, not what a balance implies. Nothing is checked against
+        // what is outstanding: a group entering its history writes repayments for months
+        // whose expenses are already in, and a repayment that overshoots today's balance is
+        // an ordinary thing anyway -- somebody rounding up, or paying ahead.
+        //
+        // The stated date, or now. A payment made on the 30th and typed in on the 3rd
+        // belongs to the month it settled, not the one somebody got round to it in.
+        context.Add(group.SettlementBetween(from, to, amount,
+            (date ?? clock.GetUtcNow()).ToUniversalTime(),
+            description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return (from, to);
     }
 
     public Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default) =>
@@ -293,7 +339,7 @@ public class SettlementService(
                          ? "There is nothing outstanding between the two of you in that direction."
                          : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
 
-        var allocations = Allocate(request.Amount, person.Groups);
+        var allocations = person.Allocate(request.Amount);
 
         var groups = await context.Set<Group>()
             .Include(@group => @group.Users)
@@ -304,7 +350,7 @@ public class SettlementService(
                         .FirstOrDefaultAsync(user => user.Id == request.UserId, cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
 
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
         var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
         var (from, to) = request.Direction is SettlementDirection.YouPaidThem
@@ -557,7 +603,8 @@ public class SettlementService(
 
     /// <summary>
     /// Largest person first, and within a person largest group first -- which is both how
-    /// somebody reads the list and the order <see cref="Allocate"/> spends a payment in.
+    /// somebody reads the list and the order <see cref="PersonSettlement.Allocate"/> spends a
+    /// payment in.
     /// </summary>
     private static IReadOnlyList<PersonSettlement> Finish(Dictionary<Guid, PersonBuilder> side) =>
     [
@@ -571,41 +618,6 @@ public class SettlementService(
                [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)],
                entry.Value.IsGuest)
     ];
-
-    /// <summary>
-    /// Spends one payment over the groups the debt spans, largest group first.
-    /// </summary>
-    /// <remarks>
-    /// The caller does not choose, and that is the point of the screen: which group a
-    /// payment lands in is bookkeeping, and the person handing over the money should not
-    /// have to do it. Largest first clears whole groups soonest, so a partial payment
-    /// leaves the fewest groups half-settled.
-    /// <para>
-    /// Anything beyond what is outstanding -- somebody rounding up -- goes onto the largest
-    /// group. It has to land somewhere, and that is where an overpayment is least
-    /// surprising to find.
-    /// </para>
-    /// </remarks>
-    private static IReadOnlyList<GroupDebt> Allocate(decimal amount, IReadOnlyList<GroupDebt> groups)
-    {
-        var allocations = new List<GroupDebt>(groups.Count);
-        var remaining = amount;
-
-        foreach (var @group in groups)
-        {
-            if (remaining <= 0)
-                break;
-
-            var part = Math.Min(remaining, @group.Amount);
-            allocations.Add(@group with { Amount = part });
-            remaining -= part;
-        }
-
-        if (remaining > 0 && allocations.Count > 0)
-            allocations[0] = allocations[0] with { Amount = allocations[0].Amount + remaining };
-
-        return allocations;
-    }
 
     /// <remarks>
     /// <see cref="IsGuest"/> is the same in every group the person spans, because a guest's

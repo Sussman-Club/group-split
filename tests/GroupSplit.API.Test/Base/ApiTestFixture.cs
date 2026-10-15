@@ -48,6 +48,10 @@ public class ApiTestFixture : IAsyncLifetime
         // Register your API services
         // The production list, so a test host cannot drift from what actually runs.
         services.AddDomainServices();
+        // The API uses HybridCache for filing suggestions. Unit tests deliberately keep its
+        // distributed tier in memory; the real host wires the same abstraction to Redis.
+        services.AddDistributedMemoryCache();
+        services.AddHybridCache();
 
         // Receipt files use object storage in production. The common unit-test graph must
         // still be constructible for tests that never touch a receipt, so give the service

@@ -63,7 +63,7 @@ public interface IJoinLinkService
     Task<JoinedGroupResponse> Accept(string token, CancellationToken ct = default);
 }
 
-public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext context, IGroupJoiner joiner)
+public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext context, IGroupJoiner joiner, TimeProvider clock)
     : IJoinLinkService
 {
     /// <summary>
@@ -95,7 +95,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
         // press wins and nothing is left half-alive.
         for (var attempt = 1; ; attempt++)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = clock.GetUtcNow();
 
             await RevokeStanding(groupId, now, ct);
 
@@ -135,7 +135,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
     {
         await MemberGroup(groupId, ct);
 
-        await RevokeStanding(groupId, DateTimeOffset.UtcNow, ct);
+        await RevokeStanding(groupId, clock.GetUtcNow(), ct);
         await context.SaveChangesAsync(ct);
     }
 
@@ -209,7 +209,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
             throw new ConflictException(ErrorCodes.GroupJoinLinkRevoked,
                 "That join link has been withdrawn by the group.");
 
-        if (link.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (link.ExpiresAt <= clock.GetUtcNow())
             throw new ConflictException(ErrorCodes.GroupJoinLinkExpired,
                 "That join link has expired.");
 
@@ -218,7 +218,7 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
 
     private IQueryable<GroupJoinLink> Live(Guid groupId)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
 
         return context.Set<GroupJoinLink>()
             .Where(link => link.GroupId == groupId && link.RevokedAt == null && link.ExpiresAt > now);

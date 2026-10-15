@@ -25,7 +25,7 @@ branches on one member of it, `code`, and shows people a message of its own choo
 | `status` | yes | The HTTP status, repeated. |
 | `detail` | usually | A sentence for developers about this occurrence. Never an exception message, stack trace or SQL. |
 | `instance` | yes | The request path. |
-| `code` | yes | The stable identifier from the [catalog](#the-code-catalog). **This is what clients branch on.** |
+| `code` | yes | The stable identifier from the [catalog](#the-code-catalog), and what clients branch on. |
 | `traceId` | yes | The W3C trace id of the request. The same id is on the server's log line, so a screenshot of an error is enough to find the log. |
 | `errors` | on `VALIDATION_FAILED` | Field name to messages, as the framework's validation problem has it. |
 | anything else | per code | Extension members named in the catalog, such as `outstandingBalances`. |
@@ -39,8 +39,10 @@ branches on one member of it, `code`, and shows people a message of its own choo
 | 403 | Forbidden | `ForbiddenException` | You are known and may not do this. |
 | 404 | Not found | `NotFoundException`, or `Problems.NotFound(...)` from an endpoint | What the URL names, or what the body refers to, does not exist for you. A resource in someone else's group answers this way too: whether it exists is not yours to learn. |
 | 409 | Conflict | `ConflictException`, or `Problems.Conflict(...)` from an endpoint | The request is fine, the current state refuses it. Something has to change first. |
+| 422 | Unprocessable | `UnprocessableException` | The request holds together, and carrying it out would leave the data saying something untrue. |
 | 429 | Too many requests | the rate limiter, never thrown | Wait `retryAfter` seconds and send the same request again. |
-| 500 | Bug | anything else | Our fault. The body carries only the trace id. |
+| 500 | Bug | anything else | Our fault. The body carries only the trace id, except for the [three bank-link codes](#server-error-500-with-something-to-say), thrown as `LeftBehindException`. |
+| 502 | Bad gateway | `BadGatewayException` | A service this one depends on did not answer. Send the same request again later. |
 
 ## The code catalog
 
@@ -69,20 +71,20 @@ routing, authentication, model binding, an unhandled exception.
 | Code | When |
 | --- | --- |
 | `GROUP_NOT_FOUND` | The group does not exist, or the caller is not a member. |
-| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. Removing somebody who is not a member -- who has already left, or was never in the group -- answers this too. |
+| `USER_NOT_FOUND` | The user named in the request does not exist, or is not someone the caller shares a group with. Removing somebody who is not a member (who has already left, or was never in the group) answers this too. |
 | `ACCOUNT_NOT_FOUND` | The account to delete does not exist. |
 | `TRANSACTION_NOT_FOUND` | The transaction does not exist, or is in a group the caller is not in. |
 | `CATEGORY_NOT_FOUND` | The category does not exist, or is in a group the caller is not in. |
 | `SPLIT_RULE_NOT_FOUND` | The split rule does not exist, or is in a group the caller is not in. |
-| `GROUP_INVITATION_NOT_FOUND` | No guest's link answers to that token (or no guest to that old invitation id): it was never issued, or has been claimed, replaced, stopped or turned down, or the guest was removed, or it has expired -- a guest's link lasts 30 days from being issued (`GroupGuest.LinkLifetime`). Unlike `GROUP_JOIN_LINK_EXPIRED`, expiry is not told apart here, for the reason that follows. A guest's link works once, so a forwarded copy of a claimed one lands here -- and gets the same answer a mistyped URL does, deliberately: the alternative is telling whoever holds it that it used to be good. The second of two people claiming one link at the same moment gets this too, and is never let in. |
+| `GROUP_INVITATION_NOT_FOUND` | No guest's link answers to that token (or no guest to that old invitation id): it was never issued, or has been claimed, replaced, stopped or turned down, or the guest was removed, or it has expired (a guest's link lasts 30 days from being issued, `GroupGuest.LinkLifetime`). Unlike `GROUP_JOIN_LINK_EXPIRED`, expiry is not told apart here. A guest's link works once, so a forwarded copy of a claimed one lands here and gets the same answer a mistyped URL does; anything else would tell whoever holds it that it used to be good. The second of two people claiming one link at the same moment gets this too, and is never let in. |
 | `GROUP_GUEST_NOT_FOUND` | A guest route named a user id that is not a current guest of the group: never one, removed, or claimed and now a member. Guest routes take the guest's user id, not the old invitation id. |
 | `GROUP_JOIN_LINK_NOT_FOUND` | No join link answers to that token, or the group has never had one. A link that has run out or been withdrawn answers 409 instead, so that the person holding it can be told which. |
 | `BANK_CONNECTION_NOT_FOUND` | The linked bank does not exist, or belongs to somebody else. Bank data is a person's, so another account's connection is never merely forbidden. |
 | `BANK_TRANSACTION_NOT_FOUND` | The imported row does not exist, belongs to somebody else, or has been superseded by the posted row that settled it. |
 | `MERCHANT_NOT_FOUND` | The merchant does not exist, or is not one of the caller's: they have no expense they can read and no imported bank row at it. Which places other people have spent at is not theirs to learn, so the two answer alike. |
-| `RECEIPT_NOT_FOUND` | The expense, or the imported row, has no itemised bill on it. Also raised when dividing an expense whose category names an itemised rule and which nobody has attached a bill to -- the division says so by name rather than falling back to an even split. |
+| `RECEIPT_NOT_FOUND` | The expense, or the imported row, has no itemised bill on it. Also raised, as a 422, when dividing an expense whose category names an itemised rule and which nobody has attached a bill to: the division says so by name instead of falling back to an even split. |
 | `RECEIPT_ATTACHMENT_NOT_FOUND` | The source file does not exist on this expense, or is not visible to the caller. |
-| `TRANSACTION_NOT_FOUND` (on a receipt route) | The id names a repayment rather than an expense. A transfer is one member paying another back and has no items to divide, so the receipt routes read it as no expense of that id -- there is no separate code for it. |
+| `TRANSACTION_NOT_FOUND` (on a receipt route) | The id names a repayment rather than an expense. A transfer is one member paying another back and has no items to divide, so the receipt routes read it as no expense of that id, with no code of its own. |
 | `RECEIPT_ITEM_NOT_FOUND` | The line named is not on this receipt. |
 
 ### Forbidden (403)
@@ -91,7 +93,7 @@ routing, authentication, model binding, an unhandled exception.
 | --- | --- |
 | `GROUP_CANNOT_REMOVE_SELF` | The member being removed is the caller. Leaving is `DELETE /groups/{id}/members/me`. |
 | `MERCHANT_EDIT_FORBIDDEN` | A rename, a new logo or a deletion of a merchant, by anybody. A merchant is shared by every group that has spent there, so any of the three changes what other people see on their own expenses, and the app has no role entitled to decide that for them. Answered before the merchant is looked up, so it is the same whether the id exists or not. To change where one expense was spent, point the expense at a different merchant. |
-| `ACCOUNT_DELETED` | The token is valid and its subject belongs to an account that has been deleted. Answered by every authenticated route, before the route itself runs. The login is deleted from Keycloak along with the account, so this is only ever seen in the gap: a token issued before the deletion, or a sign-in while Keycloak could not yet be reached to delete the login. Nothing is provisioned in the account's place, and signing in again will not help. See [account deletion](account-deletion.md). |
+| `ACCOUNT_DELETED` | The token is valid and its subject belongs to an account that has been deleted. Answered by every authenticated route, before the route itself runs. The login is deleted from Keycloak along with the account, so this is only ever seen in the gap: a token issued before the deletion, or a sign-in while Keycloak could not yet be reached to delete the login. Nothing is provisioned in the account's place, and signing in again will not help. See [account deletion](keycloak.md#deleting-an-account). |
 | `CROSS_SITE_REQUEST_REFUSED` | Answered by the web app, not the API: a write (anything but `GET`, `HEAD` or `OPTIONS`) reached the cookie-authenticated `/api` route carrying neither `Sec-Fetch-Site: same-origin`, which every current browser sends on the app's own requests, nor the `X-GroupSplit-Request` header the app's own client adds for a browser too old to send that. Nothing reached the API. Token-bearing clients use `/native/api` and never see this. |
 
 ### Conflict (409)
@@ -102,16 +104,16 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_MEMBER_NOT_SETTLED` | The member or guest being removed still has a balance in the group. For a guest, a member records the repayment that squares them first. | `balance`: their net balance, negative when they owe. |
 | `ACCOUNT_NOT_SETTLED` | The account being deleted still has a balance in one or more groups. Nothing was changed. | `outstandingBalances`: an array of `{ groupId, groupName, balance }`. |
 | `CATEGORY_NAME_TAKEN` | The group already has a category with that name. | |
-| `CATEGORY_IN_USE` | The category still has expenses filed under it. Move them first. | |
+| `CATEGORY_IN_USE` | A delete was asked for on a category that still has expenses filed under it. Archive it instead (`POST /categories/{id}/archive`); see [retiring a category](split-rules-and-membership.md#retiring-a-category). | |
 | `SPLIT_RULE_NAME_TAKEN` | The group already has a split rule with that name. | |
-| `SPLIT_RULE_IN_USE` | The split rule cannot be deleted. Either a category still defaults to it -- point the category elsewhere first -- or an expense was divided by one of its versions, which makes it part of that expense's history and undeletable for good. | |
+| `SPLIT_RULE_IN_USE` | The split rule cannot be deleted. Either a category still defaults to it (point the category elsewhere first), or an expense was divided by one of its versions, which makes it part of that expense's history and undeletable for good. | |
 | `SPLIT_RULE_ALREADY_HAS_HISTORY` | `PUT /split-rules/{id}/versions` was sent for a rule that has already been through more than one version. Writing a history wholesale is defined only for a rule that has stood for one division since it was made, which is the state a migration leaves every rule in; anything else would have to decide what becomes of the windows already there and of the expenses pointing into them. | `splitRuleId`, `versionCount`. |
 | `SPLIT_RULE_HISTORY_ENDS_ELSEWHERE` | The last entry of a written history is not the division the rule stands for now. It has to be: that entry becomes the open version, and the open version is the row already-recorded expenses point at, so it is reused rather than replaced. Correct the rule with the ordinary `PUT /split-rules/{id}` first. | `splitRuleId`, `currentVersionId`. |
 | `SPLIT_RULE_VERSION_NOT_IN_GROUP` | `PUT /transactions/{id}/division-source` named a version of a rule belonging to some other group. The same answer whether the version exists or not, so guessing ids teaches nobody what another group keeps. | `splitRuleVersionId`. |
 | `SPLIT_RULE_NOT_EDITABLE` | A rename, a restatement, a written history or a deletion was asked for on a rule the group was given rather than wrote. There are two kinds: the one it holds per member, putting the whole amount on them, and the one it holds for dividing an expense by its own bill. Both exist without anybody creating them, and an expense may name either the same way, so what they say is fixed: changing one would move money on expenses recorded under a division nobody chose. A group wanting its own is one `POST /split-rules` away, and that one is editable. The message says which of the two it was. | `splitRuleId`, `allForUserId` on a member's. |
 | `SPLIT_RULE_KIND_FIXED` | `PUT /split-rules/{id}` gave a rule a division of a different kind from the one it stands for. A rule is a named division a group refers to and the shape of that division is part of what the rule is -- the categories pointing at it, and every expense divided by it, were pointed at a rule that divided that way. Changing the numbers is an edit; changing the shape is a different rule wearing the name. Writing a history is exempt: it records a past that really did change shape. | `splitRuleId`. |
 | `SPLIT_RULE_BILL_IS_PROVISIONED` | `POST /split-rules` asked for a second "divide it by the bill" rule. Every group is given exactly one and it is not written by hand: the rule holds no settings for a second to differ by, because what it divides by lives on the receipt, one line at a time. Two of them are the same rule under two names, and the names were the only thing a second ever bought -- at the cost of every client having to pick among indistinguishable rules to offer "divide it by the bill". The refusal names the one the group already holds, so use that id. | `splitRuleId` of the one it holds. |
-| `SPLIT_RULE_NOT_IN_GROUP` | An expense named a `splitRuleId` belonging to some other group, or named one at all while having no group to divide between. The same answer whether the rule exists or not. | `splitRuleId`, on the first. |
+| `SPLIT_RULE_NOT_IN_GROUP` | An expense named a `splitRuleId` belonging to some other group, or named one at all on a personal expense, which has nobody to divide between. The same answer whether the rule exists or not. | `splitRuleId`, on the first. |
 | `TRANSACTION_PAYER_NOT_IN_GROUP` | The person named as having paid is neither a member nor a guest of the group. A guest is a participant in the group's money and may be the payer -- see [guests](guests.md). | |
 | `SPLIT_USER_NOT_IN_GROUP` | A stated share names somebody who is neither a member nor a guest of the group. A share the expense already holds for somebody who has since left is not refused here: carrying it forward unchanged is allowed, and changing it is `TRANSACTION_MOVES_DEPARTED_BALANCE`. | |
 | `SETTLEMENT_WITH_SELF` | The settlement names the caller on both sides. | |
@@ -119,7 +121,7 @@ routing, authentication, model binding, an unhandled exception.
 | `GROUP_MEMBER_NOT_JOINED` | **Retired; never sent.** Removing an invitee used to be refused. A guest is removed like a member, once square. | |
 | `SETTLEMENT_NOTHING_TO_SETTLE` | Squaring up when the caller owes nobody in the group and is owed by nobody. | |
 | `TRANSACTION_MOVES_DEPARTED_BALANCE` | An edit, a re-division, a move to another group, a bill division or a delete would change what somebody who has left the group paid or owed on this transaction. They left with a zero balance, and the group's balances add up only while their part stands as recorded. Renaming, re-noting, re-dating, re-filing and re-pointing a bill line are allowed, as is setting the other shares by hand while leaving theirs as it is. | `userIds`: the people whose part would move. |
-| `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it -- it is their own record -- but a change would move balances for people whose group they are no longer in. | |
+| `TRANSACTION_GROUP_LEFT` | The expense is in a group the caller has left. They can still read it, since it is their own record, but a change would move balances for people whose group they are no longer in. | |
 | `GROUP_CANNOT_LEAVE_LAST_MEMBER` | The caller is the only member left, so leaving would leave the group with nobody in it and no way back to its history. Archiving is the thing they want. | |
 | `PERSONAL_GROUP_NOT_SHARED` | The group is the caller's personal group (its id is their user id), and what was asked needs a second person: adding or removing a member, a guest, an invitation, a join link, a split rule (or a category that divides by one), a settlement, leaving it or archiving it. A personal group is its owner's alone. | |
 | `GROUP_JOIN_LINK_EXPIRED` | The join link is past its expiry. Somebody in the group makes a new one. | |
@@ -130,11 +132,11 @@ routing, authentication, model binding, an unhandled exception.
 | `BANK_TRANSACTION_ALREADY_FILED` | The imported row is already an expense. Filing it again would be a second expense for one payment. Deleting the expense undoes the filing: the row goes back to the inbox as waiting, with the receipt files attached to it there, and can be filed, linked or ignored again. A row the bank has withdrawn since it was filed goes with the expense instead. Also answered by uploading a receipt file to a row that is no longer waiting. | |
 | `BANK_CONNECTION_NEEDS_ATTENTION` | The bank needs the person before it will share anything -- a new sign-in, a locked account, a password it wants reset, an agreement waiting on its own site, no account shared -- so a sync would only be told so. Link in update mode is the way out, after whatever the bank asks for. | |
 | `CURRENCY_MISMATCH` | The money is in one currency and the group keeps its balances in another -- recording an expense there with a different `currency`, filing an imported row into it, or moving an expense into it (from personal, or from a group in another currency); an expense keeps the currency it was recorded in. Or, when attaching an imported row to an expense already recorded, the row is in a different one from that expense. Conversion is out of scope, and mixing them would make the balances wrong rather than merely incomplete. A personal expense may be in any currency, so keeping it personal is always open. | `transactionCurrency`, and `groupCurrency` or `expenseCurrency` depending on what it was compared against. |
-| `POSSIBLE_DUPLICATE_EXPENSE` | The imported row looks like an expense already recorded: same payer, close enough in amount, within a few days. Nothing is refused permanently -- the caller either files it anyway, because they really did pay twice, or points the row at the expense that is already there with `POST /inbox/{id}/link`. Raised before the second expense exists, because a duplicate found afterwards is a wrong balance somebody has to notice. | `matches`: an array of `{ transactionId, name, amount, currency, dateTime, groupId, groupName, paidByUserName, amountDifference, daysApart }`, closest first. |
+| `POSSIBLE_DUPLICATE_EXPENSE` | The imported row looks like an expense already recorded: same payer, close enough in amount, within a few days. Nothing is refused for good: the caller either files it anyway, because they really did pay twice, or points the row at the expense that is already there with `POST /inbox/{id}/link`. Raised before the second expense exists, because a duplicate found afterwards is a wrong balance somebody has to notice. See [duplicate detection](bank-sync.md#duplicate-detection). | `matches`: an array of `{ transactionId, name, amount, currency, dateTime, groupId, groupName, paidByUserName, amountDifference, daysApart, confidence }`, best first; `confidence` is `Confident` or `Possible`. |
 | `TRANSACTION_ALREADY_IMPORTED` | The expense an imported row is being attached to already came from one the bank still stands behind. An expense carries at most one bank row, which is what the unique index says. One whose row the bank withdrew, or that a posted row superseded, is not refused: linking moves it onto the new row, which takes over from the old one. | |
 | `MERCHANT_NAME_TAKEN` | **Retired; never sent.** Adding a merchant that already exists now hands back the one there is, and renaming one is `MERCHANT_EDIT_FORBIDDEN`. | |
 | `MERCHANT_IN_USE` | **Retired; never sent.** Deleting a merchant is `MERCHANT_EDIT_FORBIDDEN`. | |
-| `IDENTITY_EMAIL_IN_USE` | The caller signed in with a Keycloak subject this app has never seen, and the email on it is already on another user row -- almost always somebody deleted and recreated in Keycloak, which gives them a new subject and the old address. Refused rather than linked: an address is not proof of being the person the old row belonged to. Answered by every request until support resolves it, from the middleware that provisions the caller, so any route can return it. The web app shows a page saying so with the trace id; the CLI exits `2`. What support does is in [identities.md](identities.md). An address *change* that collides with another row is not refused: the person is already known by their subject, so the request goes on under the address already stored, and a warning carrying this code is logged. | |
+| `IDENTITY_EMAIL_IN_USE` | The caller signed in with a Keycloak subject this app has never seen, and the email on it is already on another user row -- almost always somebody deleted and recreated in Keycloak, which gives them a new subject and the old address. Refused rather than linked: an address is not proof of being the person the old row belonged to. Answered by every request until support resolves it, from the middleware that provisions the caller, so any route can return it. The web app shows a page saying so with the trace id; the CLI exits `2`. What support does is in [Sign-ins and accounts](keycloak.md#sign-ins-and-accounts). An address *change* that collides with another row is not refused: the person is already known by their subject, so the request goes on under the address already stored, and a warning carrying this code is logged. | |
 
 ### Validation (400)
 
@@ -151,9 +153,9 @@ no `errors` member; the code is the whole message.
 | `MERCHANT_SEARCH_TOO_SHORT` | `GET /merchants?search=` with fewer than two characters once trimmed. Leave `search` out to list the caller's places instead. |
 | `NOT_A_SETTLEMENT` | An edit set something only a settlement has on an expense: `coversThrough`, the day a settlement covers through. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is neither a member of the group nor invited to it. |
-| `SPLIT_RULE_HISTORY_INVALID` | A written history does not describe a chain: no entries at all, dates that do not strictly increase, or a last entry starting after now. Each entry's window runs until the next one starts, so two entries sharing a date leave a version that was never what the rule said -- and one dated ahead leaves the open version starting in the future, which a new expense is still divided by while the history says it has not begun. Carries `index` and `from`, plus `previousFrom` when it is the ordering that is wrong. |
+| `SPLIT_RULE_HISTORY_INVALID` | A written history does not describe a chain: no entries at all, dates that do not strictly increase, or a last entry starting after now. Each entry's window runs until the next one starts, so two entries sharing a date leave a version that was never what the rule said. One dated ahead leaves the open version starting in the future, and a new expense is still divided by it while the history says it has not begun. Carries `index` and `from`, plus `previousFrom` when it is the ordering that is wrong. |
 | `SPLIT_ON_A_PERSONAL_EXPENSE` | Shares were stated on an expense in the payer's personal group. There is nobody to divide it with. |
-| `GROUP_INVITATION_NO_NAME` | An invitation was asked for with nothing to make it out to. A name is the whole of what a group knows about somebody who has not joined -- it is what every listing shows them as -- so there is no sensible row to write without one. |
+| `GROUP_INVITATION_NO_NAME` | An invitation was asked for with nothing to make it out to. A name is the whole of what a group knows about somebody who has not joined (it is what every listing shows them as), so there is no sensible row to write without one. |
 | `RECEIPT_INVALID` | The bill could not describe a receipt at all: no lines, a line with a negative price or no name, a line id that is repeated or belongs to another bill, or a line naming a rule that is itemised, unknown, or another group's. Distinct from `RECEIPT_DOES_NOT_ADD_UP`, which is a well-formed bill whose figures disagree. Carries `receiptItemId` where one line is at fault. |
 | `RECEIPT_ATTACHMENT_INVALID` | The upload is empty, larger than 10 MB, or does not use one of the supported JPG, PNG, WebP, or PDF file types. |
 
@@ -165,11 +167,11 @@ data saying something untrue. Distinct from a 400, which says a field is wrong, 
 
 | Code | When | Extra members |
 | --- | --- | --- |
-| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The shares do not add up to the expense's amount. Raised for shares a caller stated, and also for shares a *rule* produced -- the check moved onto the one path every division passes, because an itemised rule divides its receipt's total rather than the expense's amount and so is the first kind that can disagree with it. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
-| `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in -- a refund, a deposit -- and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
-| `RECEIPT_DOES_NOT_ADD_UP` | A bill contradicts itself, or has stopped describing its expense: the subtotal, tax and tip do not come to the total, the lines do not come to the subtotal, or the total is not the expense's amount. The last one drifts apart after the bill is saved -- an imported row linked to an expense recorded for a different figure -- so it is checked again at division time and names the bill rather than the shares. An edit to the amount of an expense divided by its bill re-totals the bill instead, the difference on its tip, and is refused with this code when it would take the tip below nothing. Caught before the division rather than after, because a refusal about the shares cannot say which half of the bill was mistyped. | The figures it compared: `subtotal`, `tax`, `tip`, `total`, or `itemTotal` and `subtotal`, or `total` and `amount` (with `tip` and `difference` on an amount edit). |
-| `RECEIPT_ITEMS_MISSING_RULE` | Lines on the bill have no split rule on them, so it cannot be divided yet. Refused rather than spread over everybody: a line somebody forgot and one the table really did share look identical from here, and charging five people for one person's steak is the kind of wrong nobody checks for afterwards. The bill is still saved and still readable in that state -- it simply will not divide. | `itemIds`, so a client can say which without holding the whole receipt. |
-| `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode -- both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
+| `SPLITS_DO_NOT_SUM_TO_AMOUNT` | The shares do not add up to the expense's amount. Raised for shares a caller stated, and also for shares a *rule* produced: the check sits on the one path every division passes, because an itemised rule divides its receipt's total rather than the expense's amount and so is the first kind that can disagree with it. Nothing is adjusted: which person should carry the difference is the caller's to say. | `amount`, `splitTotal`, and `difference` (the amount minus the total), so a dialog can name the shortfall. |
+| `BANK_TRANSACTION_IS_CREDIT` | The imported row is money coming in (a refund, a deposit), and an expense is money going out. It can be ignored; filing it needs a kind of transaction that does not exist yet. | `amount`, which is negative. |
+| `RECEIPT_DOES_NOT_ADD_UP` | A bill contradicts itself, or has stopped describing its expense: the subtotal, tax and tip do not come to the total, the lines do not come to the subtotal, or the total is not the expense's amount. The last one drifts apart after the bill is saved (an imported row linked to an expense recorded for a different figure), so it is checked again at division time and names the bill rather than the shares. An edit to the amount of an expense divided by its bill re-totals the bill instead, the difference on its tip, and is refused with this code when it would take the tip below nothing. Caught before the division rather than after, because a refusal about the shares cannot say which half of the bill was mistyped. | The figures it compared: `subtotal`, `tax`, `tip`, `total`, or `itemTotal` and `subtotal`, or `total` and `amount` (with `tip` and `difference` on an amount edit). |
+| `RECEIPT_ITEMS_MISSING_RULE` | Lines on the bill have no split rule on them, so it cannot be divided yet. Refused rather than spread over everybody: a line somebody forgot and one the table really did share look identical from here, and charging five people for one person's steak is the kind of wrong nobody checks for afterwards. The bill is still saved and still readable in that state; it will not divide. | `itemIds`, so a client can say which without holding the whole receipt. |
+| `BANK_CONNECTION_UNRECOVERABLE` | The access this connection holds can no longer be read here, so it can be neither synced nor repaired in update mode; both need the token. Removing it and linking the bank again is the way forward; the item is stranded at the provider either way. | |
 
 ### Too many requests (429)
 
@@ -179,27 +181,25 @@ succeeds once the wait is over. The `Retry-After` header carries the same number
 
 | Code | When | Extra members |
 | --- | --- | --- |
-| `RATE_LIMITED` | Too many requests of one kind in the window. The kinds, and their defaults per hour: **transcription** (30) -- `POST /receipts/transcribe` and both attachment `/transcribe` routes; **bank** (30) -- `POST /bank-connections/link-token`, `POST /bank-connections`, and a connection's `/refresh` and `/sync`; **invitations** (60) -- adding guests, issuing a guest's link, `POST /groups/{id}/invitations`, `POST /groups/{id}/join-links`, and claiming, declining or accepting one. Each is configurable under `RateLimits:<Kind>:PermitLimit` and `RateLimits:<Kind>:Window`. | `retryAfter`: whole seconds to wait. |
+| `RATE_LIMITED` | Too many requests of one kind in the window. The kinds, and their defaults per hour: **transcription** (30): `POST /receipts/transcribe` and both attachment `/transcribe` routes; **bank** (30): `POST /bank-connections/link-token`, `POST /bank-connections`, and a connection's `/refresh` and `/sync`; **invitations** (60): adding guests, issuing a guest's link, `POST /groups/{id}/invitations`, `POST /groups/{id}/join-links`, and claiming, declining or accepting one. Each is configurable under `RateLimits:<Kind>:PermitLimit` and `RateLimits:<Kind>:Window`. | `retryAfter`: whole seconds to wait. |
 
 ### Bad gateway (502)
 
 A service this one depends on refused or could not be reached. The only category that is
 nobody's fault at either end, and the only one where retrying the identical request later
-is the right thing to do -- which is precisely what a 4xx would tell a caller not to bother
-with.
+is the right thing to do, which a 4xx would tell a caller not to bother with.
 
 | Code | When | Extra members |
 | --- | --- | --- |
 | `BANK_PROVIDER_UNAVAILABLE` | The bank provider did not answer, or refused. Nothing was changed here. Not answered by an unlink whose item the provider no longer has -- removed at its end, or by an earlier attempt that failed after telling it -- which succeeds. | |
-| `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` | The receipt transcription provider did not answer, did not finish within the reading's budget (two minutes, one attempt -- the file is never sent twice on the caller's behalf), or could not process the attachment. Nothing was saved; retrying is safe. | |
+| `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` | The receipt transcription provider did not answer, did not finish within the reading's budget (two minutes, one attempt: the file is never sent twice on the caller's behalf), or could not process the attachment. Nothing was saved; retrying is safe. | |
 
 ### Server error (500) with something to say
 
 Every other 500 is a bug, and a bug has nothing to tell a caller but a trace id. These three
-are the exception: the request failed here *after* somebody's bank had already granted
-access, and what became of that access is not an internal detail. It decides whether the
-person should try again, wait, or go and withdraw the access themselves — and they cannot
-find it out anywhere else.
+failed here *after* somebody's bank had already granted access, and what became of that
+access is not an internal detail. It decides whether the person should try again, wait, or
+go and withdraw the access themselves, and they cannot find it out anywhere else.
 
 | Code | When | Extra members |
 | --- | --- | --- |
@@ -211,8 +211,8 @@ find it out anywhere else.
 
 Everything lives under [`src/GroupSplit.API/Errors`](../src/GroupSplit.API/Errors).
 
-- **In a service**, throw one of the four typed exceptions with a code and a sentence for
-  `detail`: `throw new ConflictException(ErrorCodes.SplitRuleInUse, "This rule is still the default for a category.")`.
+- **In a service**, throw one of the typed exceptions in `DomainException.cs` (the table above
+  names them) with a code and a sentence for `detail`: `throw new ConflictException(ErrorCodes.SplitRuleInUse, "This rule is still the default for a category.")`.
   Attach extension members with `.WithExtension("balance", userBalance)`. Nothing catches these
   in the service layer; the exception handler does.
 - **In an endpoint** that already has the answer in hand, return a problem rather than throw:
@@ -253,10 +253,10 @@ Everything lives under
 - **`ApiErrorPresenter`** owns what happens next. `TryAsync(call, "Could not save the expense.")`
   runs the call and, on failure, shows the message as an error snackbar and returns `false`.
   `CaptureAsync(call)` returns the `ApiError` without showing it, for a caller that wants
-  the message inline, or none at all: `DivisionSourceReader` describes figures already on
-  screen, so a failure there leaves the line off rather than raising a snackbar about a
-  sentence. Anything that is not an API
-  failure is rethrown: a bug belongs to the `ErrorBoundary` in `MainLayout`, not to a snackbar.
+  the message inline, or none at all: `RuleHistoryDialog` reads the group's members and
+  categories only to label what is already on screen, so a failure there leaves the labels
+  unknown instead of raising a snackbar. Anything that is not an API failure is rethrown: a
+  bug belongs to the `ErrorBoundary` in `MainLayout`, not to a snackbar.
 - The page state services run every write through the presenter and return `Task<bool>`;
   the pages need only the answer.
 
@@ -268,7 +268,7 @@ The three failures that are not domain errors each have one defined behaviour:
 | No connection, timeout | `Network` | "We could not reach the server. Check your connection and try again." |
 | Any 5xx | `Server` | "Something went wrong on our side. Please try again in a moment. (Reference `traceId`)" |
 
-Branching on a code, the one place it happens today:
+Branching on a code, as the account page does:
 
 ```csharp
 catch (Exception exception) when (ApiErrors.IsApiFailure(exception))

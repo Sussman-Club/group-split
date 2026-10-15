@@ -1,5 +1,6 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -16,7 +17,6 @@ public interface IInboxService
     /// </summary>
     Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default);
 
-    /// <summary>How many rows are waiting, for the badge.</summary>
     /// <summary>
     /// How many rows are waiting, and -- when asked -- how many of those look like an
     /// expense already recorded.
@@ -63,6 +63,13 @@ public interface IInboxService
     /// </summary>
     Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Where each of these rows probably goes. Only rows still waiting, going out, and not
+    /// possibly recorded already are asked about -- the question for a possible duplicate
+    /// is whether to record anything at all -- and the rest are simply not in the answer.
+    /// </summary>
+    Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(SuggestFilingsRequest request, CancellationToken ct = default);
+
     /// <summary>Takes a row out of the inbox without making anything of it.</summary>
     Task Ignore(Guid id, CancellationToken ct = default);
 
@@ -92,7 +99,8 @@ public sealed class InboxService(
     AppDbContext dbContext,
     ITransactionService transactions,
     IDuplicateMatcher matcher,
-    IReceiptAttachmentService receiptAttachments) : IInboxService
+    IReceiptAttachmentService receiptAttachments,
+    IFilingSuggester suggester) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -119,18 +127,15 @@ public sealed class InboxService(
     public async Task<InboxSummaryResponse> Summary(bool withDuplicates = false,
         CancellationToken ct = default)
     {
-        var waiting = await Owned()
-            .Where(row => row.Status == BankTransactionStatus.New)
-            .ToListAsync(ct);
+        // Counted where the rows are. A first bank link brings in about two years of them, and
+        // this is read on every page and again after every write.
+        var waiting = Owned().Where(row => row.Status == BankTransactionStatus.New);
+        var count = await waiting.CountAsync(ct);
 
         if (!withDuplicates)
-            return new InboxSummaryResponse(waiting.Count);
+            return new InboxSummaryResponse(count);
 
-        var matches = await matcher.ExpensesLike(waiting, ct);
-
-        return new InboxSummaryResponse(
-            waiting.Count,
-            matches.Count(row => row.Value.Any(match => match.Confidence == MatchConfidence.Confident)));
+        return new InboxSummaryResponse(count, await matcher.CountConfident(waiting, ct));
     }
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)
@@ -333,6 +338,31 @@ public sealed class InboxService(
         }
     }
 
+    public async Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(
+        SuggestFilingsRequest request, CancellationToken ct = default)
+    {
+        var receipts = request.Rows
+            .GroupBy(row => row.Id)
+            .ToDictionary(same => same.Key, same => same.First().Receipt);
+
+        var ids = receipts.Keys.ToList();
+
+        var rows = await Owned()
+            .Include(row => row.Account)
+            .Where(row => ids.Contains(row.Id)
+                          && row.Status == BankTransactionStatus.New
+                          && row.Amount >= 0)
+            .ToListAsync(ct);
+
+        var duplicates = await matcher.ExpensesLike(rows, ct);
+
+        return await suggester.Suggest(
+            [.. rows
+                .Where(row => duplicates.GetValueOrDefault(row.Id) is not { Count: > 0 })
+                .Select(row => (row, receipts[row.Id]))],
+            ct);
+    }
+
     public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)
     {
         var row = await Existing(id, ct);
@@ -425,7 +455,7 @@ public sealed class InboxService(
 
     private static string Named(string? requested, BankTransaction row) =>
         string.IsNullOrWhiteSpace(requested)
-            ? Clip(string.IsNullOrWhiteSpace(row.MerchantName) ? row.Description : row.MerchantName, 124)
+            ? Clip(string.IsNullOrWhiteSpace(row.MerchantName) ? row.Description : row.MerchantName, TransactionNames.MaxLength)
             : requested;
 
     private static string Clip(string value, int maxLength) =>

@@ -43,6 +43,8 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
         services.AddDbContext<AppDbContext, PostgreSqlAppDbContext>(
             options => options.UseNpgsql(connectionString));
         services.AddDomainServices();
+        services.AddDistributedMemoryCache();
+        services.AddHybridCache();
         services.AddSingleton<Amazon.S3.IAmazonS3>(Moq.Mock.Of<Amazon.S3.IAmazonS3>());
         services.Configure<ReceiptStorageOptions>(options => options.BucketName = "receipts-test");
 

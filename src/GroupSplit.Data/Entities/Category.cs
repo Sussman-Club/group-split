@@ -20,6 +20,12 @@ public class Category : Entity
     public required string Name { get; set; }
 
     /// <summary>
+    /// Optional context for people and the filing suggester, such as what belongs in this
+    /// category. Empty is the ordinary no-description state.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
     /// The rule to pre-fill an expense in this category with, or null to divide it evenly
     /// between the group's members.
     /// </summary>

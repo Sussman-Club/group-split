@@ -104,6 +104,15 @@ public sealed record BankTransactionResponse(
     /// </remarks>
     public IReadOnlyList<ExpenseMatchResponse> PossibleDuplicates { get; init; } = [];
 
+    /// <summary>
+    /// Where this row probably goes, when it has been asked and there is an answer.
+    /// </summary>
+    /// <remarks>
+    /// Never filled in by the listing itself, which stays one database read: a client that
+    /// wants suggestions asks <c>POST /inbox/suggestions</c> for the rows it shows.
+    /// </remarks>
+    public FilingSuggestionResponse? Suggestion { get; init; }
+
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;
 

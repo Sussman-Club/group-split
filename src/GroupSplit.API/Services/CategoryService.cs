@@ -46,7 +46,7 @@ public interface ICategoryService
 /// about which categories follow it.
 /// </para>
 /// </remarks>
-public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) : ICategoryService
+public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, TimeProvider clock) : ICategoryService
 {
     public Task<IQueryable<Category>> List(Guid? groupId, bool includeArchived = false,
         CancellationToken ct = default)
@@ -72,6 +72,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         {
             Group = group,
             Name = request.Name,
+            Description = request.Description,
             DefaultSplitRule = await RuleOf(group, request.DefaultSplitRuleId, ct)
         };
 
@@ -88,6 +89,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         await RefuseDuplicateName(category.Group.Id, request.Name, id, ct);
 
         category.Name = request.Name;
+        category.Description = request.Description;
 
         // Re-pointing a category at a different rule changes what the next expense is
         // pre-filled with, and nothing already recorded: a past expense holds both the
@@ -110,7 +112,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext) :
         if (archived == category.ArchivedAt.HasValue)
             return category;
 
-        category.ArchivedAt = archived ? DateTimeOffset.UtcNow : null;
+        category.ArchivedAt = archived ? clock.GetUtcNow() : null;
 
         await dbContext.SaveChangesAsync(ct);
 

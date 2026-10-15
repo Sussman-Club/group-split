@@ -41,7 +41,7 @@ public class GroupLeaveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             GroupId = group.Id
         }, Ct);
 
-        await Groups.Settle(group.Id, new SettleRequest { UserId = other.Id, Amount = 10m }, Ct);
+        await GetService<ISettlementService>().Settle(group.Id, new SettleRequest { UserId = other.Id, Amount = 10m }, Ct);
 
         return (group.Id, expense.Id, other);
     }

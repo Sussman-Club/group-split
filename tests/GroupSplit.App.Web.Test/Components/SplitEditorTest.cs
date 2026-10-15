@@ -196,6 +196,58 @@ public class SplitEditorTest : ComponentTest
     }
 
     /// <summary>
+    /// Leaving Custom for a rule clears the shares before it names the rule (#441).
+    /// </summary>
+    /// <remarks>
+    /// The dialog previews after each callback, and the API refuses a rule with shares. In
+    /// the old order the first preview carried both, and its refusal showed as an error
+    /// over a division that was right.
+    /// </remarks>
+    [Fact]
+    public async Task Leaving_custom_for_a_rule_clears_the_shares_first()
+    {
+        var even = Guid.NewGuid();
+        var calls = new List<string>();
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.EvenRuleId, even)
+            .Add(e => e.Value, [new SplitInput { UserId = Ana, Amount = 100m }])
+            .Add(e => e.Preview, Divided(null))
+            .Add(e => e.ValueChanged, splits => calls.Add($"shares:{splits?.Count.ToString() ?? "null"}"))
+            .Add(e => e.SplitRuleIdChanged, id => calls.Add(id == even ? "rule:even" : $"rule:{id}")));
+
+        await Choose(editor, "Evenly");
+
+        Assert.Equal(["shares:null", "rule:even"], calls);
+    }
+
+    /// <summary>
+    /// And going into Custom keeps the other order: the rule is cleared, then the shares
+    /// arrive.
+    /// </summary>
+    [Fact]
+    public async Task Going_into_custom_from_a_rule_clears_the_rule_first()
+    {
+        var even = Guid.NewGuid();
+        var calls = new List<string>();
+
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.EvenRuleId, even)
+            .Add(e => e.SplitRuleId, even)
+            .Add(e => e.Preview, Divided("Even"))
+            .Add(e => e.ValueChanged, splits => calls.Add($"shares:{splits?.Count.ToString() ?? "null"}"))
+            .Add(e => e.SplitRuleIdChanged, id => calls.Add(id is null ? "rule:null" : $"rule:{id}")));
+
+        await ByHand(editor);
+
+        Assert.Equal(["rule:null", "shares:2"], calls);
+    }
+
+    /// <summary>
     /// The payoff of versioned rules, said where somebody would otherwise be confused: the
     /// numbers do not match the rule they can see because the rule has changed since.
     /// </summary>
@@ -313,6 +365,32 @@ public class SplitEditorTest : ComponentTest
             .First(element => element.TextContent.Contains("Receipt", StringComparison.Ordinal));
 
         Assert.Contains("active", bill.ClassName ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The bill names the category a line's rule came from, so the category's rule and name
+    /// have to reach it as values -- a string parameter written without <c>@</c> arrives as
+    /// its own name, and every line said "from CategoryName".
+    /// </summary>
+    [Fact]
+    public void The_bill_is_given_the_categorys_rule_and_name()
+    {
+        var groceries = Guid.NewGuid();
+        var editor = Render<SplitEditor>(parameters => parameters
+            .Add(e => e.Members, Members)
+            .Add(e => e.Amount, 100m)
+            .Add(e => e.ShowByBill, true)
+            .Add(e => e.Bill, Bill())
+            .Add(e => e.BillRuleId, Guid.NewGuid())
+            .Add(e => e.SplitRuleId, (Guid?)null)
+            .Add(e => e.CategoryRuleId, groceries)
+            .Add(e => e.CategoryName, "Groceries")
+            .Add(e => e.Preview, Divided("Divide by the bill")));
+
+        var bill = editor.FindComponent<BillDivision>().Instance;
+
+        Assert.Equal(groceries, bill.CategoryRuleId);
+        Assert.Equal("Groceries", bill.CategoryName);
     }
 
     /// <summary>

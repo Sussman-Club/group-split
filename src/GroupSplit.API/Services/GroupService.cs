@@ -46,6 +46,20 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <paramref name="groups"/> as the current user sees them.
+    /// </summary>
+    /// <remarks>
+    /// The current user says whose list this is being read for: archiving is personal, so
+    /// IsArchive is true only when that person archived it. Reading it off the group would
+    /// tell every member what one of them had tidied away.
+    /// <para>
+    /// The reader's personal group comes first, which is the only order the list has: it
+    /// is the one group everybody has, and the one they reach for most.
+    /// </para>
+    /// </remarks>
+    IQueryable<GroupResponse> Describe(IQueryable<Group> groups);
+
     Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default);
 
     ValueTask<Group> UpdateGroup(Guid groupId, CreateGroupRequest request,
@@ -74,6 +88,11 @@ public interface IGroupService
     /// list for new money.
     /// </remarks>
     Task<IQueryable<User>> GetGroupPastMembers(Guid groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="GetGroupPastMembers"/>'s rows as the past-members listing shows them.
+    /// </summary>
+    IQueryable<UserInfo> DescribePastMembers(IQueryable<User> pastMembers, Guid groupId);
 
 
 
@@ -183,9 +202,6 @@ public interface IGroupService
     Task<IQueryable<GroupMemberBalance>> GetAllGroupNetBalances(Cutoff? cutoff,
         CancellationToken cancellationToken = default);
 
-    Task Settle(Guid groupId, SettleRequest request,
-        CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Takes the caller out of a group they are in.
     /// </summary>
@@ -222,7 +238,8 @@ public class GroupService(
     IMemberSplitRules memberRules,
     IBillSplitRule billRule,
     IEvenSplitRule evenRule,
-    IJoinLinkService joinLinks) : IGroupService
+    IJoinLinkService joinLinks,
+    TimeProvider clock) : IGroupService
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
@@ -235,6 +252,7 @@ public class GroupService(
                 user
             },
             Name = request.Name,
+            Description = request.Description,
             DefaultPeriod = request.DefaultPeriod
         };
 
@@ -248,7 +266,7 @@ public class GroupService(
 
         if (membership is not null)
         {
-            membership.JoinedAt = DateTimeOffset.UtcNow;
+            membership.JoinedAt = clock.GetUtcNow();
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -290,12 +308,34 @@ public class GroupService(
                select g;
     }
 
+    public IQueryable<GroupResponse> Describe(IQueryable<Group> groups)
+    {
+        var userId = userContext.User.Id;
+
+        return from @group in groups
+            join membership in context.Set<GroupMembership>()
+                on new { GroupId = @group.Id, UserId = userId }
+                equals new { membership.GroupId, membership.UserId }
+            orderby @group.Id == userId descending
+            select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
+                membership.ArchivedAt != null)
+            {
+                Currency = @group.Currency,
+                Description = @group.Description,
+                DefaultSplitRuleId = @group.DefaultSplitRuleId,
+                DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                DefaultPeriod = @group.DefaultPeriod,
+                IsPersonal = @group.Id == userId
+            };
+    }
+
     public async Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
     {
         return await (from t in await GetGroupById(id, ct)
                       select new CreateGroupRequest
                       {
                           Name = t.Name,
+                          Description = t.Description,
                           DefaultSplitRuleId = t.DefaultSplitRuleId,
                           DefaultPeriod = t.DefaultPeriod
                       }).FirstOrDefaultAsync(ct);
@@ -313,6 +353,7 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
         existingGroup.Name = request.Name;
+        existingGroup.Description = request.Description;
         existingGroup.DefaultPeriod = request.DefaultPeriod;
 
         // The property was added to the existing update contract, so callers from before the
@@ -404,6 +445,18 @@ public class GroupService(
                orderby user.FirstName, user.LastName, user.Email
                select user;
     }
+
+    public IQueryable<UserInfo> DescribePastMembers(IQueryable<User> pastMembers, Guid groupId) =>
+        pastMembers
+            // A guest only when the history says this group removed them as one.
+            // Being a stand-in is not enough: one left behind by an invitation
+            // that was claimed or withdrawn before guests existed is named by old
+            // rule versions and nothing else, and was never removed from anything.
+            .Select(user => new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
+                context.Set<GroupMembershipEvent>().Any(change =>
+                    change.GroupId == groupId && change.UserId == user.Id &&
+                    change.Kind == MembershipEventKind.GuestRemoved),
+                true));
 
     public async Task<IQueryable<Group>> RemoveGroupMember(Guid groupId, Guid userId,
         CancellationToken cancellationToken = default)
@@ -502,7 +555,7 @@ public class GroupService(
         var membership = await context.Set<GroupMembership>()
             .FirstAsync(row => row.GroupId == group.Id && row.UserId == user.Id, cancellationToken);
 
-        membership.LeftAt = DateTimeOffset.UtcNow;
+        membership.LeftAt = clock.GetUtcNow();
         membership.LeftReason = reason;
         membership.LeftByUserId = byUserId;
 
@@ -527,7 +580,7 @@ public class GroupService(
         var guest = await context.Set<GroupGuest>()
             .FirstAsync(row => row.GroupId == group.Id && row.ParticipantUserId == userId, ct);
 
-        guest.EndedAt = DateTimeOffset.UtcNow;
+        guest.EndedAt = clock.GetUtcNow();
         guest.EndReason = GuestEndReason.Removed;
         guest.EndedByUserId = byUserId;
 
@@ -698,53 +751,6 @@ public class GroupService(
         return groupBalance;
     }
 
-    public async Task Settle(Guid groupId, SettleRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var currentUser = userContext.User;
-
-        var resultGroup = await (await GetGroupById(groupId, cancellationToken))
-                              .FirstOrDefaultAsync(cancellationToken)
-                          ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-
-        resultGroup.RefuseIfPersonalOf(currentUser.Id);
-
-        // A participant, not only a member: a guest's balance is real and is on the group's
-        // balances page, and the members record what a guest pays and is paid. Somebody who
-        // has gone is not here to settle with.
-        var user = await participants.Find(groupId, request.UserId, cancellationToken)
-                   ?? throw new NotFoundException(ErrorCodes.UserNotFound, "User was not found.");
-
-        if (user.Id == currentUser.Id)
-            throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
-
-        // Both sides can record one now, and which side this is comes from the request
-        // rather than from the balance. Under "owed to you" the caller is the creditor and
-        // the money moves from the other member to them; under "you owe" they are the
-        // debtor saying they have paid, and it moves the other way. Reading the direction
-        // off the balance instead would get the debtor's case exactly backwards -- they are
-        // acting precisely while the balance still says they owe.
-        //
-        // One row either way, where a settlement used to be a matched pair of a positive
-        // and a negative transaction hung off a pseudo-rule; a pair is two chances to write
-        // half a settlement.
-        var (from, to) = request.Direction is SettlementDirection.YouPaidThem
-            ? (currentUser, user)
-            : (user, currentUser);
-
-        // The stated date, or now. A payment made on the 30th and typed in on the 3rd
-        // belongs to the month it settled: without this the recorded moment was the only
-        // moment available, so a group closing September could not put September's payments
-        // in September.
-        var date = (request.Date ?? DateTimeOffset.UtcNow).ToUniversalTime();
-
-        var transfer = resultGroup.SettlementBetween(from, to, request.Amount, date,
-            request.Description?.Trim() is { Length: > 0 } note ? note : null, request.Through);
-
-        context.Add(transfer);
-        await context.SaveChangesAsync(cancellationToken);
-    }
-
     public async Task Leave(Guid groupId, CancellationToken cancellationToken = default)
     {
         var user = userContext.User;
@@ -819,7 +825,7 @@ public class GroupService(
     }
 
     public Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default) =>
-        SetArchivedAt(groupId, DateTimeOffset.UtcNow, cancellationToken);
+        SetArchivedAt(groupId, clock.GetUtcNow(), cancellationToken);
 
     public Task<IQueryable<Group>> Unarchive(Guid groupId, CancellationToken cancellationToken = default) =>
         SetArchivedAt(groupId, null, cancellationToken);

@@ -67,7 +67,8 @@ public interface ISplitRuleRevisions
 public sealed class SplitRuleRevisions(
     AppDbContext context,
     ISplitRuleHandler handlers,
-    ISplitRuleFactory factory) : ISplitRuleRevisions
+    ISplitRuleFactory factory,
+    TimeProvider clock) : ISplitRuleRevisions
 {
     public async Task<RuleRewrite> WithoutParticipant(
         Guid groupId, Guid fromUserId, Guid? toUserId, RuleHandling rules,
@@ -90,7 +91,7 @@ public sealed class SplitRuleRevisions(
                               version.Participants.Any(participant => participant.UserId == fromUserId))
             .ToListAsync(ct);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = clock.GetUtcNow();
         var emptied = 0;
 
         foreach (var version in affected)

@@ -339,7 +339,7 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await AnExpense(group.Id, 90m);
 
-        await Groups.Settle(group.Id,
+        await Settlements.Settle(group.Id,
             new SettleRequest { UserId = guest.UserId, Amount = 45m, Direction = SettlementDirection.TheyPaidYou }, Ct);
 
         Assert.All(await Balances(group.Id), balance => Assert.Equal(0m, balance.Balance));
@@ -353,7 +353,7 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await AnExpense(group.Id, 90m, payer: guest.UserId);
 
-        await Groups.Settle(group.Id,
+        await Settlements.Settle(group.Id,
             new SettleRequest { UserId = guest.UserId, Amount = 45m, Direction = SettlementDirection.YouPaidThem }, Ct);
 
         Assert.All(await Balances(group.Id), balance => Assert.Equal(0m, balance.Balance));
@@ -464,7 +464,7 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var expense = await AnExpense(group.Id, 90m);
 
-        await Groups.Settle(group.Id,
+        await Settlements.Settle(group.Id,
             new SettleRequest { UserId = guest.UserId, Amount = 45m, Direction = SettlementDirection.TheyPaidYou }, Ct);
 
         await Groups.RemoveGroupMember(group.Id, guest.UserId, Ct);
@@ -514,7 +514,7 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal(ErrorCodes.TransactionPayerNotInGroup, refused.Code);
 
-        var notHere = await Assert.ThrowsAsync<NotFoundException>(() => Groups.Settle(group.Id,
+        var notHere = await Assert.ThrowsAsync<NotFoundException>(() => Settlements.Settle(group.Id,
             new SettleRequest { UserId = guest.UserId, Amount = 1m }, Ct));
         Assert.Equal(ErrorCodes.UserNotFound, notHere.Code);
     }

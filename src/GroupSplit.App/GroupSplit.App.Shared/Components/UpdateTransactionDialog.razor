@@ -81,6 +81,7 @@
                               Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
+                              @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
                               Label="What was it?"
                               Variant="Variant.Outlined"
@@ -176,6 +177,8 @@
                                      Bill="@_receipt"
                                      SavedAmount="@Original.Amount"
                                      BillRuleId="@_billRuleId"
+                                     CategoryRuleId="@FiledUnder?.RuleId"
+                                     CategoryName="@FiledUnder?.Name"
                                      TransactionId="@Original.Id"
                                      GroupId="@_model.GroupId"
                                      BillChanged="@OnBillChangedAsync"
@@ -336,6 +339,10 @@
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
     private Guid? _evenRuleId;
 
+    /// <summary>The category the expense is filed under as the form stands, if any.</summary>
+    private CategoryInfo? FiledUnder =>
+        _model.CategoryId is { } filed ? _categories.FirstOrDefault(category => category.CategoryId == filed) : null;
+
     private DateTime? _selectedDate;
     private TimeSpan? _selectedTime;
 
@@ -444,12 +451,6 @@
         ? "Personal"
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
-    private string CategoryName =>
-        _categories.FirstOrDefault(category => category.CategoryId == _model.CategoryId)?.Name ?? "uncategorized";
-
-    private string PayerName =>
-        PayerChoices.FirstOrDefault(member => member.Id == _model.PaidByUserId)?.Label() ?? "somebody";
-
     /// <summary>
     /// Who the payer picker offers: the group's members and guests, and -- on an expense
     /// paid for by somebody who has since left -- that person too, marked as gone.
@@ -487,8 +488,6 @@
     /// a pick -- the same round trip the picker itself makes, which is why it is cheap.
     /// </remarks>
     private string? _merchantName;
-
-    private string MerchantName => _merchantName ?? "where";
 
     /// <summary>The mark for that merchant, when it has one.</summary>
     private string? _merchantLogo;
@@ -655,8 +654,8 @@
         // the way into a second step that no longer exists.
         await RefreshPreviewAsync();
 
-        // Null for nearly every expense, which has no bill, and null for a failure just the
-        // same: there is nothing to report either way, and "By its bill" stays disabled.
+        // Null for nearly every expense, which has no bill, and null for a failure once the
+        // snackbar has said so: either way "By its bill" stays disabled.
         // The option is drawn either way -- see SplitEditor.ShowByBill -- so this arriving
         // late enables a button rather than adding one.
         _receipt = await bill;
@@ -793,7 +792,8 @@
             // write, and in sequence each one lands as its own re-render on a dialog that is
             // already on screen.
             var categories = CategoriesClient.GetCategoriesAsAsyncEnumerable(id)
-                .Select(category => new CategoryInfo(category.Id, category.Name, category.DefaultSplitRuleName))
+                .Select(category => new CategoryInfo(category.Id, category.Name, category.DefaultSplitRuleName,
+                    category.DefaultSplitRuleId))
                 .ToListAsync()
                 .AsTask();
 
@@ -1027,6 +1027,32 @@
     }
 
     /// <summary>
+    /// What the preview still needs before it is worth asking for, or null when nothing.
+    /// Both, as on create: the preview is validated like the save, so a blank name comes
+    /// back a 400 just as a zero amount does.
+    /// </summary>
+    private string? Missing()
+    {
+        if (_model.Amount == 0m)
+            return "Enter an amount to see how it divides.";
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+            return "Name it to see how it divides.";
+
+        return null;
+    }
+
+    /// <summary>
+    /// Asks again only when the name decides whether there is anything to ask. The field
+    /// is immediate, and the name has no part in the answer, only in whether there is one.
+    /// </summary>
+    private async Task OnNameChangedAsync()
+    {
+        if (Missing() != _awaiting)
+            await RefreshPreviewAsync();
+    }
+
+    /// <summary>
     /// Asks the API what this edit would come to. The endpoint the edit uses, not the one
     /// the create dialog uses: this one divides by the version of the rule the expense was
     /// written under, which is what the save will do.
@@ -1038,7 +1064,7 @@
         // answers about a different day than the one the save will store.
         ApplyDate();
 
-        _awaiting = _model.Amount == 0m ? "Enter an amount to see how it divides." : null;
+        _awaiting = Missing();
 
         if (!IsShared || _awaiting is not null || CurrencyRefusal is not null)
         {
@@ -1206,7 +1232,8 @@
     /// The rule it points at, or null when it names none -- which is not a gap but an
     /// answer, and <see cref="Splits"/> says it in words.
     /// </param>
-    internal record CategoryInfo(Guid CategoryId, string Name, string? Rule)
+    /// <param name="RuleId">That rule's id, which the lines of a bill start on.</param>
+    internal record CategoryInfo(Guid CategoryId, string Name, string? Rule, Guid? RuleId = null)
     {
         /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
         public string Splits => Rule is { Length: > 0 } named ? named : "even split";

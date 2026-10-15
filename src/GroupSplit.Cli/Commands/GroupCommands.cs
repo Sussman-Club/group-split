@@ -100,12 +100,20 @@ public static class GroupCommands
     private static Command Create()
     {
         var name = new Argument<string>("name") { Description = "Name for the new group." };
-        var command = new Command("create", "Create a group.") { name };
+        var description = new Option<string?>("--description")
+        {
+            Description = "Optional context for the group, such as which trip it is."
+        };
+        var command = new Command("create", "Create a group.") { name, description };
 
         command.SetHandler(async (context, ct) =>
         {
             var group = await context.Groups.CreateGroupAsync(
-                new CreateGroupRequest { Name = context.ParseResult.GetValue(name)! }, ct);
+                new CreateGroupRequest
+                {
+                    Name = context.ParseResult.GetValue(name)!,
+                    Description = context.ParseResult.GetValue(description) ?? string.Empty
+                }, ct);
 
             context.Output.Write(group, Render);
 
@@ -123,12 +131,19 @@ public static class GroupCommands
     private static Command Rename()
     {
         var name = new Argument<string>("name") { Description = "The group's new name." };
-        var command = new Command("rename", "Rename a group.") { GroupId, name };
+        var description = new Option<string?>("--description")
+        {
+            Description = "Replace the optional group description. Pass an empty value to clear it."
+        };
+        var command = new Command("rename", "Rename a group.") { GroupId, name, description };
 
         command.SetHandler(async (context, ct) =>
         {
             var patch = new JsonPatchDocument<CreateGroupRequest>();
             patch.Replace(request => request.Name, context.ParseResult.GetValue(name)!);
+
+            if (context.ParseResult.GetResult(description) is not null)
+                patch.Replace(request => request.Description, context.ParseResult.GetValue(description) ?? string.Empty);
 
             var group = await context.Groups.UpdateGroupAsync(
                 context.ParseResult.GetValue(GroupId), patch, ct);
@@ -1319,6 +1334,8 @@ public static class GroupCommands
         var table = Tables.KeyValue();
         table.AddRow("Id", group.Id.ToString());
         table.AddRow("Name", Markup.Escape(group.Name));
+        if (!string.IsNullOrWhiteSpace(group.Description))
+            table.AddRow("Description", Markup.Escape(group.Description));
         table.AddRow("Members", group.MemberCount.ToString());
         table.AddRow("State", group.IsArchive ? "archived" : "active");
 

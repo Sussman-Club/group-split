@@ -39,7 +39,7 @@ public static class TestDataUtils
     /// caller is not in.
     /// </summary>
     /// <remarks>
-    /// Built through <see cref="IGroupService.Settle"/> in its own scope, so the transfer
+    /// Built through <see cref="ISettlementService.Settle"/> in its own scope, so the transfer
     /// is shaped exactly as a real settlement is -- one row, one split -- rather than by a
     /// test assembling the entity and getting to choose the invariants it holds.
     /// </remarks>
@@ -84,7 +84,7 @@ public static class TestDataUtils
 
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        await groups.Settle(
+        await scope.ServiceProvider.GetRequiredService<ISettlementService>().Settle(
             group.Id,
             new SettleRequest { UserId = other.Id, Amount = amount },
             TestContext.Current.CancellationToken);

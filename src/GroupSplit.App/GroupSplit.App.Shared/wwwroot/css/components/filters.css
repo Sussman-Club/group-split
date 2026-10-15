@@ -23,8 +23,7 @@
 
 /* Mud renders the activator inside a wrapper of its own; without this the pill sits in a
    block that breaks the filter row's alignment. */
-.gs-range .mud-menu,
-.gs-chip-menu-host {
+.gs-range .mud-menu {
     display: inline-flex;
 }
 

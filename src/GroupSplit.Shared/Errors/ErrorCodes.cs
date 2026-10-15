@@ -232,7 +232,7 @@ public static class ErrorCodes
     /// subject. Refused rather than linked: an address is not proof of being the person who
     /// owns the old row, and linking would hand that row's money to whoever holds the new
     /// sign-in. Answered on every request until support resolves it; see
-    /// <c>docs/identities.md</c>.
+    /// <c>docs/keycloak.md</c>, "Sign-ins and accounts".
     /// </summary>
     public const string IdentityEmailInUse = "IDENTITY_EMAIL_IN_USE";
 

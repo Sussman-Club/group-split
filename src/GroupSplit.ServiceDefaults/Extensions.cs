@@ -79,6 +79,8 @@ public static class Extensions
                 {
                     tracing.AddSource(builder.Environment.ApplicationName)
                         .AddSource("GroupSplit.ReceiptTranscription")
+                        // Decision-1 calls, as GenAI client spans. See DecisionClient.
+                        .AddSource("GroupSplit.FilingSuggestions")
                         .AddAspNetCoreInstrumentation(options =>
                             // Exclude health check requests from tracing
                             options.Filter = context =>

@@ -80,6 +80,7 @@ public class SeededItemizedExpenseTest
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase($"seeder-{Guid.NewGuid()}"));
+        services.AddSingleton(TimeProvider.System);
         services.AddSplitRuleServices();
         services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
         services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();

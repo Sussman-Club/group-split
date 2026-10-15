@@ -69,7 +69,7 @@ public class DepartedPositionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             PaidByUserId = leaverPaid ? leaver.Id : Self
         }, Ct);
 
-        await Groups.Settle(group.Id, new SettleRequest
+        await GetService<ISettlementService>().Settle(group.Id, new SettleRequest
         {
             UserId = leaver.Id,
             Amount = 100m,
@@ -467,7 +467,7 @@ public class DepartedPositionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Receipts.Divide(expense.Id, Ct);
 
-        await Groups.Settle(group.Id, new SettleRequest { UserId = leaver.Id, Amount = 30m }, Ct);
+        await GetService<ISettlementService>().Settle(group.Id, new SettleRequest { UserId = leaver.Id, Amount = 30m }, Ct);
         await Groups.RemoveGroupMember(group.Id, leaver.Id, Ct);
 
         FreshRequest();

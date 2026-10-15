@@ -188,7 +188,7 @@ public class GroupMemberDelete(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, ct);
 
         // Square: they pay back the half they owe, which is the state removal requires.
-        await groupService.Settle(group.Id, new SettleRequest
+        await GetService<ISettlementService>().Settle(group.Id, new SettleRequest
         {
             UserId = leaving.Id,
             Amount = 50m,

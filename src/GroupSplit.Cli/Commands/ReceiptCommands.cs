@@ -265,8 +265,9 @@ public static class ReceiptCommands
             Description = "A line on the bill, as <name>=<line-total>[x<qty>][/tax<amount>][@<rule-version-id>]. "
                           + "The number before x is the total printed for the whole line, not the unit price; "
                           + "repeatable. /notax says the bill's tax was not charged on it. "
-                          + "Rules are optional while editing and can be set later with "
-                          + "`groupsplit receipts rule`.",
+                          + "A new line without @ starts on the expense category's split rule (or the "
+                          + "group's default, then Even), so give @ only for lines that divide differently; "
+                          + "change one later with `groupsplit receipts rule`.",
             AllowMultipleArgumentsPerToken = false
         };
 
@@ -329,6 +330,22 @@ public static class ReceiptCommands
                 PurchaseDate = saved?.PurchaseDate,
                 Items = lines
             };
+
+            // A bill the expense divides by is the ledger's source: saving a new one
+            // re-divides the expense once every line has a rule, as `receipts divide` does.
+            if (saved is { DividesItsExpense: true })
+            {
+                Confirmation.Require(
+                    context,
+                    action: "receipts.set",
+                    summary: $"Replace the bill this expense of {saved.Total} is divided by?",
+                    changes:
+                    [
+                        $"The bill's {saved.Items.Count} line(s) are replaced by the {lines.Count} given.",
+                        "If every line has a rule, the expense is divided again by the new bill, and "
+                        + "every balance in the group moves with it. Check with `groupsplit receipts preview`."
+                    ]);
+            }
 
             var receipt = await client.SaveReceiptAsync(id, request, ct);
 
@@ -394,8 +411,26 @@ public static class ReceiptCommands
         var command = new Command("rule", "Choose the split rule version for an item.") { TransactionId, itemId, version };
         command.SetHandler(async (context, ct) =>
         {
-            var receipt = await new Api.ReceiptsClient(context.ApiHttpClient).SetReceiptItemRuleAsync(
-                context.ParseResult.GetValue(TransactionId), context.ParseResult.GetValue(itemId),
+            var id = context.ParseResult.GetValue(TransactionId);
+            var client = new Api.ReceiptsClient(context.ApiHttpClient);
+
+            // Same reason as `receipts set`: on a bill the expense divides by, a line's rule
+            // decides who owes what.
+            if (await Saved(client, id, ct) is { DividesItsExpense: true } saved)
+            {
+                Confirmation.Require(
+                    context,
+                    action: "receipts.rule",
+                    summary: $"Change a line's rule on the bill this expense of {saved.Total} is divided by?",
+                    changes:
+                    [
+                        "If every line has a rule, the expense is divided again, and every balance in "
+                        + "the group moves with it. Check with `groupsplit receipts preview`."
+                    ]);
+            }
+
+            var receipt = await client.SetReceiptItemRuleAsync(
+                id, context.ParseResult.GetValue(itemId),
                 new SetReceiptItemRuleRequest { SplitRuleVersionId = context.ParseResult.GetValue(version) }, ct);
             context.Output.Write(receipt, Render);
             return ExitCodes.Success;

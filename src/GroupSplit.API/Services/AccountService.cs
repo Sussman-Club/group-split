@@ -46,7 +46,7 @@ public sealed class AccountService(
     /// member's share was calculated from -- so deleting the rows would silently rewrite
     /// the ledger for people who did not ask for it. What goes is everything that
     /// identifies the person: their name, their address, and their login, which is deleted
-    /// from Keycloak along with every session it holds. See <c>docs/account-deletion.md</c>.
+    /// from Keycloak along with every session it holds. See <c>docs/keycloak.md</c>, "Deleting an account".
     /// </summary>
     public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
