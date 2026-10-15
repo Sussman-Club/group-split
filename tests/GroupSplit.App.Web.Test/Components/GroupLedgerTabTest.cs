@@ -73,7 +73,7 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .Returns((Guid _, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, bool? _,
-                string search, CancellationToken _) =>
+                string search, string _, CancellationToken _) =>
             {
                 var ask = new Ask(from, to, search);
                 _asks.Add(ask);
