@@ -49,6 +49,11 @@
 }
 
 /* Ledger controls share one height and quiet chrome; entry type is the selected state. */
+.gs-mobile-filter-toggle,
+.gs-mobile-spending { display: none; }
+
+.gs-filter-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gs-teal); }
+
 .gs-ledger-toolbar,
 .gs-ledger-filters {
     display: flex;
@@ -158,4 +163,32 @@
     .gs-ledger-segments { width: 100%; }
     .gs-ledger-segments .gs-chip { flex: 1; justify-content: center; padding: 0 10px; }
     .gs-ledger-toolbar .gs-search { flex-basis: 100%; }
+    .gs-ledger-filters .gs-mobile-filter-toggle { display: inline-flex; flex-shrink: 0; }
+    .gs-ledger-filters > .gs-range { flex: 1; }
+    .gs-ledger-filters .gs-payer-filter,
+    .gs-ledger-toolbar .gs-search { display: none; }
+    .gs-ledger-toolbar.filters-open .gs-payer-filter,
+    .gs-ledger-toolbar.filters-open .gs-search { display: block; }
+    .gs-ledger-toolbar.filters-open .gs-payer-filter { flex-basis: 100%; }
+    .gs-ledger-stats,
+    .gs-category-summary { display: none; }
+    .gs-mobile-spending {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        color: var(--gs-muted);
+        font-size: .8125rem;
+    }
+    .gs-group-heading { margin-bottom: 6px; }
+    .gs-group-heading .gs-eyebrow { display: none; }
+    .gs-group-heading .gs-identity-who h1 { font-size: 1.25rem; }
+    .gs-group-heading .gs-identity-who p {
+        font-size: .75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 0;
+    }
 }

@@ -37,7 +37,7 @@
 <div class="gs-stack">
     @* One row: what kind, over what span, matching what. Three controls is the whole
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
-    <div class="gs-ledger-toolbar">
+    <div class="gs-ledger-toolbar @(_mobileFiltersOpen ? "filters-open" : "")">
         <div class="gs-ledger-filters">
             @* Not in a personal group: nothing is settled there, so every entry is an
                expense and the chips would all show the same rows. *@
@@ -56,10 +56,19 @@
 
             <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
 
+            <button type="button" class="gs-mobile-filter-toggle gs-ledger-payer"
+                    aria-label="Search and filters" aria-expanded="@_mobileFiltersOpen"
+                    @onclick="@(() => _mobileFiltersOpen = !_mobileFiltersOpen)">
+                <MudIcon Icon="@Icons.Material.Rounded.Tune" Size="Size.Small" />
+                @if (IsSearching || _paidBy is not null)
+                {
+                    <span class="gs-filter-dot" aria-label="Filters active"></span>
+                }
+            </button>
             @if (!Personal)
             {
                 <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
-                         PopoverClass="gs-menu">
+                         PopoverClass="gs-menu" Class="gs-payer-filter">
                     <ActivatorContent Context="menu">
                         <button type="button" class="gs-ledger-payer" aria-haspopup="menu"
                                 @onclick="@(args => menu.ToggleAsync(args))">
@@ -95,7 +104,12 @@
                       Class="gs-search" />
     </div>
 
-    <div class="gs-stats">
+    <div class="gs-mobile-spending" aria-live="polite">
+        <span>@ExpenseCount expense@(ExpenseCount == 1 ? "" : "s") · @Spent.ToMoney() spent</span>
+        <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">Details</button>
+    </div>
+
+    <div class="gs-stats gs-ledger-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">Expenses</span>
@@ -136,6 +150,18 @@
 
     <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
         <div class="gs-mobile-ledger" aria-label="Transactions">
+            @if (_ledgerLoaded && _mobileEntries.Count == 0)
+            {
+                <div class="gs-empty" role="status">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    <span>@EmptyBlurb</span>
+                    @if (IsSearching)
+                    {
+                        <MudButton OnClick="ClearSearchAsync">Clear search</MudButton>
+                    }
+                </div>
+            }
             @foreach (var day in _mobileEntries.GroupBy(entry => Clock.Day(entry.DateTime)))
             {
                 <section class="gs-feed-day" aria-label="@day.Key.ToString("d MMMM yyyy")">
@@ -443,6 +469,8 @@
 
     private TransactionSummaryResponse? _spending;
     private IReadOnlyList<GroupLedgerEntryResponse> _mobileEntries = [];
+    private bool _ledgerLoaded;
+    private bool _mobileFiltersOpen;
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
@@ -580,7 +608,9 @@
             pageSize: state.PageSize,
             cancellationToken: cancellationToken));
 
+        cancellationToken.ThrowIfCancellationRequested();
         _mobileEntries = page?.Items ?? [];
+        _ledgerLoaded = true;
         await InvokeAsync(StateHasChanged);
 
         return new GridData<GroupLedgerEntryResponse>
@@ -616,6 +646,12 @@
     {
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        _searchString = "";
+        await OnSearchChangedAsync("");
     }
 
     private async Task OnRangeChangedAsync(DateFilter range)

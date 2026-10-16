@@ -94,14 +94,15 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
                 It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, Guid? _,
+            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string search, Guid? _,
                 bool? _, Guid? _, string _, bool? _, int? _, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
 
                 // What the server holds at the moment it is asked, which is not necessarily
                 // what it holds by the time the answer arrives.
-                var rows = _entries.ToList();
+                var rows = _entries.Where(entry => string.IsNullOrEmpty(search) ||
+                    entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 if (_holdNextRead is { } held)
                 {
@@ -238,7 +239,7 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<string>(), It.IsAny<DialogParameters<CategorySpendingDialog>>(), It.IsAny<DialogOptions>()))
             .ReturnsAsync(reference);
 
-        var showAll = tab.Find("button.gs-category-toggle");
+        var showAll = tab.Find(".gs-category-chips button.gs-category-toggle");
         Assert.Equal("View all categories", showAll.GetAttribute("aria-label"));
         await showAll.ClickAsync(new());
 
@@ -478,6 +479,30 @@ public class GroupLedgerTabTest : ComponentTest
         // The box is debounced, so the request follows the pause rather than the keystroke.
         tab.WaitForAssertion(() => Assert.Equal("coffee", _asks.Last().Search), TimeSpan.FromSeconds(5));
         tab.WaitForAssertion(() => Assert.Equal(("1", "$4.50"), Cards(tab)), TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task An_unmatched_mobile_search_clears_old_rows_and_clearing_it_restores_them()
+    {
+        _entries = [Expense(Guid.NewGuid(), "Dinner")];
+        _answer = ask => Task.FromResult(ask.Search is null
+            ? new TransactionSummaryResponse(1, 40m)
+            : new TransactionSummaryResponse(0, 0m));
+        var tab = Render();
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-feed-row")));
+        await tab.Find(".gs-mobile-filter-toggle").ClickAsync(new());
+        Assert.Contains("filters-open", tab.Find(".gs-ledger-toolbar").ClassName);
+        await tab.Find(".gs-search input").InputAsync(new() { Value = "no-such-transaction" });
+        tab.WaitForAssertion(() =>
+        {
+            Assert.Empty(tab.FindAll(".gs-feed-row"));
+            Assert.Contains("Nothing matches", tab.Find(".gs-mobile-ledger").TextContent);
+            Assert.Contains("0 expenses", tab.Find(".gs-mobile-spending").TextContent);
+            Assert.Contains("$0.00", tab.Find(".gs-mobile-spending").TextContent);
+        }, TimeSpan.FromSeconds(5));
+        await tab.Find(".gs-mobile-ledger button").ClickAsync(new());
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-feed-row")), TimeSpan.FromSeconds(5));
+        Assert.Equal("", tab.Find(".gs-search input").GetAttribute("value"));
     }
 
     [Fact]
