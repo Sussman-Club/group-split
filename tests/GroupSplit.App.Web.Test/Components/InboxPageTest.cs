@@ -110,11 +110,10 @@ public class InboxPageTest : ComponentTest
         // The control is on the page and says what it is showing.
         Assert.Contains("All time", page.Find(".gs-chip-menu").TextContent);
 
-        // Nothing narrowed yet, so the request carried no span -- and the heading says
-        // nothing, because on all time the count is the badge's and only the badge's.
+        // The live remaining count also appears on the queue itself.
         Assert.Equal((null, null), Assert.Single(_asks));
         Assert.DoesNotContain("to sort out", page.Markup);
-        Assert.DoesNotContain("1 transaction", page.Markup);
+        Assert.Contains("1 transaction left to review", page.Markup);
     }
 
     [Fact]
@@ -450,6 +449,50 @@ public class InboxPageTest : ComponentTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((SuggestFilingsRequest asked, CancellationToken _) =>
                 [.. suggestions.Where(suggestion => asked.Rows.Any(row => row.Id == suggestion.BankTransactionId))]);
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 1)]
+    public async Task Confirming_a_bundle_uses_individual_suggestions_and_stops_on_failure(bool failFirst, int expectedCalls)
+    {
+        var account = Guid.NewGuid();
+        var first = Row("Shop", 30, DateOnly.FromDateTime(Today)) with { AccountId = account };
+        var second = first with { Id = Guid.NewGuid() };
+        var group = Guid.NewGuid();
+        var category = Guid.NewGuid();
+        _rows = [first, second];
+        Suggests(new(first.Id, group, "Home", false, category, "Groceries", .9),
+            new(second.Id, group, "Home", false, category, "Groceries", .9));
+        _bank.Setup(bank => bank.FileAsync(It.IsAny<Guid>(), It.IsAny<FileBankTransactionRequest>(),
+                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => failFirst ? null : new TransactionResponse { Id = Guid.NewGuid() });
+
+        var page = Render<Inbox>();
+        page.WaitForElement(".gs-inbox-bundle");
+        await page.FindAll(".gs-inbox-bundle button")
+            .Single(button => button.TextContent.Contains("Confirm 2")).ClickAsync(new());
+
+        _bank.Verify(bank => bank.FileAsync(It.IsAny<Guid>(),
+            It.Is<FileBankTransactionRequest>(request => request.GroupId == group
+                && request.CategoryId == category && !request.FileAnyway),
+            "Home · Groceries", It.IsAny<CancellationToken>()), Times.Exactly(expectedCalls));
+    }
+
+    [Fact]
+    public async Task Review_filters_show_personal_suggestions_without_hiding_them_as_shared()
+    {
+        var shared = Row("Shop", 30, DateOnly.FromDateTime(Today));
+        var personal = Row("Cafe", 10, DateOnly.FromDateTime(Today));
+        _rows = [shared, personal];
+        Suggests(new(shared.Id, Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", .9),
+            new(personal.Id, Guid.NewGuid(), "Personal", true, Guid.NewGuid(), "Dining", .9));
+        var page = Render<Inbox>();
+        page.WaitForElement("button[aria-label='File Cafe in Personal · Dining']");
+        await page.FindAll("nav[aria-label='Review suggestions'] button")
+            .Single(button => button.TextContent.Contains("Likely personal")).ClickAsync(new());
+        Assert.Contains("Cafe", page.Markup);
+        Assert.DoesNotContain("File Shop in Home", page.Markup);
+    }
 
     /// <summary>
     /// The suggestion arrives after the rows -- the inbox never waits on the model -- and

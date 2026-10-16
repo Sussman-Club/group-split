@@ -1,0 +1,39 @@
+.gs-inbox-bundle {
+    margin-block: 12px;
+    padding: 16px;
+    border: 1px solid var(--gs-line);
+    border-inline-start: 4px solid var(--gs-teal);
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+}
+
+.gs-inbox-bundle summary {
+    cursor: pointer;
+    line-height: 1.8;
+}
+
+.gs-inbox-bundle summary span {
+    display: inline-block;
+    margin-inline-start: 12px;
+    color: var(--gs-muted);
+}
+
+.gs-inbox-bundle summary:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 4px;
+}
+
+.gs-inbox-bundle-charge {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 12px;
+    border-block-start: 1px solid var(--gs-line);
+}
+
+@media (max-width: 600px) {
+    .gs-inbox-bundle summary span {
+        display: block;
+        margin-inline-start: 0;
+    }
+}
