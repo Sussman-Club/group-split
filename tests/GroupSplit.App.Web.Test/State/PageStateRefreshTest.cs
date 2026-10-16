@@ -226,10 +226,10 @@ public class PageStateRefreshTest
 
         _groupsClient
             .Setup(c => c.GetGroupTransactionsSummaryAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(),
-                It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(),
-                It.IsAny<bool?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string? _,
-                    bool? _, string? search, CancellationToken _) =>
+                It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<bool?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, bool? _,
+                    string? search, string? _, CancellationToken _) =>
                 SummaryOf(_transactions.Where(t => t.GroupId == id), search, from, to));
 
         _groupsClient

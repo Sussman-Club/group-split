@@ -1,0 +1,48 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog>
+    <DialogContent>
+        <p class="gs-muted" style="margin-top: 0">@Period · Select a category to filter the ledger.</p>
+        <div class="gs-category-breakdown">
+            @foreach (var category in Spending.Categories)
+            {
+                <button type="button" class="gs-category-row" @onclick="@(() => Select(category))">
+                    <span class="gs-category-detail">
+                        <strong>@category.Name</strong>
+                        <span class="gs-muted">@category.Count expense@(category.Count == 1 ? "" : "s")</span>
+                        <span class="gs-category-bar" aria-hidden="true">
+                            <span style="width: @Width(category.Total)"></span>
+                        </span>
+                    </span>
+                    <span class="gs-right">
+                        <Money Value="category.Total" Currency="@Spending.Currency" />
+                        @if (!Personal)
+                        {
+                            <span class="gs-muted gs-category-share">your share @category.Share.ToMoney(Spending.Currency)</span>
+                        }
+                    </span>
+                </button>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public CategorySpendingSummaryResponse Spending { get; set; } = null!;
+    [Parameter] public bool Personal { get; set; }
+    [Parameter] public string Period { get; set; } = "";
+
+    private void Select(CategorySpendingResponse category) => MudDialog.Close(DialogResult.Ok(category));
+
+    private string Width(decimal amount)
+    {
+        var total = Spending.Categories.Sum(category => category.Total);
+        var percent = total == 0 ? 0 : Math.Clamp(amount * 100m / total, 0m, 100m);
+        return percent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+}

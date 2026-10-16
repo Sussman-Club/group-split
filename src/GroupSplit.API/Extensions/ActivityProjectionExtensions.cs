@@ -117,6 +117,11 @@ public static class ActivityProjectionExtensions
             return from transaction in narrowed
                    where (after == null || transaction.DateTime >= after) &&
                          (before == null || transaction.DateTime <= before) &&
+                         (filter.PaidBy == null || transaction.UserId == filter.PaidBy) &&
+                         (filter.CategoryId == null ||
+                          (transaction is Expense && ((Expense)transaction).CategoryId == filter.CategoryId)) &&
+                         (filter.Uncategorized != true ||
+                          (transaction is Expense && ((Expense)transaction).CategoryId == null)) &&
                          (search == null ||
                           transaction.Name.ToLower().Contains(search) ||
                           (transaction.Description != null &&

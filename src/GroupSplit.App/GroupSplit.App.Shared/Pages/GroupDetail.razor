@@ -27,7 +27,7 @@
 
 @if (Group is { } group)
 {
-    <div class="gs-page-head" @key="@($"head-{group.Id}")">
+    <div class="gs-page-head gs-group-heading" @key="@($"head-{group.Id}")">
         @* One line: back, the group's mark, and who it is. It used to be a plain .gs-inline,
            which wraps -- and on a phone the thing it wrapped was the text, leaving a 56px
            avatar stranded on a line of its own beside the back arrow with the rest of the

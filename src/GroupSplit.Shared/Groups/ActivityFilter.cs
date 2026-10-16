@@ -27,4 +27,7 @@ public record ActivityFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
     ActivityKind? Kind = null,
-    string? Search = null);
+    string? Search = null,
+    Guid? CategoryId = null,
+    bool? Uncategorized = null,
+    Guid? PaidBy = null);

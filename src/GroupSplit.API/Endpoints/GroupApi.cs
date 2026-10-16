@@ -28,6 +28,7 @@ public static class GroupApi
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
             group.MapGetGroupTransactionsSummary();
+            group.MapGetGroupSpendingByCategory();
             group.MapGetActivity();
             group.MapGetMembers();
             group.MapGetPastMembers();
@@ -176,15 +177,45 @@ public static class GroupApi
         {
             return group.MapGet("{id:guid}/transactions/summary", async (
                     Guid id,
-                    [AsParameters] TransactionFilter filter,
+                    [AsParameters] GroupSpendingFilter filter,
+                    ICurrentUser currentUser,
                     ITransactionService transactionService,
                     CancellationToken ct) =>
                 {
                     var transactions = await transactionService.InGroup(id, ct);
-                    return Results.Ok(await transactions.ToSummaryAsync(filter, ct));
+                    var spending = await transactions.ToCategorySpendingAsync(filter, currentUser.User.Id, ct);
+                    var currencies = spending.OtherCurrencies.Prepend(
+                        new CategoryCurrencySpendingResponse(spending.Currency, spending.Categories));
+
+                    return Results.Ok(new TransactionSummaryResponse(
+                        currencies.Sum(currency => currency.Categories.Sum(category => category.Count)),
+                        spending.Categories.Sum(category => category.Total))
+                    {
+                        Currency = spending.Currency,
+                        OtherCurrencies = [.. spending.OtherCurrencies.Select(currency =>
+                            new CurrencyTotalResponse(currency.Currency, currency.Categories.Sum(category => category.Count),
+                                currency.Categories.Sum(category => category.Total)))]
+                    });
                 })
                 .WithName("GetGroupTransactionsSummary")
                 .Produces<TransactionSummaryResponse>();
+        }
+
+        /// <summary>What a group spent, arranged by category rather than by individual expense.</summary>
+        private RouteHandlerBuilder MapGetGroupSpendingByCategory()
+        {
+            return group.MapGet("{id:guid}/transactions/by-category", async (
+                    Guid id,
+                    [AsParameters] GroupSpendingFilter filter,
+                    ICurrentUser currentUser,
+                    ITransactionService transactionService,
+                    CancellationToken ct) =>
+                {
+                    var transactions = await transactionService.InGroup(id, ct);
+                    return Results.Ok(await transactions.ToCategorySpendingAsync(filter, currentUser.User.Id, ct));
+                })
+                .WithName("GetGroupSpendingByCategory")
+                .Produces<CategorySpendingSummaryResponse>();
         }
 
         /// <summary>

@@ -72,7 +72,8 @@ Groups you belong to, their members and their balances.
 | `groups settle <group-id> <user-id> <amount>` | Record a repayment between you and another member. `--through <day>` records the period it was for; the amount is still the one given. |
 | `groups settle-between <group-id> <from-user-id> <to-user-id> <amount>` | Record a repayment between two named members, whichever of them you are — including neither. |
 | `groups settle-up <group-id>` | Record every repayment between you and the rest of the group at once. `--through <day>` settles only what is owed for activity dated up to that day. |
-| `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. |
+| `groups activity <group-id>` | The group's ledger: everything that happened in it, newest first, with your share of each entry and your balance as at it. `--category-id`, `--uncategorized` and `--paid-by` narrow it. |
+| `groups spending <group-id>` | Spending by category, with the category's expense count, group total and your share. `--from`, `--to` and `--paid-by` narrow it; other currencies remain separate. |
 | `groups archive <group-id>` | Archive a group, hiding it from the active list. |
 | `groups unarchive <group-id>` | Return an archived group to the active list. |
 | `groups leave <group-id>` | Leave a group. Requires that your balance in it is settled. Coming back needs a link issued after you left. |
@@ -772,7 +773,10 @@ A group the caller is not in -- including one they have **left** -- is refused w
 code 3 and `GROUP_NOT_FOUND`, not answered with an empty list. Their own expenses in a group
 they left are still in `transactions list`; the group's ledger is the group's.
 
-`groups activity` takes `--from`, `--to`, `--search` and `--kind` (`Expense` or `Transfer`).
+`groups activity` takes `--from`, `--to`, `--search` and `--kind` (`Expense` or `Transfer`),
+plus `--category-id`, `--uncategorized` and `--paid-by`. The category flags narrow to
+expenses only; `--paid-by` can name a member or guest and applies to either kind. Use
+`groups spending <group-id>` for the same period's expense totals by category.
 It ignores the group's default period (`set-default-period`): without `--from`/`--to` it is
 all time, whatever the app opens on. Without `--kind` it lists both kinds. `--from`/`--to`
 are date-times there and calendar dates (`2026-01-01`) on `inbox list`, which is what a bank

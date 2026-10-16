@@ -49,6 +49,7 @@ public class GroupLedgerTabTest : ComponentTest
         _ => Task.FromResult(new TransactionSummaryResponse(5, 29m));
 
     private List<GroupLedgerEntryResponse> _entries = [];
+    private IReadOnlyList<CategorySpendingResponse> _categories = [];
 
     /// <summary>
     /// When set, the next read of the rows waits on it -- a reload still in flight while the
@@ -69,10 +70,11 @@ public class GroupLedgerTabTest : ComponentTest
         _groups
             .Setup(client => client.GetGroupTransactionsSummaryAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(),
-                It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<string>(),
+                It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<string>(),
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .Returns((Guid _, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, string _, bool? _,
-                string search, CancellationToken _) =>
+            .Returns((Guid _, DateTimeOffset? from, DateTimeOffset? to, Guid? _, Guid? _, bool? _,
+                string search, string _, CancellationToken _) =>
             {
                 var ask = new Ask(from, to, search);
                 _asks.Add(ask);
@@ -81,18 +83,26 @@ public class GroupLedgerTabTest : ComponentTest
             });
 
         _groups
+            .Setup(client => client.GetGroupSpendingByCategoryAsync(
+                It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(),
+                It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new CategorySpendingSummaryResponse(_categories));
+
+        _groups
             .Setup(client => client.GetGroupActivityAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<CancellationToken>()))
-            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string _, string _,
-                bool? _, int? _, int? _, CancellationToken _) =>
+                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string search, Guid? _,
+                bool? _, Guid? _, string _, bool? _, int? _, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
 
                 // What the server holds at the moment it is asked, which is not necessarily
                 // what it holds by the time the answer arrives.
-                var rows = _entries.ToList();
+                var rows = _entries.Where(entry => string.IsNullOrEmpty(search) ||
+                    entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 if (_holdNextRead is { } held)
                 {
@@ -164,6 +174,9 @@ public class GroupLedgerTabTest : ComponentTest
     private static IReadOnlyList<IElement> Buttons(IRenderedComponent<GroupLedgerTab> tab, string prefix) =>
         tab.FindAll("button[aria-label^='" + prefix + "']");
 
+    private static CategorySpendingResponse Category(string name, int count, decimal total, decimal share = 0m) =>
+        new(Guid.NewGuid(), name, count, total, share);
+
     private static GroupLedgerEntryResponse Transfer(Guid id, string from = "Anabel", string to = "Daniel") =>
         new()
         {
@@ -201,6 +214,45 @@ public class GroupLedgerTabTest : ComponentTest
         };
 
     // ---- the figures over the list ------------------------------------------------------
+
+    [Fact]
+    public async Task A_long_category_breakdown_stays_compact_until_somebody_asks_to_see_it()
+    {
+        _categories =
+        [
+            Category("Household", 5, 275.14m, 68.78m),
+            Category("Utilities", 1, 61m, 32.90m),
+            Category("Groceries", 1, 30m, 0.63m),
+            Category("Dinners out", 1, 20m, 20m),
+            Category("Travel", 2, 15m, 7.50m),
+            Category("Subscriptions", 1, 8m, 4m)
+        ];
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Contains("Household", tab.Find(".gs-category-summary").TextContent));
+        Assert.Equal(6, tab.FindAll(".gs-category-chips .gs-category-leader").Count);
+        Assert.Contains("$275.14", tab.Find(".gs-category-summary").TextContent);
+        var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
+        reference.Dismiss(DialogResult.Ok(_categories[4]));
+        _dialogs.Setup(dialogs => dialogs.ShowAsync<CategorySpendingDialog>(
+                It.IsAny<string>(), It.IsAny<DialogParameters<CategorySpendingDialog>>(), It.IsAny<DialogOptions>()))
+            .ReturnsAsync(reference);
+
+        var showAll = tab.Find(".gs-category-chips button.gs-category-toggle");
+        Assert.Equal("View all categories", showAll.GetAttribute("aria-label"));
+        await showAll.ClickAsync(new());
+
+        _dialogs.Verify(dialogs => dialogs.ShowAsync<CategorySpendingDialog>(
+            "Spending by category",
+            It.Is<DialogParameters<CategorySpendingDialog>>(parameters =>
+                parameters.Get<CategorySpendingSummaryResponse>(nameof(CategorySpendingDialog.Spending)).Categories.Count == 6),
+            It.IsAny<DialogOptions>()), Times.Once);
+        _groups.Verify(client => client.GetGroupSpendingByCategoryAsync(
+            Group, It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<Guid?>(),
+            _categories[4].CategoryId, It.IsAny<bool?>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 
     /// <summary>
     /// The tab opens on the current month, and asks about that month.
@@ -427,6 +479,30 @@ public class GroupLedgerTabTest : ComponentTest
         // The box is debounced, so the request follows the pause rather than the keystroke.
         tab.WaitForAssertion(() => Assert.Equal("coffee", _asks.Last().Search), TimeSpan.FromSeconds(5));
         tab.WaitForAssertion(() => Assert.Equal(("1", "$4.50"), Cards(tab)), TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task An_unmatched_mobile_search_clears_old_rows_and_clearing_it_restores_them()
+    {
+        _entries = [Expense(Guid.NewGuid(), "Dinner")];
+        _answer = ask => Task.FromResult(ask.Search is null
+            ? new TransactionSummaryResponse(1, 40m)
+            : new TransactionSummaryResponse(0, 0m));
+        var tab = Render();
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-feed-row")));
+        await tab.Find(".gs-mobile-filter-toggle").ClickAsync(new());
+        Assert.Contains("filters-open", tab.Find(".gs-ledger-toolbar").ClassName);
+        await tab.Find(".gs-search input").InputAsync(new() { Value = "no-such-transaction" });
+        tab.WaitForAssertion(() =>
+        {
+            Assert.Empty(tab.FindAll(".gs-feed-row"));
+            Assert.Contains("Nothing matches", tab.Find(".gs-mobile-ledger").TextContent);
+            Assert.Contains("0 expenses", tab.Find(".gs-mobile-spending").TextContent);
+            Assert.Contains("$0.00", tab.Find(".gs-mobile-spending").TextContent);
+        }, TimeSpan.FromSeconds(5));
+        await tab.Find(".gs-mobile-ledger button").ClickAsync(new());
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-feed-row")), TimeSpan.FromSeconds(5));
+        Assert.Equal("", tab.Find(".gs-search input").GetAttribute("value"));
     }
 
     [Fact]

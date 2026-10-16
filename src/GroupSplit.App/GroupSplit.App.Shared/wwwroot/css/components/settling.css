@@ -122,7 +122,225 @@
     font-size: 0.9375rem;
 }
 
+/* A compact summary leads with the biggest category; the dialog holds the full list. */
+.gs-category-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 8px 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+button.gs-category-row {
+    cursor: pointer;
+    border-radius: var(--gs-radius-sm);
+}
+
+button.gs-category-row:hover {
+    background: var(--gs-surface-2);
+}
+
+button.gs-category-row:focus-visible,
+.gs-category-toggle:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+.gs-category-bar {
+    display: block;
+    height: 4px;
+    margin-top: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--mud-palette-lines-default);
+}
+
+.gs-category-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--mud-palette-primary);
+}
+
+.gs-category-toggle {
+    align-self: flex-start;
+    padding: 4px 0;
+    border: 0;
+    border-radius: var(--gs-radius-sm);
+    background: none;
+    color: var(--gs-teal);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.gs-category-toggle:hover {
+    text-decoration: underline;
+}
+
+.gs-category-summary {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 16px 18px;
+}
+
+.gs-category-heading {
+    flex-shrink: 0;
+    padding-right: 24px;
+    border-right: 1px solid var(--gs-line);
+}
+
+.gs-category-heading h3 {
+    margin: 0 0 2px;
+    font-size: 1rem;
+}
+
+.gs-category-heading > span,
+.gs-category-period {
+    font-size: .8125rem;
+}
+
+.gs-category-period { white-space: nowrap; }
+
+.gs-category-chips {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.gs-category-chips > [hidden] {
+    display: none;
+}
+
+.gs-category-chips > .gs-category-toggle {
+    flex-shrink: 0;
+}
+
+.gs-category-leader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    max-width: 100%;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-soft);
+    color: var(--gs-ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.gs-category-leader:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+.gs-category-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.gs-category-leader .gs-money { white-space: nowrap; }
+
+.gs-category-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gs-teal);
+    flex-shrink: 0;
+}
+
+.gs-category-detail { min-width: 0; flex: 1; }
+.gs-category-detail strong { display: block; overflow-wrap: anywhere; }
+.gs-category-detail > .gs-muted { font-size: .8125rem; }
+.gs-category-share { display: block; font-size: .75rem; }
+.gs-category-breakdown { max-height: 55vh; overflow-y: auto; padding: 3px; }
+.gs-category-breakdown .gs-category-row + .gs-category-row { border-top: 1px solid var(--gs-line); }
+
+@media (max-width: 640px) {
+    .gs-category-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 12px;
+        padding: 12px 14px;
+    }
+    .gs-category-heading { border: 0; padding: 0; }
+    .gs-category-period { justify-self: end; }
+    .gs-category-chips { grid-column: 1 / -1; }
+    .gs-category-leader {
+        justify-content: flex-start;
+        justify-self: start;
+        max-width: 100%;
+    }
+}
+
 /* --------------------------------------------------------- stacked chip -- */
+
+.gs-mobile-ledger { display: none; }
+
+@media (max-width: 640px) {
+    .gs-mobile-ledger { display: block; }
+    .gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
+    /* Keep the grid's empty state and pager so both layouts use the same server page. */
+    .gs-ledger-listing { padding-bottom: 100px; }
+    .gs-feed-day { margin-bottom: 20px; }
+    .gs-feed-day h3 {
+        margin: 0;
+        padding: 12px 0 10px;
+        border-bottom: 1px solid var(--gs-line);
+        font-size: .9375rem;
+        font-weight: 700;
+    }
+    .gs-feed-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--gs-line);
+    }
+    .gs-feed-entry {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+        padding: 14px 0;
+        border: 0;
+        background: transparent;
+        color: var(--gs-ink);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .gs-feed-entry:disabled { color: var(--gs-ink); cursor: default; }
+    .gs-feed-entry:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+    .gs-feed-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .gs-feed-copy strong { font-size: .875rem; overflow-wrap: anywhere; line-height: 1.3; }
+    .gs-feed-copy > .gs-muted { font-size: .75rem; line-height: 1.4; }
+    .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
+    .gs-feed-row > .mud-menu { flex-shrink: 0; }
+    .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
+}
 
 /* A chip with a second line under its label. The three view chips on the You page
    differed only in wording that did not distinguish them -- "Your share" beside

@@ -32,6 +32,7 @@ public static class GroupCommands
         groups.Subcommands.Add(SettleBetween());
         groups.Subcommands.Add(SettleUp());
         groups.Subcommands.Add(Activity());
+        groups.Subcommands.Add(Spending());
         groups.Subcommands.Add(Archive());
         groups.Subcommands.Add(Unarchive());
         groups.Subcommands.Add(Leave());
@@ -767,6 +768,18 @@ public static class GroupCommands
         {
             Description = "Match a name, note, category, or either party's name."
         };
+        var categoryId = new Option<Guid?>("--category-id")
+        {
+            Description = "Only expenses filed under this category."
+        };
+        var uncategorized = new Option<bool>("--uncategorized")
+        {
+            Description = "Only expenses with no category."
+        };
+        var paidBy = new Option<Guid?>("--paid-by")
+        {
+            Description = "Only activity paid by this member or guest."
+        };
 
         var order = Sorting.Order();
         var page = new Option<int?>("--page") { Description = "1-based page number." };
@@ -777,7 +790,7 @@ public static class GroupCommands
 
         var command = new Command("activity", "List everything that happened in a group, newest first.")
         {
-            GroupId, kind, from, to, search, sortBy, order, page, pageSize
+            GroupId, kind, from, to, search, categoryId, uncategorized, paidBy, sortBy, order, page, pageSize
         };
 
         command.SetHandler(async (context, ct) =>
@@ -790,6 +803,9 @@ public static class GroupCommands
                 to: parse.GetValue(to),
                 kind: (int?)parse.GetValue(kind),
                 search: parse.GetValue(search),
+                categoryId: parse.GetValue(categoryId),
+                uncategorized: parse.GetValue(uncategorized) ? true : null,
+                paidBy: parse.GetValue(paidBy),
                 sortBy: parse.GetValue(sortBy),
                 sortDescending: parse.GetValue(order).Descending(),
                 page: parse.GetValue(page),
@@ -824,6 +840,39 @@ public static class GroupCommands
                 return new Rows(table, Tables.PageFooter(value));
             });
 
+            return ExitCodes.Success;
+        });
+
+        return command;
+    }
+
+    /// <summary>One row per category, rather than one per expense, for a group's spending.</summary>
+    private static Command Spending()
+    {
+        var from = new Option<DateTimeOffset?>("--from") { Description = "Inclusive lower bound on the date." };
+        var to = new Option<DateTimeOffset?>("--to") { Description = "Inclusive upper bound on the date." };
+        var paidBy = new Option<Guid?>("--paid-by") { Description = "Only expenses paid by this member or guest." };
+        var command = new Command("spending", "Show a group's spending by category.") { GroupId, from, to, paidBy };
+
+        command.SetHandler(async (context, ct) =>
+        {
+            var parse = context.ParseResult;
+            var spending = await context.Groups.GetGroupSpendingByCategoryAsync(
+                parse.GetValue(GroupId), from: parse.GetValue(from), to: parse.GetValue(to),
+                paidBy: parse.GetValue(paidBy), cancellationToken: ct);
+
+            context.Output.Write(spending, value =>
+            {
+                if (value.Categories.Count == 0)
+                    return new Markup(Tables.Empty("spending") + "\n");
+
+                var table = Tables.Grid("Category", "Expenses", "Total", "Your share");
+                foreach (var category in value.Categories)
+                    table.AddRow(Markup.Escape(category.Name), category.Count.ToString(),
+                        category.Total.ToString("N2"), category.Share.ToString("N2"));
+
+                return new Rows(table);
+            });
             return ExitCodes.Success;
         });
 
