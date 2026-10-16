@@ -230,7 +230,7 @@ public class GroupLedgerTabTest : ComponentTest
         var tab = Render();
 
         tab.WaitForAssertion(() => Assert.Contains("Household", tab.Find(".gs-category-summary").TextContent));
-        Assert.DoesNotContain("Utilities", tab.Find(".gs-category-summary").TextContent);
+        Assert.Equal(6, tab.FindAll(".gs-category-chips .gs-category-leader").Count);
         Assert.Contains("$275.14", tab.Find(".gs-category-summary").TextContent);
         var reference = new DialogReference(Guid.NewGuid(), _dialogs.Object);
         reference.Dismiss(DialogResult.Ok(_categories[4]));
@@ -239,7 +239,7 @@ public class GroupLedgerTabTest : ComponentTest
             .ReturnsAsync(reference);
 
         var showAll = tab.Find("button.gs-category-toggle");
-        Assert.Contains("6 categories", showAll.TextContent);
+        Assert.Equal("View all categories", showAll.GetAttribute("aria-label"));
         await showAll.ClickAsync(new());
 
         _dialogs.Verify(dialogs => dialogs.ShowAsync<CategorySpendingDialog>(

@@ -1,0 +1,50 @@
+@using GroupSplit.Shared
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="gs-category-chips" @ref="_row">
+    @foreach (var category in Spending.Categories)
+    {
+        <button type="button" class="gs-category-leader" @key="category.CategoryId"
+                aria-pressed="@(category.CategoryId == SelectedCategoryId && (SelectedCategoryId is not null || Uncategorized))"
+                @onclick="@(() => Selected.InvokeAsync(category.CategoryId))">
+            <span class="gs-category-dot" aria-hidden="true"></span>
+            <span class="gs-category-name">@category.Name</span>
+            <Money Value="category.Total" Currency="@Spending.Currency" />
+        </button>
+    }
+    <button type="button" class="gs-category-toggle" aria-haspopup="dialog"
+            aria-label="View all categories" @onclick="ShowAll">
+        <span class="gs-category-more">View all</span>
+        <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" />
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CategorySpendingSummaryResponse Spending { get; set; } = null!;
+    [Parameter] public Guid? SelectedCategoryId { get; set; }
+    [Parameter] public bool Uncategorized { get; set; }
+    [Parameter] public EventCallback<Guid?> Selected { get; set; }
+    [Parameter] public EventCallback ShowAll { get; set; }
+    private ElementReference _row;
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import",
+            "./_content/GroupSplit.App.Shared/js/category-chips.js");
+        if (_module is not null)
+            await _module.InvokeVoidAsync("fit", _row);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("disconnect", _row);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

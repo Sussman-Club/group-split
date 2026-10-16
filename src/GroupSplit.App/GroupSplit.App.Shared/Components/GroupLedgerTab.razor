@@ -37,13 +37,13 @@
 <div class="gs-stack">
     @* One row: what kind, over what span, matching what. Three controls is the whole
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
-    <div class="gs-inline" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
-        <div class="gs-inline" style="gap: 8px; flex-wrap: wrap; min-width: 0">
+    <div class="gs-ledger-toolbar">
+        <div class="gs-ledger-filters">
             @* Not in a personal group: nothing is settled there, so every entry is an
                expense and the chips would all show the same rows. *@
             @if (!Personal)
             {
-                <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Which entries">
+                <div class="gs-ledger-segments" role="group" aria-label="Which entries">
                     @foreach (var (label, value) in Kinds)
                     {
                         var kind = value;
@@ -58,14 +58,23 @@
 
             @if (!Personal)
             {
-                <MudSelect T="Guid?" Value="@_paidBy" ValueChanged="SetPaidByAsync" Label="Paid by"
-                           Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" style="min-width: 150px">
-                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Everyone</MudSelectItem>
-                    @foreach (var payer in _payers)
-                    {
-                        <MudSelectItem T="Guid?" Value="@payer.Id">@payer.FullName</MudSelectItem>
-                    }
-                </MudSelect>
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                         PopoverClass="gs-menu">
+                    <ActivatorContent Context="menu">
+                        <button type="button" class="gs-ledger-payer" aria-haspopup="menu"
+                                @onclick="@(args => menu.ToggleAsync(args))">
+                            <span>Paid by @(_paidBy is null ? "everyone" : _payers.FirstOrDefault(payer => payer.Id == _paidBy)?.FullName ?? "selected person")</span>
+                            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => SetPaidByAsync(null))">Everyone</MudMenuItem>
+                        @foreach (var payer in _payers)
+                        {
+                            <MudMenuItem OnClick="@(() => SetPaidByAsync(payer.Id))">@payer.FullName</MudMenuItem>
+                        }
+                    </ChildContent>
+                </MudMenu>
             }
         </div>
 
@@ -115,19 +124,9 @@
         <span class="gs-muted gs-category-period">@Span</span>
         @if (_byCategory is { Categories.Count: > 0 } spending)
         {
-            var biggest = spending.Categories[0];
-            <button type="button" class="gs-category-leader"
-                    aria-pressed="@(_categoryId == biggest.CategoryId && (_categoryId is not null || _uncategorized))"
-                    @onclick="@(() => SetCategoryAsync(biggest.CategoryId))">
-                <span class="gs-category-dot" aria-hidden="true"></span>
-                <span class="gs-category-name">@biggest.Name</span>
-                <Money Value="biggest.Total" Currency="@spending.Currency" />
-            </button>
-            <button type="button" class="gs-category-toggle" aria-haspopup="dialog"
-                    @onclick="ShowCategoriesAsync">
-                @spending.Categories.Count @(spending.Categories.Count == 1 ? "category" : "categories")
-                <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" />
-            </button>
+            <CategorySpendingChips Spending="spending" SelectedCategoryId="_categoryId"
+                                   Uncategorized="_uncategorized" Selected="SetCategoryAsync"
+                                   ShowAll="ShowCategoriesAsync" />
         }
         else
         {
@@ -135,7 +134,53 @@
         }
     </section>
 
-    <div class="gs-reveal" style="--i: 2">
+    <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
+        <div class="gs-mobile-ledger" aria-label="Transactions">
+            @foreach (var day in _mobileEntries.GroupBy(entry => Clock.Day(entry.DateTime)))
+            {
+                <section class="gs-feed-day" aria-label="@day.Key.ToString("d MMMM yyyy")">
+                    <h3>@day.Key.ToString(day.Key.Year == Clock.Today.Year ? "d MMMM" : "d MMMM yyyy")</h3>
+                    @foreach (var entry in day)
+                    {
+                        <div class="gs-feed-row" @key="entry.Id">
+                            <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
+                                    aria-label="@($"Details for {Headline(entry)}")"
+                                    @onclick="@(() => ViewAsync(entry))">
+                                @if (entry.Kind is ActivityKind.Transfer)
+                                {
+                                    <span class="gs-row-icon transfer"><MudIcon Icon="@Icons.Material.Rounded.SwapHoriz" /></span>
+                                }
+                                else
+                                {
+                                    <MerchantMark PaidByUserName="@entry.PaidByUserName"
+                                                  MerchantName="@entry.MerchantName" MerchantLogoUrl="@entry.MerchantLogoUrl" />
+                                }
+                                <span class="gs-feed-copy">
+                                    <strong>@Headline(entry)</strong>
+                                    <span class="gs-muted">
+                                        @(entry.Kind is ActivityKind.Transfer ? "Settlement" + entry.CoversThrough.ThroughSuffix() : Detail(entry))
+                                        @if (Clock.TimeOf(entry.DateTime) is { } time)
+                                        {
+                                            <span> · @time.ToString("t")</span>
+                                        }
+                                    </span>
+                                    @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
+                                    {
+                                        <span class="gs-muted">Your share @share.ToMoney()</span>
+                                    }
+                                </span>
+                                <Money Value="entry.Amount" Class="gs-feed-amount" />
+                            </button>
+                            <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
+                                     aria-label="@($"Actions for {Headline(entry)}")" PopoverClass="gs-menu">
+                                <MudMenuItem OnClick="@(() => EditAsync(entry))">Edit</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => DeleteAsync(entry))">Delete</MudMenuItem>
+                            </MudMenu>
+                        </div>
+                    }
+                </section>
+            }
+        </div>
         @* Keyed so a URL arriving from outside rebuilds the grid on the page and sort it
            asks for: both are only read when a grid starts.
 
@@ -397,6 +442,7 @@
     private bool _reloadAgain;
 
     private TransactionSummaryResponse? _spending;
+    private IReadOnlyList<GroupLedgerEntryResponse> _mobileEntries = [];
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
@@ -533,6 +579,9 @@
             page: state.Page + 1,
             pageSize: state.PageSize,
             cancellationToken: cancellationToken));
+
+        _mobileEntries = page?.Items ?? [];
+        await InvokeAsync(StateHasChanged);
 
         return new GridData<GroupLedgerEntryResponse>
         {

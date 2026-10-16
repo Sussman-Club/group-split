@@ -47,3 +47,115 @@
 .gs-range-picker {
     max-width: 240px;
 }
+
+/* Ledger controls share one height and quiet chrome; entry type is the selected state. */
+.gs-ledger-toolbar,
+.gs-ledger-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.gs-ledger-segments {
+    display: inline-flex;
+    flex-shrink: 0;
+    border: 1px solid var(--gs-line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--gs-surface);
+}
+
+.gs-ledger-segments .gs-chip {
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--gs-ink-2);
+    box-shadow: none;
+    transform: none;
+    font-size: .8125rem;
+}
+
+.gs-ledger-segments .gs-chip + .gs-chip {
+    border-left: 1px solid var(--gs-line);
+}
+
+.gs-ledger-segments .gs-chip.active {
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+}
+
+.gs-ledger-segments .gs-chip:hover {
+    background: var(--gs-surface-2);
+}
+
+.gs-ledger-segments .gs-chip:focus-visible {
+    outline-offset: -3px;
+}
+
+.gs-ledger-filters .gs-range {
+    margin-bottom: 0;
+}
+
+.gs-ledger-payer,
+.gs-ledger-filters .gs-range .gs-chip-menu {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--gs-line);
+    border-radius: 12px;
+    background: var(--gs-surface);
+    color: var(--gs-ink-2);
+    font: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: none;
+    transform: none;
+    cursor: pointer;
+}
+
+.gs-ledger-payer > span {
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gs-ledger-payer:hover,
+.gs-ledger-filters .gs-range .gs-chip-menu:hover {
+    border-color: var(--gs-line-strong);
+}
+
+.gs-ledger-payer:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+.gs-ledger-toolbar .gs-search {
+    flex: 1 1 220px;
+    min-width: 180px;
+    margin: 0;
+}
+
+.gs-ledger-toolbar .gs-search .mud-input {
+    height: 42px;
+    border-radius: 12px !important;
+    background: var(--gs-surface);
+}
+
+.gs-ledger-toolbar .gs-search .mud-input-outlined-border {
+    border-radius: 12px !important;
+    border-color: var(--gs-line);
+}
+
+@media (max-width: 640px) {
+    .gs-ledger-filters { gap: 8px; width: 100%; }
+    .gs-ledger-segments { width: 100%; }
+    .gs-ledger-segments .gs-chip { flex: 1; justify-content: center; padding: 0 10px; }
+    .gs-ledger-toolbar .gs-search { flex-basis: 100%; }
+}
