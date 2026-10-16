@@ -29,6 +29,10 @@
     <div>
         <div class="gs-eyebrow">Activity</div>
         <h1>Not filed</h1>
+        @if (Selectable)
+        {
+            <p role="status" aria-live="polite">@Counted(State.TotalCount) left to review in this range.</p>
+        }
         @if (Headline is { Length: > 0 } headline)
         {
             <p>@headline</p>
@@ -58,6 +62,25 @@
 
         <DateRangeFilter Value="@State.Range" ValueChanged="SetRangeAsync" />
     </div>
+
+    @if (Selectable && State.Rows.Count > 0)
+    {
+        <nav class="gs-inline" aria-label="Review suggestions" style="gap: 8px; flex-wrap: wrap">
+            @foreach (var review in Enum.GetValues<ReviewFilter>())
+            {
+                <MudButton Size="Size.Small" Class="gs-btn-pill"
+                           Variant="@(_review == review ? Variant.Filled : Variant.Text)"
+                           Color="Color.Primary" OnClick="@(() => SetReview(review))">
+                    @ReviewLabel(review) (@State.Rows.Count(row => MatchesReview(row, review)))
+                </MudButton>
+            }
+            <span class="note">Suggestions for the loaded charges</span>
+        </nav>
+        @if (!VisibleRows.Any())
+        {
+            <p role="status">No loaded charges in this view. Choose All charges or load more below.</p>
+        }
+    }
 
     @if (State.Connections is { Enabled: false })
     {
@@ -127,9 +150,51 @@
                the full-width primary action on a phone, and no other list in the app
                should have one. *@
             <div class="gs-list gs-queue">
-                @foreach (var item in State.Rows)
+                @{ var bundles = Selectable ? InboxBundle.Create(VisibleRows) : []; }
+                @foreach (var item in VisibleRows)
                 {
                     var row = item;
+                    var bundle = bundles.FirstOrDefault(candidate => candidate.Rows.Any(member => member.Id == row.Id));
+                    if (bundle is not null)
+                    {
+                        if (bundle.First.Id == row.Id)
+                        {
+                            <details class="gs-inbox-bundle" @key="row.Id">
+                                <summary>
+                                    <strong>@row.Title</strong>
+                                    <span>@bundle.Rows.Count matching charges</span>
+                                    @if (bundle.Rows.Any(member => _selected.Contains(member.Id)))
+                                    {
+                                        <span>@bundle.Rows.Count(member => _selected.Contains(member.Id)) selected</span>
+                                    }
+                                    <span>Suggested: @bundle.Suggestion.Destination</span>
+                                    <Money Value="@bundle.Rows.Sum(member => member.Amount)" Currency="@row.Currency" />
+                                </summary>
+                                <p class="note">Same account and available context this month. Each charge has its own suggestion. Review before confirming.</p>
+                                @foreach (var member in bundle.Rows)
+                                {
+                                    <div class="gs-inline gs-inbox-bundle-charge" @key="member.Id">
+                                        <MudCheckBox T="bool" Value="@_selected.Contains(member.Id)"
+                                                     ValueChanged="@((bool on) => Select(member.Id, on))"
+                                                     Dense="true" aria-label="@($"Select {member.Title} on {member.SpentOn:d}")" />
+                                        <span>@member.AccountName · @member.SpentOn.ToShortDateString()</span>
+                                        <Money Value="@member.Amount" Currency="@member.Currency" />
+                                        <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
+                                                   OnClick="@(() => AddToGroupAsync(member))"
+                                                   aria-label="@($"Change destination for {member.Title} on {member.SpentOn:d}")">Change destination</MudButton>
+                                        <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
+                                                   OnClick="@(() => KeepPersonalAsync(member))">Keep personal</MudButton>
+                                        <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
+                                                   OnClick="@(() => IgnoreAsync(member))">Ignore</MudButton>
+                                    </div>
+                                }
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
+                                           Disabled="@(_busy is not null || _bulkBusy)"
+                                           OnClick="@(() => ConfirmBundleAsync(bundle))">Confirm @bundle.Rows.Count in @bundle.Suggestion.Destination</MudButton>
+                            </details>
+                        }
+                        continue;
+                    }
                     @* is-selectable, not just is-selected: the checkbox is a fourth child
                        of a three-column grid, and the row needs the column to put it in
                        whether or not it is ticked. *@
@@ -169,18 +234,10 @@
                             </div>
                             <div class="meta">
                                 @row.AccountName · @row.SpentOn.ToShortDateString()
-                                @if ((row.DetailedCategoryLabel ?? row.CategoryLabel) is { Length: > 0 } category)
-                                {
-                                    @($" · {category}")
-                                }
-                                @if (row.Context is { Length: > 0 } context)
-                                {
-                                    @($" · {context}")
-                                }
                             </div>
                         </div>
 
-                        <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
+                        <div class="gs-inline gs-inbox-row-actions" style="gap: 12px; flex-wrap: wrap">
                             @* Through the one money component, like every other figure in
                                the app. Money coming in is signed and toned rather than
                                shown as a negative expense, which it is not. *@
@@ -188,20 +245,10 @@
                                    Signed="@row.IsCredit" Absolute="@row.IsCredit"
                                    Class="@(row.IsCredit ? "gs-muted" : "")" />
 
-                            @*
-                                One primary action, and the rest one gesture away.
-
-                                The row used to offer up to five buttons, and a page of
-                                twenty-three of them was a hundred and fifteen ways to
-                                mis-tap. Sharing is the answer this app exists for, so it
-                                gets the button; keeping a payment personal and ignoring it
-                                are neither common nor destructive -- ignoring is reversible
-                                from the Ignored filter, which is exactly why it does not
-                                need to be prominent.
-                            *@
+                            @* Shared and personal are both ordinary answers. *@
                             @if (row.Status == InboxStatus.New)
                             {
-                                <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                                <div class="gs-inline gs-inbox-row-buttons" style="gap: 4px; flex-wrap: wrap">
                                     @if (row.IsCredit)
                                     {
                                         @* Money coming in cannot become an expense, so the
@@ -216,7 +263,7 @@
                                         @if (row.Suggestion is { } suggestion)
                                         {
                                             <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                                       Class="gs-btn-pill"
+                                                       Class="gs-btn-pill gs-inbox-suggestion"
                                                        StartIcon="@Icons.Material.Rounded.AutoAwesome"
                                                        Disabled="@(_busy == row.Id)"
                                                        title="@($"File it in {suggestion.Destination}")"
@@ -234,9 +281,11 @@
                                                  TransformOrigin="Origin.TopRight"
                                                  Disabled="@(_busy == row.Id)"
                                                  aria-label="@($"Other answers for {row.Title}")">
-                                            <MudMenuItem OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudMenuItem>
                                             <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
                                         </MudMenu>
+                                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                                   Disabled="@(_busy == row.Id || _bulkBusy)"
+                                                   OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudButton>
                                     }
                                 </div>
                             }
@@ -358,6 +407,75 @@
 
     private bool _bulkBusy;
 
+    private enum ReviewFilter { All, Shared, Personal, Uncertain }
+    private ReviewFilter _review;
+    private void SetReview(ReviewFilter review)
+    {
+        _selected.Clear();
+        _review = review;
+    }
+    private IEnumerable<BankTransactionResponse> VisibleRows => State.Rows
+        .Where(row => !Selectable || MatchesReview(row, _review));
+
+    private static bool MatchesReview(BankTransactionResponse row, ReviewFilter filter) => filter switch
+    {
+        ReviewFilter.Shared => row.PossibleDuplicates.Count == 0 && row.Suggestion is { IsPersonal: false },
+        ReviewFilter.Personal => row.PossibleDuplicates.Count == 0 && row.Suggestion is { IsPersonal: true },
+        ReviewFilter.Uncertain => row.PossibleDuplicates.Count > 0 || row.Suggestion is null,
+        _ => true
+    };
+
+    private static string ReviewLabel(ReviewFilter filter) => filter switch
+    {
+        ReviewFilter.Shared => "Likely shared",
+        ReviewFilter.Personal => "Likely personal",
+        ReviewFilter.Uncertain => "Needs a decision",
+        _ => "All charges"
+    };
+
+    private async Task ConfirmBundleAsync(InboxBundle bundle)
+    {
+        if (_bulkBusy || _busy is not null)
+            return;
+
+        _bulkBusy = true;
+        var completed = 0;
+        try
+        {
+            // Keep the displayed snapshot. Refreshes may replace rows between writes;
+            // never expand a click to newly arrived or newly suggested charges.
+            foreach (var shown in bundle.Rows)
+            {
+                var current = State.Rows.FirstOrDefault(row => row.Id == shown.Id);
+                if (current is null || current.Status != InboxStatus.New || current.Pending
+                    || current.RemovedAt is not null || current.PossibleDuplicates.Count > 0
+                    || current.Suggestion != shown.Suggestion
+                    || current.AccountId != shown.AccountId || current.Amount != shown.Amount
+                    || current.Currency != shown.Currency || current.MerchantName != shown.MerchantName
+                    || current.SpentOn != shown.SpentOn || current.Context != shown.Context
+                    || current.ProviderCategoryDetailed != shown.ProviderCategoryDetailed)
+                    break;
+
+                var suggestion = shown.Suggestion!;
+                var expense = await FileAsync(current, new FileBankTransactionRequest
+                {
+                    GroupId = suggestion.IsPersonal ? null : suggestion.GroupId,
+                    CategoryId = suggestion.CategoryId
+                }, suggestion.Destination, allowDuringBatch: true);
+                if (expense is null)
+                    break;
+                completed++;
+            }
+            Snackbar.Add(completed == bundle.Rows.Count
+                ? $"All {completed} charges filed."
+                : $"{completed} of {bundle.Rows.Count} charges filed. The remaining charges still need review.", Severity.Info);
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
     /// <summary>
     /// Whether selecting is offered at all. Only over the rows still waiting: the other two
     /// filters show decisions already taken.
@@ -376,7 +494,7 @@
     /// <see cref="KeepSelectedPersonalAsync"/> enforces where the writing happens.
     /// </remarks>
     private IEnumerable<BankTransactionResponse> Selectables =>
-        State.Rows.Where(row => row.Status == InboxStatus.New);
+        VisibleRows.Where(row => row.Status == InboxStatus.New);
 
     private bool AllSelected =>
         Selectables.Any() && Selectables.All(row => _selected.Contains(row.Id));
@@ -679,6 +797,9 @@
 
     private async Task<TransactionResponse?> AttachAsync(BankTransactionResponse row, Guid transactionId)
     {
+        if (_busy is not null || _bulkBusy)
+            return null;
+
         _busy = row.Id;
         TransactionResponse? expense = null;
 
@@ -716,6 +837,9 @@
 
     private async Task DismissMatchAsync(BankTransactionResponse row, ExpenseMatchResponse match)
     {
+        if (_busy is not null || _bulkBusy)
+            return;
+
         _busy = row.Id;
 
         try
@@ -735,6 +859,9 @@
     /// </summary>
     private async Task AddToGroupAsync(BankTransactionResponse row)
     {
+        if (_busy is not null || _bulkBusy)
+            return;
+
         var parameters = new DialogParameters<FileBankTransactionDialog>
         {
             { dialog => dialog.Row, row }
@@ -766,8 +893,12 @@
         }
     }
 
-    private async Task<TransactionResponse?> FileAsync(BankTransactionResponse row, FileBankTransactionRequest request, string destination)
+    private async Task<TransactionResponse?> FileAsync(BankTransactionResponse row, FileBankTransactionRequest request,
+        string destination, bool allowDuringBatch = false)
     {
+        if (_busy is not null || (_bulkBusy && !allowDuringBatch))
+            return null;
+
         _busy = row.Id;
         TransactionResponse? expense = null;
 
@@ -795,6 +926,9 @@
 
     private async Task IgnoreAsync(BankTransactionResponse row)
     {
+        if (_busy is not null || _bulkBusy)
+            return;
+
         _busy = row.Id;
 
         try
@@ -809,6 +943,9 @@
 
     private async Task RestoreAsync(BankTransactionResponse row)
     {
+        if (_busy is not null || _bulkBusy)
+            return;
+
         _busy = row.Id;
 
         try
