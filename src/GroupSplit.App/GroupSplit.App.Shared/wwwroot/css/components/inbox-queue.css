@@ -10,12 +10,17 @@
 .gs-inbox-bundle summary {
     cursor: pointer;
     line-height: 1.8;
+    padding-block: 6px;
 }
 
 .gs-inbox-bundle summary span {
     display: inline-block;
     margin-inline-start: 12px;
     color: var(--gs-muted);
+}
+
+.gs-inbox-bundle summary .gs-money {
+    margin-inline-start: 12px;
 }
 
 .gs-inbox-bundle summary:focus-visible {
@@ -32,6 +37,10 @@
 }
 
 @media (max-width: 600px) {
+    .gs-inbox-bundle .mud-button-root {
+        min-height: 44px;
+    }
+
     .gs-inbox-bundle summary span {
         display: block;
         margin-inline-start: 0;
