@@ -68,11 +68,20 @@ async page => {
     await summary.focus(); await page.keyboard.press('Enter');
     check(await page.locator('.gs-inbox-bundle').getAttribute('open') !== null, 'Keyboard opens bundle');
     await page.screenshot({path:'.playwright-cli/inbox-queue-desktop.png',fullPage:true});
-    const sizes = [{width:360,height:800},{width:390,height:844},{width:640,height:900}];
+    const sizes = [{width:360,height:800},{width:390,height:844},{width:450,height:850},{width:640,height:900}];
     for (const size of sizes) {
         await page.setViewportSize(size);
         const dimensions = await page.evaluate(() => ({scroll:document.documentElement.scrollWidth,width:innerWidth}));
         check(dimensions.scroll <= dimensions.width, 'Horizontal overflow at ' + size.width);
+        const actionRows = await page.locator('.gs-inbox-row-actions').evaluateAll(elements => elements.map(el => {
+            const money = el.querySelector(':scope > .gs-money').getBoundingClientRect();
+            const buttons = el.querySelector('.gs-inbox-row-buttons').getBoundingClientRect();
+            return {x:money.x, bottom:money.bottom, buttonsTop:buttons.top};
+        }));
+        check(actionRows.every(row => Math.abs(row.x - actionRows[0].x) < 2),
+            'Amounts must align regardless of suggestion at ' + size.width);
+        check(actionRows.every(row => row.bottom <= row.buttonsTop),
+            'Amounts must stay above actions at ' + size.width);
         await page.getByRole('button',{name:'Confirm 2 in Home · Groceries',exact:true}).click({trial:true});
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({path:`.playwright-cli/inbox-queue-${size.width}.png`,fullPage:true});

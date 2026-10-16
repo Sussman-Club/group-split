@@ -46,3 +46,35 @@
         margin-inline-start: 0;
     }
 }
+
+/* A stable amount line followed by an action grid: suggestion length must not
+   decide which side of the row the amount lands on. */
+@media (max-width: 640px) {
+    .gs-queue .gs-row > .gs-inbox-row-actions,
+    .gs-queue .gs-row.is-selectable > .gs-inbox-row-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
+        min-width: 0;
+    }
+
+    .gs-inbox-row-actions > .gs-inbox-row-buttons {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+        width: 100%;
+        min-width: 0;
+        align-items: center;
+    }
+
+    .gs-inbox-row-buttons > .gs-inbox-suggestion {
+        grid-column: 1 / -1;
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .gs-inbox-row-buttons > .mud-button-root {
+        min-width: 0;
+        padding-inline: 6px;
+    }
+}

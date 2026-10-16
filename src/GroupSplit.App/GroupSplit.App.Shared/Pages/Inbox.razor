@@ -237,7 +237,7 @@
                             </div>
                         </div>
 
-                        <div class="gs-inline" style="gap: 12px; flex-wrap: wrap">
+                        <div class="gs-inline gs-inbox-row-actions" style="gap: 12px; flex-wrap: wrap">
                             @* Through the one money component, like every other figure in
                                the app. Money coming in is signed and toned rather than
                                shown as a negative expense, which it is not. *@
@@ -248,7 +248,7 @@
                             @* Shared and personal are both ordinary answers. *@
                             @if (row.Status == InboxStatus.New)
                             {
-                                <div class="gs-inline" style="gap: 4px; flex-wrap: wrap">
+                                <div class="gs-inline gs-inbox-row-buttons" style="gap: 4px; flex-wrap: wrap">
                                     @if (row.IsCredit)
                                     {
                                         @* Money coming in cannot become an expense, so the
@@ -263,7 +263,7 @@
                                         @if (row.Suggestion is { } suggestion)
                                         {
                                             <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                                       Class="gs-btn-pill"
+                                                       Class="gs-btn-pill gs-inbox-suggestion"
                                                        StartIcon="@Icons.Material.Rounded.AutoAwesome"
                                                        Disabled="@(_busy == row.Id)"
                                                        title="@($"File it in {suggestion.Destination}")"
