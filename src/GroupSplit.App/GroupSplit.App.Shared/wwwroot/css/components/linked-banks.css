@@ -1,0 +1,42 @@
+/* --------------------------------------------------------- linked banks -- */
+
+/*
+   The identity of a connection matters more than its maintenance controls. A bank row
+   therefore reserves only one compact action control; the individual repairs live in its
+   menu. This keeps the name legible in the account page's side panel as well as on the full
+   page.
+*/
+.gs-bank-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 64px;
+}
+
+.gs-bank-copy {
+    min-width: 0;
+}
+
+/* Do not inherit the transaction list's ellipsis: a bank's name is its identifier. */
+.gs-bank-row .title .gs-bank-name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+}
+
+/* Every state gets the same one-line detail band. The attention tag replaces none of the
+   information, and the detail yields before it can make an alert row taller than a healthy one. */
+.gs-bank-row .gs-bank-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.gs-bank-status-detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gs-bank-row .mud-menu {
+    align-self: center;
+}

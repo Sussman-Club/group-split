@@ -351,4 +351,18 @@
     .gs-stats {
         grid-template-columns: minmax(0, 1fr);
     }
+
+    /* A linked-bank menu stays beside the name. Moving its one compact control beneath the
+       row would make the action take the space we just recovered from its written-out labels. */
+    .gs-row.gs-bank-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .gs-bank-row > :nth-child(3) {
+        grid-column: 3;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+        display: inline-flex;
+    }
 }
