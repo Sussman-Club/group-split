@@ -1,0 +1,92 @@
+@page "/settlement-requests/{Token}"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services.Errors
+@using GroupSplit.Shared
+@inject ISettlement_requestsClient Requests
+@inject ApiErrorPresenter Errors
+@inject DataChangeNotifier Changes
+@inject LocalClock Clock
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Settlement request - Group Split</PageTitle>
+
+@if (_error is not null)
+{
+    <LinkLanding Title="This request is unavailable" Subtitle="@_error" />
+}
+else if (_request is null)
+{
+    <div class="gs-card gs-empty" style="padding: 48px 24px">Loading settlement request…</div>
+}
+else
+{
+    <section class="gs-card gs-card-pad gs-stack" style="max-width: 560px; margin: 32px auto">
+        <div class="gs-eyebrow">Settlement request</div>
+        <h1>@_request.RequesterName asked you to pay <Money Value="_request.Amount" Currency="@_request.Currency" /></h1>
+        <p>For @_request.RecipientName</p>
+        <p>@Groups</p>
+        <p class="meta">Created @Clock.Day(_request.CreatedAt).ToString("d MMM yyyy") · @_request.Currency</p>
+        @switch (_request.Status)
+        {
+            case SettlementRequestStatus.Open:
+                <MudText>Pay @_request.RequesterName using the method you both prefer, then record it here. Nothing is recorded automatically.</MudText>
+                <MudTextField Value="@Message" Label="Payment message" ReadOnly="true" Variant="Variant.Outlined" Lines="3" />
+                <MudButton OnClick="CopyAsync">Copy payment message</MudButton>
+                <MudCheckBox T="bool" @bind-Value="_paid" Label="I have paid this amount outside GroupSplit" />
+                <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@(!_paid || _busy)" OnClick="RecordAsync">Record repayment</MudButton>
+                break;
+            case SettlementRequestStatus.Paid:
+                <MudText Color="Color.Success">This repayment has been recorded.</MudText>
+                break;
+            case SettlementRequestStatus.Cancelled:
+                <MudText>This request was cancelled.</MudText>
+                break;
+            default:
+                <MudText>This request is stale because the balance changed. Ask @_request.RequesterName for a new one.</MudText>
+                break;
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+    private SettlementRequestResponse? _request;
+    private string? _error;
+    private bool _paid;
+    private bool _busy;
+    private string Groups => _request is null ? "" : string.Join(" · ", _request.Groups.Select(group => $"{group.GroupName}: {group.Amount.ToMoney(_request.Currency)}"));
+    private string Message => _request is null ? "" : $"{_request.RecipientName} pays {_request.RequesterName} {_request.Amount.ToMoney(_request.Currency)} for {Groups}.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _request = null;
+        _paid = false;
+        var error = await Errors.CaptureAsync(async () => _request = await Requests.GetSettlementRequestAsync(Token));
+        if (error is { Kind: ApiErrorKind.Unauthenticated })
+            await Errors.ShowAsync(error);
+        _error = error?.Message;
+    }
+
+    private async Task RecordAsync()
+    {
+        if (_busy || !_paid) return;
+        _busy = true;
+        try
+        {
+            if (await Errors.TryAsync(async () => _request = await Requests.RecordSettlementRequestRepaymentAsync(Token),
+                    "Could not record this repayment."))
+                await Changes.NotifyTransactionsChangedAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task CopyAsync()
+    {
+        var copied = false;
+        try { copied = await JS.InvokeAsync<bool>("gs.copy", Message); }
+        catch (JSException) { }
+        Snackbar.Add(copied ? "Payment message copied." : "Select the message above and copy it by hand.",
+            copied ? Severity.Success : Severity.Info);
+    }
+}

@@ -50,6 +50,13 @@
                                            OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
                                     @(guest ? $"{owed.UserName} paid" : "They paid")
                                 </MudButton>
+                                @if (!guest)
+                                {
+                                    <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                               OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
+                                        Request payment
+                                    </MudButton>
+                                }
                             </div>
                         }
                     </div>
@@ -224,6 +231,7 @@
     /// write. The tab knows which line was pressed and nothing else.
     /// </summary>
     [Parameter] public EventCallback<(DebtInfo Debt, SettlementDirection Direction)> OnSettle { get; set; }
+    [Parameter] public EventCallback<DebtInfo> OnRequestPayment { get; set; }
 
     private PagedResponse<GroupLedgerEntryResponse>? _recent;
     private Guid _loadedFor;

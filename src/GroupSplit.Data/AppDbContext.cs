@@ -259,6 +259,35 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(link => new { link.GroupId, link.CreatedAt });
         });
 
+        modelBuilder.Entity<SettlementRequest>(entity =>
+        {
+            entity.Property(request => request.Token).HasMaxLength(64).IsRequired();
+            entity.Property(request => request.Currency).HasMaxLength(Currencies.CodeLength).IsFixedLength().IsRequired();
+            entity.Property(request => request.Amount).HasPrecision(18, 2).IsRequired();
+            entity.Property(request => request.CreatedAt).IsRequired();
+            entity.Property(request => request.CancelledAt).IsConcurrencyToken();
+            entity.Property(request => request.ResolvedAt).IsConcurrencyToken();
+            entity.Property(request => request.StaleAt).IsConcurrencyToken();
+            entity.HasIndex(request => request.Token).IsUnique();
+            entity.HasIndex(request => new { request.RecipientUserId, request.CreatedAt });
+            entity.HasIndex(request => new { request.RequesterUserId, request.CreatedAt });
+            entity.HasOne(request => request.Requester).WithMany().HasForeignKey(request => request.RequesterUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(request => request.Recipient).WithMany().HasForeignKey(request => request.RecipientUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SettlementRequestGroup>(entity =>
+        {
+            entity.HasKey(part => new { part.SettlementRequestId, part.GroupId });
+            entity.Property(part => part.DebtAtCreation).HasPrecision(18, 2).IsRequired();
+            entity.Property(part => part.RequestedAmount).HasPrecision(18, 2).IsRequired();
+            entity.HasOne(part => part.SettlementRequest).WithMany(request => request.Groups)
+                .HasForeignKey(part => part.SettlementRequestId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(part => part.Group).WithMany().HasForeignKey(part => part.GroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Group>(entity =>
         {
             entity.Property(group => group.Name).HasMaxLength(64).IsRequired();

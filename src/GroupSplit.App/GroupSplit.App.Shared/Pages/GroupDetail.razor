@@ -91,7 +91,8 @@
                 <GroupOverviewTab GroupId="@group.Id"
                                   GroupName="@group.Name"
                                   UserId="@UserInfo?.Id"
-                                  OnSettle="OnSettleAsync" />
+                                  OnSettle="OnSettleAsync"
+                                  OnRequestPayment="RequestPaymentAsync" />
                 break;
         }
     </div>
@@ -237,6 +238,17 @@ else if (NotFound)
     /// </summary>
     private Task OnSettleAsync((DebtInfo Debt, SettlementDirection Direction) line) =>
         SettleAsync(line.Debt, line.Direction);
+
+    private async Task RequestPaymentAsync(DebtInfo debt)
+    {
+        var parameters = new DialogParameters<RequestPaymentDialog>
+        {
+            { x => x.GroupId, GroupId }, { x => x.RecipientUserId, debt.UserId },
+            { x => x.RecipientName, debt.UserName }, { x => x.CurrentDebt, debt.Amount }
+        };
+        await DialogService.ShowAsync<RequestPaymentDialog>("Request payment", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+    }
 
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;

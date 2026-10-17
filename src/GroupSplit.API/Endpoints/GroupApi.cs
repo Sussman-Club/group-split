@@ -48,6 +48,7 @@ public static class GroupApi
             group.MapSettle();
             group.MapSettleUp();
             group.MapRecordRepayment();
+            group.MapSettlementRequest();
             group.MapArchive();
             group.MapUnarchive();
 
