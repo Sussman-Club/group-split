@@ -1,0 +1,83 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
+@inject IGroupsClient GroupsClient
+@inject ISettlement_requestsClient SettlementRequestsClient
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Navigation
+
+<MudDialog Class="gs-sheet">
+    <TitleContent><MudText Typo="Typo.h5">Request payment from @RecipientName</MudText></TitleContent>
+    <DialogContent>
+        @if (_link is { } link)
+        {
+            <MudStack Spacing="2">
+                <MudText>Share this private link with @RecipientName. It does not record a payment.</MudText>
+                <MudTextField Value="@link" Label="Settlement request link" ReadOnly="true" Variant="Variant.Outlined" />
+            </MudStack>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                <MudText>@RecipientName currently owes you @CurrentDebt.ToMoney().</MudText>
+                <DecimalField @bind-Value="_amount" Label="Amount to request" Variant="Variant.Outlined"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              HideSpinButtons="true" />
+                <MudText Typo="Typo.caption">You can request a different amount, including one for an earlier period. Recording it is still a separate confirmation.</MudText>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_link is null)
+        {
+            <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="CreateAsync">Create link</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelRequestAsync">Cancel request</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="Close">Done</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid? GroupId { get; set; }
+    [Parameter] public Guid RecipientUserId { get; set; }
+    [Parameter] public string RecipientName { get; set; } = "";
+    [Parameter] public decimal CurrentDebt { get; set; }
+
+    private decimal _amount;
+    private string? _link;
+
+    protected override void OnInitialized() => _amount = CurrentDebt;
+
+    private async Task CreateAsync()
+    {
+        if (_amount <= 0)
+            return;
+        SettlementRequestResponse? created = null;
+        var saved = await Errors.TryAsync(async () => created = GroupId is { } groupId
+            ? await GroupsClient.CreateGroupSettlementRequestAsync(groupId,
+                new CreateSettlementRequest { RecipientUserId = RecipientUserId, Amount = _amount })
+            : await SettlementRequestsClient.CreateSettlementRequestAsync(
+                new CreateSettlementRequest { RecipientUserId = RecipientUserId, Amount = _amount }),
+            "Could not create the settlement request.");
+        if (saved && created is not null)
+            _link = Navigation.ToAbsoluteUri($"/settlement-requests/{created.Token}").ToString();
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+    private void Close() => MudDialog.Close();
+
+    private async Task CancelRequestAsync()
+    {
+        if (_link is null)
+            return;
+        var token = _link[(_link.LastIndexOf('/') + 1)..];
+        var cancelled = await Errors.TryAsync(() => SettlementRequestsClient.CancelSettlementRequestAsync(token),
+            "Could not cancel the settlement request.");
+        if (cancelled)
+            MudDialog.Close();
+    }
+}

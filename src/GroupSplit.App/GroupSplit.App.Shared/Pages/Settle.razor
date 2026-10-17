@@ -118,7 +118,8 @@
                     var owing = person;
                     <SettlePersonRow Person="owing"
                                      Direction="SettlementDirection.TheyPaidYou"
-                                     OnRecord="@(() => RecordAsync(owing, SettlementDirection.TheyPaidYou))" />
+                                     OnRecord="@(() => RecordAsync(owing, SettlementDirection.TheyPaidYou))"
+                                     OnRequest="@(() => RequestPaymentAsync(owing))" />
                 }
             </div>
         </section>
@@ -272,6 +273,17 @@
 
         if (request is not null)
             await Settling.SettleAsync(request, person.UserName);
+    }
+
+    private async Task RequestPaymentAsync(PersonSettlement person)
+    {
+        var parameters = new DialogParameters<RequestPaymentDialog>
+        {
+            { x => x.RecipientUserId, person.UserId }, { x => x.RecipientName, person.UserName },
+            { x => x.CurrentDebt, person.Amount }
+        };
+        await DialogService.ShowAsync<RequestPaymentDialog>("Request payment", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
     }
 
     private void ReRender() => InvokeAsync(StateHasChanged);

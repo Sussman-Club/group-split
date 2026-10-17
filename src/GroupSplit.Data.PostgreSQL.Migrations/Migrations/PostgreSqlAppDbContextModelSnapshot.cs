@@ -803,6 +803,80 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("ReceiptItem");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequesterUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("StaleAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientUserId", "CreatedAt");
+
+                    b.HasIndex("RequesterUserId", "CreatedAt");
+
+                    b.ToTable("SettlementRequest");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequestGroup", b =>
+                {
+                    b.Property<Guid>("SettlementRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("DebtAtCreation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("RequestedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("SettlementRequestId", "GroupId");
+
+                    b.HasIndex("GroupId");
+
+                    b.ToTable("SettlementRequestGroup");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1404,6 +1478,44 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("SplitRuleVersion");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequest", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", "Recipient")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", "Requester")
+                        .WithMany()
+                        .HasForeignKey("RequesterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Recipient");
+
+                    b.Navigation("Requester");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequestGroup", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.Group", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.SettlementRequest", "SettlementRequest")
+                        .WithMany("Groups")
+                        .HasForeignKey("SettlementRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("SettlementRequest");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>
                 {
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
@@ -1625,6 +1737,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequest", b =>
+                {
+                    b.Navigation("Groups");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SplitRule", b =>

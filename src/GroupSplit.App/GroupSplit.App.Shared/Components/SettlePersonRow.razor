@@ -20,6 +20,12 @@
     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRecord">
         @(YouPaid ? "I paid them" : "They paid me")
     </MudButton>
+    @if (!YouPaid)
+    {
+        <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRequest">
+            Request payment
+        </MudButton>
+    }
 </div>
 
 @code {
@@ -29,6 +35,7 @@
     [Parameter] public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
 
     [Parameter] public EventCallback OnRecord { get; set; }
+    [Parameter] public EventCallback OnRequest { get; set; }
 
     private bool YouPaid => Direction is SettlementDirection.YouPaidThem;
 

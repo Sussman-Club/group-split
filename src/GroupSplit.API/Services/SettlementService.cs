@@ -138,7 +138,8 @@ public class SettlementService(
     IDebtCalculationService debtCalculator,
     IGroupParticipants participants,
     AppDbContext context,
-    TimeProvider clock) : ISettlementService
+    TimeProvider clock,
+    ISettlementRequestService settlementRequests) : ISettlementService
 {
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
@@ -273,6 +274,9 @@ public class SettlementService(
 
         await context.SaveChangesAsync(cancellationToken);
 
+        await settlementRequests.ResolveMatching(from.Id, to.Id,
+            [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
+
         return (from, to);
     }
 
@@ -366,6 +370,8 @@ public class SettlementService(
         // One save for the whole payment. Two groups disagreeing about whether a single
         // transfer happened is the failure this screen exists to prevent, not to introduce.
         await context.SaveChangesAsync(cancellationToken);
+
+        await settlementRequests.ResolveMatching(from.Id, to.Id, allocations, cancellationToken);
 
         return new SettleWithPersonResponse(
             other.Id,
