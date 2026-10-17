@@ -265,6 +265,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(request => request.Currency).HasMaxLength(Currencies.CodeLength).IsFixedLength().IsRequired();
             entity.Property(request => request.Amount).HasPrecision(18, 2).IsRequired();
             entity.Property(request => request.CreatedAt).IsRequired();
+            entity.Property(request => request.CancelledAt).IsConcurrencyToken();
+            entity.Property(request => request.ResolvedAt).IsConcurrencyToken();
+            entity.Property(request => request.StaleAt).IsConcurrencyToken();
             entity.HasIndex(request => request.Token).IsUnique();
             entity.HasIndex(request => new { request.RecipientUserId, request.CreatedAt });
             entity.HasIndex(request => new { request.RequesterUserId, request.CreatedAt });

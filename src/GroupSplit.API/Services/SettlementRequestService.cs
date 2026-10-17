@@ -83,10 +83,10 @@ public class SettlementRequestService(
         if (settlementRequest.RequesterUserId != currentUser.User.Id)
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only the requester can cancel this settlement request.");
 
-        await MarkStaleIfChanged(settlementRequest, cancellationToken);
-        EnsureOpen(settlementRequest);
+        if (settlementRequest.ResolvedAt is not null || settlementRequest.CancelledAt is not null)
+            EnsureOpen(settlementRequest);
         settlementRequest.CancelledAt = clock.GetUtcNow();
-        await context.SaveChangesAsync(cancellationToken);
+        await SaveRequest(cancellationToken);
         return ToResponse(settlementRequest);
     }
 
@@ -119,7 +119,7 @@ public class SettlementRequestService(
         }
 
         settlementRequest.ResolvedAt = now;
-        await context.SaveChangesAsync(cancellationToken);
+        await SaveRequest(cancellationToken);
         return ToResponse(settlementRequest);
     }
 
@@ -138,7 +138,6 @@ public class SettlementRequestService(
         var now = clock.GetUtcNow();
         foreach (var request in matching)
             request.ResolvedAt = now;
-        await context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<SettlementRequestResponse> Create(CreateSettlementRequest request,
@@ -149,6 +148,8 @@ public class SettlementRequestService(
         if (request.Amount <= 0)
             throw new ConflictException(ErrorCodes.SettlementAmountNotPositive,
                 "A settlement request must be for more than zero.");
+        if (decimal.Round(request.Amount, 2) != request.Amount)
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Use no more than two decimal places.");
         if (represented.Count == 0)
             throw NothingToRequest();
 
@@ -209,9 +210,15 @@ public class SettlementRequestService(
 
         foreach (var part in request.Groups)
         {
-            var position = await debts.GetUserBalance(await (await groupService.GetGroupNetBalance(part.GroupId,
-                cancellationToken)).ToListAsync(cancellationToken));
-            var current = position.YouOwed.FirstOrDefault(item => item.UserId == request.RequesterUserId)?.Amount ?? 0m;
+            var rows = await (await groupService.GetGroupNetBalance(part.GroupId, cancellationToken))
+                .ToListAsync(cancellationToken);
+            var current = 0m;
+            if (rows.Any(row => row.UserId == currentUser.User.Id))
+            {
+                var position = await debts.GetUserBalance(rows);
+                current = position.Plan.FirstOrDefault(payment => payment.FromUserId == request.RecipientUserId &&
+                    payment.ToUserId == request.RequesterUserId)?.Amount ?? 0m;
+            }
             if (current == part.DebtAtCreation)
                 continue;
             request.StaleAt = clock.GetUtcNow();
@@ -225,6 +232,16 @@ public class SettlementRequestService(
         if (request.CancelledAt is not null || request.ResolvedAt is not null || request.StaleAt is not null)
             throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,
                 "This settlement request is no longer open.");
+    }
+
+    private async Task SaveRequest(CancellationToken ct)
+    {
+        try { await context.SaveChangesAsync(ct); }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,
+                "This settlement request was already changed. Refresh to see its status.");
+        }
     }
 
     private static ConflictException NothingToRequest() => new(ErrorCodes.SettlementNothingToSettle,

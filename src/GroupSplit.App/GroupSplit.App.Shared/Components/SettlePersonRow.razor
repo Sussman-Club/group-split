@@ -20,7 +20,7 @@
     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRecord">
         @(YouPaid ? "I paid them" : "They paid me")
     </MudButton>
-    @if (!YouPaid)
+    @if (!YouPaid && !Person.IsGuest)
     {
         <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRequest">
             Request payment

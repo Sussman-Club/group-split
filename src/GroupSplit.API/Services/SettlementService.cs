@@ -181,6 +181,9 @@ public class SettlementService(
 
         // One save. Half a settling-up would leave somebody looking at a balance that had
         // moved for some of the people in it and not the others, with no way to tell which.
+        foreach (var payment in payments)
+            await settlementRequests.ResolveMatching(payment.FromUserId, payment.ToUserId,
+                [new GroupDebt(groupId, group.Name, payment.Amount)], cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         return new SettleUpResponse
@@ -272,10 +275,9 @@ public class SettlementService(
             (date ?? clock.GetUtcNow()).ToUniversalTime(),
             description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
 
-        await context.SaveChangesAsync(cancellationToken);
-
         await settlementRequests.ResolveMatching(from.Id, to.Id,
             [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return (from, to);
     }
@@ -369,9 +371,8 @@ public class SettlementService(
 
         // One save for the whole payment. Two groups disagreeing about whether a single
         // transfer happened is the failure this screen exists to prevent, not to introduce.
-        await context.SaveChangesAsync(cancellationToken);
-
         await settlementRequests.ResolveMatching(from.Id, to.Id, allocations, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return new SettleWithPersonResponse(
             other.Id,
