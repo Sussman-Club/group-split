@@ -42,6 +42,7 @@ public static class ErrorCodes
     public const string BankConnectionNotFound = "BANK_CONNECTION_NOT_FOUND";
     public const string BankTransactionNotFound = "BANK_TRANSACTION_NOT_FOUND";
     public const string MerchantNotFound = "MERCHANT_NOT_FOUND";
+    public const string SettlementRequestNotFound = "SETTLEMENT_REQUEST_NOT_FOUND";
 
     /// <summary>
     /// The expense has no itemised bill attached. Says the same thing whether the expense
@@ -102,6 +103,7 @@ public static class ErrorCodes
     public const string SettlementWithPendingInvitee = "SETTLEMENT_WITH_PENDING_INVITEE";
 
     public const string SettlementNothingToSettle = "SETTLEMENT_NOTHING_TO_SETTLE";
+    public const string SettlementRequestNotOpen = "SETTLEMENT_REQUEST_NOT_OPEN";
 
     /// <summary>
     /// Retired: removing somebody who had been invited and not joined. Guests are removed
