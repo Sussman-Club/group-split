@@ -44,19 +44,28 @@
                 @foreach (var item in Connections)
                 {
                     var connection = item;
-                    <div class="gs-row" style="cursor: default">
+                    <div @key="connection.Id" class="gs-row gs-bank-row" style="cursor: default">
                         <Avatar Name="@connection.InstitutionName" />
-                        <div style="min-width: 0">
+                        <div class="gs-bank-copy">
                             <div class="title">
-                                <span>@connection.InstitutionName</span>
+                                <span class="gs-bank-name">@connection.InstitutionName</span>
+                            </div>
+                            <div class="meta gs-bank-status">
                                 @if (connection.NeedsAttention || connection.NeedsAttentionSoon)
                                 {
                                     <span class="gs-tag">Needs attention</span>
                                 }
+                                <span class="gs-bank-status-detail">@Describe(connection)</span>
                             </div>
-                            <div class="meta">@Describe(connection)</div>
                         </div>
-                        <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
+                        @*
+                            The list is mostly for recognising a connection. Keep its three
+                            repairs behind one reachable control, so they cannot squeeze the
+                            bank's name out of its own row at panel widths.
+                        *@
+                        <MudMenu Icon="@Icons.Material.Rounded.MoreVert" Size="Size.Small" Dense="true"
+                                 AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                                 Disabled="@_busy" aria-label="@($"Actions for {connection.InstitutionName}")">
                             @*
                                 Signing in again is offered whatever the connection's state,
                                 not only when it has been flagged. A bank that is misbehaving
@@ -66,9 +75,8 @@
                             *@
                             @if (connection.NeedsAttention)
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                           Class="gs-btn-pill" Disabled="@_busy"
-                                           OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                                <MudMenuItem Icon="@Icons.Material.Rounded.Login"
+                                             OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
                             }
                             else
                             {
@@ -79,25 +87,23 @@
                                     everything it does have, and taking "Sync now" away from
                                     it would make a warning look like a breakage.
                                 *@
-                                <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
-                                           OnClick="@(() => SyncAsync(connection))">Sync now</MudButton>
+                                <MudMenuItem Icon="@Icons.Material.Rounded.Sync"
+                                             OnClick="@(() => SyncAsync(connection))">Sync now</MudMenuItem>
 
                                 @if (connection.NeedsAttentionSoon)
                                 {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                               Class="gs-btn-pill" Disabled="@_busy"
-                                               OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                                    <MudMenuItem Icon="@Icons.Material.Rounded.Login"
+                                                 OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
                                 }
                                 else
                                 {
-                                    <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_busy"
-                                               OnClick="@(() => RepairAsync(connection))">Sign in again</MudButton>
+                                    <MudMenuItem Icon="@Icons.Material.Rounded.Login"
+                                                 OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
                                 }
                             }
-                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
-                                       Disabled="@_busy"
-                                       OnClick="@(() => UnlinkAsync(connection))">Unlink</MudButton>
-                        </div>
+                            <MudMenuItem Icon="@Icons.Material.Rounded.LinkOff" IconColor="Color.Error"
+                                         OnClick="@(() => UnlinkAsync(connection))">Unlink</MudMenuItem>
+                        </MudMenu>
                     </div>
                 }
             </div>
@@ -144,26 +150,20 @@
 
         return connection.Status switch
         {
-            BankConnectionState.Revoked => $"{accounts} · access was withdrawn at the bank",
+            BankConnectionState.Revoked => $"{accounts} · access withdrawn",
             // Not only a changed password: a locked account, an agreement waiting on the
             // bank's own site, an account nobody shared. Each ends in signing in again, so
-            // the line says that and leaves the bank to say what it wants first.
-            BankConnectionState.LoginRequired =>
-                $"{accounts} · your bank needs you before it will share anything new. "
-                + "Sign in again to see what it is asking for.",
+            // the compact line says so and leaves the bank to say what it wants first.
+            BankConnectionState.LoginRequired => $"{accounts} · sign in required",
 
             // Nothing is broken in either of these, so they read as something to do rather
-            // than something that has gone wrong -- and each says what pressing "Sign in
-            // again" is for, because neither is guessable from the button alone.
-            _ when connection.AccountsNotShared =>
-                $"{accounts} · your bank has an account this is not importing. "
-                + "Sign in again and tick it to include it.",
-            _ when connection.SignInExpiring =>
-                $"{accounts} · this will stop working soon. Sign in again to keep it going.",
+            // than something that has gone wrong -- and each says why it needs attention,
+            // before the actions menu offers the repair.
+            _ when connection.AccountsNotShared => $"{accounts} · account needs sharing",
+            _ when connection.SignInExpiring => $"{accounts} · sign in expires soon",
 
             _ when connection.Accounts.Any(account => account.AccessRevoked) =>
-                $"{accounts} · access was withdrawn from "
-                + $"{Withdrawn(connection)}; the rest is still importing",
+                $"{accounts} · {Withdrawn(connection)} access withdrawn",
 
             _ => connection.LastSyncedAt is { } synced
                 ? $"{accounts} · last checked {Clock.Local(synced):d}"
