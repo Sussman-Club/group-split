@@ -366,7 +366,10 @@ public static class InboxApi
                 row.FiledAs == null ? null : row.FiledAs.Id,
                 row.RemovedAt,
                 row.Account.Name,
-                row.Account.Connection.InstitutionName));
+                row.Account.Connection.InstitutionName)
+            {
+                AccountId = row.Account.Id
+            });
     }
 
     extension(PagedResponse<BankTransactionResponse> page)

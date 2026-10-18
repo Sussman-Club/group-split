@@ -39,6 +39,7 @@ public static class Problems
         [ErrorCodes.SplitRuleNotFound] = "Split rule not found",
         [ErrorCodes.BankConnectionNotFound] = "Bank connection not found",
         [ErrorCodes.BankTransactionNotFound] = "Imported transaction not found",
+        [ErrorCodes.SettlementRequestNotFound] = "Settlement request not found",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group",
 
@@ -68,6 +69,7 @@ public static class Problems
         [ErrorCodes.PatchInvalid] = "The patch could not be applied",
         [ErrorCodes.SettlementAmountNotPositive] = "A settlement's amount must be greater than zero",
         [ErrorCodes.NotASettlement] = "Only a settlement has that",
+        [ErrorCodes.SettlementRequestNotOpen] = "Settlement request is not open",
         [ErrorCodes.SplitsDoNotSumToAmount] = "The shares do not add up to the amount",
         [ErrorCodes.RuleUsersNotInGroup] = "Rule names someone outside the group",
         [ErrorCodes.SplitRuleHistoryInvalid] = "The history is not a chain",

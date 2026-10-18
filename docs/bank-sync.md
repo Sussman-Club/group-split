@@ -631,6 +631,27 @@ certificate, and what to do about a ring that was once stored unwrapped, are in
 
 ## What it does not do
 
+### Reviewing the inbox
+
+The waiting inbox can be narrowed to likely shared, likely personal, or charges needing a
+decision. These are views of the loaded rows' individual suggestions, so their counts do not
+claim to cover pages that have not been loaded. The heading counts all waiting rows in the
+chosen date range and refreshes after each action.
+
+Compatible suggestions may appear together in an expandable merchant bundle. Each charge
+still has its own suggestion: a merchant can appear under several destinations. A bundle
+requires the same linked account, currency, payment channel, city, detailed bank
+category, calendar month, and suggested group/category. Pending, withdrawn, incoming,
+unsuggested, or potentially duplicate rows remain individual. A missing account identity
+also prevents bundling.
+
+Expanding a bundle shows every charge and offers individual changes, personal filing, and
+ignoring. Confirmation files the displayed snapshot through the ordinary filing endpoint,
+one charge at a time. A failure or a changed row stops the batch and leaves the remaining
+charges for review. There is no automatic filing or merchant-wide destination rule.
+
+### Other limits
+
 - Credits. Money coming in (a refund, a deposit, a pay cheque) arrives in the inbox and can be
   ignored, and that is all. It cannot be filed or linked: an `Expense` is money going out,
   there is no income transaction yet, and a negative expense would be a number every total in

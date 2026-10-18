@@ -4,6 +4,7 @@
 @import url("css/layout.css");
 @import url("css/components/avatars.css");
 @import url("css/components/cards.css");
+@import url("css/components/linked-banks.css");
 @import url("css/components/dashboard.css");
 @import url("css/components/transactions.css");
 @import url("css/components/controls.css");
@@ -21,6 +22,7 @@
 @import url("css/components/filters.css");
 @import url("css/responsive-phone.css");
 @import url("css/components/inbox.css");
+@import url("css/components/inbox-queue.css");
 @import url("css/components/slip.css");
 @import url("css/components/dialog-receipt.css");
 @import url("css/components/divide.css");

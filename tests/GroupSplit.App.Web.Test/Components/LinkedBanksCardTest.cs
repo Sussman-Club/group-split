@@ -3,8 +3,10 @@ using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using MudBlazor;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -33,18 +35,25 @@ public class LinkedBanksCardTest : ComponentTest
     }
 
     [Fact]
-    public void A_healthy_connection_says_when_it_was_last_checked_and_offers_a_sync()
+    public async Task A_healthy_connection_says_when_it_was_last_checked_and_offers_a_sync()
     {
+        var popovers = Render<MudPopoverProvider>();
         var card = Render(Connection());
 
         Assert.Contains("last checked", Text(card));
         Assert.DoesNotContain("Needs attention", Text(card));
-        Assert.Contains("Sync now", Buttons(card));
+        Assert.Contains("Actions for First Platypus Bank", Text(card));
+        Assert.Single(card.FindAll(".gs-bank-row .mud-menu"));
+        Assert.Single(card.FindAll(".gs-bank-row button"));
+
+        await OpenMenuAsync(card, popovers);
+
+        Assert.Contains("Sync now", popovers.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The state issue 233 was about. It has to name the problem and the action, because
-    /// neither is guessable from a button that says "Sign in again".
+    /// The state issue 233 was about. It has to name the problem before somebody has to
+    /// open the actions menu to repair it.
     /// </summary>
     [Fact]
     public void An_account_the_bank_has_and_this_does_not_is_said_out_loud()
@@ -54,8 +63,7 @@ public class LinkedBanksCardTest : ComponentTest
         var text = Text(card);
 
         Assert.Contains("Needs attention", text);
-        Assert.Contains("has an account this is not importing", text);
-        Assert.Contains("tick it to include it", text);
+        Assert.Contains("account needs sharing", text);
     }
 
     [Fact]
@@ -64,7 +72,7 @@ public class LinkedBanksCardTest : ComponentTest
         var text = Text(Render(Connection(signInExpiring: true)));
 
         Assert.Contains("Needs attention", text);
-        Assert.Contains("will stop working soon", text);
+        Assert.Contains("sign in expires soon", text);
     }
 
     /// <summary>
@@ -74,14 +82,19 @@ public class LinkedBanksCardTest : ComponentTest
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public void A_connection_that_only_needs_attention_soon_can_still_be_synced(
+    public async Task A_connection_that_only_needs_attention_soon_can_still_be_synced(
         bool accountsNotShared, bool signInExpiring)
     {
-        var buttons = Buttons(Render(Connection(
-            accountsNotShared: accountsNotShared, signInExpiring: signInExpiring)));
+        var popovers = Render<MudPopoverProvider>();
+        var card = Render(Connection(accountsNotShared: accountsNotShared, signInExpiring: signInExpiring));
 
-        Assert.Contains("Sync now", buttons);
-        Assert.Contains("Sign in again", buttons);
+        Assert.Contains("Needs attention", Text(card));
+        Assert.Single(card.FindAll(".gs-bank-row .mud-menu"));
+
+        await OpenMenuAsync(card, popovers);
+
+        Assert.Contains("Sync now", popovers.Markup, StringComparison.Ordinal);
+        Assert.Contains("Sign in again", popovers.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -89,18 +102,24 @@ public class LinkedBanksCardTest : ComponentTest
     /// be told to sign in again, so the card offers the one thing that works.
     /// </summary>
     [Fact]
-    public void A_connection_the_bank_has_stopped_offers_only_the_sign_in()
+    public async Task A_connection_the_bank_has_stopped_offers_only_the_sign_in()
     {
-        var buttons = Buttons(Render(Connection(status: BankConnectionState.LoginRequired)));
+        var popovers = Render<MudPopoverProvider>();
+        var card = Render(Connection(status: BankConnectionState.LoginRequired));
+        var text = Text(card);
 
-        Assert.DoesNotContain("Sync now", buttons);
-        Assert.Contains("Sign in again", buttons);
+        Assert.Contains("sign in required", text);
+
+        await OpenMenuAsync(card, popovers);
+
+        Assert.DoesNotContain("Sync now", popovers.Markup, StringComparison.Ordinal);
+        Assert.Contains("Sign in again", popovers.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// The state is not only a changed password any more: a locked account, an agreement
-    /// waiting at the bank, no account shared all land here (issue 319). The line says the
-    /// bank needs the person and where the way out is, without claiming which it was.
+    /// waiting at the bank, no account shared all land here (issue 319). The compact status
+    /// says the bank needs the person without claiming which one it was.
     /// </summary>
     [Fact]
     public void A_connection_the_bank_has_stopped_says_it_needs_the_person_and_where_to_go()
@@ -108,8 +127,7 @@ public class LinkedBanksCardTest : ComponentTest
         var text = Text(Render(Connection(status: BankConnectionState.LoginRequired)));
 
         Assert.Contains("Needs attention", text);
-        Assert.Contains("your bank needs you", text);
-        Assert.Contains("Sign in again to see what it is asking for", text);
+        Assert.Contains("sign in required", text);
     }
 
     [Fact]
@@ -122,17 +140,11 @@ public class LinkedBanksCardTest : ComponentTest
                 AccessRevoked: true)
         ])));
 
-        Assert.Contains("access was withdrawn from Savings", text);
-        Assert.Contains("the rest is still importing", text);
+        Assert.Contains("Savings access withdrawn", text);
     }
 
-    /// <summary>
-    /// Update mode hands back no usable public token, so the sync it used to ask for was
-    /// the whole of the repair -- and an account shared in there was never heard of. This
-    /// pins that the button takes the repair route for its own connection.
-    /// </summary>
     [Fact]
-    public async Task Signing_in_again_reopens_this_connection_rather_than_syncing_it()
+    public async Task Signing_in_again_in_the_actions_menu_repairs_its_own_connection()
     {
         var connection = Connection(accountsNotShared: true);
 
@@ -141,15 +153,18 @@ public class LinkedBanksCardTest : ComponentTest
 
         _link.Setup(link => link.OpenAsync("link-token", connection.Id)).ReturnsAsync((string?)null);
 
+        var popovers = Render<MudPopoverProvider>();
         var card = Render(connection);
 
-        await card.Find("button:contains('Sign in again')").ClickAsync(new());
+        await OpenMenuAsync(card, popovers);
+        await popovers.FindAll(".mud-menu-item")
+            .Single(item => item.TextContent.Trim() == "Sign in again")
+            .ClickAsync(new MouseEventArgs());
 
         // The connection travels with the token. An OAuth bank takes the browser away, and
         // the page it comes back to has only what was written down here to tell it whether
         // this was a repair or a new bank.
         _link.Verify(link => link.OpenAsync("link-token", connection.Id), Times.Once);
-
         _bank.Verify(bank => bank.SyncAsync(connection.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -186,10 +201,14 @@ public class LinkedBanksCardTest : ComponentTest
         return base.Render<LinkedBanksCard>();
     }
 
-    private static string Text(IRenderedComponent<LinkedBanksCard> card) => card.Markup;
+    private static async Task OpenMenuAsync(IRenderedComponent<LinkedBanksCard> card,
+        IRenderedComponent<MudPopoverProvider> popovers)
+    {
+        await card.Find(".gs-bank-row .mud-menu button").ClickAsync(new MouseEventArgs());
+        popovers.WaitForAssertion(() => Assert.Contains("mud-menu-item", popovers.Markup, StringComparison.Ordinal));
+    }
 
-    private static List<string> Buttons(IRenderedComponent<LinkedBanksCard> card) =>
-        card.FindAll("button").Select(button => button.TextContent.Trim()).ToList();
+    private static string Text(IRenderedComponent<LinkedBanksCard> card) => card.Markup;
 
     private static BankConnectionResponse Connection(
         BankConnectionState status = BankConnectionState.Active,

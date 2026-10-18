@@ -1,0 +1,80 @@
+.gs-inbox-bundle {
+    margin-block: 12px;
+    padding: 16px;
+    border: 1px solid var(--gs-line);
+    border-inline-start: 4px solid var(--gs-teal);
+    border-radius: var(--gs-radius);
+    background: var(--gs-surface-2);
+}
+
+.gs-inbox-bundle summary {
+    cursor: pointer;
+    line-height: 1.8;
+    padding-block: 6px;
+}
+
+.gs-inbox-bundle summary span {
+    display: inline-block;
+    margin-inline-start: 12px;
+    color: var(--gs-muted);
+}
+
+.gs-inbox-bundle summary .gs-money {
+    margin-inline-start: 12px;
+}
+
+.gs-inbox-bundle summary:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 4px;
+}
+
+.gs-inbox-bundle-charge {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 12px;
+    border-block-start: 1px solid var(--gs-line);
+}
+
+@media (max-width: 600px) {
+    .gs-inbox-bundle .mud-button-root {
+        min-height: 44px;
+    }
+
+    .gs-inbox-bundle summary span {
+        display: block;
+        margin-inline-start: 0;
+    }
+}
+
+/* A stable amount line followed by an action grid: suggestion length must not
+   decide which side of the row the amount lands on. */
+@media (max-width: 640px) {
+    .gs-queue .gs-row > .gs-inbox-row-actions,
+    .gs-queue .gs-row.is-selectable > .gs-inbox-row-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
+        min-width: 0;
+    }
+
+    .gs-inbox-row-actions > .gs-inbox-row-buttons {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+        width: 100%;
+        min-width: 0;
+        align-items: center;
+    }
+
+    .gs-inbox-row-buttons > .gs-inbox-suggestion {
+        grid-column: 1 / -1;
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .gs-inbox-row-buttons > .mud-button-root {
+        min-width: 0;
+        padding-inline: 6px;
+    }
+}

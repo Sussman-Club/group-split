@@ -44,6 +44,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IGroupJoiner, GroupJoiner>();
             services.AddScoped<IGroupParticipants, GroupParticipants>();
             services.AddScoped<ISettlementService, SettlementService>();
+            services.AddScoped<ISettlementRequestService, SettlementRequestService>();
             services.AddScoped<IInvitationService, InvitationService>();
             services.AddScoped<IGuestService, GuestService>();
             services.AddScoped<IJoinLinkService, JoinLinkService>();
@@ -73,6 +74,7 @@ public static class DomainServiceExtensions
         {
             routes.MapGroupApi();
             routes.MapUserApi();
+            routes.MapSettlementRequestsApi();
             routes.MapInvitationsApi();
             routes.MapTransaction();
             routes.MapReceiptDraftsApi();

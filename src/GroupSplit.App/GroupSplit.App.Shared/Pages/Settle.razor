@@ -274,6 +274,7 @@
             await Settling.SettleAsync(request, person.UserName);
     }
 
+
     private void ReRender() => InvokeAsync(StateHasChanged);
 
     protected override void OnInitialized() => Settling.OnChanged += ReRender;

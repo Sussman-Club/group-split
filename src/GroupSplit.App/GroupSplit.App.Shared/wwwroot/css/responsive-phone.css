@@ -1,5 +1,28 @@
 /* --------------------------------------------------------------- on a phone -- */
 
+@media (max-width: 820px), (max-width: 900px) and (max-height: 500px) {
+    .gs-fab {
+        right: calc(16px + env(safe-area-inset-right, 0px));
+        bottom: calc(var(--gs-tabbar-h) + 16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* The content already reserves the navigation height. Reserve the FAB band too,
+       on both pages that own one, so the final action can scroll above the button. */
+    .gs-page:has(> .gs-fab) {
+        padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .gs-fab.is-scrolling:not(:focus-visible) {
+        gap: 0;
+    }
+
+    .gs-fab.is-scrolling:not(:focus-visible) span {
+        max-width: 0;
+        padding-right: 0;
+        opacity: 0;
+    }
+}
+
 /*
     A list row is a three-column grid: icon, text, figure. On a phone the third column
     holds an amount *and* up to two buttons, and a nowrap cluster of those against a
@@ -327,5 +350,19 @@
 
     .gs-stats {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* A linked-bank menu stays beside the name. Moving its one compact control beneath the
+       row would make the action take the space we just recovered from its written-out labels. */
+    .gs-row.gs-bank-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .gs-bank-row > :nth-child(3) {
+        grid-column: 3;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+        display: inline-flex;
     }
 }

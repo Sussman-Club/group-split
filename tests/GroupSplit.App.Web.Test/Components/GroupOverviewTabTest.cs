@@ -41,8 +41,8 @@ public class GroupOverviewTabTest : ComponentTest
         _groups
             .Setup(client => client.GetGroupActivityAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResponseOfGroupLedgerEntryResponse([], 1, 3, 0));
 
         // A real MudBlazor reference, already finished with a yes -- the state a component is
@@ -270,8 +270,8 @@ public class GroupOverviewTabTest : ComponentTest
     private void VerifyRecentEntriesRead(Times times) =>
         _groups.Verify(client => client.GetGroupActivityAsync(
             Group.Id, It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-            It.IsAny<CancellationToken>()), times);
+            It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+            It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), times);
 
     /// <summary>
     /// "I paid them" on the reader's plan line records the plan's figure, as a payment the

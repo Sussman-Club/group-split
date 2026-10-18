@@ -568,6 +568,62 @@ public static class TransactionApi
                 ]
             };
         }
+
+        /// <summary>
+        /// Groups matching expenses by both currency and category. The currency grouping is
+        /// deliberate: summing dollars and euros would make a total that means neither.
+        /// </summary>
+        internal async Task<CategorySpendingSummaryResponse> ToCategorySpendingAsync(
+            GroupSpendingFilter filter, Guid userId, CancellationToken ct)
+        {
+            var rows = await transactions.ApplyFilter(filter.ToTransactionFilter())
+                .Where(expense => filter.CategoryId == null || expense.CategoryId == filter.CategoryId)
+                .Where(expense => filter.Uncategorized != true || expense.CategoryId == null)
+                .GroupBy(expense => new
+                {
+                    expense.Currency,
+                    expense.CategoryId,
+                    CategoryName = expense.Category != null ? expense.Category.Name : null
+                })
+                .Select(category => new
+                {
+                    category.Key.Currency,
+                    category.Key.CategoryId,
+                    category.Key.CategoryName,
+                    Count = category.Count(),
+                    Total = category.Sum(expense => expense.Amount),
+                    Share = category.Sum(expense => expense.Splits
+                        .Where(split => split.UserId == userId)
+                        .Select(split => (decimal?)split.Amount)
+                        .FirstOrDefault() ?? 0m)
+                })
+                .ToListAsync(ct);
+
+            var headline = HeadlineCurrency(rows
+                .GroupBy(row => row.Currency)
+                .Select(currency => (currency.Key, currency.Sum(row => row.Count))));
+
+            // Keep the projection above anonymous for SQL translation, then shape its small
+            // materialised result in memory. Category names are stable history: archived
+            // categories are joined like active ones and therefore remain visible here.
+            IReadOnlyList<CategorySpendingResponse> ForCurrency(string currency) =>
+                [.. rows.Where(row => row.Currency == currency)
+                    .OrderByDescending(row => row.Total)
+                    .ThenBy(row => row.CategoryName ?? "Uncategorized", StringComparer.Ordinal)
+                    .Select(row => new CategorySpendingResponse(
+                        row.CategoryId, row.CategoryName ?? "Uncategorized", row.Count, row.Total, row.Share))];
+
+            return new CategorySpendingSummaryResponse(ForCurrency(headline))
+            {
+                Currency = headline,
+                OtherCurrencies =
+                [
+                    .. rows.Select(row => row.Currency).Distinct().Where(currency => currency != headline)
+                        .OrderBy(currency => currency, StringComparer.Ordinal)
+                        .Select(currency => new CategoryCurrencySpendingResponse(currency, ForCurrency(currency)))
+                ]
+            };
+        }
     }
 
     extension(IQueryable<ExpenseShareResponse> rows)

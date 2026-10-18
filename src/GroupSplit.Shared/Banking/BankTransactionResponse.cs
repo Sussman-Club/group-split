@@ -94,6 +94,9 @@ public sealed record BankTransactionResponse(
     string AccountName,
     string InstitutionName)
 {
+    /// <summary>Stable identity of the linked account; display names need not be unique.</summary>
+    public Guid? AccountId { get; init; }
+
     /// <summary>
     /// Expenses already recorded that could be this same payment.
     /// </summary>

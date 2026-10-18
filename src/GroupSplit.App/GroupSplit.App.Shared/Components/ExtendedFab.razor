@@ -1,6 +1,9 @@
 @namespace GroupSplit.App.Shared.Components
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <button type="button"
+        @ref="_button"
         class="gs-fab @(AlwaysExtended ? "is-extended" : "")"
         aria-label="@AriaLabel"
         @onclick="OnClick">
@@ -9,6 +12,29 @@
 </button>
 
 @code {
+    private ElementReference _button;
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module = await JS.InvokeAsync<IJSObjectReference>("import",
+            "./_content/GroupSplit.App.Shared/js/floating-expense.js");
+        if (_module is not null)
+            await _module.InvokeVoidAsync("observe", _button);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("disconnect", _button);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+
     [Parameter] public string Label { get; set; } = "Add";
     [Parameter] public bool AlwaysExtended { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
