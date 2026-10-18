@@ -13,20 +13,16 @@ public interface ISettlementRequestService
 {
     Task<SettlementRequestResponse> CreateForGroup(Guid groupId, CreateSettlementRequest request,
         CancellationToken cancellationToken = default);
-    Task<SettlementRequestResponse> CreateAcrossGroups(CreateSettlementRequest request,
-        CancellationToken cancellationToken = default);
     Task<SettlementRequestResponse> Get(string token, CancellationToken cancellationToken = default);
     Task<SettlementRequestResponse> Cancel(string token, CancellationToken cancellationToken = default);
     Task<SettlementRequestResponse> RecordRepayment(string token, CancellationToken cancellationToken = default);
-    Task ResolveMatching(Guid fromUserId, Guid toUserId, IReadOnlyList<GroupDebt> payments,
-        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Coordinates settlement requests without ever treating one as a payment.</summary>
 public class SettlementRequestService(
     ICurrentUser currentUser,
     IGroupService groupService,
-    IDebtCalculationService debts,
+    ISettlementService settlements,
     AppDbContext context,
     TimeProvider clock) : ISettlementRequestService
 {
@@ -39,32 +35,12 @@ public class SettlementRequestService(
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
 
-        var position = await debts.GetUserBalance(
-            await (await groupService.GetGroupNetBalance(groupId, cancellationToken)).ToListAsync(cancellationToken));
+        var position = await settlements.GetPosition(groupId, Cutoff.Of(request.Through, request.UtcOffset), cancellationToken)
+            ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
         var debt = position.OwedToYou.SingleOrDefault(item => item.UserId == request.RecipientUserId)
             ?? throw NothingToRequest();
 
-        return await Create(request, [(group, debt.Amount)], cancellationToken);
-    }
-
-    public async Task<SettlementRequestResponse> CreateAcrossGroups(CreateSettlementRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var groups = await (await groupService.GetAllGroups(cancellationToken))
-            .Where(group => group.Id != currentUser.User.Id)
-            .ToListAsync(cancellationToken);
-
-        var represented = new List<(Group Group, decimal Debt)>();
-        foreach (var group in groups)
-        {
-            var position = await debts.GetUserBalance(
-                await (await groupService.GetGroupNetBalance(group.Id, cancellationToken)).ToListAsync(cancellationToken));
-            var debt = position.OwedToYou.FirstOrDefault(item => item.UserId == request.RecipientUserId);
-            if (debt is not null)
-                represented.Add((group, debt.Amount));
-        }
-
-        return await Create(request, represented, cancellationToken);
+        return await Create(request, group, debt.Amount, cancellationToken);
     }
 
     public async Task<SettlementRequestResponse> Get(string token, CancellationToken cancellationToken = default)
@@ -115,7 +91,7 @@ public class SettlementRequestService(
                 throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,
                     "This settlement request no longer names two active group members.");
             context.Add(group.SettlementBetween(recipient, requester, part.RequestedAmount, now,
-                "Settlement request"));
+                "Settlement request", settlementRequest.Through));
         }
 
         settlementRequest.ResolvedAt = now;
@@ -123,25 +99,8 @@ public class SettlementRequestService(
         return ToResponse(settlementRequest);
     }
 
-    public async Task ResolveMatching(Guid fromUserId, Guid toUserId, IReadOnlyList<GroupDebt> payments,
-        CancellationToken cancellationToken = default)
-    {
-        var candidates = await context.Set<SettlementRequest>().Include(request => request.Groups)
-            .Where(request => request.RecipientUserId == fromUserId && request.RequesterUserId == toUserId &&
-                              request.CancelledAt == null && request.ResolvedAt == null && request.StaleAt == null)
-            .ToListAsync(cancellationToken);
-        var matching = candidates.Where(request => request.Groups.Count == payments.Count &&
-            request.Groups.All(part => payments.Any(payment => payment.GroupId == part.GroupId &&
-                payment.Amount == part.RequestedAmount))).ToList();
-        if (matching.Count == 0)
-            return;
-        var now = clock.GetUtcNow();
-        foreach (var request in matching)
-            request.ResolvedAt = now;
-    }
-
     private async Task<SettlementRequestResponse> Create(CreateSettlementRequest request,
-        IReadOnlyList<(Group Group, decimal Debt)> represented, CancellationToken cancellationToken)
+        Group group, decimal debt, CancellationToken cancellationToken)
     {
         if (request.RecipientUserId == currentUser.User.Id)
             throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
@@ -150,48 +109,30 @@ public class SettlementRequestService(
                 "A settlement request must be for more than zero.");
         if (decimal.Round(request.Amount, 2) != request.Amount)
             throw new ValidationException(ErrorCodes.ValidationFailed, "Use no more than two decimal places.");
-        if (represented.Count == 0)
-            throw NothingToRequest();
-
-        if (represented.Select(item => item.Group.Currency).Distinct(StringComparer.Ordinal).Skip(1).Any())
-            throw new ConflictException(ErrorCodes.CurrencyMismatch,
-                "A settlement request can only cover groups with one currency.");
-
         var recipient = await context.Set<User>().SingleOrDefaultAsync(user => user.Id == request.RecipientUserId,
             cancellationToken) ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
-        var groupIds = represented.Select(item => item.Group.Id).ToList();
         var recipientIsMember = await context.Set<User>()
             .Where(user => user.Id == recipient.Id)
-            .Select(user => user.Groups.Count(group => groupIds.Contains(group.Id)))
+            .Select(user => user.Groups.Any(candidate => candidate.Id == group.Id))
             .SingleAsync(cancellationToken);
-        if (recipientIsMember != groupIds.Count)
+        if (!recipientIsMember)
             throw NothingToRequest();
-        var remaining = request.Amount;
-        var parts = represented.OrderByDescending(item => item.Debt).Select(item =>
-        {
-            var amount = Math.Min(remaining, item.Debt);
-            remaining -= amount;
-            return new SettlementRequestGroup { GroupId = item.Group.Id, DebtAtCreation = item.Debt, RequestedAmount = amount };
-        }).Where(part => part.RequestedAmount > 0).ToList();
-
-        // A request is an invitation to record an outside payment, not a balance edit. The
-        // requester may be settling a period whose amount exceeds today's running debt, so
-        // any remainder belongs to the largest represented group just as an ordinary
-        // cross-group repayment does.
-        if (remaining > 0)
-            parts[0].RequestedAmount += remaining;
 
         var created = new SettlementRequest
         {
             Requester = currentUser.User,
             Recipient = recipient,
             Token = NewToken(),
-            Currency = represented[0].Group.Currency,
+            Currency = group.Currency,
             Amount = request.Amount,
-            CreatedAt = clock.GetUtcNow()
+            CreatedAt = clock.GetUtcNow(),
+            Through = request.Through,
+            UtcOffset = request.Through is null ? null : request.UtcOffset ?? 0
         };
-        foreach (var part in parts)
-            created.Groups.Add(part);
+        created.Groups.Add(new SettlementRequestGroup
+        {
+            Group = group, DebtAtCreation = debt, RequestedAmount = request.Amount
+        });
         context.Add(created);
         await context.SaveChangesAsync(cancellationToken);
         return ToResponse(created);
@@ -210,15 +151,10 @@ public class SettlementRequestService(
 
         foreach (var part in request.Groups)
         {
-            var rows = await (await groupService.GetGroupNetBalance(part.GroupId, cancellationToken))
-                .ToListAsync(cancellationToken);
-            var current = 0m;
-            if (rows.Any(row => row.UserId == currentUser.User.Id))
-            {
-                var position = await debts.GetUserBalance(rows);
-                current = position.Plan.FirstOrDefault(payment => payment.FromUserId == request.RecipientUserId &&
-                    payment.ToUserId == request.RequesterUserId)?.Amount ?? 0m;
-            }
+            var position = await settlements.GetPosition(part.GroupId, Cutoff.Of(request.Through, request.UtcOffset),
+                cancellationToken);
+            var current = position?.Plan.FirstOrDefault(payment => payment.FromUserId == request.RecipientUserId &&
+                payment.ToUserId == request.RequesterUserId)?.Amount ?? 0m;
             if (current == part.DebtAtCreation)
                 continue;
             request.StaleAt = clock.GetUtcNow();
@@ -254,7 +190,8 @@ public class SettlementRequestService(
             : SettlementRequestStatus.Open,
         request.RequesterUserId, Name(request.Requester), request.RecipientUserId, Name(request.Recipient),
         request.Amount, request.Currency, request.CreatedAt,
-        request.Groups.Select(part => new GroupDebt(part.GroupId, part.Group.Name, part.RequestedAmount)).ToList());
+        request.Groups.Select(part => new GroupDebt(part.GroupId, part.Group.Name, part.RequestedAmount)).ToList(),
+        request.Through);
 
     private static string Name(User user) => $"{user.FirstName} {user.LastName}".Trim();
 

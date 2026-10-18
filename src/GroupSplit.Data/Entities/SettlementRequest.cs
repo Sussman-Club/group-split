@@ -15,6 +15,9 @@ public class SettlementRequest : Entity
     public required string Currency { get; set; }
     public required decimal Amount { get; set; }
     public required DateTimeOffset CreatedAt { get; set; }
+    /// <summary>The last day of activity requested, using the requester's UTC offset.</summary>
+    public DateOnly? Through { get; set; }
+    public int? UtcOffset { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
     public DateTimeOffset? ResolvedAt { get; set; }
     public DateTimeOffset? StaleAt { get; set; }

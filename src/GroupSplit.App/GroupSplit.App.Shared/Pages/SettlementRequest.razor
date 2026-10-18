@@ -25,6 +25,10 @@ else
         <div class="gs-eyebrow">Settlement request</div>
         <h1>@_request.RequesterName asked you to pay <Money Value="_request.Amount" Currency="@_request.Currency" /></h1>
         <p>For @_request.RecipientName</p>
+        @if (_request.Through is { } through)
+        {
+            <p>For activity up to @through.ToString("d MMM yyyy")</p>
+        }
         <p>@Groups</p>
         <p class="meta">Created @Clock.Day(_request.CreatedAt).ToString("d MMM yyyy") · @_request.Currency</p>
         @switch (_request.Status)
@@ -56,7 +60,8 @@ else
     private bool _paid;
     private bool _busy;
     private string Groups => _request is null ? "" : string.Join(" · ", _request.Groups.Select(group => $"{group.GroupName}: {group.Amount.ToMoney(_request.Currency)}"));
-    private string Message => _request is null ? "" : $"{_request.RecipientName} pays {_request.RequesterName} {_request.Amount.ToMoney(_request.Currency)} for {Groups}.";
+    private string Message => _request is null ? "" : $"{_request.RecipientName} pays {_request.RequesterName} {_request.Amount.ToMoney(_request.Currency)} for {Groups}" +
+        (_request.Through is { } day ? $", for activity up to {day:d MMM yyyy}." : ".");
 
     protected override async Task OnParametersSetAsync()
     {

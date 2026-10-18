@@ -79,6 +79,43 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     }
 
     [Fact]
+    public async Task A_period_request_uses_the_earlier_balance_and_remembers_the_date_on_repayment()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Monthly repayments" }, Ct);
+        var other = await CreateNewUser();
+        await JoinGroup(group.Id, other);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group.Id, Name = "August", Amount = 100,
+            DateTime = new DateTimeOffset(2026, 8, 20, 12, 0, 0, TimeSpan.Zero)
+        }, Ct);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group.Id, Name = "September", Amount = 80, PaidByUserId = other.Id,
+            DateTime = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero)
+        }, Ct);
+        var day = new DateOnly(2026, 8, 31);
+        var request = await Requests.CreateForGroup(group.Id, new CreateSettlementRequest
+        {
+            RecipientUserId = other.Id, Amount = 50, Through = day, UtcOffset = -240
+        }, Ct);
+        Assert.Equal(day, request.Through);
+        Assert.Equal(50, Assert.Single((await DbContext.Set<SettlementRequest>()
+            .Include(row=>row.Groups).SingleAsync(Ct)).Groups).DebtAtCreation);
+        // Later spending does not alter the requested period.
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group.Id, Name = "October", Amount = 40,
+            DateTime = new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero)
+        }, Ct);
+        using var scope = await As(other);
+        var recipient = scope.ServiceProvider.GetRequiredService<ISettlementRequestService>();
+        Assert.Equal(SettlementRequestStatus.Open, (await recipient.Get(request.Token, Ct)).Status);
+        await recipient.RecordRepayment(request.Token, Ct);
+        Assert.Equal(day, (await DbContext.Set<Transfer>().SingleAsync(Ct)).CoversThrough);
+    }
+
+    [Fact]
     public async Task An_ordinary_matching_repayment_resolves_the_request_in_the_same_save()
     {
         var (group, other) = await Debt();

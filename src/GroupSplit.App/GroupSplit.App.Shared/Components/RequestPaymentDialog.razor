@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject LocalClock Clock
 
 <MudDialog Class="gs-sheet">
     <TitleContent><MudText Typo="Typo.h5">Request payment from @RecipientName</MudText></TitleContent>
@@ -22,6 +23,10 @@
         {
             <MudStack Spacing="2">
                 <MudText>@RecipientName currently owes you @CurrentDebt.ToMoney().</MudText>
+                <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync" Label="Up to a date"
+                               Variant="Variant.Outlined" Clearable="true" MaxDate="@Clock.Today"
+                               Disabled="@(_busy || _readingPeriod)"
+                               HelperText="Leave empty to request the full balance." />
                 <DecimalField @bind-Value="_amount" Label="Amount to request" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                               HideSpinButtons="true" />
@@ -37,7 +42,7 @@
         @if (_link is null)
         {
             <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@(_busy || _amount <= 0 || decimal.Round(_amount, 2) != _amount)" OnClick="CreateAsync">Create link</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@(_busy || _readingPeriod || _amount <= 0 || decimal.Round(_amount, 2) != _amount)" OnClick="CreateAsync">Create link</MudButton>
         }
         else
         {
@@ -49,7 +54,7 @@
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
-    [Parameter] public Guid? GroupId { get; set; }
+    [Parameter] public Guid GroupId { get; set; }
     [Parameter] public Guid RecipientUserId { get; set; }
     [Parameter] public string RecipientName { get; set; } = "";
     [Parameter] public decimal CurrentDebt { get; set; }
@@ -57,22 +62,27 @@
     private decimal _amount;
     private string? _link;
     private bool _busy;
+    private bool _readingPeriod;
+    private DateTime? _through;
+    private int? _periodOffset;
 
     protected override void OnInitialized() => _amount = CurrentDebt;
 
     private async Task CreateAsync()
     {
-        if (_busy || _amount <= 0 || decimal.Round(_amount, 2) != _amount)
+        if (_busy || _readingPeriod || _amount <= 0 || decimal.Round(_amount, 2) != _amount)
             return;
         _busy = true;
         try
         {
             SettlementRequestResponse? created = null;
-            var saved = await Errors.TryAsync(async () => created = GroupId is { } groupId
-                ? await GroupsClient.CreateGroupSettlementRequestAsync(groupId,
-                    new CreateSettlementRequest { RecipientUserId = RecipientUserId, Amount = _amount })
-                : await SettlementRequestsClient.CreateSettlementRequestAsync(
-                    new CreateSettlementRequest { RecipientUserId = RecipientUserId, Amount = _amount }),
+            var saved = await Errors.TryAsync(async () => created = await GroupsClient.CreateGroupSettlementRequestAsync(GroupId,
+                new CreateSettlementRequest
+                {
+                    RecipientUserId = RecipientUserId, Amount = _amount,
+                    Through = _through is { } day ? DateOnly.FromDateTime(day) : null,
+                    UtcOffset = _periodOffset
+                }),
                 "Could not create the settlement request.");
             if (saved && created is not null)
                 _link = Navigation.ToAbsoluteUri($"/settlement-requests/{created.Token}").ToString();
@@ -82,6 +92,31 @@
 
     private void Cancel() => MudDialog.Cancel();
     private void Close() => MudDialog.Close();
+
+    private async Task ThroughChangedAsync(DateTime? day)
+    {
+        if (day is null)
+        {
+            _through = null;
+            _periodOffset = null;
+            _amount = CurrentDebt;
+            return;
+        }
+        _readingPeriod = true;
+        try
+        {
+            var offset = Clock.CutoffOffsetMinutes;
+            UserGroupBalanceResponse? balance = null;
+            if (await Errors.TryAsync(async () => balance = await GroupsClient.GetGroupUserBalanceAsync(
+                    GroupId, DateOnly.FromDateTime(day.Value), offset), "Could not read the balance for that date.") && balance is not null)
+            {
+                _through = day;
+                _periodOffset = offset;
+                _amount = balance.OwedToYou.FirstOrDefault(debt => debt.UserId == RecipientUserId)?.Amount ?? 0m;
+            }
+        }
+        finally { _readingPeriod = false; }
+    }
 
     private async Task CopyAsync()
     {

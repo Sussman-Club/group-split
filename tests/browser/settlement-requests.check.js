@@ -32,11 +32,13 @@ async page => {
         const link = await call(requester, `/groups/${group.id}/join-links`, 'POST');
         await call(recipientContext, `/invitations/links/${link.token}/accept`, 'POST');
         await call(requester, '/transactions', 'POST', {groupId:group.id,name:'Browser test dinner',amount,
-            dateTime:new Date().toISOString()});
+            dateTime:'2026-08-20T12:00:00Z'});
     }
+    await call(requester, '/transactions', 'POST', {groupId:groups[0].id,name:'Later groceries',amount:80,
+        paidByUserId:other.id,dateTime:'2026-09-10T12:00:00Z'});
     const balance = async group => call(requester, `/groups/${group.id}/balances`);
     const createViaUi = async (group, amount) => {
-        await page.goto(origin + (group ? `/groups/${group.id}` : '/settle'));
+        await page.goto(origin + `/groups/${group.id}`);
         await page.getByRole('button',{name:'Request payment',exact:true}).first().click();
         await page.getByRole('spinbutton',{name:'Amount to request'}).fill(String(amount));
         const creating = page.waitForResponse(response => response.request().method() === 'POST' &&
@@ -69,11 +71,31 @@ async page => {
     await recipient.getByText(/This request is stale because the balance changed/).waitFor();
     check(await recipient.getByRole('button',{name:'Record repayment',exact:true}).count() === 0,'Stale request is actionable');
     await call(requester, `/transactions/${extra.id}`,'DELETE');
-    // Cross-group entry point accepts an amount greater than the total debt.
+    // Requests are group-only; the all-groups screen no longer offers one.
+    await page.goto(origin + '/settle');
+    await page.getByRole('heading',{name:'Settle up',exact:true}).waitFor();
+    check(await page.getByRole('button',{name:'Request payment',exact:true}).count() === 0,'Cross-group request still visible');
+    // Selecting August suggests $50 even though today's group debt is only $10.
     const before = await Promise.all(groups.map(balance));
-    const requested = await createViaUi(null, 85);
-    check(requested.groups.length === 2,'Cross-group request must cover both groups');
-    check(requested.groups.reduce((sum,part)=>sum+part.amount,0) === 85,'Allocations must sum to the request');
+    await page.goto(origin + `/groups/${groups[0].id}`);
+    await page.getByRole('button',{name:'Request payment',exact:true}).click();
+    await page.getByRole('textbox',{name:'Up to a date',exact:true}).click();
+    for (let count = 0; await page.getByRole('button',{name:/Previous month/}).getAttribute('aria-label') !== 'Previous month (July 2026)'; count++) {
+        check(count < 36, 'Could not reach August 2026 in the calendar');
+        await page.getByRole('button',{name:/Previous month/}).click();
+    }
+    await page.getByRole('button').filter({hasText:/^31$/}).filter({visible:true}).last().click();
+    const periodAmount = page.getByRole('spinbutton',{name:'Amount to request'});
+    await periodAmount.waitFor();
+    await page.waitForFunction(()=>[...document.querySelectorAll('input')].some(input=>Number(input.value)===50));
+    check(Number(await periodAmount.inputValue()) === 50,'Earlier-period amount should be 50');
+    const creating = page.waitForResponse(response=>response.request().method()==='POST' &&
+        new URL(response.url()).pathname.endsWith('/settlement-requests'));
+    await page.getByRole('button',{name:'Create link',exact:true}).click();
+    const requested = await (await creating).json();
+    check(requested.groups.length === 1 && requested.groups[0].groupId === groups[0].id,'Request must cover only this group');
+    check(requested.through === '2026-08-31','Cutoff was not saved');
+    check(requested.amount === 50,'Period amount was not saved');
     await page.getByRole('button',{name:'Copy request link',exact:true}).click();
     await page.getByRole('button',{name:'Done',exact:true}).click();
     const afterCreation = await Promise.all(groups.map(balance));
@@ -86,6 +108,7 @@ async page => {
     await recipient.goto(`${origin}/settlement-requests/${requested.token}`);
     const record = recipient.getByRole('button',{name:'Record repayment',exact:true});
     await record.waitFor();
+    await recipient.getByText('For activity up to 31 Aug 2026',{exact:true}).waitFor();
     check(await record.isDisabled(),'Recording needs explicit outside-payment confirmation');
     for (const width of [360,390,768,1440]) {
         await recipient.setViewportSize({width,height:900});
@@ -104,11 +127,11 @@ async page => {
     check(replay.status() === 409,'Repeated repayment should be refused');
     const afterPayment = await Promise.all(groups.map(balance));
     const net = rows => rows.netBalances.find(row=>row.userId===other.id).balance;
-    check(afterPayment.reduce((sum,rows)=>sum+net(rows),0) - before.reduce((sum,rows)=>sum+net(rows),0) === 85,
-        'Recorded payment must move the debtor balance by exactly 85');
+    check(net(afterPayment[0]) - net(before[0]) === 50,'Recorded payment must move the debtor balance by exactly 50');
+    check(JSON.stringify(afterPayment[1]) === JSON.stringify(before[1]),'Payment changed an unrelated group');
     await recipient.screenshot({path:'.playwright-cli/settlement-request-completed.png',fullPage:true});
     await recipientContext.close();
-    return {groupEntry:true,crossGroupEntry:true,zeroValidation:true,cancellation:true,stale:true,
-        recipientOnly:true,noBalanceChangeOnCreation:true,aboveBalanceAmount:85,coveredGroups:2,
+    return {groupEntry:true,crossGroupRemoved:true,period:'2026-08-31',zeroValidation:true,cancellation:true,stale:true,
+        recipientOnly:true,noBalanceChangeOnCreation:true,aboveCurrentBalanceAmount:50,coveredGroups:1,unrelatedGroupUnchanged:true,
         explicitConfirmation:true,paidPersists:true,replayRefused:true,mobileWidths:[360,390,768,1440]};
 }

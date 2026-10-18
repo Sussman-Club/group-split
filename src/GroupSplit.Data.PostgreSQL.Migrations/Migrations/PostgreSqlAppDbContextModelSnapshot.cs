@@ -840,10 +840,16 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("Through")
+                        .HasColumnType("date");
+
                     b.Property<string>("Token")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("UtcOffset")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

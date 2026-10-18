@@ -138,8 +138,7 @@ public class SettlementService(
     IDebtCalculationService debtCalculator,
     IGroupParticipants participants,
     AppDbContext context,
-    TimeProvider clock,
-    ISettlementRequestService settlementRequests) : ISettlementService
+    TimeProvider clock) : ISettlementService
 {
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
@@ -182,7 +181,7 @@ public class SettlementService(
         // One save. Half a settling-up would leave somebody looking at a balance that had
         // moved for some of the people in it and not the others, with no way to tell which.
         foreach (var payment in payments)
-            await settlementRequests.ResolveMatching(payment.FromUserId, payment.ToUserId,
+            await SettlementRequestResolution.ResolveMatching(context, clock, payment.FromUserId, payment.ToUserId,
                 [new GroupDebt(groupId, group.Name, payment.Amount)], cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
@@ -275,7 +274,7 @@ public class SettlementService(
             (date ?? clock.GetUtcNow()).ToUniversalTime(),
             description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
 
-        await settlementRequests.ResolveMatching(from.Id, to.Id,
+        await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id,
             [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
@@ -371,7 +370,7 @@ public class SettlementService(
 
         // One save for the whole payment. Two groups disagreeing about whether a single
         // transfer happened is the failure this screen exists to prevent, not to introduce.
-        await settlementRequests.ResolveMatching(from.Id, to.Id, allocations, cancellationToken);
+        await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id, allocations, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         return new SettleWithPersonResponse(

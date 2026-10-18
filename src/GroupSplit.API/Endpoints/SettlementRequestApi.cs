@@ -13,7 +13,6 @@ public static class SettlementRequestApi
             var requests = routes.MapGroup("/settlement-requests").RequireAuthorization();
             requests.WithTags("Settlement requests");
 
-            requests.MapCreateSettlementRequest();
             requests.MapGetSettlementRequest();
             requests.MapCancelSettlementRequest();
             requests.MapRecordSettlementRequestRepayment();
@@ -24,19 +23,6 @@ public static class SettlementRequestApi
 
     extension(RouteGroupBuilder groups)
     {
-        private RouteHandlerBuilder MapCreateSettlementRequest()
-        {
-            return groups.MapPost(string.Empty, async (
-                    CreateSettlementRequest request,
-                    ISettlementRequestService service,
-                    CancellationToken ct) => Results.Ok(await service.CreateAcrossGroups(request, ct)))
-                .WithName("CreateSettlementRequest")
-                .Produces<SettlementRequestResponse>()
-                .ProducesValidationProblem()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict);
-        }
-
         private RouteHandlerBuilder MapGetSettlementRequest()
         {
             return groups.MapGet("{token}", async (

@@ -6,10 +6,15 @@ public enum SettlementRequestStatus { Open, Stale, Paid, Cancelled }
 public record SettlementRequestResponse(
     Guid Id, string Token, SettlementRequestStatus Status,
     Guid RequesterUserId, string RequesterName, Guid RecipientUserId, string RecipientName,
-    decimal Amount, string Currency, DateTimeOffset CreatedAt, IReadOnlyList<GroupDebt> Groups);
+    decimal Amount, string Currency, DateTimeOffset CreatedAt, IReadOnlyList<GroupDebt> Groups,
+    DateOnly? Through = null);
 
 public record CreateSettlementRequest
 {
     public Guid RecipientUserId { get; set; }
     public decimal Amount { get; set; }
+    public DateOnly? Through { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes)]
+    public int? UtcOffset { get; set; }
 }
