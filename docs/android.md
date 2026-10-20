@@ -108,13 +108,13 @@ before the installed app can sign in; publishing an AAB does not deploy realm ch
 ## Signed release CI
 
 The **Android release** workflow (`.github/workflows/android-release.yml`) is manually
-triggered on `dev` or `main`. Pull requests only run the separate Debug compile
+triggered on `main` and uses the existing `production` Actions environment. Pull requests only run the separate Debug compile
 check. A signed build uses the production HTTPS endpoints above, runs the shared app
 tests, publishes the requested package formats and verifies their signatures before
 uploading an artifact containing only signed packages and `SHA256SUMS`. Downloads expire
 after 14 days. This workflow does not deploy the server or upload to Google Play.
 
-In the repository's **Settings → Secrets and variables → Actions**, add:
+In the repository's **Settings → Environments → production**, add:
 
 | Setting | Type | Value |
 | --- | --- | --- |
@@ -127,18 +127,21 @@ with an authenticated GitHub CLI, pipe their values directly; do not print them:
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:LOCALAPPDATA/GroupSplit/Signing/groupsplit-upload.keystore")) |
-  gh secret set ANDROID_KEYSTORE_BASE64 --repo Sussman-Club/group-split
+  gh secret set ANDROID_KEYSTORE_BASE64 --repo Sussman-Club/group-split --env production
 Get-Content -Raw "$env:LOCALAPPDATA/GroupSplit/Signing/groupsplit-upload.signing-password" |
-  gh secret set ANDROID_SIGNING_PASSWORD --repo Sussman-Club/group-split
+  gh secret set ANDROID_SIGNING_PASSWORD --repo Sussman-Club/group-split --env production
 ```
 
 After the workflow reaches the default branch, open **Actions → Android release → Run
-workflow**, select `dev` or `main`, enter a new integer build version and display version
+workflow**, select `main`, enter a new integer build version and display version
 (for example `1.0.0`), and choose `apk`, `aab`, or `both`. Use a build version higher than
 every previously distributed APK or uploaded AAB; rerunning a build does not increment
 it automatically. Download the artifact from the successful run. Install the APK on a
 device, or submit the AAB to Play Console's internal testing track. The installed Release
 package still needs device acceptance against the deployed backend.
+
+The workflow respects the production environment's existing branch policy; it does not
+grant `dev` or pull-request branches access to production secrets.
 
 `Publish-AndroidCI.ps1` creates signing files in a private temporary directory outside the
 checkout. It clears secret environment variables before invoking the build and removes

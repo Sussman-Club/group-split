@@ -28,8 +28,9 @@ concurrency:
 
 jobs:
   release:
-    # Signing is available only to explicitly dispatched integration-branch builds.
-    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    # The production environment permits main (and app-v* tags); release dispatches use main.
+    if: github.ref == 'refs/heads/main'
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
