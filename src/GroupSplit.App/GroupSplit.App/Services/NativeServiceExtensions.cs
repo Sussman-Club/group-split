@@ -15,6 +15,7 @@ public static class NativeServiceExtensions
         services.AddSingleton<NativeLinkRouter>();
         services.AddSingleton<IWebAuthenticator>(_ => WebAuthenticator.Default);
         services.AddSingleton<ISecureStorage>(_ => SecureStorage.Default);
+        services.AddSingleton<IPreferences>(_ => Preferences.Default);
         services.AddSingleton<INativeBrowser, NativeBrowser>();
         services.AddSingleton<INativeTokenStore, NativeTokenStore>();
         services.AddSingleton<NativeSession>();

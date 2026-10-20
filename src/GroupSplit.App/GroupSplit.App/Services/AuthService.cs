@@ -22,6 +22,10 @@ public sealed class AuthService(NativeSession session, IUserLogin user, Navigati
     private async Task SignOutAsync(bool deleted, CancellationToken ct)
     {
         try { await session.LogoutAsync(deleted, ct); }
+        catch (NativeCredentialCleanupException)
+        {
+            snackbar.Add("Signed out for now, but saved sign-in could not be cleared. Clear this app's storage before using it again.", Severity.Warning);
+        }
         catch (Exception error) when (error is OperationCanceledException or HttpRequestException or InvalidOperationException)
         {
             snackbar.Add("Signed out of this app. Browser sign-out could not be completed; you may still be signed in there.", Severity.Warning);

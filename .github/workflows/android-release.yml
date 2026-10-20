@@ -98,7 +98,7 @@ jobs:
           RELEASE_COMMIT: ${{ github.sha }}
           GH_REPO: ${{ github.repository }}
         run: |
-          $tag = "app-v$env:DISPLAY_VERSION-$env:BUILD_VERSION"
+          $tag = "android-v$env:DISPLAY_VERSION-$env:BUILD_VERSION"
           $notesPath = Join-Path $env:RUNNER_TEMP 'android-release-notes.md'
           @(
             "Group Split $env:DISPLAY_VERSION for Android (build $env:BUILD_VERSION).",

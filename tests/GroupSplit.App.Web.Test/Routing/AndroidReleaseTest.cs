@@ -12,12 +12,14 @@ namespace GroupSplit.App.Web.Test.Routing;
 public sealed class AndroidReleaseTest
 {
     [Theory]
-    [InlineData(false, false, "app-v1.2.3-42", "GroupSplit.apk", true, true)]
-    [InlineData(true, false, "app-v1.2.3-42", "GroupSplit.apk", true, false)]
-    [InlineData(false, true, "app-v1.2.3-42", "GroupSplit.apk", true, false)]
+    [InlineData(false, false, "android-v1.2.3-42", "GroupSplit.apk", true, true)]
+    [InlineData(true, false, "android-v1.2.3-42", "GroupSplit.apk", true, false)]
+    [InlineData(false, true, "android-v1.2.3-42", "GroupSplit.apk", true, false)]
     [InlineData(false, false, "cli-v1.2.3", "GroupSplit.apk", true, false)]
-    [InlineData(false, false, "app-v1.2.3-42", "unsigned.apk", true, false)]
-    [InlineData(false, false, "app-v1.2.3-42", "GroupSplit.apk", false, false)]
+    [InlineData(false, false, "app-v1.2.3", "GroupSplit.apk", true, false)]
+    [InlineData(false, false, "app-v1.2.3-42", "GroupSplit.apk", true, false)]
+    [InlineData(false, false, "android-v1.2.3-42", "unsigned.apk", true, false)]
+    [InlineData(false, false, "android-v1.2.3-42", "GroupSplit.apk", false, false)]
     public async Task Only_a_complete_published_android_release_is_offered(bool draft, bool prerelease, string tag, string apkName, bool checksum, bool available)
     {
         var transport = new Transport { Body = Release(draft, prerelease, tag, apkName, checksum) };
@@ -27,7 +29,7 @@ public sealed class AndroidReleaseTest
         if (available)
         {
             Assert.Equal("1.2.3-42", release!.Version);
-            Assert.EndsWith("/app-v1.2.3-42/GroupSplit.apk", release.DownloadUrl);
+            Assert.EndsWith("/android-v1.2.3-42/GroupSplit.apk", release.DownloadUrl);
         }
     }
 
@@ -80,7 +82,7 @@ public sealed class AndroidReleaseTest
         Assert.NotNull(release);
     }
 
-    private static string Release(bool draft = false, bool prerelease = false, string tag = "app-v1.2.3-42", string apkName = "GroupSplit.apk", bool checksum = true) =>
+    private static string Release(bool draft = false, bool prerelease = false, string tag = "android-v1.2.3-42", string apkName = "GroupSplit.apk", bool checksum = true) =>
         JsonSerializer.Serialize(new
         {
             tag_name = tag, draft, prerelease,

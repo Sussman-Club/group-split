@@ -189,12 +189,14 @@ visitors can download the app without registering another account or using an ap
 On 20 October 2026, the existing upload keystore and password were configured in the
 repository's `production` environment as the two Android secrets above. The alias variable
 is `groupsplit-upload`. The workflow runs only on `main`, respecting the environment's
-existing branch restrictions. It publishes a draft `app-v<display-version>-<build-version>`
+existing branch restrictions. It publishes a draft `android-v<display-version>-<build-version>`
 release with both files attached, then makes it public and marks it latest. Every published
 release must have a new build version. Failed or cancelled draft publication can leave a
 draft for a maintainer to inspect; published packages are not overwritten.
+Android tags use their own prefix because `app-v*` is reserved for server deployment
+version calculation.
 
-The website checks the repository's latest public release, requiring an `app-v` tag,
+The website checks the repository's latest public release, requiring an `android-v` tag,
 `GroupSplit.apk`, a checksum file, and download URLs in this repository. It caches the
 lookup for five minutes to limit GitHub API traffic. Missing, incomplete or removed
 releases show an unavailable message with a retry button instead of a broken download.
@@ -264,6 +266,11 @@ return to sign-in. Failed writes are never automatically replayed.
 Sign-out clears local credentials before asking the authority to end its browser session.
 If the browser is cancelled or unavailable, local sign-out still completes; authority
 sign-out may need to be retried in the browser. Account deletion only clears local state.
+A separate non-secret preferences marker disables restoration before credentials are
+removed. If secure-storage deletion fails, the old credentials remain disabled across
+process restarts; only successfully saving a new remembered session enables restoration
+again. If neither deletion nor the marker can be saved, sign-out reports that saved
+sign-in could not be cleared instead of claiming it completed.
 
 Bank linking and reconnection are unavailable in the embedded native WebView until
 Hosted Link is implemented. The account and empty inbox direct people to the web app.

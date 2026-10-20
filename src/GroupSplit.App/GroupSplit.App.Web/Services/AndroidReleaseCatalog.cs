@@ -47,11 +47,12 @@ public sealed class AndroidReleaseCatalog(IHttpClientFactory clients, TimeProvid
 
     private static AndroidReleaseInfo? Parse(Release? release)
     {
-        if (release is null || release.Draft || release.Prerelease || release.Tag?.StartsWith("app-v", StringComparison.Ordinal) != true) return null;
+        const string tagPrefix = "android-v";
+        if (release is null || release.Draft || release.Prerelease || release.Tag?.StartsWith(tagPrefix, StringComparison.Ordinal) != true) return null;
         var prefix = Repository + Uri.EscapeDataString(release.Tag) + "/";
         var apk = release.Assets?.FirstOrDefault(asset => asset.Name == "GroupSplit.apk" && asset.Url == prefix + "GroupSplit.apk" && asset.Size > 0);
         var checksum = release.Assets?.FirstOrDefault(asset => asset.Name == "SHA256SUMS" && asset.Url == prefix + "SHA256SUMS");
-        return apk is null || checksum is null ? null : new(release.Tag[5..], apk.Url, checksum.Url, apk.Size);
+        return apk is null || checksum is null ? null : new(release.Tag[tagPrefix.Length..], apk.Url, checksum.Url, apk.Size);
     }
 
     public void Dispose() => gate.Dispose();

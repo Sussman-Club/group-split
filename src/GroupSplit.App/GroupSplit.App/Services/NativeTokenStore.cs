@@ -3,13 +3,19 @@ using Microsoft.Maui.Storage;
 
 namespace GroupSplit.App.Services;
 
-internal sealed class NativeTokenStore(ISecureStorage storage, ILogger<NativeTokenStore> logger) : INativeTokenStore
+internal sealed class NativeTokenStore(ISecureStorage storage, IPreferences preferences,
+    ILogger<NativeTokenStore> logger) : INativeTokenStore
 {
     internal const string Key = "groupsplit.native.tokens";
+    internal const string DisabledKey = "groupsplit.native.session-disabled";
 
     public async Task<string?> ReadAsync()
     {
-        try { return await storage.GetAsync(Key); }
+        try
+        {
+            if (preferences.Get(DisabledKey, false)) return null;
+            return await storage.GetAsync(Key);
+        }
         catch (Exception)
         {
             // Restored Android ciphertext may have lost its encryption key. Recover by
@@ -22,7 +28,13 @@ internal sealed class NativeTokenStore(ISecureStorage storage, ILogger<NativeTok
 
     public async Task WriteAsync(string value)
     {
-        try { await storage.SetAsync(Key, value); }
+        try
+        {
+            // Keep old credentials disabled until their replacement is securely saved.
+            preferences.Set(DisabledKey, true);
+            await storage.SetAsync(Key, value);
+            preferences.Set(DisabledKey, false);
+        }
         catch (Exception)
         {
             Clear();
@@ -32,10 +44,19 @@ internal sealed class NativeTokenStore(ISecureStorage storage, ILogger<NativeTok
 
     public void Clear()
     {
+        // This non-secret marker survives a restart even if SecureStorage cannot delete
+        // its ciphertext. Never rely on clearing only the in-memory token session.
+        var disabled = false;
+        try { preferences.Set(DisabledKey, true); disabled = true; }
+        catch (Exception) { logger.LogWarning("Saved native credentials could not be marked disabled."); }
         try { storage.Remove(Key); }
         catch (Exception)
         {
+            if (!disabled) throw new NativeCredentialCleanupException();
             logger.LogWarning("Secure storage could not remove the saved native session.");
         }
     }
 }
+
+internal sealed class NativeCredentialCleanupException() : InvalidOperationException(
+    "Saved sign-in could not be removed or disabled.");
