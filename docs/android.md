@@ -3,7 +3,7 @@
 Issue [#170](https://github.com/Sussman-Club/group-split/issues/170) is the tracker for
 three ordered phases: a usable native app, signed installation packages, then push
 notifications. The authentication and API foundation is implemented here; device
-acceptance, invitation app links, release packaging and notifications remain open.
+acceptance, invitation app links, release delivery and notifications remain open.
 
 ## Build configuration
 
@@ -105,6 +105,56 @@ application ID, build version and target SDK. These checks validate the package,
 on-device behavior. Production must also have the reconciled `native` Keycloak client
 before the installed app can sign in; publishing an AAB does not deploy realm changes.
 
+## Signed release CI
+
+The **Android release** workflow (`.github/workflows/android-release.yml`) is manually
+triggered on `dev` or `main`. Pull requests only run the separate Debug compile
+check. A signed build uses the production HTTPS endpoints above, runs the shared app
+tests, publishes the requested package formats and verifies their signatures before
+uploading an artifact containing only signed packages and `SHA256SUMS`. Downloads expire
+after 14 days. This workflow does not deploy the server or upload to Google Play.
+
+In the repository's **Settings → Secrets and variables → Actions**, add:
+
+| Setting | Type | Value |
+| --- | --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Secret | Base64 contents of the existing upload keystore |
+| `ANDROID_SIGNING_PASSWORD` | Secret | Password shared by the keystore and upload key |
+| `ANDROID_KEY_ALIAS` | Variable, optional | Existing key alias; defaults to `groupsplit-upload` |
+
+Reuse the upload key used for previous releases. To set the secrets from PowerShell
+with an authenticated GitHub CLI, pipe their values directly; do not print them:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:LOCALAPPDATA/GroupSplit/Signing/groupsplit-upload.keystore")) |
+  gh secret set ANDROID_KEYSTORE_BASE64 --repo Sussman-Club/group-split
+Get-Content -Raw "$env:LOCALAPPDATA/GroupSplit/Signing/groupsplit-upload.signing-password" |
+  gh secret set ANDROID_SIGNING_PASSWORD --repo Sussman-Club/group-split
+```
+
+After the workflow reaches the default branch, open **Actions → Android release → Run
+workflow**, select `dev` or `main`, enter a new integer build version and display version
+(for example `1.0.0`), and choose `apk`, `aab`, or `both`. Use a build version higher than
+every previously distributed APK or uploaded AAB; rerunning a build does not increment
+it automatically. Download the artifact from the successful run. Install the APK on a
+device, or submit the AAB to Play Console's internal testing track. The installed Release
+package still needs device acceptance against the deployed backend.
+
+`Publish-AndroidCI.ps1` creates signing files in a private temporary directory outside the
+checkout. It clears secret environment variables before invoking the build and removes
+the files in a `finally` block on success or failure. Signing secrets are scoped to that
+step; they are not used by tests, dependency setup or pull-request builds. The workflow
+uses GitHub-hosted ephemeral runners and does not cache signing material. Its helper
+regression checks can be run without Android tools or real credentials:
+
+```powershell
+./tests/android-release.check.ps1
+```
+
+The native launcher icon and splash screen reuse the existing three-arc GroupSplit mark
+and cream background. The Android foreground is inset to keep the mark inside adaptive
+launcher masks; artwork is maintained with the shared brand assets in `docs/design-system.md`.
+
 ## Sign-in and persistence
 
 The realm worker creates the `native` public client on existing realms and reconciles
@@ -199,9 +249,9 @@ and physical device:
   invitation app-link routing and public share-link origins still need implementation.
 - Bank-link and reconnect controls remain hidden in the app while web linking still works.
 
-The application identity and local signing command are configured. Phase 2 still needs
-final artwork, signed release CI, repository signing secrets and device installation
-validation. The current minimum Android
+The application identity, brand artwork, local signing command and manual signed release
+CI are configured. Phase 2 still needs repository signing secrets, a successful signed
+workflow run and device installation validation of its Release package. The current minimum Android
 API level is 24; that is still a release decision. Phase 3 follows a verified installable
 app and must choose push transport, add a transactional outbox and background delivery,
 device registration, preferences, Android 13 permission handling and destination routing.

@@ -23,6 +23,7 @@ a shadow means editing every file in the table below that carries it.
 | [`Assets/keycloak/themes/account/resources/css/group-split.css`](../src/GroupSplit.AppHost/Assets/keycloak/themes/account/resources/css/group-split.css) | The account console | As above |
 | [`Assets/keycloak/themes/email/messages/messages_en.properties`](../src/GroupSplit.AppHost/Assets/keycloak/themes/email/messages/messages_en.properties) | Password reset, verification and required-action mail | Literal hex and pixel values inline, because a mail has no stylesheet |
 | [`BrandMark.razor`](../src/GroupSplit.App/GroupSplit.App.Shared/Components/BrandMark.razor) and the two `logo.svg` under `Assets/keycloak/themes/*/resources/img/` | The three-arc mark | Literal `fill` attributes, one copy each |
+| [`Resources/AppIcon/appiconfg.svg`](../src/GroupSplit.App/GroupSplit.App/Resources/AppIcon/appiconfg.svg) and [`Resources/Splash/splash.svg`](../src/GroupSplit.App/GroupSplit.App/Resources/Splash/splash.svg) | Native launcher and splash mark | The same three paths and fills as `wwwroot/favicon.svg`; native background and adaptive-icon scale live in the MAUI project |
 
 The token names are identical across the CSS files, so a change is usually the same line
 pasted into each. The two Keycloak stylesheets carry only the subset their pages

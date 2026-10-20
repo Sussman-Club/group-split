@@ -1,0 +1,106 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: 'Android version code (increase for each distributed build)'
+        required: true
+        type: string
+      display_version:
+        description: 'Version shown to users'
+        required: true
+        default: '1.0.0'
+        type: string
+      format:
+        description: 'APK for installation, AAB for Google Play, or both'
+        required: true
+        default: both
+        type: choice
+        options: [both, apk, aab]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Signing is available only to explicitly dispatched integration-branch builds.
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      BUILD_VERSION: ${{ inputs.build_version }}
+      DISPLAY_VERSION: ${{ inputs.display_version }}
+      PACKAGE_FORMAT: ${{ inputs.format }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate release version
+        run: |
+          if ($env:BUILD_VERSION -notmatch '^[1-9][0-9]{0,9}$' -or [long]$env:BUILD_VERSION -gt 2100000000) {
+            throw 'Build version must be an integer between 1 and 2100000000.'
+          }
+          if ($env:DISPLAY_VERSION -notmatch '^\d+\.\d+(\.\d+)?$') {
+            throw 'Display version must be two or three numeric components.'
+          }
+      - name: Check signing helper cleanup
+        run: ./tests/android-release.check.ps1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android MAUI workload
+        run: |
+          dotnet workload install maui-android
+          if ($LASTEXITCODE -ne 0) { throw 'Android workload installation failed.' }
+      - name: Test native session and shared app
+        run: |
+          dotnet test --project tests/GroupSplit.App.Web.Test -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'App tests failed.' }
+      - name: Build signed packages
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS || 'groupsplit-upload' }}
+        run: |
+          ./tools/Publish-AndroidCI.ps1 -BuildVersion $env:BUILD_VERSION `
+            -DisplayVersion $env:DISPLAY_VERSION -Format $env:PACKAGE_FORMAT
+      - name: Verify package signatures and record checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          for package in artifacts/android/apk/*-Signed.apk; do
+            [ -f "$package" ] || continue
+            "$apksigner" verify --verbose "$package"
+          done
+          for package in artifacts/android/aab/*-Signed.aab; do
+            [ -f "$package" ] || continue
+            verification=$(jarsigner -J-Duser.language=en -J-Duser.country=US -verify "$package")
+            printf '%s\n' "$verification"
+            grep -q 'jar verified\.' <<< "$verification"
+          done
+          cd artifacts/android
+          find . -type f \( -name '*-Signed.apk' -o -name '*-Signed.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - name: Upload signed packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-${{ inputs.display_version }}-${{ inputs.build_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/android/**/*-Signed.apk
+            artifacts/android/**/*-Signed.aab
+            artifacts/android/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
