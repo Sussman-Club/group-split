@@ -330,7 +330,7 @@ else
     compose
         .WithContainerRegistry(registry)
         .WithComposeDefaults()
-        .WithPrepareOnPush();
+        .WithComposeReleasePipeline();
 }
 
 builder.Build().Run();

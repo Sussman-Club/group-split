@@ -68,14 +68,13 @@ never touches the deployed stack.
 3. Claims the release version and writes its tag.
 4. Pins the Aspire CLI to the version the AppHost SDK declares, so the CLI and the
    evaluated model agree.
-5. Exports the allowlist as `Parameters__*`, then unsets the GitHub-facing names so nothing
-   the build spawns inherits them.
-6. `aspire do push --environment production` builds the API, web and migration images,
-   pushes them to `ghcr.io/sussman-club/group-split`, and generates the Compose file that
-   references them. The generation rides on `push` because the AppHost declares the Compose
-   prepare step as required by it, so the two share one pipeline run; run separately they
-   would stamp different tags. The workflow knows only the documented command, not any step
-   or resource name of the AppHost's.
+5. Maps the allowlisted GitHub environment values to `Parameters__*`, then removes the
+   GitHub-facing names before the build starts.
+6. `aspire do release-compose --environment production` builds the API, web and migration
+   images, pushes them to `ghcr.io/sussman-club/group-split`, and generates the Compose file
+   that references them. `release-compose` is the AppHost's explicit release entry point: it
+   waits for Aspire's built-in image-push and Compose-prepare steps in one pipeline run, so
+   the generated artifact and pushed images use the same release tag.
 7. Resolves each pushed tag to its registry digest, so the host pulls exactly what CI built
    rather than a tag that could later be moved.
 8. Runs `docker compose config` over the generated file, so a malformed stack fails on the
@@ -93,6 +92,16 @@ never touches the deployed stack.
 10. Smoke-tests the public origin and the Keycloak OIDC discovery document, because a
     completed Komodo update proves the stack operation finished, not that the release is
     being served.
+
+The workflow delegates its longer stages to scripts:
+[`validate-komodo-credentials.sh`](../.github/scripts/validate-komodo-credentials.sh) and
+[`validate-deployment-inputs.sh`](../.github/scripts/validate-deployment-inputs.sh) check the
+production configuration, [`claim-release-version.sh`](../.github/scripts/claim-release-version.sh)
+claims or reuses an `app-v` tag,
+[`prepare-compose-release.sh`](../.github/scripts/prepare-compose-release.sh) runs Aspire and
+pins image digests, and
+[`deploy-komodo-stack.sh`](../.github/scripts/deploy-komodo-stack.sh) masks secrets, waits for
+Komodo, prints failures, and rolls back when it can.
 
 The Compose file and a secret-free deployment manifest are kept as run artifacts for a
 month, so a past deploy can be inspected. The `.env.production` beside them is not: it holds
@@ -206,10 +215,10 @@ loopback address: the dashboard is on `127.0.0.1:18888` and the Keycloak admin c
 ## Deployment parameters
 
 Anything that differs between deployments is an Aspire parameter. Parameter names are
-kebab-case; the deploy workflow exports an explicit allowlist of the `production`
-environment's secrets and variables as `Parameters__<lower-cased name>`, the spelling
-Aspire documents for CI (dashes in a parameter name are written as underscores), so a
-GitHub entry called `WEB_HOSTNAME` is what the parameter `web-hostname` resolves to.
+kebab-case; the deploy workflow maps an explicit allowlist of the `production`
+environment's secrets and variables to `Parameters__<lower-cased name>`, the spelling
+Aspire documents for CI (dashes in a parameter name are written as underscores). A GitHub
+entry called `WEB_HOSTNAME` therefore supplies the `web-hostname` parameter.
 
 The allowlist stops a future, unrelated repository secret from being forwarded into the
 AppHost and written into the generated deployment environment.
@@ -218,9 +227,9 @@ The workflow reads each entry from the one place the table below names, a variab
 secret; the same name stored as the other kind is never read. Optional entries fall back to
 the defaults declared by the AppHost when they are absent.
 
-The cost is that adding a parameter takes two edits: a GitHub entry of the matching name,
-and the same name added to the deploy workflow's allowlist. A GitHub entry the workflow
-does not name never reaches the AppHost, which falls back to its default.
+Adding a parameter takes two edits: create the matching GitHub entry and add its name to the
+deploy workflow's allowlist. An entry the workflow does not map never reaches the AppHost,
+which falls back to its default.
 
 | Parameter | GitHub entry | Required | Purpose |
 | --- | --- | --- | --- |

@@ -513,7 +513,7 @@ Before editing `realms.json`, decide how the change will reach the realms that a
   subflows and no authenticator configs. The worker rebuilds such a flow in a handful of calls;
   anything nested would take most of an importer.
 - A new `${...}` placeholder has to name an Aspire parameter in screaming-snake form, and the
-  parameter has to be added to the deploy workflow's allowlist as well; see
+  parameter needs to be added to the deploy workflow's allowlist; see
   [Deployment parameters](deployment.md#deployment-parameters). If a managed setting uses it,
   set it on Keycloak with `WithRealmVariable` so the worker is handed the same value; Keycloak
   resolves it on a first-boot import and the worker on every start after, and the two must
