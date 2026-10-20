@@ -43,6 +43,15 @@ public static class KeycloakRealmDefinition
     /// </remarks>
     public static readonly ManagedClient[] ManagedClients =
     [
+        new("mobile",
+            Properties: ["enabled", "publicClient", "standardFlowEnabled", "implicitFlowEnabled",
+                "directAccessGrantsEnabled", "serviceAccountsEnabled", "redirectUris", "webOrigins"],
+            Attributes: ["pkce.code.challenge.method", "post.logout.redirect.uris",
+                "oauth2.device.authorization.grant.enabled", "oidc.ciba.grant.enabled", "use.refresh.tokens"])
+        {
+            ProtocolMappers = ["audience-mapper"],
+            CreateWhenMissing = true
+        },
         new("web-app", Properties: ["redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"]),
         new("cli",
             Properties:

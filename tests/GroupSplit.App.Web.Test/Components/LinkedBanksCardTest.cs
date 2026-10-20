@@ -35,6 +35,16 @@ public class LinkedBanksCardTest : ComponentTest
     }
 
     [Fact]
+    public void Mobile_does_not_offer_the_embedded_bank_link_flow()
+    {
+        _link.SetupGet(link => link.RequiresExternalBrowser).Returns(true);
+        var card = Render(Connection());
+        Assert.Contains("open Group Split in your browser", card.Markup);
+        Assert.DoesNotContain("Link a bank", card.Markup);
+        Assert.Empty(card.FindAll("button"));
+    }
+
+    [Fact]
     public async Task A_healthy_connection_says_when_it_was_last_checked_and_offers_a_sync()
     {
         var popovers = Render<MudPopoverProvider>();

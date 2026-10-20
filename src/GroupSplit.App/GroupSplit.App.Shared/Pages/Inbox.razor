@@ -15,6 +15,7 @@
 @inject ISnackbar Snackbar
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
+@inject IBankLinkLauncher BankLink
 @implements IDisposable
 
 @*
@@ -95,9 +96,16 @@
         <div class="gs-card gs-empty" style="padding: 48px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
             <h3>No bank linked yet</h3>
-            <span>Link a bank and your transactions will start arriving here.</span>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                       Href="/account">Link a bank</MudButton>
+            @if (!BankLink.RequiresExternalBrowser)
+            {
+                <span>Link a bank and your transactions will start arriving here.</span>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
+                           Href="/account">Link a bank</MudButton>
+            }
+            else
+            {
+                <span>Open Group Split in your browser to link a bank.</span>
+            }
         </div>
     }
     else if (State.Rows.Count == 0)

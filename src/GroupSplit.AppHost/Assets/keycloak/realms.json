@@ -96,6 +96,37 @@
   },
   "clients": [
     {
+      "clientId": "mobile",
+      "name": "Android Application",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["groupsplit://auth/callback"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "groupsplit://auth/callback",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "true"
+      },
+      "protocolMappers": [{
+        "name": "audience-mapper",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "consentRequired": false,
+        "config": {
+          "included.client.audience": "api",
+          "access.token.claim": "true",
+          "id.token.claim": "false"
+        }
+      }]
+    },
+    {
       "clientId": "api",
       "name": "API Service",
       "description": "Resource server. Only ever validates bearer tokens, so every login flow is disabled.",
