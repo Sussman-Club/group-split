@@ -7,22 +7,11 @@ using System.Text.Json.Serialization;
 
 namespace GroupSplit.App.Services;
 
-public interface INativeBrowser
-{
-    Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct);
-}
-
-public interface INativeTokenStore
-{
-    Task<string?> ReadAsync();
-    Task WriteAsync(string value);
-    void Clear();
-}
-
 /// <summary>One serialized token session shared by every API handler in the app.</summary>
-public sealed class NativeSession(NativeOptions options, HttpClient http, INativeBrowser browser,
-    INativeTokenStore store)
+public sealed class NativeSession(NativeOptions options, IHttpClientFactory clients, INativeBrowser browser,
+    INativeTokenStore store) : IDisposable
 {
+    public const string IdentityClientName = "NativeIdentity";
     private readonly SemaphoreSlim gate = new(1, 1);
     private Tokens? tokens;
     private bool loaded;
@@ -76,10 +65,12 @@ public sealed class NativeSession(NativeOptions options, HttpClient http, INativ
             if (tokens.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(60)) return tokens.AccessToken;
             if (string.IsNullOrWhiteSpace(tokens.RefreshToken)) { Clear(); return null; }
 
-            using var response = await http.PostAsync(options.Endpoint("token"), new FormUrlEncodedContent(new Dictionary<string, string>
+            using var http = clients.CreateClient(IdentityClientName);
+            using var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["client_id"] = NativeOptions.ClientId, ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.RefreshToken
-            }), ct);
+            });
+            using var response = await http.PostAsync(options.Endpoint("token"), content, ct);
             if (response.StatusCode == HttpStatusCode.BadRequest)
             {
                 var error = await response.Content.ReadFromJsonAsync(NativeJsonContext.Default.OAuthError, ct);
@@ -145,7 +136,9 @@ public sealed class NativeSession(NativeOptions options, HttpClient http, INativ
     private async Task<Tokens> ExchangeAsync(Dictionary<string, string> fields, CancellationToken ct)
     {
         fields["client_id"] = NativeOptions.ClientId;
-        using var response = await http.PostAsync(options.Endpoint("token"), new FormUrlEncodedContent(fields), ct);
+        using var http = clients.CreateClient(IdentityClientName);
+        using var content = new FormUrlEncodedContent(fields);
+        using var response = await http.PostAsync(options.Endpoint("token"), content, ct);
         response.EnsureSuccessStatusCode();
         return await ReadTokensAsync(response, ct);
     }
@@ -164,6 +157,8 @@ public sealed class NativeSession(NativeOptions options, HttpClient http, INativ
     private static Uri Query(Uri endpoint, Dictionary<string, string> fields) => new(endpoint + "?" +
         string.Join("&", fields.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value))));
 
+    public void Dispose() => gate.Dispose();
+
     public sealed record Tokens(string AccessToken, string? RefreshToken, string? IdToken, DateTimeOffset ExpiresAt);
     internal sealed record TokenResponse(
         [property: JsonPropertyName("access_token")] string AccessToken,
@@ -173,8 +168,3 @@ public sealed class NativeSession(NativeOptions options, HttpClient http, INativ
         [property: JsonPropertyName("token_type")] string TokenType);
     internal sealed record OAuthError([property: JsonPropertyName("error")] string Error);
 }
-
-[JsonSerializable(typeof(NativeSession.Tokens))]
-[JsonSerializable(typeof(NativeSession.TokenResponse))]
-[JsonSerializable(typeof(NativeSession.OAuthError))]
-internal partial class NativeJsonContext : JsonSerializerContext;

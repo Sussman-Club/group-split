@@ -21,7 +21,8 @@ public sealed class NativeSessionTest
         var store = new Store();
         var browser = new Browser();
         var transport = new Transport();
-        var session = new NativeSession(Options, new HttpClient(transport), browser, store);
+        var clients = new ClientFactory(transport);
+        var session = new NativeSession(Options, clients, browser, store);
         await session.LoginAsync(true);
         var query = Fields(browser.Url!.Query.TrimStart('?'));
         var body = Fields(Assert.Single(transport.Bodies));
@@ -41,13 +42,14 @@ public sealed class NativeSessionTest
         await session.LoginAsync(false);
         Assert.Null(store.Value);
         Assert.Equal("access", await session.AccessTokenAsync());
+        Assert.Equal(2, clients.Created);
     }
 
     [Fact]
     public async Task Mismatched_state_never_exchanges_the_code()
     {
         var transport = new Transport();
-        var session = new NativeSession(Options, new HttpClient(transport), new Browser { WrongState = true }, new Store());
+        var session = new NativeSession(Options, new ClientFactory(transport), new Browser { WrongState = true }, new Store());
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.LoginAsync(true));
         Assert.Empty(transport.Bodies);
     }
@@ -57,7 +59,7 @@ public sealed class NativeSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport();
-        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(transport), new Browser(), store);
         var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => session.AccessTokenAsync()));
         Assert.All(results, token => Assert.Equal("access", token));
         var fields = Fields(Assert.Single(transport.Bodies));
@@ -71,7 +73,7 @@ public sealed class NativeSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport { Status = HttpStatusCode.BadRequest, Body = "{\"error\":\"invalid_grant\"}" };
-        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(transport), new Browser(), store);
         Assert.Null(await session.AccessTokenAsync());
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync());
@@ -85,7 +87,7 @@ public sealed class NativeSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport { Status = status, Body = "{\"error\":\"temporarily_unavailable\"}" };
-        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(transport), new Browser(), store);
         await Assert.ThrowsAsync<HttpRequestException>(() => session.AccessTokenAsync());
         Assert.NotNull(store.Value);
         transport.Status = HttpStatusCode.OK;
@@ -98,7 +100,7 @@ public sealed class NativeSessionTest
     {
         var store = new Store { Value = JsonSerializer.Serialize(new NativeSession.Tokens("saved", "refresh", "id", DateTimeOffset.UtcNow.AddHours(1))) };
         var browser = new Browser();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), browser, store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), browser, store);
         Assert.Equal("saved", await session.AccessTokenAsync());
         Assert.Null(browser.Url);
     }
@@ -107,7 +109,7 @@ public sealed class NativeSessionTest
     public async Task Logout_clears_locally_even_if_the_browser_is_cancelled()
     {
         var store = ExpiredStore();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser { Cancel = true }, store);
         await Assert.ThrowsAsync<OperationCanceledException>(() => session.LogoutAsync());
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync());
@@ -118,7 +120,7 @@ public sealed class NativeSessionTest
     {
         var store = ExpiredStore();
         var browser = new Browser();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), browser, store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), browser, store);
         await session.LogoutAsync(deleted: true);
         Assert.Null(browser.Url);
         Assert.Null(store.Value);
@@ -128,7 +130,7 @@ public sealed class NativeSessionTest
     public async Task Bearer_handler_attaches_token_and_clears_session_on_401_without_replaying_a_write()
     {
         var store = ExpiredStore();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), store);
         var transport = new Transport { Status = HttpStatusCode.Unauthorized };
         using var http = new HttpClient(new AuthDelegatingHandler(session) { InnerHandler = transport });
         using var response = await http.PostAsync("https://api.example/expenses", new StringContent("expense"));
@@ -156,7 +158,7 @@ public sealed class NativeSessionTest
     public async Task A_delayed_401_does_not_clear_a_newer_session()
     {
         var store = ExpiredStore();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), store);
         Assert.Equal("access", await session.AccessTokenAsync(TestContext.Current.CancellationToken));
         await session.InvalidateAsync("expired", TestContext.Current.CancellationToken);
         Assert.NotNull(store.Value);
@@ -167,7 +169,7 @@ public sealed class NativeSessionTest
     public async Task Corrupt_saved_credentials_do_not_prevent_local_sign_out()
     {
         var store = new Store { Value = "corrupt" };
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), store);
         await session.LogoutAsync(ct: TestContext.Current.CancellationToken);
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync(TestContext.Current.CancellationToken));
@@ -181,7 +183,7 @@ public sealed class NativeSessionTest
         using var context = new Bunit.BunitContext();
         var navigation = context.Services.GetRequiredService<NavigationManager>();
         var user = new Mock<IUserLogin>();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), new Store());
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), new Store());
         var auth = new AuthService(session, user.Object, navigation, Mock.Of<ISnackbar>());
         await auth.Login(destination, ct: TestContext.Current.CancellationToken);
         user.Verify(value => value.RefreshLoginAsync(), Times.Once);
@@ -195,7 +197,7 @@ public sealed class NativeSessionTest
         var navigation = context.Services.GetRequiredService<NavigationManager>();
         var user = new Mock<IUserLogin>();
         var store = ExpiredStore();
-        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser { Cancel = true }, store);
         var auth = new AuthService(session, user.Object, navigation, Mock.Of<ISnackbar>());
         await auth.Logout(TestContext.Current.CancellationToken);
         Assert.Null(store.Value);
@@ -206,6 +208,17 @@ public sealed class NativeSessionTest
     private static Store ExpiredStore() => new() { Value = JsonSerializer.Serialize(new NativeSession.Tokens("expired", "old-refresh", "id", DateTimeOffset.UtcNow.AddMinutes(-1))) };
     private static Dictionary<string, string> Fields(string value) => value.Split('&').Select(pair => pair.Split('=', 2))
         .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => Uri.UnescapeDataString(pair[1].Replace('+', ' ')));
+
+    private sealed class ClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public int Created { get; private set; }
+        public HttpClient CreateClient(string name)
+        {
+            Assert.Equal(NativeSession.IdentityClientName, name);
+            Created++;
+            return new HttpClient(handler, disposeHandler: false);
+        }
+    }
 
     private sealed class Store : INativeTokenStore
     {

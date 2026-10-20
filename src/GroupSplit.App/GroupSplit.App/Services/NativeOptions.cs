@@ -1,9 +1,20 @@
+using System.Reflection;
+
 namespace GroupSplit.App.Services;
 
 public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
 {
     public const string ClientId = "native";
     public static readonly Uri Callback = new("groupsplit://auth/callback");
+
+    public static NativeOptions FromAssembly(Assembly assembly, bool development)
+    {
+        var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToArray();
+        return Create(
+            metadata.FirstOrDefault(item => item.Key == "NativeApiUrl")?.Value ?? "",
+            metadata.FirstOrDefault(item => item.Key == "NativeAuthority")?.Value ?? "",
+            development);
+    }
 
     public static NativeOptions Create(string api, string authority, bool development)
     {
