@@ -35,7 +35,7 @@ public class LinkedBanksCardTest : ComponentTest
     }
 
     [Fact]
-    public void Mobile_does_not_offer_the_embedded_bank_link_flow()
+    public void Native_does_not_offer_the_embedded_bank_link_flow()
     {
         _link.SetupGet(link => link.RequiresExternalBrowser).Returns(true);
         var card = Render(Connection());

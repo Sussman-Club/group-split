@@ -10,9 +10,9 @@ namespace GroupSplit.Seeder.Test.Realm;
 public sealed class RealmDefinitionTests
 {
     [Fact]
-    public void Mobile_requires_PKCE_and_only_redirects_to_the_registered_app()
+    public void Native_requires_PKCE_and_only_redirects_to_the_registered_app()
     {
-        var client = KeycloakRealmDefinition.Client(KeycloakRealmDefinition.Load(), "mobile")!;
+        var client = KeycloakRealmDefinition.Client(KeycloakRealmDefinition.Load(), "native")!;
         Assert.True(client["publicClient"]!.GetValue<bool>());
         Assert.True(client["standardFlowEnabled"]!.GetValue<bool>());
         foreach (var flow in new[] { "implicitFlowEnabled", "directAccessGrantsEnabled", "serviceAccountsEnabled" })
@@ -23,7 +23,7 @@ public sealed class RealmDefinitionTests
         Assert.Equal("true", client["attributes"]!["use.refresh.tokens"]!.GetValue<string>());
         Assert.Equal("api", KeycloakRealmDefinition.ProtocolMapper(client, "audience-mapper")!
             ["config"]!["included.client.audience"]!.GetValue<string>());
-        var managed = Assert.Single(KeycloakRealmDefinition.ManagedClients, item => item.ClientId == "mobile");
+        var managed = Assert.Single(KeycloakRealmDefinition.ManagedClients, item => item.ClientId == "native");
         Assert.True(managed.CreateWhenMissing);
         Assert.Contains("pkce.code.challenge.method", managed.Attributes);
         Assert.Contains("redirectUris", managed.Properties);

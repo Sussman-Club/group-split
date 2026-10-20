@@ -7,12 +7,12 @@ using System.Text.Json.Serialization;
 
 namespace GroupSplit.App.Services;
 
-public interface IMobileBrowser
+public interface INativeBrowser
 {
     Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct);
 }
 
-public interface IMobileTokenStore
+public interface INativeTokenStore
 {
     Task<string?> ReadAsync();
     Task WriteAsync(string value);
@@ -20,8 +20,8 @@ public interface IMobileTokenStore
 }
 
 /// <summary>One serialized token session shared by every API handler in the app.</summary>
-public sealed class MobileSession(MobileOptions options, HttpClient http, IMobileBrowser browser,
-    IMobileTokenStore store)
+public sealed class NativeSession(NativeOptions options, HttpClient http, INativeBrowser browser,
+    INativeTokenStore store)
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private Tokens? tokens;
@@ -38,11 +38,11 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
             var challenge = Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
             var url = Query(options.Endpoint("auth"), new()
             {
-                ["client_id"] = MobileOptions.ClientId, ["redirect_uri"] = MobileOptions.Callback.AbsoluteUri,
+                ["client_id"] = NativeOptions.ClientId, ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
                 ["response_type"] = "code", ["scope"] = "openid profile email",
                 ["code_challenge_method"] = "S256", ["code_challenge"] = challenge, ["state"] = state
             });
-            var result = await browser.AuthenticateAsync(url, MobileOptions.Callback, ct);
+            var result = await browser.AuthenticateAsync(url, NativeOptions.Callback, ct);
             if (!result.TryGetValue("state", out var returnedState) || returnedState != state
                 || result.ContainsKey("error") || !result.TryGetValue("code", out var code)
                 || string.IsNullOrWhiteSpace(code))
@@ -51,7 +51,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
             var response = await ExchangeAsync(new()
             {
                 ["grant_type"] = "authorization_code", ["code"] = code,
-                ["redirect_uri"] = MobileOptions.Callback.AbsoluteUri, ["code_verifier"] = verifier
+                ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri, ["code_verifier"] = verifier
             }, ct);
             persistent = remember;
             await SaveAsync(response);
@@ -67,7 +67,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
             if (!loaded)
             {
                 var saved = await store.ReadAsync();
-                try { tokens = saved is null ? null : JsonSerializer.Deserialize(saved, MobileJsonContext.Default.Tokens); }
+                try { tokens = saved is null ? null : JsonSerializer.Deserialize(saved, NativeJsonContext.Default.Tokens); }
                 catch (JsonException) { store.Clear(); }
                 persistent = tokens is not null;
                 loaded = true;
@@ -78,11 +78,11 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
 
             using var response = await http.PostAsync(options.Endpoint("token"), new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["client_id"] = MobileOptions.ClientId, ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.RefreshToken
+                ["client_id"] = NativeOptions.ClientId, ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.RefreshToken
             }), ct);
             if (response.StatusCode == HttpStatusCode.BadRequest)
             {
-                var error = await response.Content.ReadFromJsonAsync(MobileJsonContext.Default.OAuthError, ct);
+                var error = await response.Content.ReadFromJsonAsync(NativeJsonContext.Default.OAuthError, ct);
                 if (error?.Error == "invalid_grant") { Clear(); return null; }
             }
             response.EnsureSuccessStatusCode();
@@ -103,7 +103,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
             Tokens? saved = tokens;
             if (!loaded)
             {
-                try { saved = JsonSerializer.Deserialize(await store.ReadAsync() ?? "null", MobileJsonContext.Default.Tokens); }
+                try { saved = JsonSerializer.Deserialize(await store.ReadAsync() ?? "null", NativeJsonContext.Default.Tokens); }
                 catch (JsonException) { /* A corrupt saved session must not prevent local sign-out. */ }
             }
             Clear(); // Local sign-out succeeds even when the authority cannot be reached.
@@ -111,9 +111,9 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
             var state = RandomValue();
             var result = await browser.AuthenticateAsync(Query(options.Endpoint("logout"), new()
             {
-                ["client_id"] = MobileOptions.ClientId, ["id_token_hint"] = saved.IdToken,
-                ["post_logout_redirect_uri"] = MobileOptions.Callback.AbsoluteUri, ["state"] = state
-            }), MobileOptions.Callback, ct);
+                ["client_id"] = NativeOptions.ClientId, ["id_token_hint"] = saved.IdToken,
+                ["post_logout_redirect_uri"] = NativeOptions.Callback.AbsoluteUri, ["state"] = state
+            }), NativeOptions.Callback, ct);
             if (!result.TryGetValue("state", out var returned) || returned != state)
                 throw new InvalidOperationException("The app signed out, but authority sign-out could not be verified.");
         }
@@ -136,7 +136,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
     private async Task SaveAsync(Tokens value)
     {
         // Persist rotated credentials before making them available to another request.
-        if (persistent) await store.WriteAsync(JsonSerializer.Serialize(value, MobileJsonContext.Default.Tokens));
+        if (persistent) await store.WriteAsync(JsonSerializer.Serialize(value, NativeJsonContext.Default.Tokens));
         else store.Clear();
         tokens = value;
         loaded = true;
@@ -144,7 +144,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
 
     private async Task<Tokens> ExchangeAsync(Dictionary<string, string> fields, CancellationToken ct)
     {
-        fields["client_id"] = MobileOptions.ClientId;
+        fields["client_id"] = NativeOptions.ClientId;
         using var response = await http.PostAsync(options.Endpoint("token"), new FormUrlEncodedContent(fields), ct);
         response.EnsureSuccessStatusCode();
         return await ReadTokensAsync(response, ct);
@@ -152,7 +152,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
 
     private static async Task<Tokens> ReadTokensAsync(HttpResponseMessage response, CancellationToken ct)
     {
-        var value = await response.Content.ReadFromJsonAsync(MobileJsonContext.Default.TokenResponse, ct);
+        var value = await response.Content.ReadFromJsonAsync(NativeJsonContext.Default.TokenResponse, ct);
         if (value is null || string.IsNullOrWhiteSpace(value.AccessToken) || value.ExpiresIn <= 0
             || !string.Equals(value.TokenType, "Bearer", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The sign-in server returned an unusable token. Please try again.");
@@ -174,7 +174,7 @@ public sealed class MobileSession(MobileOptions options, HttpClient http, IMobil
     internal sealed record OAuthError([property: JsonPropertyName("error")] string Error);
 }
 
-[JsonSerializable(typeof(MobileSession.Tokens))]
-[JsonSerializable(typeof(MobileSession.TokenResponse))]
-[JsonSerializable(typeof(MobileSession.OAuthError))]
-internal partial class MobileJsonContext : JsonSerializerContext;
+[JsonSerializable(typeof(NativeSession.Tokens))]
+[JsonSerializable(typeof(NativeSession.TokenResponse))]
+[JsonSerializable(typeof(NativeSession.OAuthError))]
+internal partial class NativeJsonContext : JsonSerializerContext;

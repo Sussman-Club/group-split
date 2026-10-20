@@ -19,7 +19,7 @@ public class AuthHandoffTest : ComponentTest
     public AuthHandoffTest() => Services.AddSingleton(_auth.Object);
 
     [Fact]
-    public void Failed_mobile_sign_in_shows_a_retryable_message()
+    public void Failed_native_sign_in_shows_a_retryable_message()
     {
         _auth.Setup(service => service.Login(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("private server details"));

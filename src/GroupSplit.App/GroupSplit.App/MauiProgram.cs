@@ -1,4 +1,4 @@
-﻿using GroupSplit.App.Services;
+using GroupSplit.App.Services;
 using GroupSplit.App.Shared.Services;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
@@ -20,13 +20,13 @@ public static class MauiProgram
             });
 
         // Add shared services
-        builder.Services.AddScoped<GroupSplit.App.Shared.Services.Banking.IBankLinkLauncher, MobileBankLinkLauncher>();
+        builder.Services.AddScoped<GroupSplit.App.Shared.Services.Banking.IBankLinkLauncher, NativeBankLinkLauncher>();
         builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
         // Add device-specific services used by the GroupSplit.App.Shared project
         var metadata = typeof(MauiProgram).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .ToDictionary(item => item.Key, item => item.Value ?? "");
-        var options = MobileOptions.Create(metadata["MobileApiUrl"], metadata["MobileAuthority"],
+        var options = NativeOptions.Create(metadata["NativeApiUrl"], metadata["NativeAuthority"],
 #if DEBUG
             true
 #else
@@ -34,10 +34,10 @@ public static class MauiProgram
 #endif
         );
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton<IMobileBrowser, MobileBrowser>();
-        builder.Services.AddSingleton<IMobileTokenStore, MobileTokenStore>();
-        builder.Services.AddSingleton(sp => new MobileSession(options, new HttpClient(),
-            sp.GetRequiredService<IMobileBrowser>(), sp.GetRequiredService<IMobileTokenStore>()));
+        builder.Services.AddSingleton<INativeBrowser, NativeBrowser>();
+        builder.Services.AddSingleton<INativeTokenStore, NativeTokenStore>();
+        builder.Services.AddSingleton(sp => new NativeSession(options, new HttpClient(),
+            sp.GetRequiredService<INativeBrowser>(), sp.GetRequiredService<INativeTokenStore>()));
         builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
         builder.Services.AddScoped<IAuthService, AuthService>();
 

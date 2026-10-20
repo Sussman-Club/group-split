@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(MobileAndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="'$(AndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
 
     <!-- Note for MacCatalyst:
       The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -19,9 +19,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableDefaultCssItems>false</EnableDefaultCssItems>
     <Nullable>enable</Nullable>
-    <MobileCleartext>false</MobileCleartext>
-    <MobileCleartext Condition="'$(Configuration)' == 'Debug'">true</MobileCleartext>
-    <AndroidManifestPlaceholders>$(AndroidManifestPlaceholders);mobileCleartext=$(MobileCleartext)</AndroidManifestPlaceholders>
+    <AndroidCleartext>false</AndroidCleartext>
+    <AndroidCleartext Condition="'$(Configuration)' == 'Debug'">true</AndroidCleartext>
+    <AndroidManifestPlaceholders>$(AndroidManifestPlaceholders);androidCleartext=$(AndroidCleartext)</AndroidManifestPlaceholders>
 
     <!-- Display name -->
     <ApplicationTitle>GroupSplit.App</ApplicationTitle>
@@ -44,13 +44,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AssemblyMetadata Include="MobileApiUrl" Value="$(MobileApiUrl)" />
-    <AssemblyMetadata Include="MobileAuthority" Value="$(MobileAuthority)" />
+    <AssemblyMetadata Include="NativeApiUrl" Value="$(NativeApiUrl)" />
+    <AssemblyMetadata Include="NativeAuthority" Value="$(NativeAuthority)" />
   </ItemGroup>
 
-  <Target Name="ValidateMobileConfiguration" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(MobileApiUrl)' == '' Or '$(MobileAuthority)' == ''"
-           Text="Set MobileApiUrl and MobileAuthority (the full Keycloak realm URL) for this mobile build." />
+  <Target Name="ValidateNativeConfiguration" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(NativeApiUrl)' == '' Or '$(NativeAuthority)' == ''"
+           Text="Set NativeApiUrl and NativeAuthority (the full Keycloak realm URL) for this native build." />
   </Target>
 
   <ItemGroup>

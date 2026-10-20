@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 
 namespace GroupSplit.App.Services;
 
-internal sealed class AuthDelegatingHandler(MobileSession session) : DelegatingHandler
+internal sealed class AuthDelegatingHandler(NativeSession session) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {

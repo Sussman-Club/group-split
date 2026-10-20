@@ -1,7 +1,7 @@
-# Android mobile foundation
+# Native app foundation and Android setup
 
 Issue [#170](https://github.com/Sussman-Club/group-split/issues/170) is the tracker for
-three ordered phases: a usable mobile app, signed installation packages, then push
+three ordered phases: a usable native app, signed installation packages, then push
 notifications. The authentication and API foundation is implemented here; device
 acceptance, invitation app links, release packaging and notifications remain open.
 
@@ -13,24 +13,24 @@ JDK required by that workload. Build only the Android target on Windows or Linux
 ```powershell
 dotnet workload install maui-android
 dotnet build src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj `
-  -p:MobileAndroidOnly=true -f net10.0-android -c Debug `
-  -p:MobileApiUrl=https://api.example.com/ `
-  -p:MobileAuthority=https://identity.example.com/realms/group-split
+  -p:AndroidOnly=true -f net10.0-android -c Debug `
+  -p:NativeApiUrl=https://api.example.com/ `
+  -p:NativeAuthority=https://identity.example.com/realms/group-split
 ```
 
-Replace both example addresses. `MobileAuthority` is the full realm URL, not the
+Replace both example addresses. `NativeAuthority` is the full realm URL, not the
 Keycloak server root. Both values are required build properties, so each build
 configuration must supply them. They are public addresses embedded in assembly metadata;
 never put credentials in them. Release accepts HTTPS only. Debug also accepts HTTP
 and permits Android cleartext traffic. Certificate validation is never bypassed.
 
-The mobile API URL must be reachable from the device and accept bearer tokens directly;
-the web BFF's cookie endpoints are not a mobile API. Exposing the production API for
-mobile access must be verified before release.
+The native API URL must be reachable from the device and accept bearer tokens directly;
+the web BFF's cookie endpoints are not a native API. Exposing the production API for
+native access must be verified before release.
 
 For an Android emulator, `localhost` is the emulator itself. Use `10.0.2.2` plus the
 host's published API/Keycloak port for local development. Set both addresses explicitly;
-there is no mobile Aspire service discovery. The system browser and the app must reach
+there is no native Aspire service discovery. The system browser and the app must reach
 the same Keycloak authority. Keycloak's configured frontend hostname, browser redirects,
 and API issuer validation must agree with that address. Physical devices need reachable
 LAN or deployed HTTPS addresses; `10.0.2.2` is emulator-only. A host's trusted development
@@ -38,9 +38,9 @@ certificate is not automatically trusted on a device.
 
 ## Sign-in and persistence
 
-The realm worker creates the `mobile` public client on existing realms and reconciles
+The realm worker creates the `native` public client on existing realms and reconciles
 its exact callback, S256 PKCE, allowed grants, refresh tokens and API audience. Deploy/run
-the realm worker before testing sign-in. No mobile client secret is required.
+the realm worker before testing sign-in. No native client secret is required.
 
 The app opens the system browser and handles `groupsplit://auth/callback` with an Android
 callback activity. It verifies the random state and exchanges the authorization code
@@ -59,7 +59,7 @@ Sign-out clears local credentials before asking the authority to end its browser
 If the browser is cancelled or unavailable, local sign-out still completes; authority
 sign-out may need to be retried in the browser. Account deletion only clears local state.
 
-Bank linking and reconnection are unavailable in the embedded mobile WebView until
+Bank linking and reconnection are unavailable in the embedded native WebView until
 Hosted Link is implemented. The account and empty inbox direct people to the web app.
 
 ## Validation and outstanding acceptance
@@ -67,7 +67,7 @@ Hosted Link is implemented. The account and empty inbox direct people to the web
 Platform-independent session and bearer-handler tests run with the existing web suite:
 
 ```powershell
-dotnet test --project tests/GroupSplit.App.Web.Test -c Release -- --filter-namespace GroupSplit.App.Web.Test.Mobile
+dotnet test --project tests/GroupSplit.App.Web.Test -c Release -- --filter-namespace GroupSplit.App.Web.Test.Native
 dotnet test --project tests/GroupSplit.Seeder.Test -c Release
 ```
 

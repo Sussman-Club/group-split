@@ -20,12 +20,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <!-- Exercise the platform-independent mobile session without an Android runtime. -->
-    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/MobileSession.cs" Link="Mobile/MobileSession.cs" />
-    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/MobileOptions.cs" Link="Mobile/MobileOptions.cs" />
-    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthDelegatingHandler.cs" Link="Mobile/AuthDelegatingHandler.cs" />
-    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthService.cs" Link="Mobile/AuthService.cs" />
-    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/MobileBankLinkLauncher.cs" Link="Mobile/MobileBankLinkLauncher.cs" />
+    <!-- Exercise the platform-independent native session without an Android runtime. -->
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeSession.cs" Link="Native/NativeSession.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeOptions.cs" Link="Native/NativeOptions.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthDelegatingHandler.cs" Link="Native/AuthDelegatingHandler.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthService.cs" Link="Native/AuthService.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeBankLinkLauncher.cs" Link="Native/NativeBankLinkLauncher.cs" />
   </ItemGroup>
 
   <ItemGroup>

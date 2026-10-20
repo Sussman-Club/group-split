@@ -38,6 +38,6 @@ jobs:
       - name: Build Android
         run: >-
           dotnet build src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj
-          -c Debug -f net10.0-android -p:MobileAndroidOnly=true
-          -p:MobileApiUrl=https://api.example.com/
-          -p:MobileAuthority=https://identity.example.com/realms/group-split
+          -c Debug -f net10.0-android -p:AndroidOnly=true
+          -p:NativeApiUrl=https://api.example.com/
+          -p:NativeAuthority=https://identity.example.com/realms/group-split

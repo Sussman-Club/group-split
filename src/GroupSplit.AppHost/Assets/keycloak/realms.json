@@ -96,8 +96,8 @@
   },
   "clients": [
     {
-      "clientId": "mobile",
-      "name": "Android Application",
+      "clientId": "native",
+      "name": "Native Application",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",

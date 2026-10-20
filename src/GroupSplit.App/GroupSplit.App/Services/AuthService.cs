@@ -5,7 +5,7 @@ using MudBlazor;
 
 namespace GroupSplit.App.Services;
 
-public sealed class AuthService(MobileSession session, IUserLogin user, NavigationManager navigation,
+public sealed class AuthService(NativeSession session, IUserLogin user, NavigationManager navigation,
     ISnackbar snackbar) : IAuthService
 {
     public async Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default)

@@ -43,7 +43,7 @@ public static class KeycloakRealmDefinition
     /// </remarks>
     public static readonly ManagedClient[] ManagedClients =
     [
-        new("mobile",
+        new("native",
             Properties: ["enabled", "publicClient", "standardFlowEnabled", "implicitFlowEnabled",
                 "directAccessGrantsEnabled", "serviceAccountsEnabled", "redirectUris", "webOrigins"],
             Attributes: ["pkce.code.challenge.method", "post.logout.redirect.uris",

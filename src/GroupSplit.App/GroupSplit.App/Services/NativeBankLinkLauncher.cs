@@ -2,7 +2,7 @@ using GroupSplit.App.Shared.Services.Banking;
 
 namespace GroupSplit.App.Services;
 
-internal sealed class MobileBankLinkLauncher : IBankLinkLauncher
+internal sealed class NativeBankLinkLauncher : IBankLinkLauncher
 {
     public bool RequiresExternalBrowser => true;
     public Task<string?> OpenAsync(string linkToken, Guid? connectionId = null) => Task.FromResult<string?>(null);

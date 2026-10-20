@@ -9,11 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
 
-namespace GroupSplit.App.Web.Test.Mobile;
+namespace GroupSplit.App.Web.Test.Native;
 
-public sealed class MobileSessionTest
+public sealed class NativeSessionTest
 {
-    private static readonly MobileOptions Options = MobileOptions.Create("https://api.example/", "https://auth.example/realms/group-split", false);
+    private static readonly NativeOptions Options = NativeOptions.Create("https://api.example/", "https://auth.example/realms/group-split", false);
 
     [Fact]
     public async Task Login_uses_PKCE_and_persists_only_when_remembered()
@@ -21,12 +21,12 @@ public sealed class MobileSessionTest
         var store = new Store();
         var browser = new Browser();
         var transport = new Transport();
-        var session = new MobileSession(Options, new HttpClient(transport), browser, store);
+        var session = new NativeSession(Options, new HttpClient(transport), browser, store);
         await session.LoginAsync(true);
         var query = Fields(browser.Url!.Query.TrimStart('?'));
         var body = Fields(Assert.Single(transport.Bodies));
         Assert.Equal("S256", query["code_challenge_method"]);
-        Assert.Equal("mobile", query["client_id"]);
+        Assert.Equal("native", query["client_id"]);
         Assert.Equal("groupsplit://auth/callback", query["redirect_uri"]);
         Assert.Equal("code", query["response_type"]);
         Assert.Equal("authorization_code", body["grant_type"]);
@@ -47,7 +47,7 @@ public sealed class MobileSessionTest
     public async Task Mismatched_state_never_exchanges_the_code()
     {
         var transport = new Transport();
-        var session = new MobileSession(Options, new HttpClient(transport), new Browser { WrongState = true }, new Store());
+        var session = new NativeSession(Options, new HttpClient(transport), new Browser { WrongState = true }, new Store());
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.LoginAsync(true));
         Assert.Empty(transport.Bodies);
     }
@@ -57,13 +57,13 @@ public sealed class MobileSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport();
-        var session = new MobileSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
         var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => session.AccessTokenAsync()));
         Assert.All(results, token => Assert.Equal("access", token));
         var fields = Fields(Assert.Single(transport.Bodies));
         Assert.Equal("refresh_token", fields["grant_type"]);
         Assert.Equal("old-refresh", fields["refresh_token"]);
-        Assert.Equal("refresh", JsonSerializer.Deserialize<MobileSession.Tokens>(store.Value!)!.RefreshToken);
+        Assert.Equal("refresh", JsonSerializer.Deserialize<NativeSession.Tokens>(store.Value!)!.RefreshToken);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public sealed class MobileSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport { Status = HttpStatusCode.BadRequest, Body = "{\"error\":\"invalid_grant\"}" };
-        var session = new MobileSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
         Assert.Null(await session.AccessTokenAsync());
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync());
@@ -85,7 +85,7 @@ public sealed class MobileSessionTest
     {
         var store = ExpiredStore();
         var transport = new Transport { Status = status, Body = "{\"error\":\"temporarily_unavailable\"}" };
-        var session = new MobileSession(Options, new HttpClient(transport), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(transport), new Browser(), store);
         await Assert.ThrowsAsync<HttpRequestException>(() => session.AccessTokenAsync());
         Assert.NotNull(store.Value);
         transport.Status = HttpStatusCode.OK;
@@ -96,9 +96,9 @@ public sealed class MobileSessionTest
     [Fact]
     public async Task Restart_loads_the_secure_session_without_opening_a_browser()
     {
-        var store = new Store { Value = JsonSerializer.Serialize(new MobileSession.Tokens("saved", "refresh", "id", DateTimeOffset.UtcNow.AddHours(1))) };
+        var store = new Store { Value = JsonSerializer.Serialize(new NativeSession.Tokens("saved", "refresh", "id", DateTimeOffset.UtcNow.AddHours(1))) };
         var browser = new Browser();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), browser, store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), browser, store);
         Assert.Equal("saved", await session.AccessTokenAsync());
         Assert.Null(browser.Url);
     }
@@ -107,7 +107,7 @@ public sealed class MobileSessionTest
     public async Task Logout_clears_locally_even_if_the_browser_is_cancelled()
     {
         var store = ExpiredStore();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
         await Assert.ThrowsAsync<OperationCanceledException>(() => session.LogoutAsync());
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync());
@@ -118,7 +118,7 @@ public sealed class MobileSessionTest
     {
         var store = ExpiredStore();
         var browser = new Browser();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), browser, store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), browser, store);
         await session.LogoutAsync(deleted: true);
         Assert.Null(browser.Url);
         Assert.Null(store.Value);
@@ -128,7 +128,7 @@ public sealed class MobileSessionTest
     public async Task Bearer_handler_attaches_token_and_clears_session_on_401_without_replaying_a_write()
     {
         var store = ExpiredStore();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
         var transport = new Transport { Status = HttpStatusCode.Unauthorized };
         using var http = new HttpClient(new AuthDelegatingHandler(session) { InnerHandler = transport });
         using var response = await http.PostAsync("https://api.example/expenses", new StringContent("expense"));
@@ -143,12 +143,12 @@ public sealed class MobileSessionTest
     [InlineData("https://user:password@api.example", true)]
     [InlineData("https://api.example?key=value", true)]
     public void Invalid_build_configuration_is_rejected(string url, bool debug) =>
-        Assert.Throws<InvalidOperationException>(() => MobileOptions.Create(url, "https://auth.example/realms/group-split", debug));
+        Assert.Throws<InvalidOperationException>(() => NativeOptions.Create(url, "https://auth.example/realms/group-split", debug));
 
     [Fact]
     public void Emulator_HTTP_is_allowed_only_for_development()
     {
-        var options = MobileOptions.Create("http://10.0.2.2:5000", "http://10.0.2.2:8080/realms/group-split", true);
+        var options = NativeOptions.Create("http://10.0.2.2:5000", "http://10.0.2.2:8080/realms/group-split", true);
         Assert.Equal("http://10.0.2.2:8080/realms/group-split/protocol/openid-connect/token", options.Endpoint("token").AbsoluteUri);
     }
 
@@ -156,7 +156,7 @@ public sealed class MobileSessionTest
     public async Task A_delayed_401_does_not_clear_a_newer_session()
     {
         var store = ExpiredStore();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
         Assert.Equal("access", await session.AccessTokenAsync(TestContext.Current.CancellationToken));
         await session.InvalidateAsync("expired", TestContext.Current.CancellationToken);
         Assert.NotNull(store.Value);
@@ -167,7 +167,7 @@ public sealed class MobileSessionTest
     public async Task Corrupt_saved_credentials_do_not_prevent_local_sign_out()
     {
         var store = new Store { Value = "corrupt" };
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser(), store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), store);
         await session.LogoutAsync(ct: TestContext.Current.CancellationToken);
         Assert.Null(store.Value);
         Assert.Null(await session.AccessTokenAsync(TestContext.Current.CancellationToken));
@@ -181,7 +181,7 @@ public sealed class MobileSessionTest
         using var context = new Bunit.BunitContext();
         var navigation = context.Services.GetRequiredService<NavigationManager>();
         var user = new Mock<IUserLogin>();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser(), new Store());
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser(), new Store());
         var auth = new AuthService(session, user.Object, navigation, Mock.Of<ISnackbar>());
         await auth.Login(destination, ct: TestContext.Current.CancellationToken);
         user.Verify(value => value.RefreshLoginAsync(), Times.Once);
@@ -195,7 +195,7 @@ public sealed class MobileSessionTest
         var navigation = context.Services.GetRequiredService<NavigationManager>();
         var user = new Mock<IUserLogin>();
         var store = ExpiredStore();
-        var session = new MobileSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
+        var session = new NativeSession(Options, new HttpClient(new Transport()), new Browser { Cancel = true }, store);
         var auth = new AuthService(session, user.Object, navigation, Mock.Of<ISnackbar>());
         await auth.Logout(TestContext.Current.CancellationToken);
         Assert.Null(store.Value);
@@ -203,18 +203,18 @@ public sealed class MobileSessionTest
         Assert.Equal("/login", new Uri(navigation.Uri).AbsolutePath);
     }
 
-    private static Store ExpiredStore() => new() { Value = JsonSerializer.Serialize(new MobileSession.Tokens("expired", "old-refresh", "id", DateTimeOffset.UtcNow.AddMinutes(-1))) };
+    private static Store ExpiredStore() => new() { Value = JsonSerializer.Serialize(new NativeSession.Tokens("expired", "old-refresh", "id", DateTimeOffset.UtcNow.AddMinutes(-1))) };
     private static Dictionary<string, string> Fields(string value) => value.Split('&').Select(pair => pair.Split('=', 2))
         .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => Uri.UnescapeDataString(pair[1].Replace('+', ' ')));
 
-    private sealed class Store : IMobileTokenStore
+    private sealed class Store : INativeTokenStore
     {
         public string? Value { get; set; }
         public Task<string?> ReadAsync() => Task.FromResult(Value);
         public Task WriteAsync(string value) { Value = value; return Task.CompletedTask; }
         public void Clear() => Value = null;
     }
-    private sealed class Browser : IMobileBrowser
+    private sealed class Browser : INativeBrowser
     {
         public Uri? Url { get; private set; }
         public bool WrongState { get; init; }

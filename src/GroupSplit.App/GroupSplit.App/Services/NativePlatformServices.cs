@@ -6,7 +6,7 @@ using Microsoft.Maui.Storage;
 
 namespace GroupSplit.App.Services;
 
-internal sealed class MobileBrowser : IMobileBrowser
+internal sealed class NativeBrowser : INativeBrowser
 {
     public async Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct)
     {
@@ -16,15 +16,15 @@ internal sealed class MobileBrowser : IMobileBrowser
     }
 }
 
-internal sealed class MobileTokenStore : IMobileTokenStore
+internal sealed class NativeTokenStore : INativeTokenStore
 {
-    private const string Key = "groupsplit.mobile.tokens";
+    private const string Key = "groupsplit.native.tokens";
     public Task<string?> ReadAsync() => SecureStorage.Default.GetAsync(Key);
     public Task WriteAsync(string value) => SecureStorage.Default.SetAsync(Key, value);
     public void Clear() => SecureStorage.Default.Remove(Key);
 }
 
-internal sealed class ClientOptionsSetter(MobileOptions options) : IClientOptionsSetter
+internal sealed class ClientOptionsSetter(NativeOptions options) : IClientOptionsSetter
 {
     public void ConfigureClient(HttpClientFactoryOptions factory)
     {
