@@ -153,6 +153,30 @@ implementation and validation.
 
 ## Validation and outstanding acceptance
 
+For Android tests against local services, start the AppHost's HTTP profile with
+`NativeDeviceTesting=true` and `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` in its environment.
+This run-mode-only opt-in serves Keycloak over HTTP on loopback port 8180; normal runs
+retain Aspire's development TLS certificate and publishing is unaffected.
+Build the Debug app with `NativeApiUrl=http://localhost:5144/` and
+`NativeAuthority=http://localhost:8180/realms/group-split`. For each Android device,
+use `adb -s <serial> reverse tcp:5144 tcp:5144` and
+`adb -s <serial> reverse tcp:8180 tcp:8180` before launching it. Keep this configuration
+for local Debug tests only. Do not disable certificate validation in the app.
+
+Local checks on 19 October 2026 used an Android 36 emulator and a physical Pixel 8a.
+Both installed, launched, signed in through the system browser and loaded authenticated
+groups. The emulator created a dedicated group, saved expenses, split $20 with a guest,
+showed the expected $10 balance and recorded a settlement back to zero. Keycloak logs
+confirmed automatic refresh. Restarting the emulator app discarded its temporary session.
+Enabling "Keep me signed in" restored the session after a process restart. Sign-out
+exposed an account-menu render race; its deferred content now captures the signed-in
+user, and a regression test covers rendering that content after the session is cleared.
+These checks found a status-bar overlap: `MainPage.SafeAreaEdges="All"` now reserves system
+bar, cutout and keyboard space, following the [MAUI safe-area guidance](https://learn.microsoft.com/en-us/dotnet/maui/user-interface/safe-area?view=net-maui-10.0).
+The corrected header and bottom navigation were visually checked on both devices.
+Offline reads/writes, revocation, account deletion and invitation links still require
+acceptance checks; these results are not a completed release sign-off.
+
 Platform-independent session and bearer-handler tests run with the existing web suite:
 
 ```powershell
