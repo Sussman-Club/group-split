@@ -404,6 +404,16 @@ sign-in. Run `groupsplit auth logout` if a stored session still answers that way
 deletion keeps and removes, and why, is in
 [Deleting an account](keycloak.md#deleting-an-account).
 
+## Incoming bank transactions
+
+`groupsplit inbox file <row-id> --group <group-id>` can add incoming money to a shared
+group. Select its category and split as for an outgoing payment. The bank's negative
+amount is preserved as a refund: negative shares reduce net spending and adjust the
+recipient's balance. Explicit shares must have the same sign and sum to the imported
+amount. Filing keeps the source bank-row link and refuses a second filing of that row.
+Incoming rows are reviewed individually and do not receive outgoing-expense duplicate
+matches or destination suggestions.
+
 ## Amounts
 
 Every amount on the command line is written one way, on every machine: digits, a `.` for the
