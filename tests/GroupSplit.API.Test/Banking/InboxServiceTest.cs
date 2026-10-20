@@ -92,16 +92,54 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal("SQ *COFFEE 4TH ST", expense.Name);
     }
 
-    [Fact]
-    public async Task Money_coming_in_cannot_be_filed_as_an_expense()
+    [Theory]
+    [InlineData(-25.01)]
+    [InlineData(-0.01)]
+    public async Task Incoming_money_is_filed_as_a_refund_with_balanced_shares(decimal amount)
     {
-        var row = await Row(amount: -25m, merchant: "Refund");
+        var (group, category, other) = await GroupWithEvenCategory();
+        var row = await Row(amount: amount, merchant: "Refund");
 
-        var e = await Assert.ThrowsAsync<UnprocessableException>(() =>
-            Inbox.File(row.Id, new FileBankTransactionRequest(), Ct));
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest
+        {
+            GroupId = group.Id,
+            CategoryId = category
+        }, Ct);
 
-        Assert.Equal(ErrorCodes.BankTransactionIsCredit, e.Code);
-        Assert.Equal(BankTransactionStatus.New, (await Reload(row)).Status);
+        Assert.Equal(amount, expense.Amount);
+        Assert.Equal(row.Currency, expense.Currency);
+        Assert.Equal(row.Id, expense.BankTransactionId);
+        Assert.Equal(category, expense.CategoryId);
+        Assert.Equal(BankTransactionStatus.Filed, (await Reload(row)).Status);
+        Assert.Equal(amount, expense.Splits.Sum(split => split.Amount));
+        Assert.All(expense.Splits, split => Assert.True(split.Amount <= 0));
+        Assert.Contains(expense.Splits, split => split.UserId == other.Id);
+
+        var balances = await (await GetService<IGroupService>().GetGroupNetBalance(group.Id, Ct)).ToListAsync(Ct);
+        var ownShare = expense.Splits.Single(split => split.UserId == expense.UserId).Amount;
+        Assert.Equal(amount - ownShare, balances.Single(balance => balance.UserId == expense.UserId).Balance);
+        Assert.Equal(0m, balances.Sum(balance => balance.Balance));
+        Assert.Equal(amount, await DbContext.Set<Expense>().Where(e => e.GroupId == group.Id).SumAsync(e => e.Amount, Ct));
+
+        var duplicate = await Assert.ThrowsAsync<ConflictException>(() =>
+            Inbox.File(row.Id, new FileBankTransactionRequest { GroupId = group.Id }, Ct));
+        Assert.Equal(ErrorCodes.BankTransactionAlreadyFiled, duplicate.Code);
+        Assert.Equal(1, await DbContext.Set<Expense>().CountAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Incoming_money_can_use_explicit_negative_shares()
+    {
+        var (group, _, other) = await GroupWithEvenCategory();
+        var row = await Row(-25m);
+        var ownId = GetService<ICurrentUser>().User.Id;
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest
+        {
+            GroupId = group.Id,
+            Splits = [new() { UserId = ownId, Amount = -20m }, new() { UserId = other.Id, Amount = -5m }]
+        }, Ct);
+        Assert.Contains(expense.Splits, split => split.UserId == other.Id && split.Amount == -5m);
+        Assert.Equal(-25m, expense.Splits.Sum(split => split.Amount));
     }
 
     [Fact]

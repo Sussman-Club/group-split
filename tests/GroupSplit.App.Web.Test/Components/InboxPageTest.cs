@@ -329,6 +329,14 @@ public class InboxPageTest : ComponentTest
     /// paid twice on somebody's behalf, and record it twice.
     /// </summary>
     [Fact]
+    public void Incoming_rows_offer_add_to_group()
+    {
+        _rows = [Credit("Amazon refund", 19.50m)];
+        var page = Render<Inbox>();
+        Assert.Contains(page.FindAll("button"), button => button.TextContent.Trim() == "Add to group");
+    }
+
+    [Fact]
     public async Task Keeping_the_selection_personal_leaves_a_flagged_row_for_a_person()
     {
         _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
@@ -402,10 +410,6 @@ public class InboxPageTest : ComponentTest
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    /// <summary>
-    /// A refund is not an expense and there is no other kind of transaction to file it as,
-    /// so it is left out rather than sent and refused one row at a time.
-    /// </summary>
     [Fact]
     public async Task Keeping_the_selection_personal_leaves_money_coming_in_alone()
     {

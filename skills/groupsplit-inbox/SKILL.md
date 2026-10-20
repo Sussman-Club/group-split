@@ -266,6 +266,18 @@ most real duplicates. It only breaks a tie between two otherwise equal candidate
 None of this catches duplicates within one side, such as two typed expenses for the same
 dinner or two bank rows for it. It only compares typed expenses against bank rows.
 
+## Filing incoming money
+
+An incoming bank row (`amount < 0`) can be filed with `inbox file`, including into a
+shared group. Keep the bank's sign: the ledger records it as a refund with negative
+shares, reducing net spending and reversing the recipient's balance. Ask for the group,
+category and split just as for an outgoing row; explicit shares must be negative or zero
+and sum to the imported amount. The same source row cannot be filed twice.
+
+Incoming rows do not receive automatic destination suggestions or outgoing-expense
+matches. Review them individually; a missing match is not proof that a refund was never
+recorded by hand.
+
 ## Getting rows in
 
 ```bash
