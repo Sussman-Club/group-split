@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
+    <!-- Android is the supported native head. Other heads require an explicit opt-in and their workloads. -->
+    <AndroidOnly Condition="'$(AndroidOnly)' == ''">true</AndroidOnly>
     <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(AndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
@@ -20,6 +22,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableDefaultCssItems>false</EnableDefaultCssItems>
     <Nullable>enable</Nullable>
+    <NativeWebUrl Condition="'$(NativeWebUrl)' == ''">https://groupsplit.sussman.win/</NativeWebUrl>
+    <NativeApiUrl Condition="'$(NativeApiUrl)' == ''">https://groupsplit.sussman.win/native/api/</NativeApiUrl>
+    <NativeAuthority Condition="'$(NativeAuthority)' == ''">https://groupsplit.sussman.win/idp/realms/group-split</NativeAuthority>
     <AndroidCleartext>false</AndroidCleartext>
     <AndroidCleartext Condition="'$(Configuration)' == 'Debug'">true</AndroidCleartext>
     <AndroidManifestPlaceholders>$(AndroidManifestPlaceholders);androidCleartext=$(AndroidCleartext)</AndroidManifestPlaceholders>
@@ -48,13 +53,12 @@
     <AndroidPackageFormats>aab</AndroidPackageFormats>
     <!-- Android bundles include multiple Android RIDs; do not infer the desktop host RID from trimming. -->
     <UseDefaultPublishRuntimeIdentifier>false</UseDefaultPublishRuntimeIdentifier>
-    <NativeApiUrl Condition="'$(NativeApiUrl)' == ''">https://groupsplit.sussman.win/native/api/</NativeApiUrl>
-    <NativeAuthority Condition="'$(NativeAuthority)' == ''">https://groupsplit.sussman.win/idp/realms/group-split</NativeAuthority>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyMetadata Include="NativeApiUrl" Value="$(NativeApiUrl)" />
     <AssemblyMetadata Include="NativeAuthority" Value="$(NativeAuthority)" />
+    <AssemblyMetadata Include="NativeWebUrl" Value="$(NativeWebUrl)" />
   </ItemGroup>
 
   <Target Name="ValidateNativeConfiguration" BeforeTargets="PrepareForBuild">

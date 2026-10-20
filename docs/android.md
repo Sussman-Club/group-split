@@ -2,13 +2,15 @@
 
 Issue [#170](https://github.com/Sussman-Club/group-split/issues/170) is the tracker for
 three ordered phases: a usable native app, signed installation packages, then push
-notifications. The authentication and API foundation is implemented here; device
-acceptance, invitation app links, release delivery and notifications remain open.
+notifications. This PR covers the Android app, invitation links, signed packaging and
+website downloads. Notifications are explicitly outside this PR.
 
 ## Build configuration
 
 Install the .NET SDK from `global.json`, the `maui-android` workload, Android SDK and
-JDK required by that workload. Build only the Android target on Windows or Linux:
+JDK required by that workload. Android is the default native target on every host; opt
+into the other platform heads explicitly with `-p:AndroidOnly=false` and their required
+workloads. Build Android on Windows or Linux:
 
 ```powershell
 dotnet workload install maui-android
@@ -19,16 +21,23 @@ dotnet build src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj `
 ```
 
 Replace both example addresses. `NativeAuthority` is the full realm URL, not the
-Keycloak server root. Debug builds must supply both values; Android Release uses the
-production defaults below. They are public addresses embedded in assembly metadata;
-never put credentials in them. Release accepts HTTPS only. Debug also accepts HTTP
+Keycloak server root. The native configurations use the production defaults below.
+They are public addresses embedded in assembly metadata;
+never put credentials in them. Both configurations default to the production HTTPS
+addresses below; supply explicit addresses when testing against local services. Release accepts HTTPS only. Debug also accepts HTTP
 and permits Android cleartext traffic. Certificate validation is never bypassed.
 
 The native API URL must be reachable from the device and accept bearer tokens directly.
 Production exposes `https://groupsplit.sussman.win/native/api/`; the API container itself
 stays private. The cookie-based `/api` route is for the web app. The production authority
 is `https://groupsplit.sussman.win/idp/realms/group-split`. These are the Android Release
-defaults and can be overridden by build properties. Debug still requires explicit URLs.
+defaults and can be overridden by build properties.
+
+`NativeWebUrl` is the public website used for shared invitation URLs. It defaults to
+`https://groupsplit.sussman.win/`; override it for local testing. The WebView's private
+origin is never used in links copied by the native app. The Android HTTPS intent filters
+target the production website; a different deployment host also needs matching filters
+and its own website association.
 
 For an Android emulator, `localhost` is the emulator itself. Use `10.0.2.2` plus the
 host's published API/Keycloak port for local development. Set both addresses explicitly;
@@ -71,8 +80,11 @@ Publish the MAUI project with the signing helper, replacing the example backend 
 ```
 
 The helper calls `dotnet publish` in Release for the Android target, supplies the alias
-`groupsplit-upload`, uses `file:` password references, and checks that a signed bundle
-was produced in `artifacts/android`. Increment `BuildVersion` for each Play upload.
+`groupsplit-upload`, uses `file:` password references, and checks that a signed package
+was produced in `artifacts/android`. Increment `BuildVersion` for each distributed release.
+It uses distinct protected password files for the keystore and key because Android's
+APK signer reads successive lines when the same file is reused. The temporary copy is
+deleted on success or failure; the original password file is preserved.
 Pass `-JavaSdkDirectory` and `-AndroidSdkDirectory` when those SDKs are not discovered
 automatically. `-Format apk` produces a signed APK for sideloading instead.
 
@@ -81,6 +93,15 @@ If Windows workload installation cannot start its administrator helper, a user-l
 `-DotnetPath "$env:LOCALAPPDATA/GroupSplit/Toolchain/dotnet/dotnet.exe"` and install/update
 the `maui-android` workload using that same executable. The app pins MAUI 10.0.110,
 so the installed workload must support that package version.
+
+For Rider, check the exact **.NET CLI executable path** in **Settings → Build, Execution,
+Deployment → Toolset and Build**. Run that executable with `workload list`: an Android
+workload installed under a different SDK root does not satisfy Rider's selected SDK.
+Install `maui-android` into the SDK Rider uses, and configure JDK 21 and the Android SDK
+in its Android settings. Reload the solution after a workload installation if the old
+errors remain. Machine-specific toolchain settings stay out of Git. The source Android
+manifest includes the application package so Rider's Android manifest model can load it
+during design-time analysis.
 
 Microsoft's [command-line publishing guide](https://learn.microsoft.com/en-us/dotnet/maui/android/deployment/publish-cli?view=net-maui-10.0)
 requires `file:` rather than `env:` password references for AAB signing. Do not place
@@ -110,9 +131,10 @@ before the installed app can sign in; publishing an AAB does not deploy realm ch
 The **Android release** workflow (`.github/workflows/android-release.yml`) is manually
 triggered on `main` and uses the existing `production` Actions environment. Pull requests only run the separate Debug compile
 check. A signed build uses the production HTTPS endpoints above, runs the shared app
-tests, publishes the requested package formats and verifies their signatures before
-uploading an artifact containing only signed packages and `SHA256SUMS`. Downloads expire
-after 14 days. This workflow does not deploy the server or upload to Google Play.
+tests, builds an APK and verifies its signature before uploading an artifact containing
+`GroupSplit.apk` and `SHA256SUMS`. CI artifacts expire after 14 days; the workflow also
+publishes these files in a versioned GitHub release for lasting website downloads.
+This workflow does not deploy the server.
 
 In the repository's **Settings → Environments → production**, add:
 
@@ -134,11 +156,10 @@ Get-Content -Raw "$env:LOCALAPPDATA/GroupSplit/Signing/groupsplit-upload.signing
 
 After the workflow reaches the default branch, open **Actions → Android release → Run
 workflow**, select `main`, enter a new integer build version and display version
-(for example `1.0.0`), and choose `apk`, `aab`, or `both`. Use a build version higher than
+(for example `1.0.0`). The workflow produces the website APK. Use a build version higher than
 every previously distributed APK or uploaded AAB; rerunning a build does not increment
 it automatically. Download the artifact from the successful run. Install the APK on a
-device, or submit the AAB to Play Console's internal testing track. The installed Release
-package still needs device acceptance against the deployed backend.
+device. The installed Release package still needs device acceptance against the deployed backend.
 
 The workflow respects the production environment's existing branch policy; it does not
 grant `dev` or pull-request branches access to production secrets.
@@ -157,6 +178,69 @@ regression checks can be run without Android tools or real credentials:
 The native launcher icon and splash screen reuse the existing three-arc GroupSplit mark
 and cream background. The Android foreground is inset to keep the mark inside adaptive
 launcher masks; artwork is maintained with the shared brand assets in `docs/design-system.md`.
+
+## Website downloads and updates
+
+The public `/android` page is available from the website's home page and app bar, with
+installation instructions for Android 7.0 (API 24) and newer. API 24 remains the supported
+minimum for this release; older Android versions are unsupported. Signed-in and signed-out
+visitors can download the app without registering another account or using an app store.
+
+On 20 October 2026, the existing upload keystore and password were configured in the
+repository's `production` environment as the two Android secrets above. The alias variable
+is `groupsplit-upload`. The workflow runs only on `main`, respecting the environment's
+existing branch restrictions. It publishes a draft `app-v<display-version>-<build-version>`
+release with both files attached, then makes it public and marks it latest. Every published
+release must have a new build version. Failed or cancelled draft publication can leave a
+draft for a maintainer to inspect; published packages are not overwritten.
+
+The website checks the repository's latest public release, requiring an `app-v` tag,
+`GroupSplit.apk`, a checksum file, and download URLs in this repository. It caches the
+lookup for five minutes to limit GitHub API traffic. Missing, incomplete or removed
+releases show an unavailable message with a retry button instead of a broken download.
+A temporary GitHub outage preserves a previously verified download. Android releases
+currently own the repository's latest release; the CLI publishes packages and tags rather
+than GitHub releases.
+
+People download the APK on their phone, open it, allow their browser to install apps if
+prompted, and install Group Split. They can turn that browser permission off afterward.
+Updates are new APK downloads from the same page, installed over the existing app with
+the same signing key. Updates are manual; no background updater or notifications are
+included. Do not uninstall an existing release merely to update it. A previous debug app
+has a different signature and cannot be upgraded with the release APK.
+
+## Invitation app links
+
+HTTPS `/join/<token>` and `/claim/<token>` links on `groupsplit.sussman.win` are registered
+with Android. The website serves `/.well-known/assetlinks.json` publicly without a
+redirect, naming `club.sussman.groupsplit` and the public SHA-256 fingerprint of the
+upload certificate used for direct APK signing. The signing key and password are never
+included in this association. If the signing certificate changes, update the association
+before distributing the replacement package.
+
+The app queues an invitation arriving before the WebView is ready and routes it to the
+shared join or claim page. An already-running app receives new links in the same window.
+Signed-out people sign in through the normal browser flow and return to that invitation;
+cancelled or failed sign-in leaves a retryable message and retains the destination.
+The app accepts only these two route shapes, from the configured website or
+`groupsplit://invite/join/<token>` / `groupsplit://invite/claim/<token>`. Foreign origins,
+extra path segments, query strings and malformed tokens are rejected. Authentication
+callbacks remain separate at `groupsplit://auth/callback`.
+
+Deploy the association with the website before checking automatic HTTPS app-link opening.
+For an installed signed APK, Android's verification status and a direct invitation can
+be checked with:
+
+```powershell
+adb shell pm verify-app-links --re-verify club.sussman.groupsplit
+adb shell pm get-app-links club.sussman.groupsplit
+adb shell am start -a android.intent.action.VIEW -c android.intent.category.BROWSABLE `
+  -d 'https://groupsplit.sussman.win/join/<real-token>'
+```
+
+See Android's [app-link verification guidance](https://developer.android.com/training/app-links/verify-applinks).
+The custom-scheme path can be tested before deployment, but it does not prove website
+association or authorization to join a particular group; the API still checks every token.
 
 ## Sign-in and persistence
 
@@ -227,6 +311,23 @@ user, and a regression test covers rendering that content after the session is c
 These checks found a status-bar overlap: `MainPage.SafeAreaEdges="All"` now reserves system
 bar, cutout and keyboard space, following the [MAUI safe-area guidance](https://learn.microsoft.com/en-us/dotnet/maui/user-interface/safe-area?view=net-maui-10.0).
 The corrected header and bottom navigation were visually checked on both devices.
+
+Checks on 20 October 2026 added 1,017 passing shared app/native tests, including rejected
+link destinations, public download metadata, canceled sign-in and interrupted writes.
+Android Debug builds complete with zero errors. An updated Debug app installed and
+launched on the Android 36 emulator; a join link opened in an already-running app and a
+claim link opened from a cold launch. Recreating the Android activity exposed a delivery
+race between old and visible WebViews; incoming routes are now broadcast to listeners,
+and the corrected claim destination was visually verified after activity recreation.
+These used placeholder invitation tokens to check navigation without changing membership.
+Canceling the system-browser sign-in returned to the same claim page with a visible
+"Sign-in was cancelled" message and an enabled retry button.
+The website's unavailable-download state was checked at desktop and 390-pixel phone
+widths with no horizontal overflow or browser-console errors, and its public association
+endpoint returned HTTP 200 with the expected Android package. The local AppHost was
+stopped after these checks. A local signed Release APK's signature was verified with
+`apksigner`, matching the public fingerprint in the website association.
+
 Offline reads/writes, revocation, account deletion and invitation links still require
 acceptance checks; these results are not a completed release sign-off.
 
@@ -249,13 +350,14 @@ and physical device:
 - Groups, ledger, adding an expense, balances and settlements. Lose the network during
   reads and writes, then recover without silently replaying a write.
 - Invitation links, including arriving signed out and returning after sign-in. Android
-  invitation app-link routing and public share-link origins still need implementation.
+  routing and public share-link origins are implemented; automatic HTTPS opening requires
+  deploying the website association and checking verification on the installed release.
 - Bank-link and reconnect controls remain hidden in the app while web linking still works.
 
 The application identity, brand artwork, local signing command and manual signed release
-CI are configured. Phase 2 still needs repository signing secrets, a successful signed
-workflow run and device installation validation of its Release package. The current minimum Android
-API level is 24; that is still a release decision. Phase 3 follows a verified installable
+CI and production signing secrets are configured. Phase 2 still needs a successful signed
+workflow run from `main` and device installation validation of its released package. The minimum Android
+API level is 24 (Android 7.0). Phase 3 follows a verified installable
 app and must choose push transport, add a transactional outbox and background delivery,
 device registration, preferences, Android 13 permission handling and destination routing.
 No push tokens or notification permissions are collected by this foundation.

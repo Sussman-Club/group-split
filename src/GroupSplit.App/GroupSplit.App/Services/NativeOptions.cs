@@ -4,6 +4,7 @@ namespace GroupSplit.App.Services;
 
 public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
 {
+    public Uri WebBaseAddress { get; init; } = new("https://groupsplit.sussman.win/");
     public const string ClientId = "native";
     public static readonly Uri Callback = new("groupsplit://auth/callback");
 
@@ -13,10 +14,11 @@ public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
         return Create(
             metadata.FirstOrDefault(item => item.Key == "NativeApiUrl")?.Value ?? "",
             metadata.FirstOrDefault(item => item.Key == "NativeAuthority")?.Value ?? "",
-            development);
+            development,
+            metadata.FirstOrDefault(item => item.Key == "NativeWebUrl")?.Value);
     }
 
-    public static NativeOptions Create(string api, string authority, bool development)
+    public static NativeOptions Create(string api, string authority, bool development, string? web = null)
     {
         static Uri Validate(string value, bool development)
         {
@@ -27,7 +29,10 @@ public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
                 throw new InvalidOperationException("Configure the native API URL and realm authority with absolute HTTPS URLs (HTTP is allowed only in Debug).");
             return new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
         }
-        return new(Validate(api, development), Validate(authority, development));
+        return new(Validate(api, development), Validate(authority, development))
+        {
+            WebBaseAddress = Validate(web ?? "https://groupsplit.sussman.win/", development)
+        };
     }
 
     public Uri Endpoint(string name) => new(Authority, "protocol/openid-connect/" + name);

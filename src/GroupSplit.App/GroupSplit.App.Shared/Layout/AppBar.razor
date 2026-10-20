@@ -3,6 +3,7 @@
 @using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@inject AppLinks AppLinks
 @implements IDisposable
 
 <header class="gs-topbar">
@@ -11,6 +12,12 @@
     </a>
     <h2 class="gs-topbar-title">@Title</h2>
     <span class="gs-topbar-spacer"></span>
+
+    @if (!AppLinks.IsNative)
+    {
+        <MudIconButton Icon="@Icons.Material.Rounded.Android" Href="/android"
+                       Title="Get the Android app" aria-label="Get the Android app" />
+    }
 
     <ThemeModeMenu />
 

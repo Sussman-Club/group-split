@@ -9,7 +9,7 @@
 
     <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
         <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
+            <RootComponent Selector="#app" ComponentType="{x:Type local:NativeRoutes}" />
         </BlazorWebView.RootComponents>
     </BlazorWebView>
 

@@ -23,6 +23,7 @@
     <!-- Exercise the platform-independent native session without an Android runtime. -->
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeSession.cs" Link="Native/NativeSession.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeOptions.cs" Link="Native/NativeOptions.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeLinkRouter.cs" Link="Native/NativeLinkRouter.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/INativeBrowser.cs" Link="Native/INativeBrowser.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/INativeTokenStore.cs" Link="Native/INativeTokenStore.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeJsonContext.cs" Link="Native/NativeJsonContext.cs" />

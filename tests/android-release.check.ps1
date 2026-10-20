@@ -19,6 +19,10 @@ function Set-TestSecrets {
 function Assert-Cleaned {
     Assert (@(Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Force).Count -eq 0) 'Signing files survived the build.'
     Assert (-not $env:ANDROID_KEYSTORE_BASE64 -and -not $env:ANDROID_SIGNING_PASSWORD) 'Secrets survived in the build environment.'
+    foreach ($arguments in $releaseCheckState.Calls) {
+        $keyPasswordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyPass=file:*' }) -replace '^-p:AndroidSigningKeyPass=file:', ''
+        Assert (-not (Test-Path -LiteralPath $keyPasswordPath)) 'The temporary key password file survived publishing.'
+    }
 }
 
 try {
@@ -34,6 +38,9 @@ try {
         Assert (-not $env:ANDROID_KEYSTORE_BASE64 -and -not $env:ANDROID_SIGNING_PASSWORD) 'Build inherited secrets.'
         $keyPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyStore=*' }) -replace '^-p:AndroidSigningKeyStore=', ''
         $passwordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningStorePass=file:*' }) -replace '^-p:AndroidSigningStorePass=file:', ''
+        $keyPasswordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyPass=file:*' }) -replace '^-p:AndroidSigningKeyPass=file:', ''
+        Assert ($keyPasswordPath -ne $passwordPath) 'Android signer would read both passwords from the same file.'
+        Assert ([IO.File]::ReadAllText($keyPasswordPath) -eq 'test-password') 'Key password file is incorrect.'
         Assert ([IO.File]::ReadAllText($keyPath) -eq 'test-keystore') 'Keystore decoding failed.'
         Assert ([IO.File]::ReadAllText($passwordPath) -eq 'test-password') 'Password file is incorrect.'
         Assert ($arguments -contains '-p:AndroidSigningKeyAlias=test-upload') 'Key alias was lost.'

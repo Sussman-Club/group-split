@@ -6,6 +6,7 @@
 @inject IDialogService DialogService
 @inject DataChangeNotifier Changes
 @inject NavigationManager Nav
+@inject AppLinks AppLinks
 @inject LocalClock Clock
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
@@ -105,7 +106,7 @@
     /// app is published at whatever host it is published at, and a server guessing that
     /// would guess wrong for every deployment but one.
     /// </summary>
-    private string Url => _link is null ? string.Empty : $"{Nav.BaseUri.TrimEnd('/')}/join/{_link.Token}";
+    private string Url => _link is null ? string.Empty : AppLinks.PublicUrl(Nav.BaseUri, $"join/{_link.Token}");
 
     protected override void OnInitialized() => Changes.GroupsChanged += ReloadAsync;
 

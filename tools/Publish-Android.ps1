@@ -35,13 +35,15 @@ foreach ($value in @($ApiUrl.AbsoluteUri, $Authority.AbsoluteUri, $keyStorePath,
     if ($value -match '[;\r\n]') { throw 'Build arguments must not contain semicolons or line breaks.' }
 }
 $projectPath = Join-Path $repositoryPath 'src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj'
+$keyPasswordDirectory = Join-Path ([IO.Path]::GetTempPath()) "groupsplit-key-password-$([guid]::NewGuid().ToString('N'))"
+$keyPasswordPath = Join-Path $keyPasswordDirectory 'key.signing-password'
 $publishArguments = @(
     'publish', $projectPath, '-f', 'net10.0-android', '-c', 'Release',
     '-p:AndroidOnly=true', "-p:NativeApiUrl=$($ApiUrl.AbsoluteUri)", "-p:NativeAuthority=$($Authority.AbsoluteUri)",
     "-p:ApplicationVersion=$BuildVersion", "-p:ApplicationDisplayVersion=$DisplayVersion",
     "-p:AndroidPackageFormats=$Format", '-p:AndroidKeyStore=true',
     "-p:AndroidSigningKeyStore=$keyStorePath", "-p:AndroidSigningKeyAlias=$KeyAlias",
-    "-p:AndroidSigningKeyPass=file:$passwordPath", "-p:AndroidSigningStorePass=file:$passwordPath",
+    "-p:AndroidSigningKeyPass=file:$keyPasswordPath", "-p:AndroidSigningStorePass=file:$passwordPath",
     '-o', $outputPath
 )
 foreach ($sdkProperty in @('JavaSdkDirectory', 'AndroidSdkDirectory')) {
@@ -52,8 +54,22 @@ foreach ($sdkProperty in @('JavaSdkDirectory', 'AndroidSdkDirectory')) {
         $publishArguments += "-p:${sdkProperty}=$sdkPath"
     }
 }
-& $DotnetPath @publishArguments
-if ($LASTEXITCODE -ne 0) { throw "Android publish failed (exit $LASTEXITCODE)." }
+try {
+    # apksigner reads each password from the next line of a file. Reusing one file for
+    # both arguments exhausts a one-line password file, even when the passwords match.
+    New-Item -ItemType Directory -Path $keyPasswordDirectory | Out-Null
+    if (-not $IsWindows) {
+        [IO.File]::SetUnixFileMode($keyPasswordDirectory, [IO.UnixFileMode]::UserRead -bor
+            [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
+    }
+    Copy-Item -LiteralPath $passwordPath -Destination $keyPasswordPath
+    & $DotnetPath @publishArguments
+    if ($LASTEXITCODE -ne 0) { throw "Android publish failed (exit $LASTEXITCODE)." }
+}
+finally {
+    if (Test-Path -LiteralPath $keyPasswordPath) { Remove-Item -LiteralPath $keyPasswordPath -Force }
+    if (Test-Path -LiteralPath $keyPasswordDirectory) { Remove-Item -LiteralPath $keyPasswordDirectory -Force }
+}
 $signedPackages = @(Get-ChildItem -LiteralPath $outputPath -Filter "*.$Format" -File |
     Where-Object { $_.BaseName -match '-signed$' })
 if ($signedPackages.Count -eq 0) { throw "Publish produced no signed .$Format package in $outputPath." }

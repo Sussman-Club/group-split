@@ -69,6 +69,7 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
+    [Parameter] public string? ReturnUrl { get; set; }
 
     private bool _redirecting;
     private bool _remember;
@@ -99,7 +100,7 @@
 
         try
         {
-            await AuthService.Login(ReadQueryValue("returnUrl"), _remember);
+            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"), _remember);
         }
         catch (OperationCanceledException)
         {

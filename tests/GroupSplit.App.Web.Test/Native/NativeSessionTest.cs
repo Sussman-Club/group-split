@@ -55,6 +55,37 @@ public sealed class NativeSessionTest
     }
 
     [Fact]
+    public async Task Cancelling_sign_in_saves_no_credentials_and_allows_a_new_attempt()
+    {
+        var store = new Store();
+        var browser = new Browser { Cancel = true };
+        var transport = new Transport();
+        using var session = new NativeSession(Options, new ClientFactory(transport), browser, store);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => session.LoginAsync(true));
+        Assert.Null(store.Value);
+        Assert.Empty(transport.Bodies);
+        browser.Cancel = false;
+        await session.LoginAsync(false);
+        Assert.Equal("access", await session.AccessTokenAsync());
+        Assert.Null(store.Value);
+    }
+
+    [Fact]
+    public async Task A_network_failure_during_a_write_is_not_replayed_and_keeps_the_session()
+    {
+        using var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), new Store());
+        await session.LoginAsync(false);
+        var transport = new Transport { NetworkFailure = true };
+        using var client = new HttpClient(new AuthDelegatingHandler(session) { InnerHandler = transport });
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.PostAsync("https://api.example/expenses", new StringContent("expense")));
+        Assert.Single(transport.Bodies);
+        Assert.Equal("access", await session.AccessTokenAsync());
+        transport.NetworkFailure = false;
+        using var retry = await client.PostAsync("https://api.example/expenses", new StringContent("expense"));
+        Assert.Equal(2, transport.Bodies.Count);
+    }
+
+    [Fact]
     public async Task Concurrent_requests_refresh_once_and_save_the_rotated_token()
     {
         var store = ExpiredStore();
@@ -177,6 +208,8 @@ public sealed class NativeSessionTest
 
     [Theory]
     [InlineData("/groups", "/groups")]
+    [InlineData("/join/invitation-token", "/join/invitation-token")]
+    [InlineData("/claim/invitation-token", "/claim/invitation-token")]
     [InlineData("//attacker.example/", "/")]
     public async Task Sign_in_refreshes_the_shared_user_and_returns_only_to_a_local_page(string destination, string expected)
     {
@@ -231,7 +264,7 @@ public sealed class NativeSessionTest
     {
         public Uri? Url { get; private set; }
         public bool WrongState { get; init; }
-        public bool Cancel { get; init; }
+        public bool Cancel { get; set; }
         public Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct)
         {
             Url = url;
@@ -245,11 +278,13 @@ public sealed class NativeSessionTest
         public const string ValidBody = "{\"access_token\":\"access\",\"refresh_token\":\"refresh\",\"id_token\":\"id\",\"expires_in\":300,\"token_type\":\"Bearer\"}";
         public string Body { get; set; } = ValidBody;
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
+        public bool NetworkFailure { get; set; }
         public List<string> Bodies { get; } = [];
         public string? Authorization { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
+            if (NetworkFailure) throw new HttpRequestException("Device is offline");
             Authorization = request.Headers.Authorization?.ToString();
             return new(Status) { Content = new StringContent(Body, Encoding.UTF8, "application/json") };
         }

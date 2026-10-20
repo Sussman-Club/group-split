@@ -40,6 +40,8 @@ builder.AddSecurityHeaders();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<AndroidReleaseCatalog>();
 builder.Services.AddAuthorizationBuilder();
 
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
@@ -131,5 +133,6 @@ app.MapRazorComponents<App>()
     .MapRenderMode(app);
 
 app.MapIdentity();
+app.MapAndroidDownloads();
 
 app.Run();

@@ -12,15 +12,9 @@ on:
         required: true
         default: '1.0.0'
         type: string
-      format:
-        description: 'APK for installation, AAB for Google Play, or both'
-        required: true
-        default: both
-        type: choice
-        options: [both, apk, aab]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-release
@@ -39,7 +33,6 @@ jobs:
     env:
       BUILD_VERSION: ${{ inputs.build_version }}
       DISPLAY_VERSION: ${{ inputs.display_version }}
-      PACKAGE_FORMAT: ${{ inputs.format }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -77,7 +70,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS || 'groupsplit-upload' }}
         run: |
           ./tools/Publish-AndroidCI.ps1 -BuildVersion $env:BUILD_VERSION `
-            -DisplayVersion $env:DISPLAY_VERSION -Format $env:PACKAGE_FORMAT
+            -DisplayVersion $env:DISPLAY_VERSION -Format apk
       - name: Verify package signatures and record checksums
         shell: bash
         run: |
@@ -87,21 +80,38 @@ jobs:
             [ -f "$package" ] || continue
             "$apksigner" verify --verbose "$package"
           done
-          for package in artifacts/android/aab/*-Signed.aab; do
-            [ -f "$package" ] || continue
-            verification=$(jarsigner -J-Duser.language=en -J-Duser.country=US -verify "$package")
-            printf '%s\n' "$verification"
-            grep -q 'jar verified\.' <<< "$verification"
-          done
+          cp artifacts/android/apk/club.sussman.groupsplit-Signed.apk artifacts/android/GroupSplit.apk
           cd artifacts/android
-          find . -type f \( -name '*-Signed.apk' -o -name '*-Signed.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          sha256sum GroupSplit.apk > SHA256SUMS
       - name: Upload signed packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: android-${{ inputs.display_version }}-${{ inputs.build_version }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            artifacts/android/**/*-Signed.apk
-            artifacts/android/**/*-Signed.aab
+            artifacts/android/GroupSplit.apk
             artifacts/android/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
+      - name: Publish website download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $tag = "app-v$env:DISPLAY_VERSION-$env:BUILD_VERSION"
+          $notesPath = Join-Path $env:RUNNER_TEMP 'android-release-notes.md'
+          @(
+            "Group Split $env:DISPLAY_VERSION for Android (build $env:BUILD_VERSION).",
+            '',
+            'Download and installation instructions: https://groupsplit.sussman.win/android',
+            '',
+            'Requires Android 7.0 or newer. Install GroupSplit.apk to install or update the app.',
+            "Source commit: $env:RELEASE_COMMIT. The SHA256SUMS file verifies the download."
+          ) | Set-Content -LiteralPath $notesPath
+          # Upload into a draft so the website cannot offer an incomplete release.
+          gh release create $tag artifacts/android/GroupSplit.apk artifacts/android/SHA256SUMS `
+            --target $env:RELEASE_COMMIT --title "Group Split $env:DISPLAY_VERSION (Android build $env:BUILD_VERSION)" `
+            --notes-file $notesPath --draft
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the Android release failed. Use a new build version for each release.' }
+          gh release edit $tag --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing the Android download failed; the release is still a draft.' }

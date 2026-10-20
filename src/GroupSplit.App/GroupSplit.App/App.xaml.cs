@@ -17,4 +17,10 @@ public partial class App : Application
         // Resolve the page after InitializeComponent has loaded application resources.
         return new Window(services.GetRequiredService<MainPage>()) { Title = "Group Split" };
     }
+
+    protected override void OnAppLinkRequestReceived(Uri uri)
+    {
+        services.GetRequiredService<Services.NativeLinkRouter>().Open(uri);
+        base.OnAppLinkRequestReceived(uri);
+    }
 }

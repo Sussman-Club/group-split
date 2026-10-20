@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @attribute [AllowAnonymous]
+@inject AppLinks AppLinks
 
 <PageTitle>Group Split</PageTitle>
 
@@ -20,6 +21,11 @@
                            EndIcon="@Icons.Material.Rounded.ArrowForward" Href="/login">
                     Sign in to get started
                 </MudButton>
+                @if (!AppLinks.IsNative)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill"
+                               StartIcon="@Icons.Material.Rounded.Android" Href="/android">Get the Android app</MudButton>
+                }
             </div>
         </div>
 

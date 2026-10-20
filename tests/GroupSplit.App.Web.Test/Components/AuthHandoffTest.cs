@@ -18,6 +18,24 @@ public class AuthHandoffTest : ComponentTest
 
     public AuthHandoffTest() => Services.AddSingleton(_auth.Object);
 
+    [Theory]
+    [InlineData("/join/invitation-token")]
+    [InlineData("/claim/invitation-token")]
+    public void Cancelled_invitation_sign_in_keeps_the_destination_for_retry(string destination)
+    {
+        _auth.Setup(service => service.Login(destination, false, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+        var page = Render<AuthHandoff>(parameters => parameters
+            .Add(value => value.Title, "Join a group")
+            .Add(value => value.Subtitle, "Sign in to continue")
+            .Add(value => value.ActionLabel, "Continue")
+            .Add(value => value.ReturnUrl, destination));
+        page.Find("button").Click();
+        page.WaitForAssertion(() => Assert.Contains("Sign-in was cancelled", page.Markup));
+        page.Find("button").Click();
+        _auth.Verify(service => service.Login(destination, false, It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
     [Fact]
     public void Failed_native_sign_in_shows_a_retryable_message()
     {

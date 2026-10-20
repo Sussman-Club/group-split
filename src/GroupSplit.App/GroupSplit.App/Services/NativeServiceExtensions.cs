@@ -11,6 +11,8 @@ public static class NativeServiceExtensions
     public static IServiceCollection AddNativeServices(this IServiceCollection services, NativeOptions options)
     {
         services.AddSingleton(options);
+        services.AddSingleton(new AppLinks(options.WebBaseAddress));
+        services.AddSingleton<NativeLinkRouter>();
         services.AddSingleton<IWebAuthenticator>(_ => WebAuthenticator.Default);
         services.AddSingleton<ISecureStorage>(_ => SecureStorage.Default);
         services.AddSingleton<INativeBrowser, NativeBrowser>();
