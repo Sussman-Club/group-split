@@ -1,0 +1,25 @@
+@using Microsoft.AspNetCore.Components
+@using GroupSplit.App.Shared
+@using GroupSplit.App.Services
+@inject NativeLinkRouter Links
+@inject NavigationManager Nav
+@implements IDisposable
+
+<Routes />
+
+@code {
+    protected override void OnInitialized() => Links.Changed += OnLink;
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) Navigate();
+        return Task.CompletedTask;
+    }
+    // Views can overlap while Android recreates an activity. Deliver the route to each
+    // listener instead of letting an old view consume it ahead of the visible one.
+    private void OnLink(string route) => _ = InvokeAsync(() => Nav.NavigateTo(route));
+    private void Navigate()
+    {
+        if (Links.Take() is { } route) Nav.NavigateTo(route);
+    }
+    public void Dispose() => Links.Changed -= OnLink;
+}

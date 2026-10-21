@@ -20,6 +20,7 @@ public static class ServiceExtensions
         public IServiceCollection AddSharedServices(ServiceLifetime sessionLifetime = ServiceLifetime.Scoped)
         {
             services.AddMudTheme();
+            services.TryAddSingleton(new AppLinks());
             services.TryAdd<ThemePreference>(sessionLifetime);
             services.TryAdd<LocalClock>(sessionLifetime);
             services.TryAddScoped<ApiErrorPresenter>();

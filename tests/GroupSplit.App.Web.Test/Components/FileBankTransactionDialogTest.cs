@@ -85,6 +85,31 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Incoming_money_previews_and_files_negative_shares()
+    {
+        var (provider, reference) = await OpenAsync(Row with { Amount = -25.01m });
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(Trip.Id));
+        var editor = provider.FindComponent<SplitEditor>();
+        Assert.Equal(-25.01m, editor.Instance.Amount);
+        _commands.Verify(commands => commands.PreviewAsync(
+            It.Is<CreateTransactionRequest>(request => request.Amount == -25.01m && request.GroupId == Trip.Id),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+        await provider.InvokeAsync(() => editor.Instance.ValueChanged.InvokeAsync(
+        [
+            new SplitInput { UserId = Ana.Id, Amount = -12.51m },
+            new SplitInput { UserId = Daniel.Id, Amount = -12.50m }
+        ]));
+        Assert.Contains("Money received", provider.Markup, StringComparison.Ordinal);
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add credit")
+            .ClickAsync(new MouseEventArgs());
+        var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
+        Assert.NotNull(answer?.Request);
+        Assert.Equal(Trip.Id, answer!.Request!.GroupId);
+        Assert.Equal(-25.01m, answer.Request.Splits!.Sum(split => split.Amount));
+    }
+
+    [Fact]
     public async Task Shares_that_do_not_add_up_are_refused_without_closing()
     {
         var (provider, reference) = await OpenAsync();

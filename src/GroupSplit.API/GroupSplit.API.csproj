@@ -7,9 +7,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.0-preview.1.26479.8" />
-        <PackageReference Include="Aspire.OpenAI" Version="13.6.0-preview.1.26479.8" />
-        <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.0" />
+        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.1-preview.1.26506.6" />
+        <PackageReference Include="Aspire.OpenAI" Version="13.6.1-preview.1.26506.6" />
+        <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.1" />
         <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.102.1" />
         <PackageReference Include="AWSSDK.S3" Version="4.0.104.1" />
         <PackageReference Include="Going.Plaid" Version="6.68.0" />

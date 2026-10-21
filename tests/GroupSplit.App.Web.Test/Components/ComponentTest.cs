@@ -49,6 +49,7 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(new LocalClock(Mock.Of<IJSRuntime>()));
 
         Services.AddSingleton(Mock.Of<IAuthService>());
+        Services.AddSingleton(new AppLinks());
 
         // Who is reading, which several screens ask so they can mark the reader's own row.
         // Answering "nobody" is a real state -- a page renders before the token is read --

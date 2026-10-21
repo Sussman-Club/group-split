@@ -13,6 +13,8 @@ namespace GroupSplit.AppHost.Extensions;
 /// </summary>
 public static class DeploymentExtensions
 {
+    private const string ComposeReleaseStepName = "release-compose";
+
     /// <summary>
     /// The home directory of the non-root user the published .NET images run as, and the
     /// only place under it a named volume can be mounted. See <c>WithKeyRingVolume</c>.
@@ -163,32 +165,24 @@ public static class DeploymentExtensions
                     service.Ports.AddRange(ports);
                 }));
 
-        /// <summary>
-        /// Makes <c>aspire do push</c> also generate the Compose file and env file, so the
-        /// images and the artifacts that reference them come out of one pipeline execution.
-        /// <para>
-        /// Run as separate <c>aspire do</c> invocations, the pushes and the prepare step each
-        /// get their own <c>deploy-prereq</c>, and that stamps a fresh timestamp tag every
-        /// time: the generated Compose file then points at a tag nothing was ever pushed
-        /// under, and the pull fails with "manifest unknown".
-        /// </para>
-        /// <para>
-        /// Wired the way Aspire extends its own entry points: a step that depends on the
-        /// prepare step the Docker integration names after this environment, and declares
-        /// itself required by <see cref="WellKnownPipelineSteps.Push"/>. The deploy workflow
-        /// therefore calls a documented command and knows neither this step's name nor the
-        /// Compose resource's; renaming either touches nothing outside the AppHost. Every
-        /// image the environment owns is pushed, since <c>push</c> is the step all push
-        /// steps are required by.
-        /// </para>
-        /// </summary>
-        public IResourceBuilder<DockerComposeEnvironmentResource> WithPrepareOnPush()
+        /// <summary>Adds a release step that waits for image push and Docker Compose preparation.</summary>
+        /// <remarks>
+        /// Separate runs can stamp different <c>deploy-prereq</c> tags, leaving the generated
+        /// environment file pointing to an image that was never pushed. This step avoids that
+        /// without changing what <c>aspire do push</c> does. Inspect it with
+        /// <c>aspire do --list-steps</c>.
+        /// </remarks>
+        public IResourceBuilder<DockerComposeEnvironmentResource> WithComposeReleasePipeline()
         {
             compose.ApplicationBuilder.Pipeline.AddStep(
-                $"prepare-{compose.Resource.Name}-on-push",
+                ComposeReleaseStepName,
                 _ => Task.CompletedTask,
-                dependsOn: $"prepare-{compose.Resource.Name}",
-                requiredBy: WellKnownPipelineSteps.Push);
+                dependsOn:
+                new[]
+                {
+                    $"prepare-{compose.Resource.Name}",
+                    WellKnownPipelineSteps.Push
+                });
 
             return compose;
         }

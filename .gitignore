@@ -488,6 +488,11 @@ aspire-output/
 # Local copy of deploy secrets (never commit)
 .deploy-secrets.local
 
+# Android upload keys and signing passwords (keep outside the repository)
+*.keystore
+*.jks
+*.signing-password
+
 # Agents folders
 .agents/
 .claude/

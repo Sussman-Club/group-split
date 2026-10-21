@@ -53,13 +53,20 @@
             @* What the bank sent, in the same summary card the expense dialog uses for its
                own figures. It stands where the amount field stands there, because it is
                that -- the amount -- and the only difference is that nobody may type it. *@
+            @if (Row.IsCredit)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Money received. Its shares reduce spending and adjust the group balances for the person who received it.
+                </MudAlert>
+            }
+
             <div class="gs-card gs-card-pad" style="padding: 14px 16px">
                 <div class="gs-inline" style="justify-content: space-between">
                     <div>
                         <div class="gs-eyebrow">@Row.Title</div>
                         <div class="gs-muted" style="font-size: .8125rem">@Where</div>
                     </div>
-                    <Money Value="@Row.Amount" Currency="@Row.Currency" Class="gs-money" />
+                    <Money Value="@Row.Amount" Currency="@Row.Currency" Signed="@Row.IsCredit" Absolute="@Row.IsCredit" Class="gs-money" />
                 </div>
             </div>
 
@@ -235,7 +242,7 @@
             @* Gated on having answered, not on the answer: null is "Personal", which is a
                destination like any other, so it cannot also stand for "not yet said". *@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">Add expense</MudButton>
+                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">@(Row.IsCredit ? "Add credit" : "Add expense")</MudButton>
         }
     </DialogActions>
 </MudDialog>

@@ -93,11 +93,15 @@ jobs:
       - name: Check CSS bundle
         run: python3 tests/check-css.py src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css
 
-      # The deploy job reads Komodo's failed update to decide whether production was
-      # touched and so whether to roll back. Otherwise that only runs when a production
-      # deploy fails, which is the wrong time to find out it is broken.
+      # A failed production deploy relies on this classifier to decide whether to roll back.
       - name: Test the deploy scripts
-        run: bash .github/scripts/classify-komodo-failure.test.sh
+        run: |
+          bash .github/scripts/classify-komodo-failure.test.sh
+          bash -n .github/scripts/claim-release-version.sh
+          bash -n .github/scripts/validate-deployment-inputs.sh
+          bash -n .github/scripts/validate-komodo-credentials.sh
+          bash -n .github/scripts/prepare-compose-release.sh
+          bash -n .github/scripts/deploy-komodo-stack.sh
 
       # The CLI ships as a .NET tool, and packaging breaks in ways a plain build does
       # not catch -- a missing ToolCommandName, a dependency that will not travel in the

@@ -85,7 +85,7 @@ public interface IInboxService
 /// expense here, so the category default, the even fallback, the membership checks and the
 /// splits-must-sum rule are the ones a typed expense already meets. What this adds is the
 /// link back and the row's new status, and the guards that only make sense for imported
-/// money: a credit is not an expense, a row already filed must not become a second one, and
+/// money: a row already filed must not become a second one, and
 /// a row that looks like an expense somebody has already recorded is not filed until they
 /// have been told and have said which it is.
 /// <para>
@@ -148,16 +148,8 @@ public sealed class InboxService(
                 "This imported transaction has already been added as an expense.");
         }
 
-        // Money coming in is not an expense, and there is no other kind of transaction yet.
-        // Filing it as a negative expense would put a number every total has to know about
-        // into the ledger.
-        if (row.Amount < 0)
-        {
-            throw new UnprocessableException(ErrorCodes.BankTransactionIsCredit,
-                    "This is money coming in, so it cannot be added as an expense.")
-                .WithExtension("amount", row.Amount);
-        }
-
+        // Bank credits already use the ledger's refund sign: negative amounts and
+        // negative shares reduce spending and reverse the recipient's group balance.
         await RefuseCurrencyMismatch(row, request.GroupId, ct);
 
         // Before the expense exists, not after: a duplicate discovered afterwards is a

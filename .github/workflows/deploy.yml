@@ -55,9 +55,7 @@ jobs:
       packages: write
 
     steps:
-      # Separate from the parameter check below so the Komodo credentials stay scoped to
-      # the two steps that actually talk to Komodo, instead of riding along with every
-      # parameter through the image build.
+      # Keep Komodo credentials out of the image-build environment.
       - name: Validate Komodo credentials
         env:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
@@ -65,28 +63,15 @@ jobs:
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
           KOMODO_REGISTRY_ACCOUNT: ${{ vars.KOMODO_REGISTRY_ACCOUNT }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          missing=0
-          for name in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET KOMODO_REGISTRY_ACCOUNT; do
-            if [ -z "${!name:-}" ]; then
-              echo "${name} is not set on the production environment" >&2
-              missing=1
-            fi
-          done
-
-          [ "$missing" -eq 0 ]
+        run: bash .github/scripts/validate-komodo-credentials.sh
 
       # Fails in seconds on a missing value rather than after the images are built.
       # The AppHost enforces the same rules once the parameters are resolved (its
       # validate-smtp and validate-google-sign-in pipeline steps); this copy is the
       # cheap one.
       - name: Validate deployment inputs
-        # Anchored so the push step reuses exactly this allowlist. Actions supports YAML
-        # anchors and aliases but not merge keys, so both uses have to be the same map --
-        # which is why the Komodo credentials above and the release version below are
-        # deliberately not part of it.
+        # Reused by validation and release preparation. Komodo credentials and release
+        # metadata remain outside this map.
         env: &deployment_inputs
           WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME }}
           DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
@@ -132,78 +117,7 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_DECISION_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DECISION_DEPLOYMENT }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          missing=0
-
-          # value NAME: reads an explicitly allowlisted workflow input. Keeping this
-          # list here prevents a future, unrelated GitHub secret from being forwarded
-          # into the AppHost and the generated deployment environment.
-          value() {
-            printf '%s' "${!1:-}"
-          }
-
-          # require NAME...: every NAME must have a value.
-          require() {
-            for name in "$@"; do
-              if [ -z "$(value "$name")" ]; then
-                echo "${name} is not set on the production environment" >&2
-                missing=1
-              fi
-            done
-          }
-
-          # require_when FLAG NAME...: when FLAG is true, every NAME must have a value.
-          require_when() {
-            local flag="$1"
-            shift
-            [ "$(value "$flag")" = "true" ] || return 1
-            require "$@"
-          }
-
-          require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
-                  KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET CACHE_PASSWORD \
-                  STORAGE_ACCESSKEY STORAGE_SECRETKEY
-
-          require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
-            || echo "::notice::SMTP_ENABLED is not true. Keycloak sends no mail, and the sign-in page offers no password reset."
-          require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
-            || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
-          # Bank sync stores live bank access tokens, and BANK_KEY_CERTIFICATE is what keeps
-          # the key ring that opens them from sitting unwrapped beside them in the database,
-          # where one dump would carry both. The API refuses to start without it, so this
-          # refuses first, before anything is built. The AppHost's validate-plaid agrees.
-          require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET BANK_KEY_CERTIFICATE \
-            || echo "::notice::PLAID_ENABLED is not true. Nobody can link a bank."
-
-          # The API links banks whenever it has both credentials, whatever PLAID_ENABLED
-          # says, so credentials left in place behind a switch that is off need the
-          # certificate just the same -- or the API would refuse to start after the deploy.
-          if [ "$(value PLAID_ENABLED)" != "true" ] && [ -n "$(value PLAID_CLIENT_ID)" ] \
-             && [ -n "$(value PLAID_SECRET)" ] && [ -z "$(value BANK_KEY_CERTIFICATE)" ]; then
-            echo "PLAID_CLIENT_ID and PLAID_SECRET are set, so the API links banks whatever PLAID_ENABLED says, but BANK_KEY_CERTIFICATE is not set on the production environment. Set it, or remove the Plaid credentials." >&2
-            missing=1
-          fi
-          require_when VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY \
-            || echo "::notice::VERYFI_ENABLED is not true. Receipt transcription through Veryfi is off."
-
-          # Cross-field validation still fails closed: a provider selected explicitly must
-          # also be enabled, and an enabled provider must have its complete credentials.
-          provider="$(value RECEIPT_TRANSCRIPTION_PROVIDER)"
-          case "$provider" in
-            AzureOpenAI)
-              require_when AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY \
-                || echo "::notice::AZURE_OPENAI_ENABLED is not true. Azure OpenAI receipt transcription is off."
-              ;;
-            Veryfi|'') ;;
-            *)
-              echo "RECEIPT_TRANSCRIPTION_PROVIDER must be Veryfi or AzureOpenAI, not '$provider'" >&2
-              missing=1
-              ;;
-          esac
-
-          [ "$missing" -eq 0 ] || exit 1
+        run: bash .github/scripts/validate-deployment-inputs.sh
 
       - name: Check out the merged commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -212,59 +126,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # Claims the next app-v version and writes the tag, so the images, the Compose file
-      # and the deployment record all name one immutable identifier. Modelled on the CLI's
-      # release job, including reusing a tag already on HEAD: that is what makes a re-run
-      # of this workflow deploy the same version rather than burning a new number.
+      # The release script reuses an existing tag on HEAD when a workflow is rerun.
       - name: Claim the release version
         id: deployment
         env:
-          # Through the environment, not interpolated: `${{ }}` is pasted in before bash
-          # parses the line.
           BUMP: ${{ inputs.bump || 'patch' }}
-          # Creating the tag through the API keeps the git credential off the checkout, so
-          # nothing later in the job inherits push rights.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          commit="$(git rev-parse HEAD)"
-
-          # A re-run finds its own tag and deploys that version again.
-          existing="$(git tag --points-at HEAD --list 'app-v*' | head -1)"
-          if [ -n "$existing" ]; then
-            echo "HEAD is already tagged $existing; deploying that version again."
-            version="$existing"
-          else
-            latest="$(git tag --list 'app-v*' --sort=-v:refname | head -1)"
-
-            if [ -z "$latest" ]; then
-              version="app-v0.1.0"
-            else
-              IFS=. read -r major minor patch <<<"${latest#app-v}"
-
-              case "$BUMP" in
-                major) version="app-v$((major + 1)).0.0" ;;
-                minor) version="app-v${major}.$((minor + 1)).0" ;;
-                patch) version="app-v${major}.${minor}.$((patch + 1))" ;;
-                *) echo "::error::Unknown bump '$BUMP'." >&2; exit 1 ;;
-              esac
-            fi
-
-            echo "Last release: ${latest:-none}. Claiming $version ($BUMP) for $commit."
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-              -f "ref=refs/tags/$version" -f "sha=$commit" > /dev/null
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-
-          # Also onto the job environment: the push step reuses the anchored parameter
-          # map, and an alias cannot carry a step output of its own.
-          echo "DEPLOYMENT_VERSION=$version" >> "$GITHUB_ENV"
-          echo "DEPLOYMENT_COMMIT=$commit" >> "$GITHUB_ENV"
-          echo "Deployment__Version=$version" >> "$GITHUB_ENV"
+        run: bash .github/scripts/claim-release-version.sh
 
       - name: Read the Aspire CLI version from the AppHost
         id: aspire
@@ -317,116 +186,11 @@ jobs:
       - name: Restore the migrations project
         run: dotnet restore src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj
 
-      # One invocation, not the Compose prepare step then a push per image: the AppHost
-      # declares its Compose prepare step as required by Aspire's `push` entry point
-      # (see WithPrepareOnPush), so this documented command yields both the pushed images
-      # and the artifacts that reference the same release tag. Deliberately not `aspire
-      # deploy`: that would run `docker compose up` on the runner instead of the server.
-      - name: Push images and prepare Compose artifacts
+      # Build, push, and prepare in one AppHost run. Komodo, not the runner, runs Compose.
+      - name: Prepare and push Compose release
         env: *deployment_inputs
         shell: bash
-        run: |
-          set -euo pipefail
-
-          # The allowlist, and the only place these names are written in this step. Every
-          # AppHost parameter is the lower-cased GitHub name, so the mapping is mechanical:
-          # DASHBOARD_TOKEN becomes Parameters__dashboard_token, the spelling Aspire
-          # documents for CI (a dash in a parameter name written as an underscore).
-          #
-          # A list rather than the whole environment is what stops a future, unrelated
-          # repository secret from reaching the AppHost and the generated deployment
-          # environment.
-          parameters="
-            WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
-            KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET
-            STORAGE_ACCESSKEY STORAGE_SECRETKEY
-            SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
-            GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
-            PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET PLAID_ENV PLAID_REDIRECT_URI
-            BANK_KEY_CERTIFICATE
-            RECEIPT_TRANSCRIPTION_PROVIDER
-            VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
-            VERYFI_LOG_RAW_RESPONSES
-            AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
-            AZURE_OPENAI_DECISION_DEPLOYMENT
-          "
-
-          for name in $parameters; do
-            value="${!name:-}"
-
-            if [ -n "$value" ]; then
-              export "Parameters__$(printf %s "$name" | tr "[:upper:]" "[:lower:]")=$value"
-            fi
-
-            # Do not leave the GitHub-facing name in the environment the build inherits.
-            unset "$name"
-          done
-
-          aspire do push --environment production --non-interactive
-
-          # Aspire writes release tags into the generated environment file. Resolve each
-          # pushed tag to its registry digest so the remote host pulls the exact content
-          # that CI built, rather than a tag that could later be moved.
-          output_dir="src/GroupSplit.AppHost/aspire-output"
-          env_file="$output_dir/.env.production"
-          image_variables=(API_IMAGE WEB_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)
-          declare -A tagged_images
-          declare -A pinned_images
-
-          env_value() {
-            local key="$1"
-            local value
-            value="$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file")"
-            [ -n "$value" ] || {
-              echo "Generated environment is missing $key." >&2
-              exit 1
-            }
-            printf '%s' "$value"
-          }
-
-          replace_env_value() {
-            local key="$1"
-            local value="$2"
-            local temporary
-            temporary="$(mktemp)"
-            awk -v key="$key" -v value="$value" '
-              index($0, key "=") == 1 { print key "=" value; found=1; next }
-              { print }
-              END { if (!found) exit 1 }
-            ' "$env_file" > "$temporary"
-            mv "$temporary" "$env_file"
-          }
-
-          for image_variable in "${image_variables[@]}"; do
-            tagged_images["$image_variable"]="$(env_value "$image_variable")"
-            repository="${tagged_images[$image_variable]%:*}"
-            pinned_images["$image_variable"]="$(docker image inspect \
-              --format '{{range .RepoDigests}}{{println .}}{{end}}' \
-              "${tagged_images[$image_variable]}" \
-              | awk -v prefix="${repository}@sha256:" 'index($0, prefix) == 1 {print; exit}' || true)"
-            [ -n "${pinned_images[$image_variable]}" ] || {
-              echo "Could not resolve a registry digest for ${tagged_images[$image_variable]}." >&2
-              exit 1
-            }
-            replace_env_value "$image_variable" "${pinned_images[$image_variable]}"
-          done
-
-          # Keep an auditable, secret-free record of exactly what this run pushed. The
-          # resolved .env.production remains on the runner only because it contains the
-          # deployment secrets.
-          {
-            echo "deployment_version=$DEPLOYMENT_VERSION"
-            echo "commit=$DEPLOYMENT_COMMIT"
-            echo "environment=production"
-            echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            for image_variable in "${image_variables[@]}"; do
-              image_name="${image_variable%_IMAGE}"
-              image_name="${image_name,,}"
-              echo "image.${image_name}.tag=${tagged_images[$image_variable]}"
-              echo "image.${image_name}.digest=${pinned_images[$image_variable]#*@}"
-              echo "image.${image_name}.reference=${pinned_images[$image_variable]}"
-            done
-          } > "$output_dir/deployment-manifest.txt"
+        run: bash .github/scripts/prepare-compose-release.sh
 
       - name: Validate generated Compose configuration
         shell: bash
@@ -452,264 +216,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # Hand the generated compose file and env to Komodo, then deploy the stack.
-      # The stack must already exist in Komodo in `file_contents` mode.
-      #
-      # A deploy that fails puts the previous stack configuration back and deploys it again.
-      # Compose recreates the api and web containers before it finds out that a one-shot
-      # service they wait for has failed, so a failed deploy is not a no-op: left alone, it
-      # keeps the site down until something else is deployed. The one exception is a failed
-      # registry login (classify-komodo-failure.sh tells it apart): Komodo stops there,
-      # before it pulls or restarts anything, and a redeploy would start with the same login
-      # and fail the same way, so the configuration goes back without a redeploy.
+      # The stack already exists in Komodo in `file_contents` mode. The script saves its
+      # current configuration for rollback.
       - name: Deploy to Komodo
         env:
           KOMODO_URL: ${{ secrets.KOMODO_URL }}
           KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
           KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
-          # The name of a ghcr.io account in Komodo's registry providers, holding a token
-          # that can read this organisation's packages. A variable so that changing who
-          # holds that token needs no commit.
+          # Komodo registry account with read access to this organisation's GHCR packages.
           KOMODO_REGISTRY_ACCOUNT: ${{ vars.KOMODO_REGISTRY_ACCOUNT }}
           STACK: ${{ vars.KOMODO_STACK || 'group-split' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          classify="$GITHUB_WORKSPACE/.github/scripts/classify-komodo-failure.sh"
-          docs="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/deployment.md"
-          cd src/GroupSplit.AppHost/aspire-output
-
-          # What the step is doing and whether production has been touched by then, so a
-          # failure that no branch below expects still gets a summary that says both.
-          doing='preparing the Komodo update'
-          touched='no'
-          update_id=''
-          summarised=''
-
-          # summarise TITLE FAILED TOUCHED OUTCOME [NEXT]: the job summary of a failed deploy.
-          summarise() {
-            {
-              echo "### $1"
-              echo
-              echo "- Release: \`$DEPLOYMENT_VERSION\`"
-              echo "- Commit: \`$DEPLOYMENT_COMMIT\`"
-              [ -z "$update_id" ] || echo "- Komodo update: \`$update_id\`"
-              echo "- Failed at: $2"
-              echo "- Production touched: $3"
-              echo "- Outcome: $4"
-              [ -z "${5:-}" ] || printf '\n%s\n' "$5"
-            } >> "$GITHUB_STEP_SUMMARY"
-            summarised=1
-          }
-
-          # The environment file and request payloads contain production secrets. Remove
-          # them before action post-steps execute, even if Komodo rejects the update.
-          finish() {
-            local code=$?
-            rm -f payload.json previous.json rollback.json .env.production
-            if [ "$code" -ne 0 ] && [ -z "$summarised" ]; then
-              summarise "Deployment failed" "$doing" "$touched" "the step stopped there; its log says why"
-            fi
-          }
-          trap finish EXIT
-
-          # Mask the generated secrets before anything below can print them. GitHub masks
-          # only its own secrets; a value Aspire generates for a parameter nobody pinned
-          # would reach the log in the clear through any Compose output that echoes it.
-          while IFS= read -r line || [ -n "$line" ]; do
-            case "$line" in ''|'#'*) continue ;; esac
-            key="${line%%=*}"
-            value="${line#*=}"
-            value="${value#\"}"
-            value="${value%\"}"
-            if [[ "${key^^}" =~ PASSWORD|SECRET|KEY|TOKEN|CERT ]] && [ "${#value}" -ge 4 ]; then
-              echo "::add-mask::$value"
-            fi
-          done < .env.production
-
-          auth=(-H "X-Api-Key: $KOMODO_API_KEY" -H "X-Api-Secret: $KOMODO_API_SECRET" -H 'Content-Type: application/json')
-          # Safe to retry: UpdateStack is an upsert, and GetStack, GetUpdate and GetStackLog are reads.
-          curl_args=(--fail-with-body --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 10 --max-time 60)
-
-          # DeployStack is not. A retry after a lost or slow response would start a second
-          # deploy of the same stack -- the very thing the job concurrency group exists to
-          # prevent, from inside a single run. One attempt, with room to be accepted.
-          execute_args=(--fail-with-body --silent --show-error --connect-timeout 10 --max-time 120)
-
-          # Deploys whatever configuration the stack holds, and prints the update's id.
-          deploy() {
-            local response id
-            response=$(curl "${execute_args[@]}" -X POST "$KOMODO_URL/execute" "${auth[@]}" \
-              -d "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}")
-            id=$(jq -r '._id."$oid" // empty' <<<"$response")
-            if [ -z "$id" ]; then
-              echo "Komodo did not return an update id." >&2
-              return 1
-            fi
-            printf '%s' "$id"
-          }
-
-          # /execute is async: 2xx means accepted, not deployed. Polls the update into $status.
-          #
-          # Still running after five minutes has not failed, and calling it a failure sends
-          # whoever reads this looking for the wrong thing: it is most likely still going on
-          # the host, with the stack mid-change. Nor is it rolled back, which would race it.
-          wait_for() {
-            local id="$1" state=''
-            for _ in $(seq 1 60); do
-              sleep 5
-              status=$(curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
-                -d "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$id\"}}")
-              state="$(jq -r '.status // empty' <<<"$status")"
-              [ "$state" = "Complete" ] && return 0
-            done
-            echo "::error::Komodo update $id was still '${state:-unknown}' after five minutes. It is probably still running on the host; check the stack there before retrying, because a second deploy would race it."
-            return 1
-          }
-
-          # Says why the update in $status failed: the failed stages, and only their stderr,
-          # since the Compose Config stage's stdout is the fully interpolated Compose file.
-          # Komodo marks its own messages up as HTML for its UI; the tags are dropped here. A
-          # one-shot service that exited non-zero -- the realm worker, the migrations -- is
-          # named there but not explained, so its own log is fetched as well; so is a service
-          # whose healthcheck never passed, which Compose reports by container name as
-          # "container <project>-<service>-1 is unhealthy". Otherwise the reason stays on the
-          # host, and the rollback below recreates the container and discards it.
-          report_failure() {
-            local service
-            jq -r '(.logs // [])[] | select(.success == false)
-                   | "--- \(.stage): \(.command)\n\(.stderr // "" | gsub("<[^>]+>"; ""))"' <<<"$status"
-            for service in $(jq -r --arg stack "$STACK" '
-                [(.logs // [])[] | select(.success == false) | .stderr
-                 | (scan("service \"([^\"]+)\" didn.t complete successfully") | .[0]),
-                   (scan("container " + $stack + "-(.+?)(?:-[0-9]+)? is unhealthy") | .[0])]
-                | unique | .[]' <<<"$status"); do
-              echo "::group::Log of $service"
-              curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
-                -d "{\"type\":\"GetStackLog\",\"params\":{\"stack\":\"$STACK\",\"services\":[\"$service\"],\"tail\":200}}" \
-                | jq -r '.stdout, .stderr' \
-                || echo "Could not read the log of $service from Komodo."
-              echo "::endgroup::"
-              echo "::error::Service $service did not complete successfully; its log is in the group above."
-            done
-          }
-
-          # The failed stages of the update in $status, for a summary.
-          failed_stages() {
-            bash "$classify" <<<"$status" \
-              | jq -r '.failed_stages | if length == 0 then "no stage Komodo recorded" else join(", ") end'
-          }
-
-          # What production runs now, kept to put back if this deploy fails. Without it there
-          # is nothing to roll back to, and the deploy goes ahead as it always did.
-          if curl "${curl_args[@]}" -X POST "$KOMODO_URL/read" "${auth[@]}" \
-               -d "{\"type\":\"GetStack\",\"params\":{\"stack\":\"$STACK\"}}" > previous.json \
-             && jq -e '(.config.file_contents // "") != "" and (.config.environment // "") != ""' previous.json > /dev/null; then
-            jq --arg stack "$STACK" '{
-              type: "UpdateStack",
-              params: { id: $stack,
-                        config: { file_contents: .config.file_contents, environment: .config.environment,
-                                  registry_provider: .config.registry_provider,
-                                  registry_account: .config.registry_account } }
-            }' previous.json > rollback.json
-          else
-            echo "::warning::Could not read the current configuration of stack $STACK, so a failed deploy will not be rolled back."
-          fi
-          rm -f previous.json
-
-          # jq rather than string interpolation: the YAML is full of quotes and newlines.
-          jq -n --arg stack "$STACK" \
-                --arg registry_account "$KOMODO_REGISTRY_ACCOUNT" \
-                --rawfile yaml docker-compose.yaml \
-                --rawfile env .env.production '{
-            type: "UpdateStack",
-            params: { id: $stack,
-                      config: { file_contents: $yaml, environment: $env,
-                                # Komodo logs in to GHCR before compose up, with the
-                                # read-only account stored in its config. The provider
-                                # is the registry the AppHost pushes to, so it stays here.
-                                registry_provider: "ghcr.io",
-                                registry_account: $registry_account } }
-          }' > payload.json
-          doing='writing the release into the Komodo stack'
-          curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @payload.json > /dev/null
-
-          status=''
-          doing='starting the Komodo deploy'
-          touched="unknown: check the stack's updates in Komodo"
-          update_id=$(deploy)
-          doing="waiting for Komodo update $update_id"
-          touched='unknown: the update is probably still running on the host'
-          wait_for "$update_id"
-
-          if ! jq -e '.success == true' <<<"$status" > /dev/null; then
-            echo "::error::Komodo deploy failed for update $update_id."
-            report_failure
-
-            classification="$(bash "$classify" <<<"$status")"
-            kind="$(jq -r '.kind' <<<"$classification")"
-            failed="$(failed_stages)"
-
-            if [ "$kind" = registry-login ]; then
-              # Nothing on the host changed, so nothing is deployed again. Komodo's stack
-              # does hold this release's configuration by now; the previous one goes back,
-              # so that what Komodo shows -- and what a deploy started from its UI would
-              # run -- is what production runs.
-              if [ -f rollback.json ] \
-                 && curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null; then
-                outcome="not rolled back, because nothing changed; Komodo's stack configuration is the previous one again"
-              else
-                outcome="not rolled back, because nothing changed; Komodo's stack still holds this release's configuration, which is not what runs"
-              fi
-
-              echo "::error::Komodo could not log in to ghcr.io as its registry account '$KOMODO_REGISTRY_ACCOUNT', so it stopped before pulling or restarting anything. Production was not touched and still runs the previous release. Not rolled back: a redeploy starts with the same login. Renew that account's GHCR token in Komodo, then re-run this job."
-              summarise "Deployment failed: Komodo could not log in to GHCR" "$failed" \
-                "no, Komodo stops at the login, before it pulls or restarts anything" "$outcome" \
-                "**To fix:** the GHCR credential of Komodo's registry account \`$KOMODO_REGISTRY_ACCOUNT\` was refused, most likely because its token expired. Renew it in Komodo (Settings -> Providers -> ghcr.io) with a classic personal access token that has \`read:packages\`, then re-run this job. See [the registry account Komodo pulls with]($docs#the-registry-account-komodo-pulls-with)."
-              exit 1
-            fi
-
-            # Past the login, Compose may have recreated containers, so production is rolled
-            # back as before -- unless Komodo recorded no stage at all.
-            case "$kind" in
-              other) touched='possibly: the update got past the registry login, and Compose may have recreated containers' ;;
-              *) touched='unknown, Komodo recorded no stage' ;;
-            esac
-
-            if [ ! -f rollback.json ]; then
-              summarise "Deployment failed" "$failed" "$touched" \
-                "not rolled back: the previous configuration could not be read before the deploy"
-              exit 1
-            fi
-
-            echo "Restoring the previous configuration of stack $STACK and deploying it again."
-            doing="rolling back after $failed failed"
-            curl "${curl_args[@]}" -X POST "$KOMODO_URL/write" "${auth[@]}" --data @rollback.json > /dev/null
-            rollback_id=$(deploy)
-            doing="waiting for the rollback, Komodo update $rollback_id"
-            wait_for "$rollback_id"
-
-            if jq -e '.success == true' <<<"$status" > /dev/null; then
-              echo "::error::Rolled back: production runs the previous stack configuration again (Komodo update $rollback_id)."
-              outcome="rolled back to the previous configuration (\`$rollback_id\`)"
-            else
-              echo "::error::The rollback failed as well (Komodo update $rollback_id), so production is probably down."
-              report_failure
-              outcome="failed, and so did the rollback (\`$rollback_id\`, at $(failed_stages)), so production is probably down"
-            fi
-
-            summarise "Deployment failed" "$failed" "$touched" "$outcome"
-            exit 1
-          fi
-
-          {
-            echo "### Deployment"
-            echo
-            echo "- Release: \`$DEPLOYMENT_VERSION\`"
-            echo "- Commit: \`$DEPLOYMENT_COMMIT\`"
-            echo "- Komodo update: \`$update_id\`"
-            echo "- Environment: \`production\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: bash .github/scripts/deploy-komodo-stack.sh
 
       # Komodo's completed update confirms that the stack operation finished, but it does
       # not prove that the public proxy and identity issuer are serving the new release.

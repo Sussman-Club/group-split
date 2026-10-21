@@ -20,10 +20,25 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- Exercise the platform-independent native session without an Android runtime. -->
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeSession.cs" Link="Native/NativeSession.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeOptions.cs" Link="Native/NativeOptions.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeLinkRouter.cs" Link="Native/NativeLinkRouter.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/INativeBrowser.cs" Link="Native/INativeBrowser.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/INativeTokenStore.cs" Link="Native/INativeTokenStore.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeJsonContext.cs" Link="Native/NativeJsonContext.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeBrowser.cs" Link="Native/NativeBrowser.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeTokenStore.cs" Link="Native/NativeTokenStore.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/ClientOptionsSetter.cs" Link="Native/ClientOptionsSetter.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeServiceExtensions.cs" Link="Native/NativeServiceExtensions.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthDelegatingHandler.cs" Link="Native/AuthDelegatingHandler.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthService.cs" Link="Native/AuthService.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeBankLinkLauncher.cs" Link="Native/NativeBankLinkLauncher.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="bunit" Version="2.9.0" />
+    <PackageReference Include="Microsoft.Maui.Essentials" Version="10.0.110" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <!-- Collects coverage under Microsoft.Testing.Platform. Filters live in
          tests/coverage.config, which every run passes on the command line. -->

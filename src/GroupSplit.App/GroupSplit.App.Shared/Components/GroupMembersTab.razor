@@ -8,6 +8,7 @@
 @inject IDialogService DialogService
 @inject DataChangeNotifier Changes
 @inject NavigationManager Nav
+@inject AppLinks AppLinks
 @inject LocalClock Clock
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
@@ -515,7 +516,7 @@
     /// </remarks>
     private async Task CopyAsync(Guid guestUserId, string name, string token, string copiedMessage)
     {
-        var url = $"{Nav.BaseUri.TrimEnd('/')}/claim/{token}";
+        var url = AppLinks.PublicUrl(Nav.BaseUri, $"claim/{token}");
         var copied = false;
 
         try

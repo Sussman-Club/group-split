@@ -17,6 +17,9 @@ namespace GroupSplit.App.Shared.Services.Banking;
 /// </remarks>
 public interface IBankLinkLauncher
 {
+    /// <summary>Whether linking must be completed in the web app instead of this host.</summary>
+    bool RequiresExternalBrowser => false;
+
     /// <summary>
     /// Shows the linking UI. Answers the public token when somebody links a bank, and null
     /// when they close it, when it fails, or when the browser cannot run it at all.

@@ -1,9 +1,7 @@
-﻿using GroupSplit.App.Services;
-using GroupSplit.App.Shared.Services;
-using GroupSplit.Shared;
+using GroupSplit.App.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MudBlazor.Services;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.App;
 
@@ -11,31 +9,20 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
-        var builder = MauiApp.CreateBuilder();
-        builder
-            .UseMauiApp<App>()
-            .ConfigureFonts(fonts =>
-            {
-                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-            });
-
-        // Add shared services
-        builder.Services.AddSharedServices(ServiceLifetime.Singleton);
-
-        // Add device-specific services used by the GroupSplit.App.Shared project
-        builder.Services.AddSingleton<AuthService>();
-        builder.Services.AddSingleton<IAuthService>(ActivatorUtilities.GetServiceOrCreateInstance<AuthService>);
-
+        var builder = MauiApp.CreateBuilder().UseMauiApp<App>();
         builder.Services.AddMauiBlazorWebView();
-
-        // Add MudBlazor services
         builder.Services.AddMudServices();
+        builder.Services.AddTransient<MainPage>();
 
 #if DEBUG
+        const bool development = true;
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
+#else
+        const bool development = false;
 #endif
 
+        builder.Services.AddNativeServices(NativeOptions.FromAssembly(typeof(MauiProgram).Assembly, development));
         return builder.Build();
     }
 }

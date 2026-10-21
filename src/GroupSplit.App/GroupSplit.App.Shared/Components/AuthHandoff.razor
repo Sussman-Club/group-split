@@ -69,6 +69,7 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
+    [Parameter] public string? ReturnUrl { get; set; }
 
     private bool _redirecting;
     private bool _remember;
@@ -97,7 +98,28 @@
 
         _redirecting = true;
 
-        await AuthService.Login(ReadQueryValue("returnUrl"), _remember);
+        try
+        {
+            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"), _remember);
+        }
+        catch (OperationCanceledException)
+        {
+            _redirecting = false;
+            Error = "Sign-in was cancelled. You can try again.";
+            _notice = true;
+        }
+        catch (HttpRequestException)
+        {
+            _redirecting = false;
+            Error = "The sign-in server could not be reached. Check your connection and try again.";
+            _notice = false;
+        }
+        catch (InvalidOperationException)
+        {
+            _redirecting = false;
+            Error = "Sign-in could not be completed. Please try again.";
+            _notice = false;
+        }
     }
 
     private string? ReadQueryValue(string key)
