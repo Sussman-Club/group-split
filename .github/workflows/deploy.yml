@@ -55,6 +55,14 @@ jobs:
       packages: write
 
     steps:
+      # Validation invokes repository scripts, so checkout must come first.
+      - name: Check out the merged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history and every tag: the version below is derived from them.
+          fetch-depth: 0
+          persist-credentials: false
+
       # Keep Komodo credentials out of the image-build environment.
       - name: Validate Komodo credentials
         env:
@@ -118,13 +126,6 @@ jobs:
           AZURE_OPENAI_DECISION_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DECISION_DEPLOYMENT }}
         shell: bash
         run: bash .github/scripts/validate-deployment-inputs.sh
-
-      - name: Check out the merged commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # Full history and every tag: the version below is derived from them.
-          fetch-depth: 0
-          persist-credentials: false
 
       # The release script reuses an existing tag on HEAD when a workflow is rerun.
       - name: Claim the release version
