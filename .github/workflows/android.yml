@@ -1,0 +1,49 @@
+name: Android build
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'src/GroupSplit.App/**'
+      - 'src/GroupSplit.Shared/**'
+      - 'src/GroupSplit.API/**'
+      - 'global.json'
+      - '.github/workflows/android.yml'
+      - '.github/workflows/android-release.yml'
+      - 'tools/Publish-Android*.ps1'
+      - 'tests/android-release.check.ps1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check signing helper cleanup
+        shell: pwsh
+        run: ./tests/android-release.check.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android MAUI workload
+        run: dotnet workload install maui-android
+      # Compile-only example endpoints. This job does not connect to a live backend,
+      # sign a release package, or establish on-device acceptance.
+      - name: Build Android
+        run: >-
+          dotnet build src/GroupSplit.App/GroupSplit.App/GroupSplit.App.csproj
+          -c Debug -f net10.0-android -p:AndroidOnly=true
+          -p:NativeApiUrl=https://api.example.com/
+          -p:NativeAuthority=https://identity.example.com/realms/group-split

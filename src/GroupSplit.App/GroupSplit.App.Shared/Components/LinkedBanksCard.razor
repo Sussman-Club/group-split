@@ -23,7 +23,11 @@
         }
     </div>
 
-    @if (Inbox.Connections is { Enabled: false })
+    @if (Link.RequiresExternalBrowser)
+    {
+        <p class="meta">To link or reconnect a bank, open Group Split in your browser.</p>
+    }
+    else if (Inbox.Connections is { Enabled: false })
     {
         <p class="meta">
             Bank sync is not switched on for this app, so there is nothing to link yet.

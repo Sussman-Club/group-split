@@ -1,0 +1,117 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: 'Android version code (increase for each distributed build)'
+        required: true
+        type: string
+      display_version:
+        description: 'Version shown to users'
+        required: true
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The production environment permits main (and app-v* tags); release dispatches use main.
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      BUILD_VERSION: ${{ inputs.build_version }}
+      DISPLAY_VERSION: ${{ inputs.display_version }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate release version
+        run: |
+          if ($env:BUILD_VERSION -notmatch '^[1-9][0-9]{0,9}$' -or [long]$env:BUILD_VERSION -gt 2100000000) {
+            throw 'Build version must be an integer between 1 and 2100000000.'
+          }
+          if ($env:DISPLAY_VERSION -notmatch '^\d+\.\d+(\.\d+)?$') {
+            throw 'Display version must be two or three numeric components.'
+          }
+      - name: Check signing helper cleanup
+        run: ./tests/android-release.check.ps1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android MAUI workload
+        run: |
+          dotnet workload install maui-android
+          if ($LASTEXITCODE -ne 0) { throw 'Android workload installation failed.' }
+      - name: Test native session and shared app
+        run: |
+          dotnet test --project tests/GroupSplit.App.Web.Test -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'App tests failed.' }
+      - name: Build signed packages
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS || 'groupsplit-upload' }}
+        run: |
+          ./tools/Publish-AndroidCI.ps1 -BuildVersion $env:BUILD_VERSION `
+            -DisplayVersion $env:DISPLAY_VERSION -Format apk
+      - name: Verify package signatures and record checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          for package in artifacts/android/apk/*-Signed.apk; do
+            [ -f "$package" ] || continue
+            "$apksigner" verify --verbose "$package"
+          done
+          cp artifacts/android/apk/club.sussman.groupsplit-Signed.apk artifacts/android/GroupSplit.apk
+          cd artifacts/android
+          sha256sum GroupSplit.apk > SHA256SUMS
+      - name: Upload signed packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-${{ inputs.display_version }}-${{ inputs.build_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/android/GroupSplit.apk
+            artifacts/android/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish website download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $tag = "android-v$env:DISPLAY_VERSION-$env:BUILD_VERSION"
+          $notesPath = Join-Path $env:RUNNER_TEMP 'android-release-notes.md'
+          @(
+            "Group Split $env:DISPLAY_VERSION for Android (build $env:BUILD_VERSION).",
+            '',
+            'Download and installation instructions: https://groupsplit.sussman.win/android',
+            '',
+            'Requires Android 7.0 or newer. Install GroupSplit.apk to install or update the app.',
+            "Source commit: $env:RELEASE_COMMIT. The SHA256SUMS file verifies the download."
+          ) | Set-Content -LiteralPath $notesPath
+          # Upload into a draft so the website cannot offer an incomplete release.
+          gh release create $tag artifacts/android/GroupSplit.apk artifacts/android/SHA256SUMS `
+            --target $env:RELEASE_COMMIT --title "Group Split $env:DISPLAY_VERSION (Android build $env:BUILD_VERSION)" `
+            --notes-file $notesPath --draft
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the Android release failed. Use a new build version for each release.' }
+          gh release edit $tag --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing the Android download failed; the release is still a draft.' }

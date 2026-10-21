@@ -38,6 +38,8 @@ going to build it. Nothing else depends on it: the AppHost reaches the MAUI proj
 rather than by project reference, CI never builds it, and the dashboard builds it only when
 somebody starts it.
 
+For Android configuration and the native-app acceptance checklist, see [Android](android.md).
+
 ## Run it
 
 From the root of the checkout:

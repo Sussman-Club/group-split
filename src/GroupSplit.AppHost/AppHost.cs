@@ -1,4 +1,5 @@
 using GroupSplit.AppHost.Extensions;
+using Microsoft.Extensions.Configuration;
 using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
@@ -137,6 +138,16 @@ var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web"
 
 if (builder.ExecutionContext.IsRunMode)
 {
+    // ADB reverse carries these loopback ports to Android without trusting a host
+    // development certificate. Opt in only for local Debug acceptance testing.
+    if (builder.Configuration.GetValue<bool>("NativeDeviceTesting"))
+    {
+#pragma warning disable ASPIRECERTIFICATES001
+        keycloak.WithoutHttpsCertificate()
+            .WithEndpoint("http", endpoint => endpoint.Port = 8180);
+#pragma warning restore ASPIRECERTIFICATES001
+    }
+
     // What the AI calls were asked and answered, on their spans, so the dashboard's GenAI
     // view has something to show. Locally only: it is people's merchants and amounts, and a
     // deployment's traces have no business holding them.

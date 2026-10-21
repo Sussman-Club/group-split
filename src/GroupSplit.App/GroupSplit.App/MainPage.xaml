@@ -4,11 +4,12 @@
              xmlns:local="clr-namespace:GroupSplit.App"
              xmlns:shared="clr-namespace:GroupSplit.App.Shared;assembly=GroupSplit.App.Shared"
              x:Class="GroupSplit.App.MainPage"
+             SafeAreaEdges="All"
              BackgroundColor="{DynamicResource PageBackgroundColor}">
 
     <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
         <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />
+            <RootComponent Selector="#app" ComponentType="{x:Type local:NativeRoutes}" />
         </BlazorWebView.RootComponents>
     </BlazorWebView>
 

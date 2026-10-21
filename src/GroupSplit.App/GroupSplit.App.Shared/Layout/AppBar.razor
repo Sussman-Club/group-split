@@ -3,6 +3,7 @@
 @using GroupSplit.Shared
 @inject IAuthService AuthService
 @inject NavigationManager Nav
+@inject AppLinks AppLinks
 @implements IDisposable
 
 <header class="gs-topbar">
@@ -12,9 +13,15 @@
     <h2 class="gs-topbar-title">@Title</h2>
     <span class="gs-topbar-spacer"></span>
 
+    @if (!AppLinks.IsNative)
+    {
+        <MudIconButton Icon="@Icons.Material.Rounded.Android" Href="/android"
+                       Title="Get the Android app" aria-label="Get the Android app" />
+    }
+
     <ThemeModeMenu />
 
-    @if (UserInfo is not null)
+    @if (UserInfo is { } user)
     {
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense>
             @* Custom activator content owns its own activation: MudBlazor wires the
@@ -26,14 +33,14 @@
                         class="gs-user-btn"
                         aria-label="Account menu"
                         @onclick="@context.ToggleAsync">
-                    <span class="name">@UserInfo.FirstName</span>
-                    <Avatar Name="@UserInfo.FullName" Size="sm" />
+                    <span class="name">@user.FirstName</span>
+                    <Avatar Name="@user.FullName" Size="sm" />
                 </button>
             </ActivatorContent>
             <ChildContent>
                 <div style="padding: 10px 16px 6px; min-width: 200px">
-                    <div style="font-weight: 700; font-size: .875rem">@UserInfo.FullName</div>
-                    <div class="gs-muted" style="font-size: .75rem">@UserInfo.Email</div>
+                    <div style="font-weight: 700; font-size: .875rem">@user.FullName</div>
+                    <div class="gs-muted" style="font-size: .75rem">@user.Email</div>
                 </div>
                 <MudDivider Class="my-1" />
                 <MudMenuItem Icon="@Icons.Material.Rounded.AccountCircle" Label="Account" Href="/account" />

@@ -1,0 +1,73 @@
+@page "/android"
+@attribute [AllowAnonymous]
+@using System.Net.Http.Json
+@using GroupSplit.App.Shared.Components
+@inject IHttpClientFactory Clients
+@inject NavigationManager Nav
+@inject AppLinks AppLinks
+
+<PageTitle>Android app - Group Split</PageTitle>
+
+<section class="gs-card gs-card-pad" style="max-width: 42rem; margin: 24px auto">
+    <BrandMark Size="64" />
+    <div class="gs-eyebrow" style="margin-top: 24px">Group Split for Android</div>
+    <h1>Your groups, in your pocket.</h1>
+    <p>Track expenses, check balances and settle up from your phone.</p>
+
+    @if (AppLinks.IsNative)
+    {
+        <p>You are already using the Android app. Get future updates from the website.</p>
+        <MudButton Href="@AppLinks.PublicUrl(Nav.BaseUri, "android")" Target="_blank" Variant="Variant.Filled" Color="Color.Primary">Open download page</MudButton>
+    }
+    else if (_loading)
+    {
+        <p role="status">Checking the latest Android version…</p>
+    }
+    else if (_release is { } release)
+    {
+        <MudButton Href="@release.DownloadUrl" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   Class="gs-btn-pill" StartIcon="@Icons.Material.Rounded.Download" data-enhance-nav="false">Download for Android</MudButton>
+        <p class="gs-muted">@release.Version · @((release.Size / 1048576d).ToString("0")) MB · Android 7.0 or newer</p>
+        <p><a href="@release.ChecksumUrl" data-enhance-nav="false">Download checksum</a></p>
+    }
+    else
+    {
+        <p role="status">The Android download is not available right now. You can keep using Group Split in your browser.</p>
+        <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" Color="Color.Primary">Check again</MudButton>
+    }
+
+    <h2 style="margin-top: 32px">Install on your phone</h2>
+    <ol>
+        <li>Download the APK on your Android phone.</li>
+        <li>Open the download. If Android asks, allow this browser to install apps.</li>
+        <li>Install Group Split, then open it and sign in with your usual account.</li>
+    </ol>
+    <p class="gs-muted">You can turn off the browser's install permission afterward. For updates, download the new APK here and install it over the existing app.</p>
+    <MudButton Href="/" Variant="Variant.Text">Continue on the website</MudButton>
+</section>
+
+@code {
+    private AndroidReleaseInfo? _release;
+    private bool _loading = true;
+
+    // Both interactive web modes can read the public endpoint without server-only services.
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        firstRender && !AppLinks.IsNative ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            using var client = Clients.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(15);
+            _release = await client.GetFromJsonAsync(Nav.ToAbsoluteUri("/downloads/android/latest"), AndroidDownloadJsonContext.Default.AndroidReleaseInfo);
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _release = null;
+        }
+        finally { _loading = false; }
+        StateHasChanged();
+    }
+}

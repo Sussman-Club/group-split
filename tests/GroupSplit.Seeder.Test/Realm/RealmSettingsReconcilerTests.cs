@@ -7,6 +7,29 @@ namespace GroupSplit.Seeder.Test.Realm;
 
 public sealed class RealmSettingsReconcilerTests
 {
+    [Fact]
+    public async Task Native_is_created_on_existing_realms_and_its_security_drift_is_repaired()
+    {
+        var current = Imported();
+        var clients = current["clients"]!.AsArray();
+        clients.Remove(clients.OfType<JsonObject>().Single(client => client["clientId"]!.GetValue<string>() == "native"));
+        var admin = new StubRealmAdmin(current);
+        await Reconcile(admin);
+        Assert.Contains("create client native", admin.Writes);
+        var native = admin.Clients["native"];
+        native["redirectUris"] = new JsonArray("https://attacker.example/callback");
+        native["directAccessGrantsEnabled"] = true;
+        native["attributes"]!["pkce.code.challenge.method"] = "plain";
+        await Reconcile(admin);
+        native = admin.Clients["native"];
+        Assert.Equal("groupsplit://auth/callback", native["redirectUris"]![0]!.GetValue<string>());
+        Assert.False(native["directAccessGrantsEnabled"]!.GetValue<bool>());
+        Assert.Equal("S256", native["attributes"]!["pkce.code.challenge.method"]!.GetValue<string>());
+        var writes = admin.Writes.Count;
+        await Reconcile(admin);
+        Assert.Equal(writes, admin.Writes.Count);
+    }
+
     private const string Origin = "https://groupsplit.example";
 
     private const string DeletionSecret = "the-deploy-secret";

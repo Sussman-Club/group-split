@@ -48,6 +48,7 @@ public class InboxPageTest : ComponentTest
 
     public InboxPageTest()
     {
+        Services.AddSingleton(Mock.Of<IBankLinkLauncher>());
         _rows = [Row("Lidl", 30m, new DateOnly(2026, 9, 1))];
 
         _inbox

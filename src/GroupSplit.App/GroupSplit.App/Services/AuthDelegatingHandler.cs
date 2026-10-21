@@ -1,22 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System;
 
 namespace GroupSplit.App.Services;
 
-internal class AuthDelegatingHandler(AuthService authService) : DelegatingHandler
+internal sealed class AuthDelegatingHandler(NativeSession session) : DelegatingHandler
 {
-    protected async override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        if (authService.AccessTokenResponse is not null)
-        {
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authService.AccessTokenResponse.AccessToken);
-        }
-        return await base.SendAsync(request, cancellationToken);
-    }
-
-    protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
+        var token = await session.AccessTokenAsync(cancellationToken);
+        if (token is not null)
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var response = await base.SendAsync(request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && token is not null)
+            await session.InvalidateAsync(token, cancellationToken);
+        return response;
     }
 }

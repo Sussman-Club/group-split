@@ -9,6 +9,28 @@ namespace GroupSplit.Seeder.Test.Realm;
 /// </summary>
 public sealed class RealmDefinitionTests
 {
+    [Fact]
+    public void Native_requires_PKCE_and_only_redirects_to_the_registered_app()
+    {
+        var client = KeycloakRealmDefinition.Client(KeycloakRealmDefinition.Load(), "native")!;
+        Assert.True(client["publicClient"]!.GetValue<bool>());
+        Assert.True(client["standardFlowEnabled"]!.GetValue<bool>());
+        foreach (var flow in new[] { "implicitFlowEnabled", "directAccessGrantsEnabled", "serviceAccountsEnabled" })
+            Assert.False(client[flow]!.GetValue<bool>());
+        Assert.Equal(["groupsplit://auth/callback"], Strings(client["redirectUris"]));
+        Assert.Empty(Strings(client["webOrigins"]));
+        Assert.Equal("S256", client["attributes"]!["pkce.code.challenge.method"]!.GetValue<string>());
+        Assert.Equal("true", client["attributes"]!["use.refresh.tokens"]!.GetValue<string>());
+        Assert.Equal("api", KeycloakRealmDefinition.ProtocolMapper(client, "audience-mapper")!
+            ["config"]!["included.client.audience"]!.GetValue<string>());
+        var managed = Assert.Single(KeycloakRealmDefinition.ManagedClients, item => item.ClientId == "native");
+        Assert.True(managed.CreateWhenMissing);
+        Assert.Contains("pkce.code.challenge.method", managed.Attributes);
+        Assert.Contains("redirectUris", managed.Properties);
+        Assert.Contains("use.refresh.tokens", managed.Attributes);
+        Assert.Equal(["audience-mapper"], managed.ProtocolMappers);
+    }
+
     /// <summary>
     /// A wildcard redirect URI on a public client hands an authorization code to whoever
     /// builds the link -- PKCE does not help when the attacker chose the challenge. Every
