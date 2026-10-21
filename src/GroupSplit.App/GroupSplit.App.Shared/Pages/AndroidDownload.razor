@@ -8,51 +8,78 @@
 
 <PageTitle>Android app - Group Split</PageTitle>
 
-<section class="gs-card gs-card-pad" style="max-width: 42rem; margin: 24px auto">
-    <BrandMark Size="64" />
-    <div class="gs-eyebrow" style="margin-top: 24px">Group Split for Android</div>
-    <h1>Your groups, in your pocket.</h1>
-    <p>Track expenses, check balances and settle up from your phone.</p>
+<div class="gs-android-page">
+    <section class="gs-android-hero" aria-labelledby="android-title">
+        <div class="gs-android-app-icon"><BrandMark Size="64" /></div>
+        <p class="gs-android-platform"><MudIcon Icon="@Icons.Material.Rounded.Android" Size="Size.Small" /> Group Split for Android</p>
+        <h1 id="android-title">Your groups,<br />in your pocket.</h1>
+        <p class="gs-android-intro">From the first shared bill to the last settled balance. Keep your expenses together, wherever the group goes.</p>
 
-    @if (AppLinks.IsNative)
-    {
-        <p>You are already using the Android app. Get future updates from the website.</p>
-        <MudButton Href="@AppLinks.PublicUrl(Nav.BaseUri, "android")" Target="_blank" Variant="Variant.Filled" Color="Color.Primary">Open download page</MudButton>
-    }
-    else if (_loading)
-    {
-        <p role="status">Checking the latest Android version…</p>
-    }
-    else if (_release is { } release)
-    {
-        <MudButton Href="@release.DownloadUrl" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                   Class="gs-btn-pill" StartIcon="@Icons.Material.Rounded.Download" data-enhance-nav="false">Download for Android</MudButton>
-        <p class="gs-muted">@release.Version · @((release.Size / 1048576d).ToString("0")) MB · Android 7.0 or newer</p>
-        <p><a href="@release.ChecksumUrl" data-enhance-nav="false">Download checksum</a></p>
-    }
-    else
-    {
-        <p role="status">The Android download is not available right now. You can keep using Group Split in your browser.</p>
-        <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" Color="Color.Primary">Check again</MudButton>
-    }
+        <div class="gs-android-download" aria-live="polite" aria-busy="@_loading.ToString().ToLowerInvariant()">
+            @if (AppLinks.IsNative)
+            {
+                <h2>You're all set.</h2>
+                <p>You are already using the Android app. Get future updates from the website.</p>
+                <MudButton Href="@AppLinks.PublicUrl(Nav.BaseUri, "android")" Target="_blank" Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill">Open download page</MudButton>
+            }
+            else if (_loading)
+            {
+                <p role="status">Checking the latest Android version…</p>
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Checking for an Android release" />
+            }
+            else if (_release is { } release)
+            {
+                <MudButton Href="@release.DownloadUrl" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           Class="gs-btn-pill gs-android-cta" StartIcon="@Icons.Material.Rounded.Download" data-enhance-nav="false">Download for Android</MudButton>
+                <p class="gs-android-compatibility">Android 7.0 or newer</p>
+                <dl class="gs-android-release">
+                    <div><dt>Version</dt><dd>@release.Version</dd></div>
+                    <div><dt>Download size</dt><dd>@((release.Size / 1048576d).ToString("0")) MB</dd></div>
+                    <div><dt>File type</dt><dd>Android APK</dd></div>
+                </dl>
+                <a class="gs-android-checksum" href="@release.ChecksumUrl" data-enhance-nav="false">Download checksum</a>
+            }
+            else
+            {
+                <h2>Check back in a moment.</h2>
+                <p role="status">The Android download is not available right now. You can keep using Group Split in your browser.</p>
+                <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" Color="Color.Primary" Class="gs-btn-pill">Check again</MudButton>
+            }
+        </div>
+        <a class="gs-android-web-link" href="/">Continue on the website</a>
+    </section>
 
-    <h2 style="margin-top: 32px">Install on your phone</h2>
-    <ol>
-        <li>Download the APK on your Android phone.</li>
-        <li>Open the download. If Android asks, allow this browser to install apps.</li>
-        <li>Install Group Split, then open it and sign in with your usual account.</li>
-    </ol>
-    <p class="gs-muted">You can turn off the browser's install permission afterward. For updates, download the new APK here and install it over the existing app.</p>
-    <MudButton Href="/" Variant="Variant.Text">Continue on the website</MudButton>
-</section>
+    <section class="gs-android-install" aria-labelledby="android-install-title">
+        <div class="gs-android-install-heading">
+            <MudIcon Icon="@Icons.Material.Rounded.InstallMobile" Size="Size.Large" />
+            <h2 id="android-install-title">A few steps.<br />Then you're in.</h2>
+            <p>Install on your phone directly from this page.</p>
+        </div>
+        <ol class="gs-android-steps">
+            <li><div><h3>Download the app</h3><p>Download the APK on your Android phone.</p></div></li>
+            <li><div><h3>Allow the install</h3><p>Open the download. If Android asks, allow this browser to install apps. You can turn off this permission afterward.</p></div></li>
+            <li><div><h3>Pick up where you left off</h3><p>Install Group Split, then open it and sign in with your usual account.</p></div></li>
+        </ol>
+        <div class="gs-android-update-note">
+            <MudIcon Icon="@Icons.Material.Rounded.SystemUpdate" Size="Size.Small" />
+            <div><h3>When it's time to update</h3><p>Download the new APK here and install it over the existing app.</p></div>
+        </div>
+    </section>
+</div>
 
 @code {
     private AndroidReleaseInfo? _release;
     private bool _loading = true;
 
     // Both interactive web modes can read the public endpoint without server-only services.
-    protected override Task OnAfterRenderAsync(bool firstRender) =>
-        firstRender && !AppLinks.IsNative ? LoadAsync() : Task.CompletedTask;
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return Task.CompletedTask;
+        if (!AppLinks.IsNative) return LoadAsync();
+        _loading = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
 
     private async Task LoadAsync()
     {
