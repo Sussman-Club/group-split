@@ -7,6 +7,14 @@ public sealed class NativeLinkRouter(NativeOptions options)
     private string? pending;
     public event Action<string>? Changed;
 
+    public void OpenGroup(Guid groupId)
+    {
+        if (groupId == Guid.Empty) return;
+        var route = $"/groups/{groupId}";
+        lock (gate) pending = route;
+        Changed?.Invoke(route);
+    }
+
     public bool Open(Uri uri)
     {
         var route = Route(uri, options.WebBaseAddress);

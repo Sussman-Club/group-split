@@ -1,0 +1,33 @@
+@using GroupSplit.App.Shared.Services
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@if (push is { Supported: true })
+{
+    <div class="gs-card gs-card-pad">
+        <div class="gs-card-title"><h2>Notifications</h2></div>
+        <p class="gs-muted">Get an alert on this device when someone adds an expense to your group.</p>
+        <MudSwitch T="bool" Value="push.Enabled" ValueChanged="SetEnabled" Disabled="busy" Color="Color.Primary">
+            Expense alerts
+        </MudSwitch>
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Warning">@error</MudAlert>
+        }
+    </div>
+}
+
+@code {
+    private IPushNotifications? push;
+    private bool busy;
+    private string? error;
+    protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();
+    private async Task SetEnabled(bool value)
+    {
+        busy = true;
+        error = null;
+        try { await push!.SetEnabledAsync(value); }
+        catch (Exception) { error = "Could not update alerts. Check your connection and allow notifications in Android settings, then try again."; }
+        finally { busy = false; }
+    }
+}

@@ -5,6 +5,16 @@ namespace GroupSplit.App.Web.Test.Native;
 
 public sealed class NativeLinkRouterTest
 {
+    [Fact]
+    public void A_notification_group_waits_for_the_webview_and_empty_ids_are_ignored()
+    {
+        var links = new NativeLinkRouter(NativeOptions.Create("https://api.example/", "https://auth.example/", false));
+        links.OpenGroup(Guid.Empty);
+        Assert.Null(links.Take());
+        var group = Guid.NewGuid();
+        links.OpenGroup(group);
+        Assert.Equal($"/groups/{group}", links.Take());
+    }
     private static readonly Uri Website = new("https://groupsplit.sussman.win/");
 
     [Theory]

@@ -74,6 +74,7 @@ public static class DomainServiceExtensions
         {
             routes.MapGroupApi();
             routes.MapUserApi();
+            routes.MapPushApi();
             routes.MapSettlementRequestsApi();
             routes.MapInvitationsApi();
             routes.MapTransaction();

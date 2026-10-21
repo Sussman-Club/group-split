@@ -56,6 +56,11 @@ builder.Services.AddReceiptStorage(builder.Configuration);
 builder.Services.AddReceiptTranscription(builder.Configuration);
 builder.Services.AddFilingSuggestions(builder.Configuration);
 builder.Services.AddDomainServices();
+if (builder.Configuration.GetValue<bool>("Push:Enabled"))
+{
+    builder.Services.AddSingleton<GroupSplit.API.Services.Push.IPushSender, GroupSplit.API.Services.Push.FirebasePushSender>();
+    builder.Services.AddHostedService<GroupSplit.API.Services.Push.FirebasePushWorker>();
+}
 
 // The Data Protection key ring the bank access tokens are encrypted with, in the app
 // database and itself encrypted with a certificate the deployment holds as a secret.

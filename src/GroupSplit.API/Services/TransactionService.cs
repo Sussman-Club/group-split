@@ -331,6 +331,7 @@ public class TransactionService(
             await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
         dbContext.Add(expense);
+        await GroupSplit.API.Services.Push.ExpensePushQueue.Enqueue(dbContext, group.Id, currentUser.Id, ct);
         await dbContext.SaveChangesAsync(ct);
 
         return expense;

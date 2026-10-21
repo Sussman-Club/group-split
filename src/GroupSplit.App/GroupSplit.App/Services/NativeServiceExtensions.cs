@@ -19,6 +19,9 @@ public static class NativeServiceExtensions
         services.AddSingleton<INativeBrowser, NativeBrowser>();
         services.AddSingleton<INativeTokenStore, NativeTokenStore>();
         services.AddSingleton<NativeSession>();
+#if ANDROID
+        services.AddSingleton<IPushNotifications, AndroidPushNotifications>();
+#endif
         services.AddHttpClient(NativeSession.IdentityClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false });
         services.AddTransient<AuthDelegatingHandler>();

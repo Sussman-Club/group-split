@@ -25,7 +25,20 @@ public class MainActivity : MauiAppCompatActivity
 
     private static void OpenLink(Intent? intent)
     {
+        if (Guid.TryParse(intent?.GetStringExtra("groupId"), out var groupId))
+            IPlatformApplication.Current?.Services.GetRequiredService<Services.NativeLinkRouter>().OpenGroup(groupId);
         if (intent?.Action == Intent.ActionView && Uri.TryCreate(intent.DataString, UriKind.Absolute, out var uri))
             Microsoft.Maui.Controls.Application.Current?.SendOnAppLinkRequestReceived(uri);
+    }
+
+    protected override async void OnResume()
+    {
+        base.OnResume();
+        try
+        {
+            if (IPlatformApplication.Current?.Services.GetService<GroupSplit.App.Shared.Services.IPushNotifications>() is { } push)
+                await push.RefreshAsync();
+        }
+        catch (Exception) { /* Retry token registration when the app next resumes. */ }
     }
 }

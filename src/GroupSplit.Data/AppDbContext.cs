@@ -34,6 +34,20 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PushDevice>(entity =>
+        {
+            entity.Property(device => device.Token).HasMaxLength(4096).IsRequired();
+            entity.HasIndex(device => device.Token).IsUnique();
+            entity.HasIndex(device => device.UserId);
+            entity.HasOne<User>().WithMany().HasForeignKey(device => device.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<PushDelivery>(entity =>
+        {
+            entity.Property(delivery => delivery.NextAttemptAt).IsConcurrencyToken();
+            entity.HasIndex(delivery => delivery.NextAttemptAt);
+            entity.HasOne<PushDevice>().WithMany().HasForeignKey(delivery => delivery.DeviceId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Group>().WithMany().HasForeignKey(delivery => delivery.GroupId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<User>(entity =>
         {
             entity.Property(user => user.FirstName).HasMaxLength(64);
