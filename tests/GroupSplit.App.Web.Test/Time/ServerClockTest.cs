@@ -52,6 +52,7 @@ public class ServerClockTest : ComponentTest
         ComponentFactories.AddStub<AppThemeProvider>();
         ComponentFactories.AddStub<NavMenu>();
         ComponentFactories.AddStub<AppBar>();
+        ComponentFactories.AddStub<AndroidUpdateNotice>();
 
         _settling.Setup(state => state.Plan).Returns(new SettlementPlanResponse(0m, 0m, 0m, [], [], null));
         _settling.Setup(state => state.History).Returns(new PagedResponse<SettlementResponse>(
