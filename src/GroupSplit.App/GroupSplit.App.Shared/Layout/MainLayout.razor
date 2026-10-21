@@ -39,6 +39,7 @@
     <div class="gs-main">
         <AppBar />
         <main class="gs-content">
+            <AndroidUpdateNotice />
             <div class="gs-page" @key="(_path, Clock.Offset)">
                 @* The last resort, for bugs. Rejected requests never reach it: the API's
                    refusals are read by ApiErrorPresenter and shown as messages, so what
