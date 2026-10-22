@@ -56,6 +56,35 @@ by [BagIt](https://www.rfc-editor.org/info/rfc8493/); this archive does not clai
 
 ## Account deletion
 
+Deletion, bank linking (including pending-link completion), bank unlink and receipt uploads
+share an account guard. Writers re-read the stored account status after acquiring it; a
+request authenticated before deletion cannot add private records after the tombstone is
+committed. An upload/link already in progress finishes before deletion inventories its data.
+Pending links found for a deleted account are abandoned rather than completed.
+
+The production guard uses a PostgreSQL session advisory lock on a dedicated unpooled
+connection, spanning the workflow's multiple saves and provider/storage calls. Disposing
+that connection releases the lock on success, failure or cancellation. This requires a direct
+PostgreSQL connection or session pooling; do not route it through PgBouncer transaction or
+statement pooling. Each guarded operation consumes one additional connection while running.
+See [PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS).
+In-memory test hosts use a process-local equivalent; relational concurrency tests use real
+PostgreSQL sessions. No new database schema is required for this coordination.
+
+This is cooperative coordination: every path that creates these private records must use
+the guard. It is not a database constraint, and losing the lock session while work continues
+on another connection can release coordination early. A durable `Deleting` workflow with
+short guarded transactions and retryable cleanup would provide a stronger recovery model.
+That broader lifecycle change is outside this targeted race fix.
+
+An account concurrency token alone does not protect child inserts
+([EF concurrency](https://learn.microsoft.com/en-us/ef/core/saving/concurrency)). One database
+transaction around bank and storage calls would hold locks across network operations;
+EF advises keeping such transactions short. A durable cleanup/outbox workflow is the
+larger alternative ([transactional outbox](https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-out-box-cosmos)).
+PgBouncer explicitly lists session advisory locks as incompatible with transaction pooling
+([feature matrix](https://www.pgbouncer.org/features.html)).
+
 Outstanding shared balances block deletion before any cleanup. Once settled, bank unlink
 runs first. A provider error leaves the account active and the remaining connection in
 place: retry deletion (banks already removed stay removed). A lost key or missing connector

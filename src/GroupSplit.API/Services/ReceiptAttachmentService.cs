@@ -41,6 +41,7 @@ public sealed class ReceiptAttachmentService(
     AppDbContext db,
     IAmazonS3 storage,
     IReceiptFiles files,
+    IAccountDataGuard accountData,
     IOptions<ReceiptStorageOptions> storageOptions,
     ILogger<ReceiptAttachmentService> logger,
     TimeProvider clock) : IReceiptAttachmentService
@@ -67,6 +68,7 @@ public sealed class ReceiptAttachmentService(
 
     public async Task<ReceiptAttachmentResponse> Upload(Guid expenseId, IFormFile file, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         ArgumentNullException.ThrowIfNull(file);
         var expense = await MineToChange(expenseId, ct);
 
@@ -94,6 +96,7 @@ public sealed class ReceiptAttachmentService(
     public async Task<ReceiptAttachmentResponse> UploadBank(Guid bankTransactionId, IFormFile file,
         CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         ArgumentNullException.ThrowIfNull(file);
         var row = await VisibleBank(bankTransactionId, ct);
         if (row.Status != BankTransactionStatus.New)

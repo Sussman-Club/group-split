@@ -59,6 +59,7 @@ public interface IBankConnectionService
     Task Unlink(Guid id, CancellationToken ct = default);
 
     /// <summary>Account deletion only: cleans the explicitly named account, without caller scoping.</summary>
+    /// <remarks>The deletion workflow holds the account data guard; this must not reacquire it.</remarks>
     Task UnlinkForAccount(Guid userId, CancellationToken ct = default);
 
     /// <summary>
@@ -122,6 +123,7 @@ public sealed class BankConnectionService(
     IAccessTokenProtector protector,
     IJobDispatcher jobs,
     IReceiptFiles receiptFiles,
+    IAccountDataGuard accountData,
     TimeProvider clock,
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
@@ -225,6 +227,7 @@ public sealed class BankConnectionService(
 
     public async Task<BankConnection> Link(CreateBankConnectionRequest request, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var provider = DefaultProvider;
         var connector = Required(provider);
         var user = userContext.User;
@@ -301,6 +304,10 @@ public sealed class BankConnectionService(
 
     public async Task CompletePending(Guid pendingLinkId, CancellationToken ct = default)
     {
+        var ownerId = await dbContext.Set<PendingBankLink>().Where(link => link.Id == pendingLinkId)
+            .Select(link => (Guid?)link.UserId).FirstOrDefaultAsync(ct);
+        if (ownerId is null) return;
+        await using var lease = await accountData.Acquire(ownerId.Value, allowDeleted: true, ct: ct);
         var pending = await dbContext.Set<PendingBankLink>()
             .Include(link => link.User)
             .FirstOrDefaultAsync(link => link.Id == pendingLinkId, ct);
@@ -308,6 +315,13 @@ public sealed class BankConnectionService(
         if (pending is null)
         {
             // Finished by the request that started it, or by an earlier attempt.
+            return;
+        }
+
+        await dbContext.Entry(pending.User).ReloadAsync(ct);
+        if (pending.User.Kind == UserKind.Deleted)
+        {
+            await AbandonPending(pendingLinkId, ct);
             return;
         }
 
@@ -753,6 +767,7 @@ public sealed class BankConnectionService(
 
     public async Task Unlink(Guid id, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var connection = await Existing(id, ct);
         await UnlinkConnection(connection, ct);
     }

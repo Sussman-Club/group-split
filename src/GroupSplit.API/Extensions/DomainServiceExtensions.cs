@@ -30,6 +30,7 @@ public static class DomainServiceExtensions
             services.AddCurrentUser();
             services.AddScoped<IDebtCalculationService, DebtCalculationService>();
             services.AddScoped<IAccountService, AccountService>();
+            services.AddScoped<IAccountDataGuard, AccountDataGuard>();
             services.AddScoped<IPersonalDataExport, PersonalDataExport>();
             services.AddScoped<IPersonalDataReader, PersonalDataReader>();
             services.AddScoped<IPersonalDataArchiveWriter, PersonalDataArchiveWriter>();

@@ -32,6 +32,7 @@ public sealed class AccountService(
     ILoginDeletion logins,
     IBankConnectionService banks,
     IReceiptFiles receiptFiles,
+    IAccountDataGuard accountData,
     TimeProvider clock,
     AppDbContext context,
     ILogger<AccountService> logger) : IAccountService
@@ -54,9 +55,11 @@ public sealed class AccountService(
     public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var lease = await accountData.Acquire(userId, allowDeleted: true, ct: cancellationToken);
         var user = await context.Set<User>()
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
+        await context.Entry(user).ReloadAsync(cancellationToken);
 
         // Already done, login deletion included: that was written down the first time and is
         // the sweep's to finish. Only reachable now that a caller can name an account rather
