@@ -34,6 +34,7 @@ public static class DomainServiceExtensions
             // provide -- IKeycloakUserRemoval, from AddKeycloakAdminClient in Program.cs, or a
             // fake in a test host -- like any other system outside this one.
             services.TryAddSingleton(TimeProvider.System);
+            services.AddBackgroundJobs();
             services.AddScoped<ILoginDeletion, LoginDeletion>();
             services.AddJobs()
                 .Handlers

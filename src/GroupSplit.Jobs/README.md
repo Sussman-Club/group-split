@@ -1,5 +1,9 @@
 # Jobs and scheduling
 
+The API's opt-in PostgreSQL outbox reuses this executor for durable commands.
+See [durable background jobs](../../docs/background-jobs.md) for registration,
+transactional enqueueing, retries and operator reconciliation.
+
 IJobDispatcher submits work immediately and returns an execution handle.
 IJobScheduler registers when work should be submitted and returns an IScheduledJob.
 Schedules have no public ID; implementations can keep identity internally.
