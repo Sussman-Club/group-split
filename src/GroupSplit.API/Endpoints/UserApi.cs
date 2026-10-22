@@ -25,7 +25,17 @@ public static class UserApi
             group.MapGetSettlements();
             group.MapGetActivity();
             group.MapDeleteCurrentUser();
-            group.MapGet("/me/export", async (PersonalDataExport export, HttpContext http, CancellationToken ct) =>
+            group.MapExportPersonalData();
+
+            return group;
+        }
+    }
+
+    extension(RouteGroupBuilder group)
+    {
+        private RouteHandlerBuilder MapExportPersonalData()
+        {
+            return group.MapGet("/me/export", async (PersonalDataExport export, HttpContext http, CancellationToken ct) =>
                 {
                     http.Response.Headers.CacheControl = "no-store";
                     return Results.File(await export.Create(ct), "application/zip", "groupsplit-personal-data.zip");
@@ -39,13 +49,8 @@ public static class UserApi
                         schema.Format = "binary";
                     return Task.CompletedTask;
                 });
-
-            return group;
         }
-    }
 
-    extension(RouteGroupBuilder group)
-    {
         private RouteHandlerBuilder MapGetCurrentUser()
         {
             return group.MapGet("/me", (
