@@ -45,6 +45,8 @@ public class GroupLedgerTabTest : ComponentTest
     /// <summary>The kind each ledger request asked for, in order.</summary>
     private readonly List<int?> _kinds = [];
 
+    private readonly List<(string Key, bool? Descending)> _orders = [];
+
     private Func<Ask, Task<TransactionSummaryResponse>> _answer =
         _ => Task.FromResult(new TransactionSummaryResponse(5, 29m));
 
@@ -95,14 +97,20 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string search, Guid? _,
-                bool? _, Guid? _, string _, bool? _, int? _, int? _, CancellationToken _) =>
+                bool? _, Guid? _, string sortBy, bool? descending, int? _, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
+                _orders.Add((sortBy, descending));
 
                 // What the server holds at the moment it is asked, which is not necessarily
                 // what it holds by the time the answer arrives.
                 var rows = _entries.Where(entry => string.IsNullOrEmpty(search) ||
                     entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (sortBy == "dateTime")
+                    rows = descending == true
+                        ? rows.OrderByDescending(entry => entry.DateTime).ToList()
+                        : rows.OrderBy(entry => entry.DateTime).ToList();
 
                 if (_holdNextRead is { } held)
                 {
@@ -147,6 +155,44 @@ public class GroupLedgerTabTest : ComponentTest
 
     private IRenderedComponent<GroupLedgerTab> Render() =>
         base.Render<GroupLedgerTab>(parameters => parameters.Add(tab => tab.GroupId, Group));
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("-dateTime", true)]
+    [InlineData("dateTime", false)]
+    [InlineData("unknown", true)]
+    public async Task Mobile_activity_uses_newest_first_unless_the_link_requests_oldest_first(
+        string? requestedSort, bool descending)
+    {
+        ReaderAt(TimeSpan.Zero);
+        var day = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        _entries =
+        [
+            Expense(Guid.NewGuid(), "Older") with { DateTime = day.AddDays(-1) },
+            Expense(Guid.NewGuid(), "Newest") with { DateTime = day.AddHours(2) },
+            Expense(Guid.NewGuid(), "Earlier today") with { DateTime = day }
+        ];
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(navigation.GetUriWithQueryParameter("sort", requestedSort));
+        var tab = Render();
+
+        string[] expected = descending
+            ? ["Newest", "Earlier today", "Older"]
+            : ["Older", "Earlier today", "Newest"];
+
+        void AssertOrder() => tab.WaitForAssertion(() =>
+        {
+            Assert.Equal(expected, tab.FindAll(".gs-feed-copy strong").Select(entry => entry.TextContent));
+            Assert.Equal(2, tab.FindAll(".gs-feed-day").Count);
+            Assert.NotEmpty(_orders);
+            Assert.All(_orders, order => Assert.Equal(("dateTime", (bool?)descending),
+                (order.Key, order.Descending)));
+        });
+
+        AssertOrder();
+        await tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+        AssertOrder();
+    }
 
     /// <summary>The big number on the first card, and the money on the second.</summary>
     private static (string Count, string Total) Cards(IRenderedComponent<GroupLedgerTab> tab)
