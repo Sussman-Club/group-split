@@ -1,0 +1,123 @@
+/* Hidden by default, including prerendering and browsers without JavaScript. */
+html:not([data-gs-android]) .gs-android-only { display: none !important; }
+
+.gs-android-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(32px, 5vw, 80px);
+    max-width: 1040px;
+    margin: 40px auto;
+}
+
+.gs-android-app-icon {
+    display: grid;
+    place-items: center;
+    width: 100px;
+    height: 100px;
+    background: var(--gs-surface-2);
+    border: 1px solid var(--gs-line);
+    border-radius: 26px;
+    box-shadow: var(--gs-shadow-md);
+    margin-bottom: 28px;
+}
+
+.gs-android-platform {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gs-teal);
+    font-weight: 700;
+    font-size: .875rem;
+    margin: 0 0 12px;
+}
+
+.gs-android-app-icon .gs-brand-mark { width: 64px; height: 64px; }
+
+.gs-android-hero h1 {
+    font-family: var(--gs-font-display);
+    font-size: clamp(2.5rem, 4.6vw, 4rem);
+    font-weight: 800;
+    line-height: 1.06;
+    letter-spacing: -.045em;
+    margin: 0 0 20px;
+}
+
+.gs-android-intro {
+    max-width: 42ch;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    color: var(--gs-ink-2);
+    margin: 0 0 28px;
+}
+
+.gs-android-download {
+    border-top: 1px solid var(--gs-line-strong);
+    padding-top: 24px;
+}
+.gs-android-download h2 { font-size: 1.25rem; margin: 0 0 8px; }
+.gs-android-download > p { line-height: 1.65; }
+.gs-android-download .gs-android-cta { min-height: 52px; padding-inline: 24px; }
+.gs-android-compatibility { color: var(--gs-muted); font-size: .8125rem; margin: 10px 0 22px; }
+.gs-android-release { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0 0 16px; }
+.gs-android-release dt { font-size: .75rem; color: var(--gs-muted); margin-bottom: 4px; }
+.gs-android-release dd { font-size: .875rem; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.gs-android-checksum { font-size: .8125rem; color: var(--gs-muted); text-decoration: underline; text-underline-offset: 3px; }
+.gs-android-web-link { display: inline-block; color: var(--gs-teal); font-size: .875rem; font-weight: 700; margin-top: 28px; text-underline-offset: 4px; }
+.gs-android-page a:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 5px; }
+
+.gs-android-install {
+    background: var(--gs-surface);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-xl);
+    overflow: hidden;
+}
+.gs-android-install-heading { padding: 30px 32px 24px; background: var(--gs-teal-soft); }
+.gs-android-install-heading > .mud-icon-root { color: var(--gs-teal); margin-bottom: 16px; }
+.gs-android-install-heading h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 12px; }
+.gs-android-install-heading p { font-size: .875rem; color: var(--gs-ink-2); line-height: 1.65; margin: 0; }
+.gs-android-steps { list-style: none; counter-reset: install; padding: 8px 32px; margin: 0; }
+.gs-android-steps li { counter-increment: install; display: flex; gap: 16px; padding: 24px 0; }
+.gs-android-steps li + li { border-top: 1px solid var(--gs-line); }
+.gs-android-steps li::before { content: counter(install); display: grid; place-items: center; flex: 0 0 30px; height: 30px; border: 1px solid var(--gs-line-strong); border-radius: 50%; color: var(--gs-teal); font-weight: 800; font-size: .875rem; }
+.gs-android-steps h3, .gs-android-update-note h3 { font-size: .9375rem; font-weight: 700; margin: 3px 0 6px; }
+.gs-android-steps p, .gs-android-update-note p { font-size: .875rem; line-height: 1.7; color: var(--gs-ink-2); margin: 0; }
+.gs-android-update-note { display: flex; gap: 12px; border-top: 1px solid var(--gs-line); margin: 0 32px; padding: 24px 0 28px; }
+.gs-android-update-note > .mud-icon-root { margin-top: 5px; color: var(--gs-teal); flex-shrink: 0; }
+
+@media (max-width: 760px) {
+    .gs-android-page { grid-template-columns: minmax(0, 1fr); gap: 32px; max-width: 520px; margin: 20px auto; }
+    .gs-android-app-icon { width: 84px; height: 84px; border-radius: 22px; margin-bottom: 24px; }
+    .gs-android-install-heading { padding: 24px; }
+    .gs-android-steps { padding-inline: 24px; }
+    .gs-android-update-note { margin-inline: 24px; }
+}
+@media (max-width: 400px) {
+    .gs-android-download .gs-android-cta { width: 100%; padding-inline: 12px; }
+    .gs-android-release { gap: 12px 20px; }
+    .gs-android-install-heading { padding: 20px; }
+    .gs-android-steps { padding-inline: 20px; }
+    .gs-android-update-note { margin-inline: 20px; }
+}
+
+/* Stays outside the page wrapper so dismissing survives in-app navigation. */
+.gs-android-update {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    background: var(--gs-teal-soft);
+    border: 1px solid var(--gs-teal);
+    border-radius: var(--gs-radius);
+}
+.gs-android-update > .mud-icon-root { color: var(--gs-teal); flex-shrink: 0; }
+.gs-android-update-copy { flex: 1; min-width: 0; }
+.gs-android-update-copy strong { display: block; font-size: .9375rem; }
+.gs-android-update-copy span { display: block; color: var(--gs-ink-2); font-size: .8125rem; margin-top: 4px; overflow-wrap: anywhere; }
+@media (max-width: 540px) {
+    .gs-android-update { flex-wrap: wrap; gap: 12px; padding: 16px; }
+    .gs-android-update-copy { flex-basis: calc(100% - 40px); }
+    .gs-android-update > .mud-button { flex: 1; white-space: nowrap; }
+    .gs-android-update > .mud-icon-button { flex: 0 0 auto; }
+}

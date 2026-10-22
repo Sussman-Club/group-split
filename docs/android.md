@@ -368,3 +368,17 @@ API level is 24 (Android 7.0). Phase 3 follows a verified installable
 app and must choose push transport, add a transactional outbox and background delivery,
 device registration, preferences, Android 13 permission handling and destination routing.
 No push tokens or notification permissions are collected by this foundation.
+
+### In-app update notice
+
+New Android builds embed their `ApplicationVersion` as `NativeAndroidBuild` assembly
+metadata. On the first interactive layout render, the native app checks the public
+`/downloads/android/latest` endpoint once. A release with a greater Android build
+number shows a dismissible **Update available** notice. **Update app** opens the public
+`/android` download page in the system browser. Installation remains a user action.
+The notice stays dismissed during navigation and checks again on a fresh app session.
+Offline, missing, invalid, and older releases do not interrupt the app. Website sessions
+and builds without Android version metadata do not check for updates.
+
+Existing APKs need to be updated once to a build containing this feature before they
+can show future update notices.

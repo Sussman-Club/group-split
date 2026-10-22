@@ -4,6 +4,7 @@ namespace GroupSplit.App.Services;
 
 public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
 {
+    public int? AndroidBuild { get; init; }
     public Uri WebBaseAddress { get; init; } = new("https://groupsplit.sussman.win/");
     public const string ClientId = "native";
     public static readonly Uri Callback = new("groupsplit://auth/callback");
@@ -15,7 +16,11 @@ public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
             metadata.FirstOrDefault(item => item.Key == "NativeApiUrl")?.Value ?? "",
             metadata.FirstOrDefault(item => item.Key == "NativeAuthority")?.Value ?? "",
             development,
-            metadata.FirstOrDefault(item => item.Key == "NativeWebUrl")?.Value);
+            metadata.FirstOrDefault(item => item.Key == "NativeWebUrl")?.Value) with
+        {
+            AndroidBuild = int.TryParse(metadata.FirstOrDefault(item => item.Key == "NativeAndroidBuild")?.Value,
+                out var build) && build > 0 ? build : null
+        };
     }
 
     public static NativeOptions Create(string api, string authority, bool development, string? web = null)

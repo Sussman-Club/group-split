@@ -4,6 +4,12 @@
     const storageKey = "groupsplit.theme";
     const root = document.documentElement;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Device detection is deliberately independent of viewport size: tablets
+    // and narrow desktop windows should not be mistaken for Android phones.
+    function stampAndroid() {
+        root.toggleAttribute("data-gs-android", /Android/i.test(navigator.userAgent));
+    }
+    stampAndroid();
 
     // ------------------------------------------------------------ theme --
 
@@ -292,6 +298,7 @@
         // to the light palette and brought the boot bar back, with rows and
         // chips muted under it.
         reapply() {
+            stampAndroid();
             if (root.dataset.theme !== theme) root.dataset.theme = theme;
             if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
         },
