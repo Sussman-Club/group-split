@@ -35,7 +35,7 @@ public static class UserApi
     {
         private RouteHandlerBuilder MapExportPersonalData()
         {
-            return group.MapGet("/me/export", async (PersonalDataExport export, HttpContext http, CancellationToken ct) =>
+            return group.MapGet("/me/export", async (IPersonalDataExport export, HttpContext http, CancellationToken ct) =>
                 {
                     http.Response.Headers.CacheControl = "no-store";
                     return Results.File(await export.Create(ct), "application/zip", "groupsplit-personal-data.zip");

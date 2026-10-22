@@ -5,8 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
+public interface IPersonalDataExport
+{
+    Task<Stream> Create(CancellationToken ct);
+}
+
 /// <summary>Coordinates one consistent read and a complete archive before HTTP delivery.</summary>
-public sealed class PersonalDataExport(AppDbContext db, PersonalDataReader reader, PersonalDataArchiveWriter writer)
+public sealed class PersonalDataExport(AppDbContext db, IPersonalDataReader reader, IPersonalDataArchiveWriter writer) : IPersonalDataExport
 {
     public Task<Stream> Create(CancellationToken ct) =>
         db.Database.CreateExecutionStrategy().ExecuteAsync(() => CreateSnapshot(ct));

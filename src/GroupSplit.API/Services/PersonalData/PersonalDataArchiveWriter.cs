@@ -4,8 +4,13 @@ using System.Text.Json;
 
 namespace GroupSplit.API.Services.PersonalData;
 
+public interface IPersonalDataArchiveWriter
+{
+    Task<Stream> Write(ExportRecords records, CancellationToken ct);
+}
+
 /// <summary>Packages a portable record set, spreadsheet views and original receipt files.</summary>
-public sealed class PersonalDataArchiveWriter(IReceiptAttachmentService receiptFiles)
+public sealed class PersonalDataArchiveWriter(IReceiptAttachmentService receiptFiles) : IPersonalDataArchiveWriter
 {
     public async Task<Stream> Write(ExportRecords records, CancellationToken ct)
     {

@@ -4,9 +4,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services.PersonalData;
 
+public interface IPersonalDataReader
+{
+    Task<ExportRecords> Read(CancellationToken ct);
+}
+
 /// <summary>Applies existing API visibility rules and projects only portable, credential-free records.</summary>
 public sealed class PersonalDataReader(AppDbContext db, ICurrentUser currentUser,
-    IGroupService groups, TimeProvider clock)
+    IGroupService groups, TimeProvider clock) : IPersonalDataReader
 {
     public async Task<ExportRecords> Read(CancellationToken ct)
     {

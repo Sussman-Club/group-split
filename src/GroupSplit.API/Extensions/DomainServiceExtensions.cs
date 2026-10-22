@@ -30,9 +30,9 @@ public static class DomainServiceExtensions
             services.AddCurrentUser();
             services.AddScoped<IDebtCalculationService, DebtCalculationService>();
             services.AddScoped<IAccountService, AccountService>();
-            services.AddScoped<PersonalDataExport>();
-            services.AddScoped<PersonalDataReader>();
-            services.AddScoped<PersonalDataArchiveWriter>();
+            services.AddScoped<IPersonalDataExport, PersonalDataExport>();
+            services.AddScoped<IPersonalDataReader, PersonalDataReader>();
+            services.AddScoped<IPersonalDataArchiveWriter, PersonalDataArchiveWriter>();
 
             // The Keycloak half of deleting an account. Keycloak itself is the host's to
             // provide -- IKeycloakUserRemoval, from AddKeycloakAdminClient in Program.cs, or a

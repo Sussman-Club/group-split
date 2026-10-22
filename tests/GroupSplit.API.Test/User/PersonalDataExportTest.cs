@@ -33,7 +33,7 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         _files.Setup(files => files.Download(expense.Id, attachment.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ReceiptAttachmentDownload([1, 2, 3], "image/png", attachment.FileName));
 
-        await using var stream = await GetService<PersonalDataExport>().Create(Ct);
+        await using var stream = await GetService<IPersonalDataExport>().Create(Ct);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         using var data = await JsonDocument.ParseAsync(zip.GetEntry("data.json")!.Open(), cancellationToken: Ct);
         var transaction = Assert.Single(data.RootElement.GetProperty("transactions").EnumerateArray());
@@ -77,7 +77,7 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         await DbContext.SaveChangesAsync(Ct);
         _files.Setup(files => files.Download(expense.Id, file.Id, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new IOException("Missing object"));
-        await Assert.ThrowsAsync<IOException>(() => GetService<PersonalDataExport>().Create(Ct));
+        await Assert.ThrowsAsync<IOException>(() => GetService<IPersonalDataExport>().Create(Ct));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
             InstitutionName = "Hidden bank", AccessTokenCiphertext = "NEVER-EXPORT-CREDENTIAL", LinkedAt = DateTimeOffset.UtcNow });
         await DbContext.SaveChangesAsync(Ct);
 
-        await using var stream = await GetService<PersonalDataExport>().Create(Ct);
+        await using var stream = await GetService<IPersonalDataExport>().Create(Ct);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         using var json = await JsonDocument.ParseAsync(archive.GetEntry("data.json")!.Open(), cancellationToken: Ct);
         var root = json.RootElement;
@@ -124,4 +124,3 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.DoesNotContain("accessToken", root.GetRawText(), StringComparison.OrdinalIgnoreCase);
     }
 }
-
