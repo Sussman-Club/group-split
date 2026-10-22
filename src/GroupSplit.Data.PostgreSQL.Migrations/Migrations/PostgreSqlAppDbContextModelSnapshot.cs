@@ -671,6 +671,42 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("PendingBankLink");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.PendingDataCleanup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PendingDataCleanup");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.PendingLoginDeletion", b =>
                 {
                     b.Property<Guid>("Id")

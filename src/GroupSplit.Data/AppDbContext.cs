@@ -44,6 +44,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(job => new { job.Status, job.LeaseExpiresAt });
         });
 
+        modelBuilder.Entity<PendingDataCleanup>(entity =>
+        {
+            entity.Property(row => row.Kind).HasMaxLength(32);
+            entity.Property(row => row.Provider).HasMaxLength(64);
+            entity.Property(row => row.Resource).HasMaxLength(1024);
+            entity.Property(row => row.Reason).HasMaxLength(128);
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.Property(user => user.FirstName).HasMaxLength(64);

@@ -25,6 +25,20 @@ public static class UserApi
             group.MapGetSettlements();
             group.MapGetActivity();
             group.MapDeleteCurrentUser();
+            group.MapGet("/me/export", async (PersonalDataExport export, HttpContext http, CancellationToken ct) =>
+                {
+                    http.Response.Headers.CacheControl = "no-store";
+                    return Results.File(await export.Create(ct), "application/zip", "groupsplit-personal-data.zip");
+                })
+                .WithName("ExportPersonalData")
+                .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
+                .AddOpenApiOperationTransformer((operation, _, _) =>
+                {
+                    // ZIP bytes are a binary download, not a base64 JSON string.
+                    if (operation.Responses?["200"].Content?["application/zip"].Schema is Microsoft.OpenApi.OpenApiSchema schema)
+                        schema.Format = "binary";
+                    return Task.CompletedTask;
+                });
 
             return group;
         }

@@ -1,6 +1,9 @@
 using Amazon.S3;
 using GroupSplit.API.Extensions;
 using Microsoft.Extensions.Options;
+using GroupSplit.Data;
+using GroupSplit.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
@@ -33,6 +36,7 @@ public interface IReceiptFiles
 public sealed class ReceiptFiles(
     IAmazonS3 storage,
     IOptions<ReceiptStorageOptions> storageOptions,
+    AppDbContext db,
     ILogger<ReceiptFiles> logger) : IReceiptFiles
 {
     public async Task DeleteAsync(IEnumerable<string> objectKeys, string why, CancellationToken ct = default)
@@ -41,7 +45,18 @@ public sealed class ReceiptFiles(
         {
             try
             {
+                var pending = await db.Set<PendingDataCleanup>()
+                    .Where(row => row.Kind == "receipt" && row.Resource == objectKey).ToListAsync(ct);
+                if (pending.Count == 0)
+                {
+                    var work = new PendingDataCleanup { Kind = "receipt", Resource = objectKey, Reason = "Receipt removed" };
+                    db.Add(work);
+                    await db.SaveChangesAsync(ct);
+                    pending.Add(work);
+                }
                 await storage.DeleteObjectAsync(storageOptions.Value.BucketName, objectKey, ct);
+                db.RemoveRange(pending);
+                await db.SaveChangesAsync(ct);
             }
             catch (Exception error)
             {

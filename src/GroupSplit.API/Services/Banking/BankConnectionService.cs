@@ -58,6 +58,9 @@ public interface IBankConnectionService
     /// </summary>
     Task Unlink(Guid id, CancellationToken ct = default);
 
+    /// <summary>Account deletion only: cleans the explicitly named account, without caller scoping.</summary>
+    Task UnlinkForAccount(Guid userId, CancellationToken ct = default);
+
     /// <summary>
     /// Reads the provider's account list again for a connection that already exists, and
     /// asks for a sync.
@@ -443,6 +446,9 @@ public sealed class BankConnectionService(
 
         if (item is null)
         {
+            if (pending.ItemCiphertext is not null)
+                dbContext.Add(new PendingDataCleanup { Kind = "provider-item", Provider = pending.Provider,
+                    Resource = $"pending-link:{pending.Id}", ConnectionId = pending.Id, Reason = "Held item unreadable; reconcile provider inventory" });
             // Never got as far as an item, or the item it got can no longer be read. Either
             // way there is no token here to hand anything back with.
             logger.LogWarning(
@@ -460,6 +466,8 @@ public sealed class BankConnectionService(
         {
             // The one outcome that leaves something behind, and this line is its only
             // record once the row is gone.
+            dbContext.Add(new PendingDataCleanup { Kind = "provider-item", Provider = pending.Provider,
+                Resource = item.ProviderItemId, ConnectionId = pending.Id, Reason = "Held item removal failed" });
             logger.LogError(
                 "Gave up on held bank link {PendingLinkId} and could not hand item {ProviderItemId} back to "
                 + "{Provider}. It exists there, belongs to no connection here, and has to be removed by hand.",
@@ -746,6 +754,20 @@ public sealed class BankConnectionService(
     public async Task Unlink(Guid id, CancellationToken ct = default)
     {
         var connection = await Existing(id, ct);
+        await UnlinkConnection(connection, ct);
+    }
+
+    public async Task UnlinkForAccount(Guid userId, CancellationToken ct = default)
+    {
+        var connections = await dbContext.Set<BankConnection>().Where(row => row.UserId == userId).ToListAsync(ct);
+        foreach (var connection in connections) await UnlinkConnection(connection, ct);
+        var pending = await dbContext.Set<PendingBankLink>().Where(row => row.UserId == userId)
+            .Select(row => row.Id).ToListAsync(ct);
+        foreach (var id in pending) await AbandonPending(id, ct);
+    }
+
+    private async Task UnlinkConnection(BankConnection connection, CancellationToken ct)
+    {
 
         // The whole graph, so EF deletes it rather than leaving it to the database's own
         // cascade. One person's one bank is a bounded number of rows, and the alternative
@@ -806,6 +828,7 @@ public sealed class BankConnectionService(
         // leave an item nobody owns still being billed for and still sending webhooks.
         if (Connector(connection.Provider) is not { } connector)
         {
+            RecordProviderCleanup(connection, "Connector unavailable");
             logger.LogWarning(
                 "Unlinking connection {ConnectionId} without telling {Provider}: no connector is registered for it.",
                 connection.Id, connection.Provider);
@@ -816,6 +839,7 @@ public sealed class BankConnectionService(
         }
         else
         {
+            RecordProviderCleanup(connection, "Access token unreadable");
             // Nothing to tell them with, and that is precisely the connection somebody is
             // most likely to be removing: the two other readers of a stored token now refuse
             // to work with an unreadable one and say so, and both point here as the way out.
@@ -832,11 +856,20 @@ public sealed class BankConnectionService(
         // The expenses filed from this connection's rows keep everything but the link: the
         // relationship is SetNull, so they are spending history rather than an import.
         dbContext.Remove(connection);
+        foreach (var attachment in discarded)
+            dbContext.Add(new PendingDataCleanup { Kind = "receipt", Resource = attachment.ObjectKey, Reason = "Bank unlinked" });
         await dbContext.SaveChangesAsync(ct);
 
         await receiptFiles.DeleteAsync(discarded.Select(attachment => attachment.ObjectKey),
             "Could not remove the receipt object of a bank row whose bank was unlinked.", ct);
     }
+
+    private void RecordProviderCleanup(BankConnection connection, string reason) =>
+        dbContext.Add(new PendingDataCleanup
+        {
+            Kind = "provider-item", Provider = connection.Provider, Resource = connection.ProviderItemId,
+            ConnectionId = connection.Id, Reason = reason
+        });
 
     /// <summary>
     /// Hands the item back, counting an item the provider no longer knows as handed back.

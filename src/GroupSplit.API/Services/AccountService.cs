@@ -5,6 +5,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
+using GroupSplit.API.Services.Banking;
 
 namespace GroupSplit.API.Services;
 
@@ -29,6 +30,8 @@ public interface IAccountService
 public sealed class AccountService(
     IGroupService groups,
     ILoginDeletion logins,
+    IBankConnectionService banks,
+    IReceiptFiles receiptFiles,
     TimeProvider clock,
     AppDbContext context,
     ILogger<AccountService> logger) : IAccountService
@@ -98,6 +101,17 @@ public sealed class AccountService(
             return outstanding;
         }
 
+        // Complete fallible provider work before closing memberships or anonymising. A failure
+        // leaves the account usable so the person can retry; already unlinked banks stay gone.
+        await banks.UnlinkForAccount(userId, cancellationToken);
+
+        var personalFiles = await context.Set<ReceiptAttachment>()
+            .Where(file => file.Expense != null && file.Expense.GroupId == userId)
+            .ToListAsync(cancellationToken);
+        foreach (var file in personalFiles)
+            context.Add(new PendingDataCleanup { Kind = "receipt", Resource = file.ObjectKey, Reason = "Account deleted" });
+        context.RemoveRange(personalFiles);
+
         foreach (var group in sharedGroups)
         {
             await groups.DetachMember(group, user, LeftReason.AccountDeleted, user.Id, cancellationToken);
@@ -136,6 +150,9 @@ public sealed class AccountService(
         // as it was rather than stranded between states -- and the login deletion is never
         // owed without the account having gone, or the other way round.
         await context.SaveChangesAsync(cancellationToken);
+
+        await receiptFiles.DeleteAsync(personalFiles.Select(file => file.ObjectKey),
+            "Could not delete personal receipt after account deletion.", cancellationToken);
 
         if (pending is not null)
         {
