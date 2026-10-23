@@ -333,8 +333,10 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         connection.AccessTokenCiphertext = "not-a-readable-token";
         await DbContext.SaveChangesAsync(Ct);
         await GetService<IBankConnectionService>().Unlink(connection.Id, Ct);
-        var work = await DbContext.Set<PendingDataCleanup>().SingleAsync(Ct);
-        Assert.Equal(connection.ProviderItemId, work.Resource);
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var details = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.ProviderItemReconciliation>(work.Payload)!;
+        Assert.Equal(connection.ProviderItemId, details.Resource);
+        Assert.Equal(BackgroundJobStatus.AwaitingOperator, work.Status);
         Assert.Equal("Access token unreadable", work.Reason);
         Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
         Assert.Empty(_bank.RemovedTokens);
@@ -348,11 +350,13 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         connection.Provider = "missing";
         await DbContext.SaveChangesAsync(Ct);
         await GetService<IBankConnectionService>().Unlink(connection.Id, Ct);
-        var work = await DbContext.Set<PendingDataCleanup>().SingleAsync(Ct);
-        Assert.Equal("provider-item", work.Kind);
-        Assert.Equal(connection.ProviderItemId, work.Resource);
-        Assert.Equal(connection.Id, work.ConnectionId);
-        Assert.Equal("missing", work.Provider);
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var details = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.ProviderItemReconciliation>(work.Payload)!;
+        Assert.Equal("provider-item", work.Type);
+        Assert.Equal(connection.ProviderItemId, details.Resource);
+        Assert.Equal(connection.Id, details.ConnectionId);
+        Assert.Equal("missing", details.Provider);
+        Assert.Equal(BackgroundJobStatus.AwaitingOperator, work.Status);
     }
 
     [Fact]
@@ -364,10 +368,19 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .ThrowsAsync(new IOException("storage unavailable"));
         await GetService<IBankConnectionService>().Unlink(await ConnectionId(), Ct);
         Assert.Null(await Attachment(file));
-        var work = await DbContext.Set<PendingDataCleanup>().SingleAsync(Ct);
-        Assert.Equal("receipt", work.Kind);
-        Assert.Equal($"key-{file:N}", work.Resource);
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var command = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.DeleteReceiptFile>(work.Payload)!;
+        Assert.Equal("delete-receipt-file", work.Type);
+        Assert.Equal($"key-{file:N}", command.ObjectKey);
+        Assert.Equal(BackgroundJobStatus.Pending, work.Status);
         Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
+
+        // Resolve the real handler registration, as the durable worker does, once storage recovers.
+        _storage.Setup(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeleteObjectResponse());
+        await GetService<GroupSplit.Jobs.IJobExecutor>().ExecuteAsync(command, Ct);
+        _storage.Verify(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey,
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     private async Task<Guid> ConnectionId() =>

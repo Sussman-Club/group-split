@@ -187,6 +187,7 @@ public sealed class ReceiptAttachmentService(
         await MineToChange(expenseId, ct);
         var attachment = await FindAttachment(expenseId, attachmentId, ct);
         db.Remove(attachment);
+        files.Enqueue([attachment.ObjectKey]);
         await db.SaveChangesAsync(ct);
 
         // The database is authoritative for which files a caller can address. If storage
@@ -219,6 +220,7 @@ public sealed class ReceiptAttachmentService(
         var deleted = attachments.Except(returning).ToList();
 
         db.RemoveRange(deleted);
+        files.Enqueue(deleted.Select(attachment => attachment.ObjectKey));
         await db.SaveChangesAsync(ct);
 
         // Removing the metadata first prevents the deleted expense from exposing stale
@@ -232,6 +234,7 @@ public sealed class ReceiptAttachmentService(
         await VisibleBank(bankTransactionId, ct);
         var attachment = await FindBankAttachment(bankTransactionId, attachmentId, ct);
         db.Remove(attachment);
+        files.Enqueue([attachment.ObjectKey]);
         await db.SaveChangesAsync(ct);
         await files.DeleteAsync([attachment.ObjectKey], "Could not remove deleted pending receipt object.", ct);
     }

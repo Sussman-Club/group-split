@@ -89,7 +89,7 @@ Outstanding shared balances block deletion before any cleanup. Once settled, ban
 runs first. A provider error leaves the account active and the remaining connection in
 place: retry deletion (banks already removed stay removed). A lost key or missing connector
 cannot remove a provider Item, so its provider, Item ID, connection ID and reason are stored
-for an administrator in `PendingDataCleanup`, without access tokens.
+for an administrator in `BackgroundJob` with status `AwaitingOperator`, without access tokens.
 
 Names and email addresses are cleared and shared memberships closed. The user ID remains
 as a tombstone. Shared expenses, final shares, settlements, structured receipts and shared
@@ -110,18 +110,22 @@ reopening access. See [deployment guidance](deployment.md).
 
 ## Operational reconciliation
 
-Inspect `PendingDataCleanup` regularly. `provider-item` rows name the provider Item to
+Inspect `BackgroundJob` regularly. `provider-item` rows in `AwaitingOperator` name the provider Item to
 remove through its administrative tooling. `pending-link:{id}` means an encrypted held
 item was unreadable; reconcile provider inventory with the held-link ID and timestamp.
 Do not print or copy access tokens into logs or tickets. Missing connectors must be restored
-or the Item removed through the provider dashboard. Delete the cleanup row only after
-confirming removal with the provider; retain a credential-free operational audit externally.
+or the Item removed through the provider dashboard. Mark the job completed and clear its
+payload only after confirming removal; retain a credential-free operational audit externally.
 
-`receipt` rows name object keys awaiting deletion. Delete each from the configured receipt
-bucket (including retained versions under the deployment's policy), verify absence, then
-remove the row. Deleting an already absent object is safe. Receipt deletions persist work
-before contacting storage; account deletion and bank unlink persist that work alongside
-row removal. Other historical receipt paths may still have a crash window before queuing.
-Storage errors are logged with object keys and leave the rows actionable. Keycloak failures
+`delete-receipt-file` jobs name object keys awaiting deletion. The durable worker retries
+deletion from the configured bucket automatically, then clears the completed payload.
+After ten failed attempts the job requires operator review. Retained storage versions
+follow the deployment's policy. Deleting an already absent object is safe. Every normal
+receipt-removal path saves the job with metadata removal. An immediate best-effort delete
+keeps current request behavior; the job subsequently verifies deletion and acknowledges
+completion, so the object may be deleted twice safely. Storage failures leave work durable.
+The existing emergency cleanup after a failed upload metadata save is still best effort:
+it cannot enqueue in the failed business transaction. Keycloak failures
 continue through `PendingLoginDeletion` and its existing sweep. None of these operational
-tables is exposed in a user's export.
+tables is exposed in a user's export. See [durable background jobs](background-jobs.md)
+for lease recovery, retry semantics, payload rules and operator procedures.

@@ -227,7 +227,7 @@ Before this, deleting an account left the Keycloak user untouched, and that show
 | Every Keycloak session: the web app's, the CLI's refresh token, any other device. | |
 | The web app's own session in the browser they deleted from. | |
 | Linked banks, accounts, imported bank rows and unfiled receipt files. | Filed expenses lose their private bank-row link. Unremovable provider Items are recorded for administrator reconciliation. |
-| Personal receipt files. | Shared receipt files and structured ledger/receipt history. Failed file deletions are recorded in `PendingDataCleanup` for operational retry. |
+| Personal receipt files. | Shared receipt files and structured ledger/receipt history. File deletion jobs are saved in `BackgroundJob` with metadata removal and retried automatically. |
 
 It cannot be undone. An admin creating a login with the same address, since registration is
 closed, makes a new login and a new, empty account; it does not reach the old one.

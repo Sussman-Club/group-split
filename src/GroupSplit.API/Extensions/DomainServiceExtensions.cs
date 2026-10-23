@@ -1,5 +1,6 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.API.Services.PersonalData;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
@@ -39,10 +40,12 @@ public static class DomainServiceExtensions
             // provide -- IKeycloakUserRemoval, from AddKeycloakAdminClient in Program.cs, or a
             // fake in a test host -- like any other system outside this one.
             services.TryAddSingleton(TimeProvider.System);
+            services.AddSingleton(new BackgroundJobRegistry().Add<DeleteReceiptFile>(DeleteReceiptFile.Name));
             services.AddBackgroundJobs();
             services.AddScoped<ILoginDeletion, LoginDeletion>();
             services.AddJobs()
                 .Handlers
+                    .AddJobHandler<DeleteReceiptFile, DeleteReceiptFileHandler>()
                     .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule);

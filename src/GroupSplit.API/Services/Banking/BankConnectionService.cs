@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
+using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Jobs;
@@ -122,6 +123,7 @@ public sealed class BankConnectionService(
     IServiceProvider services,
     IAccessTokenProtector protector,
     IJobDispatcher jobs,
+    IBackgroundJobQueue backgroundJobs,
     IReceiptFiles receiptFiles,
     IAccountDataGuard accountData,
     TimeProvider clock,
@@ -461,8 +463,9 @@ public sealed class BankConnectionService(
         if (item is null)
         {
             if (pending.ItemCiphertext is not null)
-                dbContext.Add(new PendingDataCleanup { Kind = "provider-item", Provider = pending.Provider,
-                    Resource = $"pending-link:{pending.Id}", ConnectionId = pending.Id, Reason = "Held item unreadable; reconcile provider inventory" });
+                backgroundJobs.AwaitOperator("provider-item",
+                    new ProviderItemReconciliation(pending.Provider, $"pending-link:{pending.Id}", pending.Id),
+                    "Held item unreadable; reconcile provider inventory");
             // Never got as far as an item, or the item it got can no longer be read. Either
             // way there is no token here to hand anything back with.
             logger.LogWarning(
@@ -480,8 +483,9 @@ public sealed class BankConnectionService(
         {
             // The one outcome that leaves something behind, and this line is its only
             // record once the row is gone.
-            dbContext.Add(new PendingDataCleanup { Kind = "provider-item", Provider = pending.Provider,
-                Resource = item.ProviderItemId, ConnectionId = pending.Id, Reason = "Held item removal failed" });
+            backgroundJobs.AwaitOperator("provider-item",
+                new ProviderItemReconciliation(pending.Provider, item.ProviderItemId, pending.Id),
+                "Held item removal failed");
             logger.LogError(
                 "Gave up on held bank link {PendingLinkId} and could not hand item {ProviderItemId} back to "
                 + "{Provider}. It exists there, belongs to no connection here, and has to be removed by hand.",
@@ -871,8 +875,7 @@ public sealed class BankConnectionService(
         // The expenses filed from this connection's rows keep everything but the link: the
         // relationship is SetNull, so they are spending history rather than an import.
         dbContext.Remove(connection);
-        foreach (var attachment in discarded)
-            dbContext.Add(new PendingDataCleanup { Kind = "receipt", Resource = attachment.ObjectKey, Reason = "Bank unlinked" });
+        receiptFiles.Enqueue(discarded.Select(attachment => attachment.ObjectKey));
         await dbContext.SaveChangesAsync(ct);
 
         await receiptFiles.DeleteAsync(discarded.Select(attachment => attachment.ObjectKey),
@@ -880,11 +883,8 @@ public sealed class BankConnectionService(
     }
 
     private void RecordProviderCleanup(BankConnection connection, string reason) =>
-        dbContext.Add(new PendingDataCleanup
-        {
-            Kind = "provider-item", Provider = connection.Provider, Resource = connection.ProviderItemId,
-            ConnectionId = connection.Id, Reason = reason
-        });
+        backgroundJobs.AwaitOperator("provider-item",
+            new ProviderItemReconciliation(connection.Provider, connection.ProviderItemId, connection.Id), reason);
 
     /// <summary>
     /// Hands the item back, counting an item the provider no longer knows as handed back.

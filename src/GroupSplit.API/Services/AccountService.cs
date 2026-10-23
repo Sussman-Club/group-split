@@ -111,8 +111,7 @@ public sealed class AccountService(
         var personalFiles = await context.Set<ReceiptAttachment>()
             .Where(file => file.Expense != null && file.Expense.GroupId == userId)
             .ToListAsync(cancellationToken);
-        foreach (var file in personalFiles)
-            context.Add(new PendingDataCleanup { Kind = "receipt", Resource = file.ObjectKey, Reason = "Account deleted" });
+        receiptFiles.Enqueue(personalFiles.Select(file => file.ObjectKey));
         context.RemoveRange(personalFiles);
 
         foreach (var group in sharedGroups)

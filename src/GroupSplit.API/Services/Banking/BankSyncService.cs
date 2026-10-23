@@ -220,6 +220,7 @@ public sealed class BankSyncService(
         }
 
         var discarded = await DropPhantomsAsync(connection, suspects, attempt, ct);
+        receiptFiles.Enqueue(discarded);
 
         connection.Cursor = cursor;
         connection.LastSyncedAt = clock.GetUtcNow();
@@ -382,6 +383,7 @@ public sealed class BankSyncService(
         }
 
         var discarded = await DiscardReceiptFilesAsync(withdrawn, ct);
+        receiptFiles.Enqueue(discarded);
 
         await dbContext.SaveChangesAsync(ct);
 
