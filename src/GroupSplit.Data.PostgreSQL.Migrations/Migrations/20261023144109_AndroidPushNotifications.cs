@@ -19,6 +19,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Token = table.Column<string>(type: "character varying(4096)", maxLength: 4096, nullable: false),
                     ExpensesEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    ExpenseChangesEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    SettlementsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    PaymentRequestsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    InvitationsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    BankSyncIssuesEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>

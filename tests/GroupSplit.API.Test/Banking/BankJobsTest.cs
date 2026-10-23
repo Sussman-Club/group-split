@@ -29,6 +29,24 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task A_new_bank_signin_problem_stages_one_private_alert_and_does_not_repeat()
+    {
+        var connection = await LinkAsync(BankConnectionStatus.Active);
+        DbContext.Add(new PushDevice { UserId = connection.UserId, Token = "test-token",
+            UpdatedAt = DateTimeOffset.UtcNow, BankSyncIssuesEnabled = true });
+        await DbContext.SaveChangesAsync(Ct);
+        _bank.Throw(BankSyncFailure.LoginRequired);
+        Assert.Equal(SyncOutcome.LoginRequired, await GetService<IBankSyncService>().SyncAsync(connection.Id, Ct));
+        Assert.Equal(SyncOutcome.NotSyncable, await GetService<IBankSyncService>().SyncAsync(connection.Id, Ct));
+        var jobs = DbContext.Set<BackgroundJob>().Where(j => j.Type == GroupSplit.API.Services.Push.SendPushNotification.Name).ToList();
+        var stored = Assert.Single(jobs);
+        var job = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.Push.SendPushNotification>(stored.Payload)!;
+        Assert.Equal(connection.UserId, job.UserId);
+        Assert.Equal(connection.Id, job.SubjectId);
+        Assert.Equal(GroupSplit.Shared.PushNotificationKind.BankSyncIssue, job.Kind);
+    }
+
+    [Fact]
     public async Task The_sweep_dispatches_one_sync_per_active_connection_and_no_other()
     {
         var active = await LinkAsync(BankConnectionStatus.Active);

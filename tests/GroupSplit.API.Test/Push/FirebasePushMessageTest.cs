@@ -1,4 +1,5 @@
 using GroupSplit.API.Services.Push;
+using GroupSplit.Shared;
 using Newtonsoft.Json.Linq;
 
 namespace GroupSplit.API.Test.Push;
@@ -20,4 +21,27 @@ public sealed class FirebasePushMessageTest
         Assert.Equal(sentAt.ToUniversalTime(), DateTimeOffset.Parse(timestamp.Value<string>()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("An expense was added to Vacation 2024.", wire["notification"]?["body"]?.Value<string>());
     }
+    [Theory]
+    [InlineData(PushNotificationKind.ExpenseChanged, "An expense was changed in Trip.")]
+    [InlineData(PushNotificationKind.Settlement, "A settlement was recorded in Trip.")]
+    [InlineData(PushNotificationKind.PaymentRequest, "You have a payment request in Trip.")]
+    [InlineData(PushNotificationKind.InvitationAccepted, "A guest joined Trip.")]
+    [InlineData(PushNotificationKind.BankSyncIssue, "A linked bank needs your attention.")]
+    public void Categories_include_their_own_channel_and_routing_data(PushNotificationKind kind, string body)
+    {
+        var groupId = Guid.NewGuid();
+        var message = FirebasePushSender.CreateMessage("token", groupId, "Trip", Guid.NewGuid(),
+            DateTimeOffset.UtcNow, kind, kind == PushNotificationKind.PaymentRequest ? "request-token" : null);
+        Assert.Equal(body, message.Notification.Body);
+        Assert.Equal(PushNotificationKinds.Channel(kind), message.Android.Notification.ChannelId);
+        Assert.Equal(kind.ToString(), message.Data["notificationKind"]);
+    }
+
+    [Theory]
+    [InlineData("https://evil.example")]
+    [InlineData("../account")]
+    [InlineData("token?x=y")]
+    public void Payment_notification_routing_rejects_untrusted_paths(string token) =>
+        Assert.Null(PushNotificationKinds.Route(PushNotificationKind.PaymentRequest, Guid.NewGuid(), token));
+
 }

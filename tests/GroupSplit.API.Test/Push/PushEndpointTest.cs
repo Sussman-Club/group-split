@@ -47,6 +47,23 @@ public sealed class PushEndpointTest : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Other_categories_can_be_enabled_without_expense_creation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var id = Guid.NewGuid();
+        var request = new PushDeviceRequest("token", false, true, true, true, true, true);
+        (await host.Client.PutAsJsonAsync($"/users/me/push-devices/{id}", request, ct)).EnsureSuccessStatusCode();
+        using var scope = host.Services.CreateScope();
+        var device = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<PushDevice>().SingleAsync(ct);
+        Assert.False(device.ExpensesEnabled);
+        Assert.True(device.ExpenseChangesEnabled);
+        Assert.True(device.SettlementsEnabled);
+        Assert.True(device.PaymentRequestsEnabled);
+        Assert.True(device.InvitationsEnabled);
+        Assert.True(device.BankSyncIssuesEnabled);
+    }
+
+    [Fact]
     public async Task Token_rotation_and_preferences_update_the_same_device()
     {
         var id = Guid.NewGuid();

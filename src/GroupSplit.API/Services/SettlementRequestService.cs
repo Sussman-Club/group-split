@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using System.Security.Cryptography;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
@@ -24,7 +25,8 @@ public class SettlementRequestService(
     IGroupService groupService,
     ISettlementService settlements,
     AppDbContext context,
-    TimeProvider clock) : ISettlementRequestService
+    TimeProvider clock,
+    PushNotificationQueue notifications) : ISettlementRequestService
 {
     private const int TokenBytes = 32;
 
@@ -134,6 +136,8 @@ public class SettlementRequestService(
             Group = group, DebtAtCreation = debt, RequestedAmount = request.Amount
         });
         context.Add(created);
+        await notifications.ForGroup(PushNotificationKind.PaymentRequest, group.Id, currentUser.User.Id,
+            cancellationToken, created.Id, [recipient.Id]);
         await context.SaveChangesAsync(cancellationToken);
         return ToResponse(created);
     }

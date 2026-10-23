@@ -1,4 +1,5 @@
 @using GroupSplit.App.Shared.Services
+@using GroupSplit.Shared
 @using Microsoft.Extensions.DependencyInjection
 @inject IServiceProvider Services
 
@@ -6,10 +7,16 @@
 {
     <div class="gs-card gs-card-pad">
         <div class="gs-card-title"><h2>Notifications</h2></div>
-        <p class="gs-muted">Get an alert on this device when someone adds an expense to your group.</p>
-        <MudSwitch T="bool" Value="push.Enabled" ValueChanged="SetEnabled" Disabled="busy" Color="Color.Primary">
-            Expense alerts
-        </MudSwitch>
+        <p class="gs-muted">Choose which alerts this device receives.</p>
+        @foreach (var kind in Enum.GetValues<PushNotificationKind>())
+        {
+            <div>
+                <MudSwitch T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
+                           Disabled="busy" Color="Color.Primary">
+                    @PushNotificationKinds.Label(kind)
+                </MudSwitch>
+            </div>
+        }
         @if (error is not null)
         {
             <MudAlert Severity="Severity.Warning">@error</MudAlert>
@@ -22,11 +29,11 @@
     private bool busy;
     private string? error;
     protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();
-    private async Task SetEnabled(bool value)
+    private async Task SetEnabled(PushNotificationKind kind, bool value)
     {
         busy = true;
         error = null;
-        try { await push!.SetEnabledAsync(value); }
+        try { await push!.SetEnabledAsync(kind, value); }
         catch (Exception) { error = "Could not update alerts. Check your connection and allow notifications in Android settings, then try again."; }
         finally { busy = false; }
     }

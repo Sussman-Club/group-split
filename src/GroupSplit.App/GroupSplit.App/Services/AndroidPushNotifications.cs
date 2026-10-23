@@ -13,13 +13,15 @@ namespace GroupSplit.App.Services;
 public sealed class AndroidPushNotifications(NativeSession session, NativeOptions options,
     IHttpClientFactory clients) : IPushNotifications
 {
-    private const string EnabledKey = "push.expenses";
     private const string InstallationKey = "push.installation";
     private readonly SemaphoreSlim gate = new(1, 1);
     public bool Supported => Firebase.FirebaseApp.InitializeApp(Android.App.Application.Context) is not null;
-    public bool Enabled => Preferences.Default.Get(EnabledKey, false);
+    public bool Enabled => Enum.GetValues<PushNotificationKind>().Any(IsEnabled);
+    public bool IsEnabled(PushNotificationKind kind) => Preferences.Default.Get(PushNotificationKinds.Preference(kind), false);
 
-    public async Task SetEnabledAsync(bool enabled)
+    public Task SetEnabledAsync(bool enabled) => SetEnabledAsync(PushNotificationKind.ExpenseCreated, enabled);
+
+    public async Task SetEnabledAsync(PushNotificationKind kind, bool enabled)
     {
         await gate.WaitAsync();
         try
@@ -30,13 +32,21 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
                 throw new InvalidOperationException("Notification permission was not granted.");
             if (enabled && AndroidX.Core.App.NotificationManagerCompat.From(Android.App.Application.Context)?.AreNotificationsEnabled() != true)
                 throw new InvalidOperationException("Notifications are disabled in Android settings.");
-            FirebaseMessaging.Instance.AutoInitEnabled = enabled;
-            if (enabled)
+            var key = PushNotificationKinds.Preference(kind);
+            var previous = IsEnabled(kind);
+            Preferences.Default.Set(key, enabled);
+            try
             {
-                await RegisterAsync();
-                Preferences.Default.Set(EnabledKey, true);
+                FirebaseMessaging.Instance.AutoInitEnabled = Enabled;
+                if (Enabled) await RegisterAsync();
+                else await RemoveAsync();
             }
-            else await RemoveAsync();
+            catch
+            {
+                Preferences.Default.Set(key, previous);
+                FirebaseMessaging.Instance.AutoInitEnabled = Enabled;
+                throw;
+            }
         }
         finally { gate.Release(); }
     }
@@ -77,14 +87,18 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
         client.Timeout = TimeSpan.FromSeconds(15);
         using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(options.ApiBaseAddress, $"users/me/push-devices/{id}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
-        request.Content = JsonContent.Create(new PushDeviceRequest(token, true), NativeJsonContext.Default.PushDeviceRequest);
+        request.Content = JsonContent.Create(new PushDeviceRequest(token,
+            IsEnabled(PushNotificationKind.ExpenseCreated), IsEnabled(PushNotificationKind.ExpenseChanged),
+            IsEnabled(PushNotificationKind.Settlement), IsEnabled(PushNotificationKind.PaymentRequest),
+            IsEnabled(PushNotificationKind.InvitationAccepted), IsEnabled(PushNotificationKind.BankSyncIssue)), NativeJsonContext.Default.PushDeviceRequest);
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }
 
     private async Task RemoveAsync(bool skipServer = false)
     {
-        Preferences.Default.Set(EnabledKey, false);
+        foreach (var kind in Enum.GetValues<PushNotificationKind>())
+            Preferences.Default.Set(PushNotificationKinds.Preference(kind), false);
         Exception? failure = null;
         try
         {

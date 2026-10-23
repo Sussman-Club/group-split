@@ -1,5 +1,6 @@
 ﻿using Android.App;
 using Android.Runtime;
+using GroupSplit.Shared;
 
 namespace GroupSplit.App;
 
@@ -19,7 +20,9 @@ public class MainApplication : MauiApplication
         if (OperatingSystem.IsAndroidVersionAtLeast(26))
         {
             var manager = (NotificationManager?)GetSystemService(NotificationService);
-            manager?.CreateNotificationChannel(new NotificationChannel("group_expenses", "Expense alerts", NotificationImportance.Default));
+            foreach (var kind in Enum.GetValues<PushNotificationKind>())
+                manager?.CreateNotificationChannel(new NotificationChannel(PushNotificationKinds.Channel(kind),
+                    PushNotificationKinds.Label(kind), NotificationImportance.Default));
         }
     }
 }

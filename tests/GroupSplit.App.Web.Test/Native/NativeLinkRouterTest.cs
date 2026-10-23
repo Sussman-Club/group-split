@@ -1,4 +1,5 @@
 using GroupSplit.App.Services;
+using GroupSplit.Shared;
 using GroupSplit.App.Shared.Services;
 
 namespace GroupSplit.App.Web.Test.Native;
@@ -15,6 +16,21 @@ public sealed class NativeLinkRouterTest
         links.OpenGroup(group);
         Assert.Equal($"/groups/{group}", links.Take());
     }
+    [Fact]
+    public void Category_notifications_keep_safe_routes_until_the_webview_is_ready()
+    {
+        var links = new NativeLinkRouter(NativeOptions.Create("https://api.example/", "https://auth.example/", false));
+        Assert.True(links.OpenNotification(PushNotificationKind.BankSyncIssue, Guid.Empty, null));
+        Assert.Equal("/account", links.Take());
+        Assert.True(links.OpenNotification(PushNotificationKind.PaymentRequest, Guid.NewGuid(), "request-token"));
+        Assert.Equal("/settlement-requests/request-token", links.Take());
+        Assert.False(links.OpenNotification(PushNotificationKind.PaymentRequest, Guid.NewGuid(), "../account"));
+        Assert.Null(links.Take());
+        var group = Guid.NewGuid();
+        Assert.True(links.OpenNotification(PushNotificationKind.InvitationAccepted, group, null));
+        Assert.Equal($"/groups/{group}", links.Take());
+    }
+
     private static readonly Uri Website = new("https://groupsplit.sussman.win/");
 
     [Theory]

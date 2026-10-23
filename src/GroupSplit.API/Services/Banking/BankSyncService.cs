@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using System.Diagnostics.CodeAnalysis;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -73,6 +74,7 @@ public sealed class BankSyncService(
     IMerchantDirectory merchants,
     IReceiptFiles receiptFiles,
     TimeProvider clock,
+    PushNotificationQueue notifications,
     ILogger<BankSyncService> logger) : IBankSyncService
 {
     /// <summary>
@@ -344,6 +346,8 @@ public sealed class BankSyncService(
         if (await SupersededAsync(connection, item, ct))
             return;
 
+        if (connection.Status != status && status != BankConnectionStatus.Active)
+            await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
         connection.Status = status;
         await dbContext.SaveChangesAsync(ct);
     }

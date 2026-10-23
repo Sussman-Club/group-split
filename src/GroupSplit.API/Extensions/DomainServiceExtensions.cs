@@ -43,14 +43,17 @@ public static class DomainServiceExtensions
             services.TryAddSingleton(TimeProvider.System);
             services.AddSingleton(new BackgroundJobRegistry()
                 .Add<DeleteReceiptFile>(DeleteReceiptFile.Name)
-                .Add<SendExpensePush>(SendExpensePush.Name));
+                .Add<SendExpensePush>(SendExpensePush.Name)
+                .Add<SendPushNotification>(SendPushNotification.Name));
             services.TryAddSingleton<IPushSender, FirebasePushSender>();
+            services.AddScoped<PushNotificationQueue>();
             services.AddBackgroundJobs();
             services.AddScoped<ILoginDeletion, LoginDeletion>();
             services.AddJobs()
                 .Handlers
                     .AddJobHandler<DeleteReceiptFile, DeleteReceiptFileHandler>()
                     .AddJobHandler<SendExpensePush, SendExpensePushHandler>()
+                    .AddJobHandler<SendPushNotification, SendPushNotificationHandler>()
                     .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule);

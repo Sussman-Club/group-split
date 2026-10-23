@@ -1,8 +1,19 @@
-# Android expense notifications
+# Android notifications
 
-The Android MAUI app can opt in to Firebase Cloud Messaging (FCM) expense alerts under **Account → Notifications → Expense alerts**. Permission is requested only after that action. Each device has its own switch; one account can register several devices.
+The Android MAUI app can opt in to Firebase Cloud Messaging (FCM) alerts under **Account → Notifications**. Each category has an independent switch on each device. Android permission is requested only when enabling a category; one account can register several devices. All categories default to off.
 
-The first implementation alerts other current group members when an expense is created through the transaction service. It does not yet send settlement or invitation alerts, or keep an in-app notification history. Automatically filed bank expenses are not wired to this event yet.
+Available categories:
+
+| Category | When it sends | Recipients / tap destination |
+| --- | --- | --- |
+| New expenses | A member creates an expense through the transaction service | Other current group members; opens the group |
+| Expense changes | An expense is edited, moved, or deleted | Other current members of the affected groups; opens the group |
+| Settlements | A repayment is recorded, including settling across groups | Current members on either end of the payment, excluding the actor; opens the group |
+| Payment requests | A member requests repayment | Only the named recipient; opens the specific request |
+| Guests joining | A guest accepts a shareable invitation | Other current group members; opens the group |
+| Bank sync issues | A bank newly requires sign-in, revokes access, warns of expiring sign-in, or reports unshared accounts | Only the bank owner; opens Account |
+
+Bank alerts are for actionable state changes. Repeated webhook reports of the same issue do not enqueue another alert, and ordinary transient sync retries do not send alerts. There is no in-app notification history. Automatically filed bank expenses are not wired to the new-expense event yet.
 
 ## Create the Firebase project
 
@@ -35,19 +46,19 @@ See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [se
 ## Delivery behavior
 
 - Device registration is authenticated and bound to the current account. Only that account can change or unregister it. Token rotation updates the same installation; token uniqueness prevents duplicate registrations.
-- Creating an expense saves its pending deliveries in the same database commit. Firebase is called by a typed `SendExpensePush` handler through the existing durable background queue, outside the expense request. Job payloads contain device/user/group identifiers, a stable delivery ID, and expiration; FCM tokens are read only when sending.
-- The worker checks membership and device preference again before sending. The shared queue polls every two seconds and provides atomic multi-instance claims, five-minute leases, a two-minute execution timeout, and up to ten attempts with exponential backoff (five seconds through one hour). Failed jobs remain available for operator inspection; completed payloads are cleared. Delivery is at least once: a process failure after Firebase accepts a message can cause a retry. Notification tags reduce duplicate tray entries.
+- Each event stages its pending deliveries in the same database commit as the business change. Firebase is called by typed handlers through the existing durable background queue, outside the expense request. Job payloads contain device/user/group identifiers, a stable delivery ID, and expiration; FCM tokens are read only when sending.
+- The worker checks the selected category, device ownership, and current membership again before sending. Payment requests must still be open and addressed to the recipient; bank issues must still exist on the recipient's bank connection. The shared queue polls every two seconds and provides atomic multi-instance claims, five-minute leases, a two-minute execution timeout, and up to ten attempts with exponential backoff (five seconds through one hour). Failed jobs remain available for operator inspection; completed payloads are cleared. Delivery is at least once: a process failure after Firebase accepts a message can cause a retry. Notification tags reduce duplicate tray entries.
 - Unregistered FCM tokens are deleted. Registrations last 30 days without a successful app refresh. Pending alerts expire after one hour. The app refreshes registration on resume, sign-in and token rotation.
-- Android displays background notifications; the messaging service displays foreground notifications. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
+- Each category has its own Android notification channel. Android displays background notifications; the messaging service displays foreground notifications. Background messages set an explicit current UTC event timestamp, preventing the Firebase SDK's default year-one timestamp from showing an age of thousands of years. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
 - Sign-out unregisters the installation, turns off auto-init, deletes its FCM token and clears tray notifications. Account deletion removes its device records. A different account signing in resets device alerts. Offline failures show a warning; alerts already handed to FCM may still be in flight.
-- Lock-screen messages include the group name (for example, "An expense was added to Vacation 2024."), with no member names, amounts or expense descriptions. Tokens and provider errors are not logged.
+- Group alerts include the group name on the lock screen (for example, "An expense was added to Vacation 2024."), with no member names, amounts or expense descriptions. Bank alerts contain only a generic notice that a linked bank needs attention. Tokens and provider errors are not logged.
 
 ## Check live delivery
 
 1. Apply the migration and run the configured API.
-2. Sign into the Android app as a member of a shared group. Enable expense alerts in Account, and accept Android's permission prompt (Android 13+).
+2. Sign into the Android app as a member of a shared group. Enable the categories being tested in Account, and accept Android's permission prompt (Android 13+).
 3. As a different member, add an expense to the group. The actor should not receive their own alert.
 4. Check the receiving app while foregrounded, backgrounded and closed. Tap each alert and confirm the group opens. Android force-stop blocks FCM until the app is opened again.
-5. Disable alerts and repeat; then re-enable and sign out, and repeat. Check a second device, denied OS permissions, a removed group member and account switching.
+5. Disable one category and confirm other selected categories remain enabled. Test expense edits/deletions, repayments, payment requests, guest acceptance, and bank issues. Verify each tap destination. Then re-enable and sign out, and repeat. Check a second device, denied OS permissions, a removed group member and account switching.
 
 Firebase credentials and an Android device are required for these live checks; local builds and automated tests do not verify actual FCM delivery.

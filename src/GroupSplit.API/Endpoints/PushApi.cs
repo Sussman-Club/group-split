@@ -38,6 +38,11 @@ public static class PushApi
             }
             device.Token = request.Token;
             device.ExpensesEnabled = request.ExpensesEnabled;
+            device.ExpenseChangesEnabled = request.ExpenseChangesEnabled;
+            device.SettlementsEnabled = request.SettlementsEnabled;
+            device.PaymentRequestsEnabled = request.PaymentRequestsEnabled;
+            device.InvitationsEnabled = request.InvitationsEnabled;
+            device.BankSyncIssuesEnabled = request.BankSyncIssuesEnabled;
             device.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();

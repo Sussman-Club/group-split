@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using GroupSplit.Data;
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
@@ -133,7 +134,8 @@ public class TransactionService(
     IGroupParticipants participants,
     IReceiptAttachmentService receiptAttachments,
     GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue backgroundJobs,
-    TimeProvider clock) : ITransactionService
+    TimeProvider clock,
+    PushNotificationQueue notifications) : ITransactionService
 {
     /// <summary>
     /// The caller's expenses, and only their expenses.
@@ -942,6 +944,11 @@ public class TransactionService(
         // what a departed participant paid and owed here is what it was.
         DepartedPositions.RefuseIfMoved(departed, expense, recordedIn);
 
+        await notifications.ForGroup(PushNotificationKind.ExpenseChanged, expense.GroupId,
+            userContext.User.Id, ct);
+        if (recordedIn != expense.GroupId)
+            await notifications.ForGroup(PushNotificationKind.ExpenseChanged, recordedIn, userContext.User.Id, ct);
+
         await dbContext.SaveChangesAsync(ct);
 
         return expense;
@@ -1101,6 +1108,8 @@ public class TransactionService(
             dbContext.Remove(row);
 
         dbContext.Remove(transaction);
+        if (transaction is Expense)
+            await notifications.ForGroup(PushNotificationKind.ExpenseChanged, transaction.GroupId, userContext.User.Id, ct);
 
         await dbContext.SaveChangesAsync(ct);
     }
