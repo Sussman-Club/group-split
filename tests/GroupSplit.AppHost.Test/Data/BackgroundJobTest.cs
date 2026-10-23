@@ -1,4 +1,5 @@
 using Aspire.Hosting.Testing;
+using System.Data.Common;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.AppHost.Test.Base;
@@ -8,6 +9,7 @@ using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -101,6 +103,28 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
             Assert.Equal(BackgroundJobStatus.Running, row.Status);
             Assert.Equal(1, row.Attempts);
         });
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task A_stale_candidate_cannot_claim_a_job_another_worker_completed()
+    {
+        var id = await Enqueue();
+        var gate = new BeforeClaimUpdate();
+        await using var delayed = new PostgreSqlAppDbContext(new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
+            .UseNpgsql(_connectionString).AddInterceptors(gate).Options);
+        var stale = Store(delayed).Claim(Ct);
+        try
+        {
+            await gate.Reached.Task.WaitAsync(Ct);
+            var winner = Assert.IsType<BackgroundJob>(await Claim());
+            await using var other = Context();
+            await Store(other).Finish(winner, BackgroundJobStatus.Completed, null, Ct);
+        }
+        finally { gate.Continue.TrySetResult(); }
+        Assert.Null(await stale);
+        var saved = await Read(id);
+        Assert.Equal(BackgroundJobStatus.Completed, saved.Status);
+        Assert.Equal(1, saved.Attempts);
     }
 
     [Fact(Timeout = 120_000)]
@@ -399,6 +423,23 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
     private sealed class Executor(Func<IJob, CancellationToken, ValueTask<object?>> execute) : IJobExecutor
     {
         public ValueTask<object?> ExecuteAsync(IJob job, CancellationToken cancellationToken) => execute(job, cancellationToken);
+    }
+
+    private sealed class BeforeClaimUpdate : DbCommandInterceptor
+    {
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Continue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.StartsWith("UPDATE", StringComparison.Ordinal))
+            {
+                Reached.TrySetResult();
+                await Continue.Task.WaitAsync(cancellationToken);
+            }
+            return result;
+        }
     }
 
     private sealed class Clock : TimeProvider

@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev, main]
   # Called by deploy.yml, which waits for it: the tests gate a deployment rather than
   # running beside one. Triggering both on the same push raced them, and the deploy
   # generally won, so main could ship on a red build.

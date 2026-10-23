@@ -35,9 +35,13 @@ the registry translates between it and typed jobs.
 ## Execution and failures
 
 The scheduled job runs every two seconds and processes up to ten invocations per run,
-claiming one row at a time with an atomic
-`UPDATE ... RETURNING` over `FOR UPDATE SKIP LOCKED`. Different instances can work
-concurrently. No row lock or database transaction spans execution. A claim records
+claiming one row at a time with LINQ and a conditional `ExecuteUpdateAsync`. The update
+compares the candidate's observed status, attempt count, lease and availability; only
+one competing worker can change that state. Losers select again, up to sixteen
+conflicts per invocation before yielding to the next scheduled run. Different
+instances can work concurrently. This optimistic approach adds database round trips
+under contention; it does not provide `SKIP LOCKED` behavior. No database transaction
+spans execution. A claim records
 a unique lease ID, increments attempts and expires after five minutes. A process
 that crashes leaves a row another instance can reclaim when that lease expires.
 
@@ -77,5 +81,5 @@ Operators should purge completed rows after their operational retention window;
 failed and awaiting-operator rows require review before removal. Database backups
 follow the deployment's separate retention policy.
 
-PostgreSQL documents `SKIP LOCKED` for consumers of a queue-like table:
-[SELECT locking clauses](https://www.postgresql.org/docs/current/sql-select.html).
+EF documents conditional updates and checking the affected-row count for concurrency:
+[ExecuteUpdate concurrency control](https://learn.microsoft.com/en-us/ef/core/saving/execute-insert-update-delete#concurrency-control-and-rows-affected).

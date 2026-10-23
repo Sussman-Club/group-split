@@ -18,30 +18,53 @@ public sealed class BackgroundJobStore(AppDbContext db, TimeProvider time) : IBa
 
     public async Task<BackgroundJob?> Claim(CancellationToken ct)
     {
-        var now = time.GetUtcNow();
-        var lease = Guid.NewGuid();
-        var expires = now + LeaseDuration;
-        // One statement also makes this safe with EF's retry strategy: an ambiguous
-        // commit may leave a lease behind, which expires instead of losing the job.
-        var rows = await db.Set<BackgroundJob>().FromSqlInterpolated($"""
-            WITH candidate AS (
-                SELECT "Id" FROM "BackgroundJob"
-                WHERE ("Status" = 'Pending' AND "AvailableAt" <= {now})
-                   OR ("Status" = 'Running' AND "LeaseExpiresAt" <= {now})
-                ORDER BY "AvailableAt", "CreatedAt", "Id"
-                FOR UPDATE SKIP LOCKED LIMIT 1
-            )
-            UPDATE "BackgroundJob" AS job
-            SET "Status" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN 'Failed' ELSE 'Running' END,
-                "Attempts" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN job."Attempts" ELSE job."Attempts" + 1 END,
-                "LeaseId" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN NULL ELSE {lease} END,
-                "LeaseExpiresAt" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN NULL ELSE {expires} END,
-                "Reason" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN 'AttemptsExhausted' ELSE job."Reason" END,
-                "FinishedAt" = CASE WHEN job."Attempts" >= {MaxAttempts} THEN {now} ELSE NULL END
-            FROM candidate WHERE job."Id" = candidate."Id"
-            RETURNING job.*
-            """).AsNoTracking().ToListAsync(ct);
-        return rows.SingleOrDefault();
+        // Bound contention work; the existing scheduler will try again on its next tick.
+        for (var conflict = 0; conflict < 16; conflict++)
+        {
+            var now = time.GetUtcNow();
+            var candidate = await db.Set<BackgroundJob>().AsNoTracking()
+                .Where(job => (job.Status == BackgroundJobStatus.Pending && job.AvailableAt <= now)
+                    || (job.Status == BackgroundJobStatus.Running && job.LeaseExpiresAt <= now))
+                .OrderBy(job => job.AvailableAt).ThenBy(job => job.CreatedAt).ThenBy(job => job.Id)
+                .FirstOrDefaultAsync(ct);
+            if (candidate is null) return null;
+            if (await TryClaim(candidate, now, ct)) return candidate;
+        }
+        return null;
+    }
+
+    private async Task<bool> TryClaim(BackgroundJob candidate, DateTimeOffset now, CancellationToken ct)
+    {
+        var exhausted = candidate.Attempts >= MaxAttempts;
+        var status = exhausted ? BackgroundJobStatus.Failed : BackgroundJobStatus.Running;
+        var attempts = exhausted ? candidate.Attempts : candidate.Attempts + 1;
+        Guid? lease = exhausted ? null : Guid.NewGuid();
+        DateTimeOffset? expires = exhausted ? null : now + LeaseDuration;
+        DateTimeOffset? finished = exhausted ? now : null;
+        var reason = exhausted ? "AttemptsExhausted" : candidate.Reason;
+
+        // Compare the observed state in the UPDATE itself. Only one competing worker
+        // can change it; losers select again. No transaction spans handler execution.
+        var affected = await db.Set<BackgroundJob>()
+            .Where(job => job.Id == candidate.Id && job.Status == candidate.Status
+                && job.Attempts == candidate.Attempts && job.LeaseId == candidate.LeaseId
+                && job.AvailableAt == candidate.AvailableAt && job.LeaseExpiresAt == candidate.LeaseExpiresAt)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(job => job.Status, status)
+                .SetProperty(job => job.Attempts, attempts)
+                .SetProperty(job => job.LeaseId, lease)
+                .SetProperty(job => job.LeaseExpiresAt, expires)
+                .SetProperty(job => job.FinishedAt, finished)
+                .SetProperty(job => job.Reason, reason), ct);
+        if (affected == 0) return false;
+
+        candidate.Status = status;
+        candidate.Attempts = attempts;
+        candidate.LeaseId = lease;
+        candidate.LeaseExpiresAt = expires;
+        candidate.FinishedAt = finished;
+        candidate.Reason = reason;
+        return true;
     }
 
     public async Task Finish(BackgroundJob job, BackgroundJobStatus status, string? reason, CancellationToken ct)
