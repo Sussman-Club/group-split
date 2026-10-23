@@ -22,12 +22,13 @@ public sealed class SendExpensePushHandler(AppDbContext db, IPushSender sender, 
         var device = await db.Set<PushDevice>().SingleOrDefaultAsync(d => d.Id == job.DeviceId
             && d.UserId == job.UserId && d.ExpensesEnabled && d.UpdatedAt > now.AddDays(-30), ct);
         if (device is null) return;
-        var member = await db.Set<User>().AnyAsync(u => u.Id == job.UserId && u.Kind == UserKind.Account
-            && u.Groups.Any(g => g.Id == job.GroupId), ct);
-        if (!member) return;
+        var groupName = await db.Set<Group>()
+            .Where(g => g.Id == job.GroupId && g.Users.Any(u => u.Id == job.UserId && u.Kind == UserKind.Account))
+            .Select(g => g.Name).SingleOrDefaultAsync(ct);
+        if (groupName is null) return;
 
         // Provider failures escape to the shared queue's retry policy. Never persist tokens or errors.
-        if (!await sender.SendAsync(device.Token, job.GroupId, job.DeliveryId, ct))
+        if (!await sender.SendAsync(device.Token, job.GroupId, groupName, job.DeliveryId, ct))
         {
             db.Remove(device);
             await db.SaveChangesAsync(ct);

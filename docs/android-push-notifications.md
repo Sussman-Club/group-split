@@ -28,7 +28,7 @@ GOOGLE_APPLICATION_CREDENTIALS=<absolute path to the server service-account JSON
 
 Use an identity with Firebase Cloud Messaging send permissions in this project. Application Default Credentials through workload identity can replace the credentials file. Keep service-account JSON in server secret storage; never place it in the Android app or commit it. The `google-services.json` Android configuration is a different file and is not a server credential.
 
-Push defaults to disabled. Disabled sending fails safely without contacting Firebase; queued jobs follow the shared retry policy and are skipped once expired. These environment values must reach the API container/process explicitly if an orchestrator launches it; they are not automatically forwarded by the AppHost. No Firebase project or credentials are provisioned by this branch.
+Push defaults to disabled. Disabled sending fails safely without contacting Firebase; queued jobs follow the shared retry policy and are skipped once expired. For local Aspire runs, set these values in the AppHost environment; it forwards them to the API when push is enabled. Deployed containers need these values supplied explicitly. No Firebase project or credentials are provisioned by this branch.
 
 See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [sending messages](https://firebase.google.com/docs/cloud-messaging/send/admin-sdk).
 
@@ -40,7 +40,7 @@ See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [se
 - Unregistered FCM tokens are deleted. Registrations last 30 days without a successful app refresh. Pending alerts expire after one hour. The app refreshes registration on resume, sign-in and token rotation.
 - Android displays background notifications; the messaging service displays foreground notifications. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
 - Sign-out unregisters the installation, turns off auto-init, deletes its FCM token and clears tray notifications. Account deletion removes its device records. A different account signing in resets device alerts. Offline failures show a warning; alerts already handed to FCM may still be in flight.
-- Lock-screen messages contain a generic expense alert, with no names, amounts or expense descriptions. Tokens and provider errors are not logged.
+- Lock-screen messages include the group name (for example, "An expense was added to Vacation 2024."), with no member names, amounts or expense descriptions. Tokens and provider errors are not logged.
 
 ## Check live delivery
 

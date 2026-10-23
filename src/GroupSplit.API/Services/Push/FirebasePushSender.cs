@@ -7,14 +7,14 @@ namespace GroupSplit.API.Services.Push;
 public interface IPushSender
 {
     // False means the token is permanently unregistered; other failures are retried.
-    Task<bool> SendAsync(string token, Guid groupId, Guid deliveryId, CancellationToken ct);
+    Task<bool> SendAsync(string token, Guid groupId, string groupName, Guid deliveryId, CancellationToken ct);
 }
 
 public sealed class FirebasePushSender(IConfiguration config) : IPushSender, IDisposable
 {
     private FirebaseApp? app;
 
-    public async Task<bool> SendAsync(string token, Guid groupId, Guid deliveryId, CancellationToken ct)
+    public async Task<bool> SendAsync(string token, Guid groupId, string groupName, Guid deliveryId, CancellationToken ct)
     {
         if (!config.GetValue<bool>("Push:Enabled"))
             throw new InvalidOperationException("Push delivery is disabled.");
@@ -28,7 +28,7 @@ public sealed class FirebasePushSender(IConfiguration config) : IPushSender, IDi
             await FirebaseMessaging.GetMessaging(app).SendAsync(new Message
             {
                 Token = token,
-                Notification = new Notification { Title = "Group Split", Body = "A new expense was added to your group." },
+                Notification = new Notification { Title = "Group Split", Body = $"An expense was added to {groupName}." },
                 Data = new Dictionary<string, string> { ["groupId"] = groupId.ToString() },
                 Android = new AndroidConfig
                 {

@@ -138,6 +138,14 @@ var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web"
 
 if (builder.ExecutionContext.IsRunMode)
 {
+    // Local Firebase credentials stay outside the repository and reach only the API.
+    if (builder.Configuration.GetValue<bool>("Push:Enabled"))
+    {
+        api.WithEnvironment("Push__Enabled", "true")
+            .WithEnvironment("Push__ProjectId", builder.Configuration["Push:ProjectId"])
+            .WithEnvironment("GOOGLE_APPLICATION_CREDENTIALS", builder.Configuration["GOOGLE_APPLICATION_CREDENTIALS"]);
+    }
+
     // ADB reverse carries these loopback ports to Android without trusting a host
     // development certificate. Opt in only for local Debug acceptance testing.
     if (builder.Configuration.GetValue<bool>("NativeDeviceTesting"))

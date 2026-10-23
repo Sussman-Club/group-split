@@ -44,7 +44,7 @@ public sealed class PushDeliveryTest : IAsyncLifetime
         db.Add(device);
         await db.SaveChangesAsync(Ct);
         var sender = new Mock<IPushSender>();
-        var setup = sender.Setup(s => s.SendAsync("token", group.Id, delivery.DeliveryId, It.IsAny<CancellationToken>()));
+        var setup = sender.Setup(s => s.SendAsync("token", group.Id, group.Name, delivery.DeliveryId, It.IsAny<CancellationToken>()));
         if (scenario == "retry") setup.ThrowsAsync(new HttpRequestException("Unavailable"));
         else setup.ReturnsAsync(scenario != "unregistered");
         var handler = new SendExpensePushHandler(db, sender.Object, TimeProvider.System);
@@ -52,7 +52,7 @@ public sealed class PushDeliveryTest : IAsyncLifetime
             await Assert.ThrowsAsync<HttpRequestException>(() => handler.HandleAsync(delivery, Ct).AsTask());
         else
             await handler.HandleAsync(delivery, Ct);
-        sender.Verify(s => s.SendAsync("token", group.Id, delivery.DeliveryId, It.IsAny<CancellationToken>()), Times.Exactly(sends));
+        sender.Verify(s => s.SendAsync("token", group.Id, group.Name, delivery.DeliveryId, It.IsAny<CancellationToken>()), Times.Exactly(sends));
         db.ChangeTracker.Clear();
         Assert.Equal(deviceCount, await db.Set<PushDevice>().CountAsync(Ct));
     }

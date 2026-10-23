@@ -36,7 +36,7 @@ public sealed class ExpenseMessagingService : FirebaseMessagingService
         var notification = builder
             .SetSmallIcon(Resource.Drawable.ic_notification)!
             .SetContentTitle("Group Split")!
-            .SetContentText("A new expense was added to your group.")!
+            .SetContentText(message.GetNotification()?.Body ?? "An expense was added to your group.")!
             .SetAutoCancel(true)!.SetContentIntent(pending)!.Build();
         NotificationManagerCompat.From(this)?.Notify(id, notification);
     }
