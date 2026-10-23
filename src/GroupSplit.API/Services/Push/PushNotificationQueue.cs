@@ -9,14 +9,12 @@ namespace GroupSplit.API.Services.Push;
 
 public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue jobs, TimeProvider clock)
 {
-    internal static Expression<Func<PushDevice, bool>> Enabled(PushNotificationKind kind) => kind switch
+    internal static Expression<Func<PushDevice, bool>> Enabled(PushNotificationKind kind) => PushNotificationKinds.Category(kind) switch
     {
-        PushNotificationKind.ExpenseCreated => d => d.ExpensesEnabled,
-        PushNotificationKind.ExpenseChanged => d => d.ExpensesEnabled,
-        PushNotificationKind.Settlement => d => d.SettlementsEnabled,
-        PushNotificationKind.PaymentRequest => d => d.SettlementsEnabled,
-        PushNotificationKind.InvitationAccepted => d => d.InvitationsEnabled,
-        PushNotificationKind.BankSyncIssue => d => d.BankSyncIssuesEnabled,
+        PushNotificationCategory.Expenses => d => d.ExpensesEnabled,
+        PushNotificationCategory.Settlements => d => d.SettlementsEnabled,
+        PushNotificationCategory.GuestsJoining => d => d.InvitationsEnabled,
+        PushNotificationCategory.BankSyncIssues => d => d.BankSyncIssuesEnabled,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 

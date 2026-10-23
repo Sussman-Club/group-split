@@ -1,29 +1,63 @@
 namespace GroupSplit.Shared;
 
+// Values are persisted in jobs: append kinds without renumbering existing ones.
 public enum PushNotificationKind { ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue }
+public enum PushNotificationCategory { Expenses, Settlements, GuestsJoining, BankSyncIssues }
+
+public sealed record PushNotificationDefinition(
+    PushNotificationKind Kind, PushNotificationCategory Category, string BodyTemplate);
 
 public static class PushNotificationKinds
 {
-    public static string Channel(PushNotificationKind kind) => kind switch
+    // The server and native clients share this catalog. More events within an existing
+    // category need no additional preference column or UI switch.
+    public static IReadOnlyList<PushNotificationDefinition> Definitions { get; } = Array.AsReadOnly<PushNotificationDefinition>(
+    [
+        new(PushNotificationKind.ExpenseCreated, PushNotificationCategory.Expenses, "An expense was added to {0}."),
+        new(PushNotificationKind.ExpenseChanged, PushNotificationCategory.Expenses, "An expense was changed in {0}."),
+        new(PushNotificationKind.Settlement, PushNotificationCategory.Settlements, "A settlement was recorded in {0}."),
+        new(PushNotificationKind.PaymentRequest, PushNotificationCategory.Settlements, "You have a payment request in {0}."),
+        new(PushNotificationKind.InvitationAccepted, PushNotificationCategory.GuestsJoining, "A guest joined {0}."),
+        new(PushNotificationKind.BankSyncIssue, PushNotificationCategory.BankSyncIssues, "A linked bank needs your attention.")
+    ]);
+
+    public static IReadOnlyList<PushNotificationKind> Settings { get; } = Array.AsReadOnly(
+        Definitions.DistinctBy(d => d.Category).Select(d => d.Kind).ToArray());
+
+    private static PushNotificationDefinition Definition(PushNotificationKind kind) =>
+        Definitions.FirstOrDefault(d => d.Kind == kind) ?? throw new ArgumentOutOfRangeException(nameof(kind));
+
+    public static PushNotificationCategory Category(PushNotificationKind kind) => Definition(kind).Category;
+    public static string Body(PushNotificationKind kind, string groupName) =>
+        string.Format(System.Globalization.CultureInfo.InvariantCulture, Definition(kind).BodyTemplate, groupName);
+
+    public static string Channel(PushNotificationKind kind) => Category(kind) switch
     {
-        PushNotificationKind.ExpenseCreated => "group_expenses",
-        PushNotificationKind.ExpenseChanged => "expense_changes",
-        PushNotificationKind.Settlement => "settlements",
-        PushNotificationKind.PaymentRequest => "payment_requests",
-        PushNotificationKind.InvitationAccepted => "invitations",
-        PushNotificationKind.BankSyncIssue => "bank_sync",
+        PushNotificationCategory.Expenses => "group_expenses",
+        PushNotificationCategory.Settlements => "settlements",
+        PushNotificationCategory.GuestsJoining => "invitations",
+        PushNotificationCategory.BankSyncIssues => "bank_sync",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
-    public static string Label(PushNotificationKind kind) => kind switch
+
+    public static string Label(PushNotificationKind kind) => Category(kind) switch
     {
-        PushNotificationKind.ExpenseCreated => "Expenses",
-        PushNotificationKind.ExpenseChanged => "Expense changes",
-        PushNotificationKind.Settlement => "Settlements",
-        PushNotificationKind.PaymentRequest => "Payment requests",
-        PushNotificationKind.InvitationAccepted => "Guests joining",
-        PushNotificationKind.BankSyncIssue => "Bank sync issues",
+        PushNotificationCategory.Expenses => "Expenses",
+        PushNotificationCategory.Settlements => "Settlements",
+        PushNotificationCategory.GuestsJoining => "Guests joining",
+        PushNotificationCategory.BankSyncIssues => "Bank sync issues",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
+
+    public static string Preference(PushNotificationKind kind) => Category(kind) switch
+    {
+        PushNotificationCategory.Expenses => "push.expenses",
+        PushNotificationCategory.Settlements => "push.settlements",
+        PushNotificationCategory.GuestsJoining => "push.invitations",
+        PushNotificationCategory.BankSyncIssues => "push.bank_sync",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    };
+
     public static string? Route(PushNotificationKind kind, Guid groupId, string? requestToken = null)
     {
         if (!Enum.IsDefined(kind)) return null;
@@ -34,8 +68,4 @@ public static class PushNotificationKinds
                 ? "/settlement-requests/" + requestToken : null;
         return groupId == Guid.Empty ? null : $"/groups/{groupId}";
     }
-
-    public static string Preference(PushNotificationKind kind) => kind is PushNotificationKind.ExpenseCreated or PushNotificationKind.ExpenseChanged
-        ? "push.expenses" : kind is PushNotificationKind.Settlement or PushNotificationKind.PaymentRequest
-            ? "push.settlements" : "push." + Channel(kind);
 }

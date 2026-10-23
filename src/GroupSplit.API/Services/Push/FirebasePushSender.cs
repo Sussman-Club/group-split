@@ -23,7 +23,7 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
             throw new InvalidOperationException("Push delivery is disabled.");
         app ??= FirebaseApp.Create(new AppOptions
         {
-            Credential = await GoogleCredential.GetApplicationDefaultAsync(ct),
+            Credential = await CredentialAsync(config, ct),
             ProjectId = config["Push:ProjectId"]
         }, "groupsplit-push");
         try
@@ -38,13 +38,41 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
         }
     }
 
+    internal static Task<GoogleCredential> CredentialAsync(IConfiguration config, CancellationToken ct)
+    {
+        var encoded = config["Push:ServiceAccountBase64"];
+        if (string.IsNullOrWhiteSpace(encoded)) return GoogleCredential.GetApplicationDefaultAsync(ct);
+        // Select the credential type explicitly: deployment configuration must never load
+        // arbitrary external-account credential definitions or write a private key to disk.
+        try
+        {
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+            return Task.FromResult(GoogleCredential.FromServiceAccountCredential(
+                CredentialFactory.FromJson<ServiceAccountCredential>(json)));
+        }
+        catch (Exception error) when (error is ArgumentException or FormatException or InvalidOperationException or System.Text.Json.JsonException
+                                      or Newtonsoft.Json.JsonException or System.Security.Cryptography.CryptographicException)
+        {
+            throw new InvalidOperationException("The Firebase service-account configuration is invalid.");
+        }
+    }
+
     internal static Message CreateMessage(string token, Guid groupId, string groupName,
         Guid deliveryId, DateTimeOffset sentAt,
         PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null) => new()
     {
         Token = token,
-        Notification = new Notification { Title = "Group Split", Body = Body(kind, groupName) },
+        Notification = new Notification { Title = "Group Split", Body = PushNotificationKinds.Body(kind, groupName) },
         Data = Data(kind, groupId, requestToken),
+        Apns = new ApnsConfig
+        {
+            Headers = new Dictionary<string, string>
+            {
+                ["apns-push-type"] = "alert", ["apns-priority"] = "10",
+                ["apns-expiration"] = sentAt.AddHours(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+            },
+            Aps = new Aps { Sound = "default", ThreadId = groupId == Guid.Empty ? "account" : groupId.ToString() }
+        },
         Android = new AndroidConfig
         {
             TimeToLive = TimeSpan.FromHours(1),
@@ -56,17 +84,6 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
                 EventTimestamp = sentAt.UtcDateTime
             }
         }
-    };
-
-    private static string Body(PushNotificationKind kind, string name) => kind switch
-    {
-        PushNotificationKind.ExpenseCreated => $"An expense was added to {name}.",
-        PushNotificationKind.ExpenseChanged => $"An expense was changed in {name}.",
-        PushNotificationKind.Settlement => $"A settlement was recorded in {name}.",
-        PushNotificationKind.PaymentRequest => $"You have a payment request in {name}.",
-        PushNotificationKind.InvitationAccepted => $"A guest joined {name}.",
-        PushNotificationKind.BankSyncIssue => "A linked bank needs your attention.",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
     private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken)

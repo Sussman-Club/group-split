@@ -20,7 +20,7 @@ public class MainApplication : MauiApplication
         if (OperatingSystem.IsAndroidVersionAtLeast(26))
         {
             var manager = (NotificationManager?)GetSystemService(NotificationService);
-            foreach (var kind in Enum.GetValues<PushNotificationKind>())
+            foreach (var kind in PushNotificationKinds.Settings)
                 manager?.CreateNotificationChannel(new NotificationChannel(PushNotificationKinds.Channel(kind),
                     PushNotificationKinds.Label(kind), NotificationImportance.Default));
         }

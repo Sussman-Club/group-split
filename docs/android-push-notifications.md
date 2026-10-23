@@ -23,6 +23,19 @@ Bank alerts are for actionable state changes. Repeated webhook reports of the sa
 
 See [Firebase Android setup](https://firebase.google.com/docs/cloud-messaging/android/get-started).
 
+## GitHub production environment
+
+The release workflows read these settings from **Settings / Environments / production**:
+
+| Setting | Kind | Purpose |
+| --- | --- | --- |
+| `ANDROID_GOOGLE_SERVICES_JSON_BASE64` | Secret | Base64-encoded Android `google-services.json`; the Android release helper validates the package, writes it only for the build, and removes it afterwards. |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | Secret | Base64-encoded Firebase Admin service-account JSON; supplied only to the API container as a secret Aspire parameter. |
+| `PUSH_PROJECT_ID` | Variable | The Firebase project ID, such as `sussman-club-groupsplit`. |
+| `PUSH_ENABLED` | Variable | `true` to send notifications, `false` to disable sending. |
+
+The Deploy workflow carries the API settings through Compose to Komodo. When enabled, missing push configuration fails validation before image builds. The Android release workflow refuses missing or wrong-package Firebase configuration rather than silently publishing an app without notifications. Both workflows use the same production Firebase project; the server credential never enters an Android build. Base64 is only the transport encoding; GitHub encrypts the secrets.
+
 ## Configure the API
 
 Apply the `AndroidPushNotifications` EF migration using the normal database deployment workflow before deploying this API. It adds `PushDevice` registrations; deliveries use the shared `BackgroundJob` queue already in `dev`.
@@ -34,6 +47,8 @@ Push__Enabled=true
 Push__ProjectId=<your Firebase project ID>
 GOOGLE_APPLICATION_CREDENTIALS=<absolute path to the server service-account JSON>
 ```
+
+Production can instead set `Push__ServiceAccountBase64` to the base64-encoded service-account JSON. The API loads it in memory using the service-account-only Google credential factory; no key file or host-specific path is required. Leave it empty to use Application Default Credentials as above.
 
 Use an identity with Firebase Cloud Messaging send permissions in this project. Application Default Credentials through workload identity can replace the credentials file. Keep service-account JSON in server secret storage; never place it in the Android app or commit it. The `google-services.json` Android configuration is a different file and is not a server credential.
 
@@ -47,7 +62,7 @@ See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [se
 - Each event stages its pending deliveries in the same database commit as the business change. Firebase is called by typed handlers through the existing durable background queue, outside the expense request. Job payloads contain device/user/group identifiers, a stable delivery ID, and expiration; FCM tokens are read only when sending.
 - The worker checks the selected category, device ownership, and current membership again before sending. Payment requests must still be open and addressed to the recipient; bank issues must still exist on the recipient's bank connection. The shared queue polls every two seconds and provides atomic multi-instance claims, five-minute leases, a two-minute execution timeout, and up to ten attempts with exponential backoff (five seconds through one hour). Failed jobs remain available for operator inspection; completed payloads are cleared. Delivery is at least once: a process failure after Firebase accepts a message can cause a retry. Notification tags reduce duplicate tray entries.
 - Unregistered FCM tokens are deleted. Registrations last 30 days without a successful app refresh. Pending alerts expire after one hour. The app refreshes registration on resume, sign-in and token rotation.
-- Each category has its own Android notification channel. Android displays background notifications; the messaging service displays foreground notifications. Background messages set an explicit current UTC event timestamp, preventing the Firebase SDK's default year-one timestamp from showing an age of thousands of years. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
+- Each preference category has its own Android notification channel. Android displays background notifications; the messaging service displays foreground notifications. Background messages set an explicit current UTC event timestamp, preventing the Firebase SDK's default year-one timestamp from showing an age of thousands of years. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
 - Sign-out unregisters the installation, turns off auto-init, deletes its FCM token and clears tray notifications. Account deletion removes its device records. A different account signing in resets device alerts. Offline failures show a warning; alerts already handed to FCM may still be in flight.
 - Group alerts include the group name on the lock screen (for example, "An expense was added to Vacation 2024."), with no member names, amounts or expense descriptions. Bank alerts contain only a generic notice that a linked bank needs attention. Tokens and provider errors are not logged.
 
@@ -60,3 +75,11 @@ See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [se
 5. Disable one category and confirm other selected categories remain enabled. Test expense edits/deletions, repayments, payment requests, guest acceptance, and bank issues. Verify each tap destination. Then re-enable and sign out, and repeat. Check a second device, denied OS permissions, a removed group member and account switching.
 
 Firebase credentials and an Android device are required for these live checks; local builds and automated tests do not verify actual FCM delivery.
+
+## Extend to iOS and other notification events
+
+`PushNotificationKinds.Definitions` is the shared event catalog: each event has its own kind and message, and belongs to one of the four preference categories. UI settings and Android channels come from those categories. Add an event to an existing category and stage `SendPushNotification` through `PushNotificationQueue` in the same save as its business change. Add any event-specific authorization or relevance checks to the delivery handler, and any new destination to the shared route helper. Persisted enum values must stay stable. New preference categories still need an explicit device preference and schema change.
+
+The Firebase sender and device registration API accept FCM tokens without assuming Android. The message includes common notification text and routing data, plus separate Android and APNs delivery settings. Apple alerts have a one-hour expiry, default sound, and a group thread. Both platforms use the same queue, preferences, recipient checks, and server credential.
+
+This prepares server delivery for iOS; it does not implement the iOS client or claim an iPhone test. To ship iOS, register the iOS bundle ID in the same Firebase project, supply `GoogleService-Info.plist` to an iOS build on macOS, upload the Apple APNs authentication key to Firebase, enable the app's push capability, and implement `IPushNotifications` with the iOS Firebase SDK. Register the Firebase **FCM** token (not the raw APNs token), and route foreground/tap callbacks through the shared notification kind and native link router. The four settings remain the same. Keep Apple credentials separate from the shared Firebase Admin credential.

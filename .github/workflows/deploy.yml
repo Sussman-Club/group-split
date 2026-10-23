@@ -113,6 +113,9 @@ jobs:
           PLAID_ENV: ${{ vars.PLAID_ENV }}
           PLAID_REDIRECT_URI: ${{ vars.PLAID_REDIRECT_URI }}
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
+          PUSH_ENABLED: ${{ vars.PUSH_ENABLED || 'false' }}
+          PUSH_PROJECT_ID: ${{ vars.PUSH_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           RECEIPT_TRANSCRIPTION_PROVIDER: ${{ secrets.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}
           VERYFI_CLIENT_ID: ${{ secrets.VERYFI_CLIENT_ID }}

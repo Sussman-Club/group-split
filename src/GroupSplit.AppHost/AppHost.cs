@@ -317,6 +317,7 @@ else
         // Where bank providers are told to deliver webhooks: the same public origin, whose
         // /webhooks path the web app forwards here.
         .WithBankingOrigin(hostname)
+        .WithFirebasePush()
         .WithManagementHealthcheck();
 
     dbServer.AsDeployedPostgres();

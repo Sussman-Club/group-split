@@ -9,7 +9,7 @@ namespace GroupSplit.App;
 
 [Service(Exported = false)]
 [IntentFilter(["com.google.firebase.MESSAGING_EVENT"])]
-public sealed class ExpenseMessagingService : FirebaseMessagingService
+public sealed class PushMessagingService : FirebaseMessagingService
 {
     public override async void OnNewToken(string token)
     {
@@ -44,7 +44,7 @@ public sealed class ExpenseMessagingService : FirebaseMessagingService
         var notification = builder
             .SetSmallIcon(Resource.Drawable.ic_notification)!
             .SetContentTitle("Group Split")!
-            .SetContentText(message.GetNotification()?.Body ?? "An expense was added to your group.")!
+            .SetContentText(message.GetNotification()?.Body ?? PushNotificationKinds.Body(kind, "your group"))!
             .SetAutoCancel(true)!.SetContentIntent(pending)!.Build();
         NotificationManagerCompat.From(this)?.Notify(id, notification);
     }

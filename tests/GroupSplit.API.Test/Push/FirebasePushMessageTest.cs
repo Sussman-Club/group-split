@@ -37,6 +37,37 @@ public sealed class FirebasePushMessageTest
         Assert.Equal(kind.ToString(), message.Data["notificationKind"]);
     }
 
+    [Fact]
+    public void Apple_delivery_uses_the_same_content_and_routing_with_a_bounded_lifetime()
+    {
+        var sentAt = DateTimeOffset.FromUnixTimeSeconds(1_792_764_000);
+        var group = Guid.NewGuid();
+        var message = FirebasePushSender.CreateMessage("ios-fcm-token", group, "Trip", Guid.NewGuid(),
+            sentAt, PushNotificationKind.PaymentRequest, "request-token");
+        var wire = JObject.FromObject(message);
+        Assert.Equal("You have a payment request in Trip.", message.Notification.Body);
+        Assert.Equal("request-token", message.Data["requestToken"]);
+        Assert.Equal("alert", message.Apns.Headers["apns-push-type"]);
+        Assert.Equal(sentAt.AddHours(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            message.Apns.Headers["apns-expiration"]);
+        Assert.Equal("default", wire["apns"]?["payload"]?["aps"]?["sound"]?.Value<string>());
+        Assert.Equal(group.ToString(), message.Apns.Aps.ThreadId);
+    }
+
+    [Fact]
+    public void Catalog_covers_every_event_and_keeps_preference_groups_consistent()
+    {
+        Assert.Equal(Enum.GetValues<PushNotificationKind>().Order(), PushNotificationKinds.Definitions.Select(d => d.Kind).Order());
+        Assert.Equal(Enum.GetValues<PushNotificationCategory>().Length, PushNotificationKinds.Settings.Count);
+        foreach (var category in PushNotificationKinds.Definitions.GroupBy(d => d.Category))
+        {
+            Assert.Single(category.Select(d => PushNotificationKinds.Preference(d.Kind)).Distinct());
+            Assert.Single(category.Select(d => PushNotificationKinds.Channel(d.Kind)).Distinct());
+            foreach (var definition in category)
+                Assert.False(string.IsNullOrWhiteSpace(PushNotificationKinds.Body(definition.Kind, "Trip")));
+        }
+    }
+
     [Theory]
     [InlineData("https://evil.example")]
     [InlineData("../account")]

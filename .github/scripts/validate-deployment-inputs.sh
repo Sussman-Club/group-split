@@ -34,6 +34,9 @@ require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
 require_when GOOGLE_SIGN_IN_ENABLED GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
   || echo "::notice::GOOGLE_SIGN_IN_ENABLED is not true. The login page offers no Google button."
 
+require_when PUSH_ENABLED PUSH_PROJECT_ID FIREBASE_SERVICE_ACCOUNT_BASE64 \
+  || echo "::notice::PUSH_ENABLED is not true. Push notification sending is off."
+
 # Plaid credentials can enable bank links even when PLAID_ENABLED is false. The API needs
 # BANK_KEY_CERTIFICATE in either case so its stored access tokens remain protected.
 require_when PLAID_ENABLED PLAID_CLIENT_ID PLAID_SECRET BANK_KEY_CERTIFICATE \

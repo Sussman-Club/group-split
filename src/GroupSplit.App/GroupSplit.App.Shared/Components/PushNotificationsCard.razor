@@ -8,7 +8,7 @@
     <div class="gs-card gs-card-pad">
         <div class="gs-card-title"><h2>Notifications</h2></div>
         <p class="gs-muted">Choose which alerts this device receives.</p>
-        @foreach (var kind in Enum.GetValues<PushNotificationKind>().Where(k => k is not (PushNotificationKind.ExpenseChanged or PushNotificationKind.PaymentRequest)))
+        @foreach (var kind in PushNotificationKinds.Settings)
         {
             <div>
                 <MudSwitch T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
@@ -34,7 +34,7 @@
         busy = true;
         error = null;
         try { await push!.SetEnabledAsync(kind, value); }
-        catch (Exception) { error = "Could not update alerts. Check your connection and allow notifications in Android settings, then try again."; }
+        catch (Exception) { error = "Could not update alerts. Check your connection and allow notifications in your device settings, then try again."; }
         finally { busy = false; }
     }
 }
