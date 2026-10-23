@@ -6,10 +6,8 @@ Available categories:
 
 | Category | When it sends | Recipients / tap destination |
 | --- | --- | --- |
-| New expenses | A member creates an expense through the transaction service | Other current group members; opens the group |
-| Expense changes | An expense is edited, moved, or deleted | Other current members of the affected groups; opens the group |
-| Settlements | A repayment is recorded, including settling across groups | Current members on either end of the payment, excluding the actor; opens the group |
-| Payment requests | A member requests repayment | Only the named recipient; opens the specific request |
+| Expenses | An expense is added, edited, moved, or deleted | Other current members of the affected groups; opens the group |
+| Settlements | A repayment is recorded or a member requests repayment | Repayments alert current members on either end except the actor and open the group; requests alert the named recipient and open the request |
 | Guests joining | A guest accepts a shareable invitation | Other current group members; opens the group |
 | Bank sync issues | A bank newly requires sign-in, revokes access, warns of expiring sign-in, or reports unshared accounts | Only the bank owner; opens Account |
 

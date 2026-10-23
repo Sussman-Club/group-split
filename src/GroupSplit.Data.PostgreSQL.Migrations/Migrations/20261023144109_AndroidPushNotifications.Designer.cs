@@ -708,16 +708,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<bool>("BankSyncIssuesEnabled")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("ExpenseChangesEnabled")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("ExpensesEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("InvitationsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("PaymentRequestsEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("SettlementsEnabled")

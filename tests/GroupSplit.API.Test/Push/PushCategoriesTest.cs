@@ -30,9 +30,8 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         PushDevice Device(UserEntity user, string token, bool enabled) => new()
         {
             UserId = user.Id, Token = token, UpdatedAt = DateTimeOffset.UtcNow,
-            // Expense creation being enabled must not imply other categories are enabled.
-            ExpensesEnabled = true, ExpenseChangesEnabled = enabled, SettlementsEnabled = enabled,
-            PaymentRequestsEnabled = enabled, InvitationsEnabled = enabled
+            ExpensesEnabled = enabled, SettlementsEnabled = enabled,
+            InvitationsEnabled = enabled
         };
         var expected = Device(member, "recipient", true);
         DbContext.AddRange(expected, Device(member, "disabled", false), Device(actor, "actor", true),
@@ -58,7 +57,7 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         var user = GetService<ICurrentUser>().User;
         var group = new GroupEntity { Name = "Trip", Users = { user } };
         var device = new PushDevice { UserId = user.Id, Token = "token", UpdatedAt = DateTimeOffset.UtcNow,
-            ExpenseChangesEnabled = true, SettlementsEnabled = true, InvitationsEnabled = true };
+            ExpensesEnabled = true, SettlementsEnabled = true, InvitationsEnabled = true };
         DbContext.AddRange(group, device);
         await DbContext.SaveChangesAsync(Ct);
         var job = new SendPushNotification(device.Id, user.Id, group.Id, Guid.NewGuid(),
@@ -85,7 +84,7 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         var recipient = new UserEntity { FirstName = "Recipient" };
         var group = new GroupEntity { Name = "Trip", Users = { actor, recipient } };
         var device = new PushDevice { UserId = recipient.Id, Token = "token", UpdatedAt = DateTimeOffset.UtcNow,
-            ExpenseChangesEnabled = true, SettlementsEnabled = true, PaymentRequestsEnabled = true };
+            ExpensesEnabled = true, SettlementsEnabled = true };
         DbContext.AddRange(group, device);
         await DbContext.SaveChangesAsync(Ct);
         var expenses = GetService<ITransactionService>();
@@ -115,7 +114,7 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         var payment = new SettlementRequest { Requester = requester, Recipient = recipient, Token = "opaque-token",
             Currency = "USD", Amount = 1, CreatedAt = DateTimeOffset.UtcNow, ResolvedAt = DateTimeOffset.UtcNow };
         payment.Groups.Add(new SettlementRequestGroup { Group = group, DebtAtCreation = 1, RequestedAmount = 1 });
-        var device = new PushDevice { UserId = recipient.Id, Token = "token", PaymentRequestsEnabled = true,
+        var device = new PushDevice { UserId = recipient.Id, Token = "token", SettlementsEnabled = true,
             UpdatedAt = DateTimeOffset.UtcNow };
         DbContext.AddRange(group, payment, device);
         await DbContext.SaveChangesAsync(Ct);

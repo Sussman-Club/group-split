@@ -16,7 +16,7 @@ public static class PushNotificationKinds
     };
     public static string Label(PushNotificationKind kind) => kind switch
     {
-        PushNotificationKind.ExpenseCreated => "New expenses",
+        PushNotificationKind.ExpenseCreated => "Expenses",
         PushNotificationKind.ExpenseChanged => "Expense changes",
         PushNotificationKind.Settlement => "Settlements",
         PushNotificationKind.PaymentRequest => "Payment requests",
@@ -35,6 +35,7 @@ public static class PushNotificationKinds
         return groupId == Guid.Empty ? null : $"/groups/{groupId}";
     }
 
-    public static string Preference(PushNotificationKind kind) => kind == PushNotificationKind.ExpenseCreated
-        ? "push.expenses" : "push." + Channel(kind);
+    public static string Preference(PushNotificationKind kind) => kind is PushNotificationKind.ExpenseCreated or PushNotificationKind.ExpenseChanged
+        ? "push.expenses" : kind is PushNotificationKind.Settlement or PushNotificationKind.PaymentRequest
+            ? "push.settlements" : "push." + Channel(kind);
 }

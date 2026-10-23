@@ -12,9 +12,9 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
     internal static Expression<Func<PushDevice, bool>> Enabled(PushNotificationKind kind) => kind switch
     {
         PushNotificationKind.ExpenseCreated => d => d.ExpensesEnabled,
-        PushNotificationKind.ExpenseChanged => d => d.ExpenseChangesEnabled,
+        PushNotificationKind.ExpenseChanged => d => d.ExpensesEnabled,
         PushNotificationKind.Settlement => d => d.SettlementsEnabled,
-        PushNotificationKind.PaymentRequest => d => d.PaymentRequestsEnabled,
+        PushNotificationKind.PaymentRequest => d => d.SettlementsEnabled,
         PushNotificationKind.InvitationAccepted => d => d.InvitationsEnabled,
         PushNotificationKind.BankSyncIssue => d => d.BankSyncIssuesEnabled,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))

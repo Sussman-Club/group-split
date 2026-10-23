@@ -16,16 +16,23 @@ public sealed class PushNotificationsCardTest : ComponentTest
         Services.AddSingleton<IPushNotifications>(preferences);
         var card = Render<PushNotificationsCard>();
         var switches = card.FindComponents<MudSwitch<bool>>();
-        Assert.Equal(6, switches.Count);
+        Assert.Equal(4, switches.Count);
+        Assert.Contains("Expenses", card.Markup);
+        Assert.DoesNotContain("Expense changes", card.Markup);
+        Assert.Equal(PushNotificationKinds.Preference(PushNotificationKind.ExpenseCreated),
+            PushNotificationKinds.Preference(PushNotificationKind.ExpenseChanged));
         var settlements = switches.Single(s => s.Markup.Contains("Settlements"));
         await card.InvokeAsync(() => settlements.Instance.ValueChanged.InvokeAsync(true));
         Assert.True(preferences.IsEnabled(PushNotificationKind.Settlement));
         Assert.False(preferences.IsEnabled(PushNotificationKind.ExpenseCreated));
         preferences.Fail = true;
-        var requests = card.FindComponents<MudSwitch<bool>>().Single(s => s.Markup.Contains("Payment requests"));
+        Assert.DoesNotContain("Payment requests", card.Markup);
+        Assert.Equal(PushNotificationKinds.Preference(PushNotificationKind.Settlement),
+            PushNotificationKinds.Preference(PushNotificationKind.PaymentRequest));
+        var requests = card.FindComponents<MudSwitch<bool>>().Single(s => s.Markup.Contains("Guests joining"));
         await card.InvokeAsync(() => requests.Instance.ValueChanged.InvokeAsync(true));
         Assert.Contains("Could not update alerts", card.Markup);
-        Assert.False(preferences.IsEnabled(PushNotificationKind.PaymentRequest));
+        Assert.False(preferences.IsEnabled(PushNotificationKind.InvitationAccepted));
         Assert.True(preferences.IsEnabled(PushNotificationKind.Settlement));
     }
 
