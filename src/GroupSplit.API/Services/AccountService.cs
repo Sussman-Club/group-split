@@ -5,6 +5,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
+using GroupSplit.API.Services.Banking;
 
 namespace GroupSplit.API.Services;
 
@@ -29,6 +30,9 @@ public interface IAccountService
 public sealed class AccountService(
     IGroupService groups,
     ILoginDeletion logins,
+    IBankConnectionService banks,
+    IReceiptFiles receiptFiles,
+    IAccountDataGuard accountData,
     TimeProvider clock,
     AppDbContext context,
     ILogger<AccountService> logger) : IAccountService
@@ -51,9 +55,11 @@ public sealed class AccountService(
     public async Task<IReadOnlyList<OutstandingBalance>> DeleteAccount(Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var lease = await accountData.Acquire(userId, allowDeleted: true, ct: cancellationToken);
         var user = await context.Set<User>()
                        .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
                    ?? throw new NotFoundException(ErrorCodes.AccountNotFound, $"No account with id {userId}.");
+        await context.Entry(user).ReloadAsync(cancellationToken);
 
         // Already done, login deletion included: that was written down the first time and is
         // the sweep's to finish. Only reachable now that a caller can name an account rather
@@ -98,6 +104,16 @@ public sealed class AccountService(
             return outstanding;
         }
 
+        // Complete fallible provider work before closing memberships or anonymising. A failure
+        // leaves the account usable so the person can retry; already unlinked banks stay gone.
+        await banks.UnlinkForAccount(userId, cancellationToken);
+
+        var personalFiles = await context.Set<ReceiptAttachment>()
+            .Where(file => file.Expense != null && file.Expense.GroupId == userId)
+            .ToListAsync(cancellationToken);
+        receiptFiles.Enqueue(personalFiles.Select(file => file.ObjectKey));
+        context.RemoveRange(personalFiles);
+
         foreach (var group in sharedGroups)
         {
             await groups.DetachMember(group, user, LeftReason.AccountDeleted, user.Id, cancellationToken);
@@ -136,6 +152,9 @@ public sealed class AccountService(
         // as it was rather than stranded between states -- and the login deletion is never
         // owed without the account having gone, or the other way round.
         await context.SaveChangesAsync(cancellationToken);
+
+        await receiptFiles.DeleteAsync(personalFiles.Select(file => file.ObjectKey),
+            "Could not delete personal receipt after account deletion.", cancellationToken);
 
         if (pending is not null)
         {

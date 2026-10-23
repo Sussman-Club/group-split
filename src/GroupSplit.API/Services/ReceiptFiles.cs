@@ -1,51 +1,38 @@
 using Amazon.S3;
 using GroupSplit.API.Extensions;
+using GroupSplit.API.Services.BackgroundJobs;
 using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Services;
 
-/// <summary>
-/// Deletes stored receipt files, for every path that drops the rows naming them.
-/// </summary>
-/// <remarks>
-/// A receipt file is two things that cannot share a transaction: a
-/// <see cref="Data.Entities.ReceiptAttachment"/> row and an object in the bucket. Every
-/// caller deletes the row first and saves, then hands the keys here -- so a caller can never
-/// address a file that is gone, and the worst a storage outage leaves is an object nothing
-/// points at, which is logged by key for cleanup.
-/// <para>
-/// Its own service rather than a method on <see cref="IReceiptAttachmentService"/>, because
-/// two of the paths that need it run with nobody signed in: a sync withdrawing a row, and
-/// an unlink tidying up after itself. These are receipt images of somebody's spending, so
-/// a row that goes must not leave its picture behind.
-/// </para>
-/// </remarks>
 public interface IReceiptFiles
 {
-    /// <summary>
-    /// Deletes each object, carrying on past any that storage will not delete. Never
-    /// throws: the rows are already gone, so there is nothing left to undo.
-    /// </summary>
+    /// <summary>Stages durable deletion with the metadata removal; the caller saves both.</summary>
+    void Enqueue(IEnumerable<string> objectKeys);
+
+    /// <summary>Best-effort immediate removal after saving. The durable worker verifies removal later.</summary>
     Task DeleteAsync(IEnumerable<string> objectKeys, string why, CancellationToken ct = default);
 }
 
-/// <inheritdoc cref="IReceiptFiles"/>
 public sealed class ReceiptFiles(
     IAmazonS3 storage,
     IOptions<ReceiptStorageOptions> storageOptions,
+    IBackgroundJobQueue jobs,
     ILogger<ReceiptFiles> logger) : IReceiptFiles
 {
+    public void Enqueue(IEnumerable<string> objectKeys)
+    {
+        foreach (var key in objectKeys.Distinct()) jobs.Enqueue(new DeleteReceiptFile(key));
+    }
+
     public async Task DeleteAsync(IEnumerable<string> objectKeys, string why, CancellationToken ct = default)
     {
-        foreach (var objectKey in objectKeys)
+        foreach (var key in objectKeys.Distinct())
         {
-            try
-            {
-                await storage.DeleteObjectAsync(storageOptions.Value.BucketName, objectKey, ct);
-            }
+            try { await storage.DeleteObjectAsync(storageOptions.Value.BucketName, key, ct); }
             catch (Exception error)
             {
-                logger.LogError(error, "{Message} {ObjectKey}", why, objectKey);
+                logger.LogWarning("Receipt deletion deferred: {Reason} ({ErrorType})", why, error.GetType().Name);
             }
         }
     }

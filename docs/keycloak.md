@@ -226,6 +226,8 @@ Before this, deleting an account left the Keycloak user untouched, and that show
 | Their Keycloak user: login, password, profile, Google link. | The Keycloak subject (an opaque id) on the anonymised row, as a tombstone; see [When Keycloak cannot be reached](#when-keycloak-cannot-be-reached). It names nobody once the user it identified is gone. |
 | Every Keycloak session: the web app's, the CLI's refresh token, any other device. | |
 | The web app's own session in the browser they deleted from. | |
+| Linked banks, accounts, imported bank rows and unfiled receipt files. | Filed expenses lose their private bank-row link. Unremovable provider Items are recorded for administrator reconciliation. |
+| Personal receipt files. | Shared receipt files and structured ledger/receipt history. File deletion jobs are saved in `BackgroundJob` with metadata removal and retried automatically. |
 
 It cannot be undone. An admin creating a login with the same address, since registration is
 closed, makes a new login and a new, empty account; it does not reach the old one.
@@ -234,6 +236,13 @@ Deleting is refused with `ACCOUNT_NOT_SETTLED` while any shared group's balance 
 and then nothing changes in either place.
 
 ### How it is carried out
+
+Before anonymisation, the app unlinks the account's banks and abandons pending links.
+Provider failures leave the account active for retry; already unlinked banks stay removed.
+Unreadable tokens or missing connectors leave credential-free provider cleanup records.
+Personal receipt removals are queued atomically with anonymisation and performed after saving.
+Backups expire according to the operator's configured policy; the application enforces no
+fixed backup expiry. See [personal data and operational reconciliation](personal-data.md).
 
 1. The app deletes its half, in one save. The row is anonymised and marked `Deleted`, its
    memberships end, and a `PendingLoginDeletion` row is written, all in the same transaction,
