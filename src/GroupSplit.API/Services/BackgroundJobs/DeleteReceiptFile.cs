@@ -18,4 +18,3 @@ internal sealed class DeleteReceiptFileHandler(IAmazonS3 storage, IOptions<Recei
     public async ValueTask HandleAsync(DeleteReceiptFile job, CancellationToken cancellationToken) =>
         await storage.DeleteObjectAsync(options.Value.BucketName, job.ObjectKey, cancellationToken);
 }
-
