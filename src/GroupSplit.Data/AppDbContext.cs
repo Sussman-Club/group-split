@@ -34,6 +34,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PushDevice>(entity =>
+        {
+            entity.Property(device => device.Token).HasMaxLength(4096).IsRequired();
+            entity.HasIndex(device => device.Token).IsUnique();
+            entity.HasIndex(device => device.UserId);
+            entity.HasOne<User>().WithMany().HasForeignKey(device => device.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<BackgroundJob>(entity =>
         {
             entity.Property(job => job.Type).HasMaxLength(128).IsRequired();

@@ -246,6 +246,9 @@ which falls back to its default.
 | `smtp-enabled` | variable `SMTP_ENABLED` | no, defaults to `false` | Whether Keycloak sends mail, and so whether the sign-in page offers a password reset. See [Email](keycloak.md#email). |
 | `smtp-host`, `smtp-from`, `smtp-user`, `smtp-password` | variables `SMTP_HOST`, `SMTP_FROM`, `SMTP_USER`; secret `SMTP_PASSWORD` | when mail is enabled | The relay. Missing while enabled fails the publish. |
 | `smtp-port` | variable `SMTP_PORT` | no, defaults to `587` | Relay port. |
+| `push-enabled` | variable `PUSH_ENABLED` | no, defaults to `false` | Whether Firebase push delivery is enabled. |
+| `push-project-id` | variable `PUSH_PROJECT_ID` | when push is enabled | Firebase project shared by the native app and API. |
+| `firebase-service-account-base64` | secret `FIREBASE_SERVICE_ACCOUNT_BASE64` | when push is enabled | Base64-encoded service-account JSON, passed only to the API and loaded in memory. See [Firebase setup](android-push-notifications.md). |
 | `plaid-enabled` | variable `PLAID_ENABLED` | no, defaults to `false` | Whether people can link a bank. |
 | `plaid-client-id`, `plaid-secret` | secrets `PLAID_CLIENT_ID`, `PLAID_SECRET` | when bank sync is enabled | The Plaid credentials. The client id is the same in every Plaid environment; the secret is one per environment. Missing while enabled fails the publish. They reach the API whatever `plaid-enabled` says, and the API links banks whenever it has both, so leave them empty to switch bank sync off. |
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |

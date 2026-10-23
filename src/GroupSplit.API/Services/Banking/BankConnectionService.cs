@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using System.Text.Json;
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
@@ -124,6 +125,7 @@ public sealed class BankConnectionService(
     IAccessTokenProtector protector,
     IJobDispatcher jobs,
     IBackgroundJobQueue backgroundJobs,
+    PushNotificationQueue notifications,
     IReceiptFiles receiptFiles,
     IAccountDataGuard accountData,
     TimeProvider clock,
@@ -189,6 +191,8 @@ public sealed class BankConnectionService(
                     "Bank connection {ConnectionId}: the stored access token cannot be read, so it cannot be "
                     + "repaired in update mode.", connection.Id);
 
+                if (connection.Status != BankConnectionStatus.LoginRequired)
+                    await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
                 connection.Status = BankConnectionStatus.LoginRequired;
                 await dbContext.SaveChangesAsync(ct);
 
@@ -934,6 +938,8 @@ public sealed class BankConnectionService(
             // what the person would then be told: this item needs them, and the app already
             // has a way of saying so. Marking it is also what puts "Sign in again" on the
             // card, so refusing without marking would leave them nothing to press.
+            if (connection.Status != BankConnectionStatus.LoginRequired)
+                await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
             connection.Status = BankConnectionStatus.LoginRequired;
             await dbContext.SaveChangesAsync(ct);
 
@@ -989,6 +995,8 @@ public sealed class BankConnectionService(
             // find nothing. What this notification is actually for is putting the person in
             // front of update mode, and the flag is what does that.
             case NewAccountsAvailable:
+                if (!connection.AccountsNotShared)
+                    await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
                 connection.AccountsNotShared = true;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1003,6 +1011,8 @@ public sealed class BankConnectionService(
                     expiring.By?.ToString("u") ?? "an unstated date",
                     expiring.Reason);
 
+                if (!connection.SignInExpiring)
+                    await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
                 connection.SignInExpiring = true;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1012,6 +1022,8 @@ public sealed class BankConnectionService(
                 break;
 
             case LoginRequired:
+                if (connection.Status != BankConnectionStatus.LoginRequired)
+                    await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
                 connection.Status = BankConnectionStatus.LoginRequired;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1030,6 +1042,8 @@ public sealed class BankConnectionService(
                 break;
 
             case PermissionRevoked:
+                if (connection.Status != BankConnectionStatus.Revoked)
+                    await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
                 connection.Status = BankConnectionStatus.Revoked;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1068,10 +1082,14 @@ public sealed class BankConnectionService(
                 "Bank connection {ConnectionId}: access was withdrawn from an account it does not know.",
                 connection.Id);
 
+            if (!connection.AccountsNotShared)
+                await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
             connection.AccountsNotShared = true;
         }
         else
         {
+            if (!account.AccessRevoked)
+                await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
             account.AccessRevoked = true;
         }
 

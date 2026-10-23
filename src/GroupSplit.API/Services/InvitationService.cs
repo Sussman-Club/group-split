@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -92,7 +93,8 @@ public sealed class InvitationService(
     IGroupJoiner joiner,
     IGroupParticipants participants,
     IGuestService guests,
-    TimeProvider clock)
+    TimeProvider clock,
+    PushNotificationQueue notifications)
     : IInvitationService
 {
     public async Task<IReadOnlyList<GroupInvitationResponse>> Invite(Guid groupId,
@@ -284,6 +286,7 @@ public sealed class InvitationService(
 
             // The stand-in stays. It holds nothing now, so it reads as nobody to the group,
             // and it is what the membership history names for the time before the claim.
+            await notifications.ForGroup(PushNotificationKind.InvitationAccepted, group.Id, user.Id, ct, guest.Id);
             await context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
 

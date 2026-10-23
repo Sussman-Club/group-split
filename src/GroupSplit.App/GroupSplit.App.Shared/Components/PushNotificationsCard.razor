@@ -1,0 +1,40 @@
+@using GroupSplit.App.Shared.Services
+@using GroupSplit.Shared
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@if (push is { Supported: true })
+{
+    <div class="gs-card gs-card-pad">
+        <div class="gs-card-title"><h2>Notifications</h2></div>
+        <p class="gs-muted">Choose which alerts this device receives.</p>
+        @foreach (var kind in PushNotificationKinds.Settings)
+        {
+            <div>
+                <MudSwitch T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
+                           Disabled="busy" Color="Color.Primary">
+                    @PushNotificationKinds.Label(kind)
+                </MudSwitch>
+            </div>
+        }
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Warning">@error</MudAlert>
+        }
+    </div>
+}
+
+@code {
+    private IPushNotifications? push;
+    private bool busy;
+    private string? error;
+    protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();
+    private async Task SetEnabled(PushNotificationKind kind, bool value)
+    {
+        busy = true;
+        error = null;
+        try { await push!.SetEnabledAsync(kind, value); }
+        catch (Exception) { error = "Could not update alerts. Check your connection and allow notifications in your device settings, then try again."; }
+        finally { busy = false; }
+    }
+}

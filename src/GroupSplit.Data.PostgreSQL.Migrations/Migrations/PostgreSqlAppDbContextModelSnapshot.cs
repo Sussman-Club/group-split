@@ -696,6 +696,45 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("PendingLoginDeletion");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.PushDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("BankSyncIssuesEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ExpensesEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("InvitationsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SettlementsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PushDevice");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1486,6 +1525,15 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.PushDevice", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Receipt", b =>

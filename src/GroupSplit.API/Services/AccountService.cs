@@ -147,6 +147,8 @@ public sealed class AccountService(
         user.LastName = null;
         user.Email = null;
         user.Kind = UserKind.Deleted;
+        context.RemoveRange(await context.Set<PushDevice>()
+            .Where(device => device.UserId == user.Id).ToListAsync(cancellationToken));
 
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states -- and the login deletion is never

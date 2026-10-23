@@ -2,6 +2,7 @@
 using Android.Content.PM;
 using Android.Content;
 using Android.OS;
+using GroupSplit.Shared;
 
 namespace GroupSplit.App;
 
@@ -25,7 +26,26 @@ public class MainActivity : MauiAppCompatActivity
 
     private static void OpenLink(Intent? intent)
     {
+        var kindText = intent?.GetStringExtra("notificationKind");
+        var kind = PushNotificationKind.ExpenseCreated;
+        if (kindText is null || (Enum.TryParse(kindText, out kind) && Enum.IsDefined(kind)))
+        {
+            Guid.TryParse(intent?.GetStringExtra("groupId"), out var groupId);
+            IPlatformApplication.Current?.Services.GetRequiredService<Services.NativeLinkRouter>()
+                .OpenNotification(kind, groupId, intent?.GetStringExtra("requestToken"));
+        }
         if (intent?.Action == Intent.ActionView && Uri.TryCreate(intent.DataString, UriKind.Absolute, out var uri))
             Microsoft.Maui.Controls.Application.Current?.SendOnAppLinkRequestReceived(uri);
+    }
+
+    protected override async void OnResume()
+    {
+        base.OnResume();
+        try
+        {
+            if (IPlatformApplication.Current?.Services.GetService<GroupSplit.App.Shared.Services.IPushNotifications>() is { } push)
+                await push.RefreshAsync();
+        }
+        catch (Exception) { /* Retry token registration when the app next resumes. */ }
     }
 }

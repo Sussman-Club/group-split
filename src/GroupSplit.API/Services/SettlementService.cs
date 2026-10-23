@@ -1,3 +1,4 @@
+using GroupSplit.API.Services.Push;
 using GroupSplit.API.Errors;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -138,8 +139,21 @@ public class SettlementService(
     IDebtCalculationService debtCalculator,
     IGroupParticipants participants,
     AppDbContext context,
-    TimeProvider clock) : ISettlementService
+    TimeProvider clock,
+    PushNotificationQueue notifications) : ISettlementService
 {
+    private async Task NotifySettlements(CancellationToken ct)
+    {
+        var pending = context.ChangeTracker.Entries<Transfer>().Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity).GroupBy(t => t.GroupId);
+        foreach (var group in pending)
+        {
+            var recipients = group.SelectMany(t => t.Splits.Select(s => s.UserId).Append(t.UserId)).Distinct().ToArray();
+            await notifications.ForGroup(PushNotificationKind.Settlement, group.Key, userContext.User.Id, ct,
+                recipients: recipients);
+        }
+    }
+
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -183,6 +197,7 @@ public class SettlementService(
         foreach (var payment in payments)
             await SettlementRequestResolution.ResolveMatching(context, clock, payment.FromUserId, payment.ToUserId,
                 [new GroupDebt(groupId, group.Name, payment.Amount)], cancellationToken);
+        await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         return new SettleUpResponse
@@ -276,6 +291,7 @@ public class SettlementService(
 
         await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id,
             [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
+        await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         return (from, to);
@@ -371,6 +387,7 @@ public class SettlementService(
         // One save for the whole payment. Two groups disagreeing about whether a single
         // transfer happened is the failure this screen exists to prevent, not to introduce.
         await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id, allocations, cancellationToken);
+        await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         return new SettleWithPersonResponse(
