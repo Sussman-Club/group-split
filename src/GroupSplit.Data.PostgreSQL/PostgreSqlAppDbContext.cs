@@ -9,6 +9,8 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<BackgroundJob>().Property(job => job.Payload).HasColumnType("jsonb");
+
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.Property(transaction => transaction.DateTime)

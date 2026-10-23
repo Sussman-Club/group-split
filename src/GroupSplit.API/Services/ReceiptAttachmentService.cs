@@ -41,6 +41,7 @@ public sealed class ReceiptAttachmentService(
     AppDbContext db,
     IAmazonS3 storage,
     IReceiptFiles files,
+    IAccountDataGuard accountData,
     IOptions<ReceiptStorageOptions> storageOptions,
     ILogger<ReceiptAttachmentService> logger,
     TimeProvider clock) : IReceiptAttachmentService
@@ -67,6 +68,7 @@ public sealed class ReceiptAttachmentService(
 
     public async Task<ReceiptAttachmentResponse> Upload(Guid expenseId, IFormFile file, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         ArgumentNullException.ThrowIfNull(file);
         var expense = await MineToChange(expenseId, ct);
 
@@ -94,6 +96,7 @@ public sealed class ReceiptAttachmentService(
     public async Task<ReceiptAttachmentResponse> UploadBank(Guid bankTransactionId, IFormFile file,
         CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         ArgumentNullException.ThrowIfNull(file);
         var row = await VisibleBank(bankTransactionId, ct);
         if (row.Status != BankTransactionStatus.New)
@@ -184,6 +187,7 @@ public sealed class ReceiptAttachmentService(
         await MineToChange(expenseId, ct);
         var attachment = await FindAttachment(expenseId, attachmentId, ct);
         db.Remove(attachment);
+        files.Enqueue([attachment.ObjectKey]);
         await db.SaveChangesAsync(ct);
 
         // The database is authoritative for which files a caller can address. If storage
@@ -216,6 +220,7 @@ public sealed class ReceiptAttachmentService(
         var deleted = attachments.Except(returning).ToList();
 
         db.RemoveRange(deleted);
+        files.Enqueue(deleted.Select(attachment => attachment.ObjectKey));
         await db.SaveChangesAsync(ct);
 
         // Removing the metadata first prevents the deleted expense from exposing stale
@@ -229,6 +234,7 @@ public sealed class ReceiptAttachmentService(
         await VisibleBank(bankTransactionId, ct);
         var attachment = await FindBankAttachment(bankTransactionId, attachmentId, ct);
         db.Remove(attachment);
+        files.Enqueue([attachment.ObjectKey]);
         await db.SaveChangesAsync(ct);
         await files.DeleteAsync([attachment.ObjectKey], "Could not remove deleted pending receipt object.", ct);
     }

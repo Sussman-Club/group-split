@@ -1,5 +1,8 @@
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.BackgroundJobs;
+using GroupSplit.API.Services.PersonalData;
+using GroupSplit.API.Services.Push;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -29,14 +32,25 @@ public static class DomainServiceExtensions
             services.AddCurrentUser();
             services.AddScoped<IDebtCalculationService, DebtCalculationService>();
             services.AddScoped<IAccountService, AccountService>();
+            services.AddScoped<IAccountDataGuard, AccountDataGuard>();
+            services.AddScoped<IPersonalDataExport, PersonalDataExport>();
+            services.AddScoped<IPersonalDataReader, PersonalDataReader>();
+            services.AddScoped<IPersonalDataArchiveWriter, PersonalDataArchiveWriter>();
 
             // The Keycloak half of deleting an account. Keycloak itself is the host's to
             // provide -- IKeycloakUserRemoval, from AddKeycloakAdminClient in Program.cs, or a
             // fake in a test host -- like any other system outside this one.
             services.TryAddSingleton(TimeProvider.System);
+            services.AddSingleton(new BackgroundJobRegistry()
+                .Add<DeleteReceiptFile>(DeleteReceiptFile.Name)
+                .Add<SendExpensePush>(SendExpensePush.Name));
+            services.TryAddSingleton<IPushSender, FirebasePushSender>();
+            services.AddBackgroundJobs();
             services.AddScoped<ILoginDeletion, LoginDeletion>();
             services.AddJobs()
                 .Handlers
+                    .AddJobHandler<DeleteReceiptFile, DeleteReceiptFileHandler>()
+                    .AddJobHandler<SendExpensePush, SendExpensePushHandler>()
                     .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule);

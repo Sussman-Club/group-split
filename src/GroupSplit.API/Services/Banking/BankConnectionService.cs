@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
+using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Jobs;
@@ -57,6 +58,10 @@ public interface IBankConnectionService
     /// imported rows. Expenses filed from those rows stay, and lose only the link back.
     /// </summary>
     Task Unlink(Guid id, CancellationToken ct = default);
+
+    /// <summary>Account deletion only: cleans the explicitly named account, without caller scoping.</summary>
+    /// <remarks>The deletion workflow holds the account data guard; this must not reacquire it.</remarks>
+    Task UnlinkForAccount(Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Reads the provider's account list again for a connection that already exists, and
@@ -118,7 +123,9 @@ public sealed class BankConnectionService(
     IServiceProvider services,
     IAccessTokenProtector protector,
     IJobDispatcher jobs,
+    IBackgroundJobQueue backgroundJobs,
     IReceiptFiles receiptFiles,
+    IAccountDataGuard accountData,
     TimeProvider clock,
     IOptions<BankingOptions> options,
     ILogger<BankConnectionService> logger) : IBankConnectionService
@@ -222,6 +229,7 @@ public sealed class BankConnectionService(
 
     public async Task<BankConnection> Link(CreateBankConnectionRequest request, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var provider = DefaultProvider;
         var connector = Required(provider);
         var user = userContext.User;
@@ -298,6 +306,10 @@ public sealed class BankConnectionService(
 
     public async Task CompletePending(Guid pendingLinkId, CancellationToken ct = default)
     {
+        var ownerId = await dbContext.Set<PendingBankLink>().Where(link => link.Id == pendingLinkId)
+            .Select(link => (Guid?)link.UserId).FirstOrDefaultAsync(ct);
+        if (ownerId is null) return;
+        await using var lease = await accountData.Acquire(ownerId.Value, allowDeleted: true, ct: ct);
         var pending = await dbContext.Set<PendingBankLink>()
             .Include(link => link.User)
             .FirstOrDefaultAsync(link => link.Id == pendingLinkId, ct);
@@ -305,6 +317,13 @@ public sealed class BankConnectionService(
         if (pending is null)
         {
             // Finished by the request that started it, or by an earlier attempt.
+            return;
+        }
+
+        await dbContext.Entry(pending.User).ReloadAsync(ct);
+        if (pending.User.Kind == UserKind.Deleted)
+        {
+            await AbandonPending(pendingLinkId, ct);
             return;
         }
 
@@ -443,6 +462,10 @@ public sealed class BankConnectionService(
 
         if (item is null)
         {
+            if (pending.ItemCiphertext is not null)
+                backgroundJobs.AwaitOperator("provider-item",
+                    new ProviderItemReconciliation(pending.Provider, $"pending-link:{pending.Id}", pending.Id),
+                    "Held item unreadable; reconcile provider inventory");
             // Never got as far as an item, or the item it got can no longer be read. Either
             // way there is no token here to hand anything back with.
             logger.LogWarning(
@@ -460,6 +483,9 @@ public sealed class BankConnectionService(
         {
             // The one outcome that leaves something behind, and this line is its only
             // record once the row is gone.
+            backgroundJobs.AwaitOperator("provider-item",
+                new ProviderItemReconciliation(pending.Provider, item.ProviderItemId, pending.Id),
+                "Held item removal failed");
             logger.LogError(
                 "Gave up on held bank link {PendingLinkId} and could not hand item {ProviderItemId} back to "
                 + "{Provider}. It exists there, belongs to no connection here, and has to be removed by hand.",
@@ -745,7 +771,22 @@ public sealed class BankConnectionService(
 
     public async Task Unlink(Guid id, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var connection = await Existing(id, ct);
+        await UnlinkConnection(connection, ct);
+    }
+
+    public async Task UnlinkForAccount(Guid userId, CancellationToken ct = default)
+    {
+        var connections = await dbContext.Set<BankConnection>().Where(row => row.UserId == userId).ToListAsync(ct);
+        foreach (var connection in connections) await UnlinkConnection(connection, ct);
+        var pending = await dbContext.Set<PendingBankLink>().Where(row => row.UserId == userId)
+            .Select(row => row.Id).ToListAsync(ct);
+        foreach (var id in pending) await AbandonPending(id, ct);
+    }
+
+    private async Task UnlinkConnection(BankConnection connection, CancellationToken ct)
+    {
 
         // The whole graph, so EF deletes it rather than leaving it to the database's own
         // cascade. One person's one bank is a bounded number of rows, and the alternative
@@ -806,6 +847,7 @@ public sealed class BankConnectionService(
         // leave an item nobody owns still being billed for and still sending webhooks.
         if (Connector(connection.Provider) is not { } connector)
         {
+            RecordProviderCleanup(connection, "Connector unavailable");
             logger.LogWarning(
                 "Unlinking connection {ConnectionId} without telling {Provider}: no connector is registered for it.",
                 connection.Id, connection.Provider);
@@ -816,6 +858,7 @@ public sealed class BankConnectionService(
         }
         else
         {
+            RecordProviderCleanup(connection, "Access token unreadable");
             // Nothing to tell them with, and that is precisely the connection somebody is
             // most likely to be removing: the two other readers of a stored token now refuse
             // to work with an unreadable one and say so, and both point here as the way out.
@@ -832,11 +875,16 @@ public sealed class BankConnectionService(
         // The expenses filed from this connection's rows keep everything but the link: the
         // relationship is SetNull, so they are spending history rather than an import.
         dbContext.Remove(connection);
+        receiptFiles.Enqueue(discarded.Select(attachment => attachment.ObjectKey));
         await dbContext.SaveChangesAsync(ct);
 
         await receiptFiles.DeleteAsync(discarded.Select(attachment => attachment.ObjectKey),
             "Could not remove the receipt object of a bank row whose bank was unlinked.", ct);
     }
+
+    private void RecordProviderCleanup(BankConnection connection, string reason) =>
+        backgroundJobs.AwaitOperator("provider-item",
+            new ProviderItemReconciliation(connection.Provider, connection.ProviderItemId, connection.Id), reason);
 
     /// <summary>
     /// Hands the item back, counting an item the provider no longer knows as handed back.

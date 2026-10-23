@@ -59,6 +59,8 @@
     <AssemblyMetadata Include="NativeApiUrl" Value="$(NativeApiUrl)" />
     <AssemblyMetadata Include="NativeAuthority" Value="$(NativeAuthority)" />
     <AssemblyMetadata Include="NativeWebUrl" Value="$(NativeWebUrl)" />
+    <AssemblyMetadata Include="NativeAndroidBuild" Value="$(ApplicationVersion)"
+                      Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
   </ItemGroup>
 
   <Target Name="ValidateNativeConfiguration" BeforeTargets="PrepareForBuild">

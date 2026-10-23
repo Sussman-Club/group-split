@@ -16,6 +16,8 @@ public sealed class FirebasePushSender(IConfiguration config) : IPushSender, IDi
 
     public async Task<bool> SendAsync(string token, Guid groupId, Guid deliveryId, CancellationToken ct)
     {
+        if (!config.GetValue<bool>("Push:Enabled"))
+            throw new InvalidOperationException("Push delivery is disabled.");
         app ??= FirebaseApp.Create(new AppOptions
         {
             Credential = await GoogleCredential.GetApplicationDefaultAsync(ct),

@@ -9,6 +9,8 @@
 @inject IUsersClient Users
 @inject IDialogService DialogService
 @inject ApiErrorPresenter Errors
+@inject AppLinks AppLinks
+@inject IJSRuntime JS
 
 <PageTitle>Account - Group Split</PageTitle>
 
@@ -77,7 +79,30 @@ else
             <LinkedBanksCard Reveal="2" />
             <PushNotificationsCard />
 
-            <div class="gs-card gs-card-pad gs-danger-zone gs-reveal" style="--i: 3">
+            <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+                <div class="gs-card-title"><h2>Your records</h2></div>
+                <p class="gs-muted">Download a ZIP with your records in JSON, spreadsheet-ready
+                    ledger tables, and original receipt files. Includes a format guide and checksums.</p>
+                @if (AppLinks.IsNative)
+                {
+                    <p>To download your records and receipt files, sign in on the website.</p>
+                    <MudButton Href="@AppLinks.PublicUrl(Nav.BaseUri, "account")" Target="_blank"
+                               Variant="Variant.Outlined">Open account on website</MudButton>
+                }
+                else
+                {
+                    <MudButton OnClick="ExportAsync" Disabled="_exporting" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Rounded.Download">
+                        @(_exporting ? "Preparing your archive…" : "Download my records and receipt files (ZIP)")
+                    </MudButton>
+                    @if (_exportError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Class="mt-3" role="alert">@_exportError</MudAlert>
+                    }
+                }
+            </div>
+
+            <div class="gs-card gs-card-pad gs-danger-zone gs-reveal" style="--i: 4">
                 <div class="gs-card-title">
                     <h2>Delete account</h2>
                 </div>
@@ -86,6 +111,15 @@ else
                     any linked Google account and every session you have open. Expenses you
                     recorded stay in their groups, because they are what everyone else's share
                     was worked out from. You have to settle up in every group first.
+                </p>
+                <p class="gs-muted">
+                    Linked banks and imported bank rows are removed. A bank provider failure may
+                    leave deletion unfinished; retry after the bank service recovers. Items whose
+                    access cannot be read are recorded for administrator cleanup. Personal receipt
+                    files are deleted; shared expenses, their receipts, settlements and anonymised
+                    personal ledger records are retained. Failed receipt or sign-in cleanup is
+                    recorded for retry. Backups may retain older data until the operator's configured
+                    backup expiry; there is no application-enforced expiry period.
                 </p>
 
                 @if (_blocking is { Count: > 0 })
@@ -128,6 +162,31 @@ else
     private string? _error;
 
     private bool _deleting;
+    private bool _exporting;
+    private string? _exportError;
+
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        _exportError = null;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+            _exportError = await JS.InvokeAsync<string?>("gs.downloadPersonalData", timeout.Token);
+        }
+        catch (JSException)
+        {
+            _exportError = "Your records could not be downloaded. Please retry.";
+        }
+        catch (OperationCanceledException)
+        {
+            _exportError = "Preparing your archive took too long. Please retry.";
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
 
     private Task LogoutAsync() => AuthService.Logout();
 
@@ -135,7 +194,7 @@ else
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, "Delete your account? Your name and email address are removed and your sign-in is deleted, so you cannot sign in again. This cannot be undone." },
+            { x => x.ContentText, "Delete your account? Your name and email are removed, your sign-in is deleted, your banks are disconnected, and personal receipt files are deleted. Anonymised ledger records and shared receipts remain. Cleanup failures are recorded for retry; backups expire under the operator's retention policy. This cannot be undone." },
             { x => x.ButtonText, "Delete account" },
             { x => x.Color, Color.Error }
         };

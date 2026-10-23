@@ -16,7 +16,7 @@ See [Firebase Android setup](https://firebase.google.com/docs/cloud-messaging/an
 
 ## Configure the API
 
-Apply the `AndroidPushNotifications` EF migration through the normal database deployment workflow before deploying this API. It adds PushDevice registrations and the PushDelivery outbox.
+Apply the EF migrations through `UseSharedPushQueue` using the normal database deployment workflow before deploying this API. Device registrations live in `PushDevice`; deliveries use the shared `BackgroundJob` queue. `UseSharedPushQueue` moves unexpired pending deliveries from the earlier `PushDelivery` outbox before removing it. Stop old API instances before applying this migration so their polling workers cannot send concurrently with the conversion.
 
 Configure the **API process** (not the web frontend) with:
 
@@ -28,15 +28,15 @@ GOOGLE_APPLICATION_CREDENTIALS=<absolute path to the server service-account JSON
 
 Use an identity with Firebase Cloud Messaging send permissions in this project. Application Default Credentials through workload identity can replace the credentials file. Keep service-account JSON in server secret storage; never place it in the Android app or commit it. The `google-services.json` Android configuration is a different file and is not a server credential.
 
-Push defaults to disabled. These environment values must reach the API container/process explicitly if an orchestrator launches it; they are not automatically forwarded by the AppHost. No Firebase project or credentials are provisioned by this branch.
+Push defaults to disabled. Disabled sending fails safely without contacting Firebase; queued jobs follow the shared retry policy and are skipped once expired. These environment values must reach the API container/process explicitly if an orchestrator launches it; they are not automatically forwarded by the AppHost. No Firebase project or credentials are provisioned by this branch.
 
 See [Firebase Admin setup](https://firebase.google.com/docs/admin/setup) and [sending messages](https://firebase.google.com/docs/cloud-messaging/send/admin-sdk).
 
 ## Delivery behavior
 
 - Device registration is authenticated and bound to the current account. Only that account can change or unregister it. Token rotation updates the same installation; token uniqueness prevents duplicate registrations.
-- Creating an expense saves its pending deliveries in the same database commit. Firebase is called by the API background worker, outside the expense request.
-- The worker checks membership and device preference again before sending. It retries failures up to five times, with a five-minute lease between attempts. Multiple API instances claim through an EF concurrency token. Delivery is at least once: a process failure after Firebase accepts a message can cause a retry. Notification tags reduce duplicate tray entries.
+- Creating an expense saves its pending deliveries in the same database commit. Firebase is called by a typed `SendExpensePush` handler through the existing durable background queue, outside the expense request. Job payloads contain device/user/group identifiers, a stable delivery ID, and expiration; FCM tokens are read only when sending.
+- The worker checks membership and device preference again before sending. The shared queue polls every two seconds and provides atomic multi-instance claims, five-minute leases, a two-minute execution timeout, and up to ten attempts with exponential backoff (five seconds through one hour). Failed jobs remain available for operator inspection; completed payloads are cleared. Delivery is at least once: a process failure after Firebase accepts a message can cause a retry. Notification tags reduce duplicate tray entries.
 - Unregistered FCM tokens are deleted. Registrations last 30 days without a successful app refresh. Pending alerts expire after one hour. The app refreshes registration on resume, sign-in and token rotation.
 - Android displays background notifications; the messaging service displays foreground notifications. Tapping opens the group through the native router, including a cold start. Group access still requires the normal authorization checks.
 - Sign-out unregisters the installation, turns off auto-init, deletes its FCM token and clears tray notifications. Account deletion removes its device records. A different account signing in resets device alerts. Offline failures show a warning; alerts already handed to FCM may still be in flight.

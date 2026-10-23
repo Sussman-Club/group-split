@@ -4,7 +4,6 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace GroupSplit.API.Test.Push;
@@ -17,15 +16,17 @@ public sealed class PushDeliveryTest : IAsyncLifetime
     public ValueTask DisposeAsync() => host.DisposeAsync();
 
     [Theory]
-    [InlineData("sent", 1, 0, 1)]
-    [InlineData("unregistered", 1, 0, 0)]
-    [InlineData("retry", 1, 1, 1)]
-    [InlineData("disabled", 0, 0, 1)]
-    [InlineData("departed", 0, 0, 1)]
-    [InlineData("expired", 0, 0, 1)]
-    [InlineData("exhausted", 0, 0, 1)]
+    [InlineData("sent", 1, 1)]
+    [InlineData("unregistered", 1, 0)]
+    [InlineData("retry", 1, 1)]
+    [InlineData("disabled", 0, 1)]
+    [InlineData("departed", 0, 1)]
+    [InlineData("expired", 0, 1)]
+    [InlineData("stale", 0, 1)]
+    [InlineData("deleted", 0, 1)]
+    [InlineData("reassigned", 0, 1)]
     public async Task Pending_deliveries_check_current_access_and_handle_provider_results(
-        string scenario, int sends, int pendingCount, int deviceCount)
+        string scenario, int sends, int deviceCount)
     {
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -35,28 +36,24 @@ public sealed class PushDeliveryTest : IAsyncLifetime
         db.AddRange(user, group);
         var device = new PushDevice { UserId = user.Id, Token = "token", ExpensesEnabled = scenario != "disabled",
             UpdatedAt = DateTimeOffset.UtcNow };
-        var delivery = new PushDelivery { UserId = user.Id, DeviceId = device.Id, GroupId = group.Id,
-            NextAttemptAt = DateTimeOffset.UtcNow.AddSeconds(-1),
-            ExpiresAt = DateTimeOffset.UtcNow.AddHours(scenario == "expired" ? -1 : 1),
-            Attempts = scenario == "exhausted" ? 5 : 0 };
-        db.AddRange(device, delivery);
+        if (scenario == "stale") device.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-31);
+        if (scenario == "deleted") user.Kind = UserKind.Deleted;
+        var delivery = new SendExpensePush(device.Id,
+            scenario == "reassigned" ? Guid.NewGuid() : user.Id, group.Id, Guid.NewGuid(),
+            DateTimeOffset.UtcNow.AddHours(scenario == "expired" ? -1 : 1));
+        db.Add(device);
         await db.SaveChangesAsync(Ct);
         var sender = new Mock<IPushSender>();
-        var setup = sender.Setup(s => s.SendAsync("token", group.Id, delivery.Id, It.IsAny<CancellationToken>()));
+        var setup = sender.Setup(s => s.SendAsync("token", group.Id, delivery.DeliveryId, It.IsAny<CancellationToken>()));
         if (scenario == "retry") setup.ThrowsAsync(new HttpRequestException("Unavailable"));
         else setup.ReturnsAsync(scenario != "unregistered");
-        using var worker = new FirebasePushWorker(host.Services.GetRequiredService<IServiceScopeFactory>(), sender.Object,
-            NullLogger<FirebasePushWorker>.Instance);
-        await worker.Deliver(Ct);
-        sender.Verify(s => s.SendAsync("token", group.Id, delivery.Id, It.IsAny<CancellationToken>()), Times.Exactly(sends));
+        var handler = new SendExpensePushHandler(db, sender.Object, TimeProvider.System);
+        if (scenario == "retry")
+            await Assert.ThrowsAsync<HttpRequestException>(() => handler.HandleAsync(delivery, Ct).AsTask());
+        else
+            await handler.HandleAsync(delivery, Ct);
+        sender.Verify(s => s.SendAsync("token", group.Id, delivery.DeliveryId, It.IsAny<CancellationToken>()), Times.Exactly(sends));
         db.ChangeTracker.Clear();
-        Assert.Equal(pendingCount, await db.Set<PushDelivery>().CountAsync(Ct));
         Assert.Equal(deviceCount, await db.Set<PushDevice>().CountAsync(Ct));
-        if (pendingCount > 0)
-        {
-            var pending = await db.Set<PushDelivery>().SingleAsync(Ct);
-            Assert.Equal(1, pending.Attempts);
-            Assert.True(pending.NextAttemptAt > DateTimeOffset.UtcNow);
-        }
     }
 }

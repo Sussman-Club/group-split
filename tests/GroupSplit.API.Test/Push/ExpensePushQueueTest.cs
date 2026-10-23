@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Push;
 using GroupSplit.API.Test.Base;
@@ -42,7 +43,10 @@ public sealed class ExpensePushQueueTest(ApiTestFixture fixture) : ApiUnitTest(f
         {
             GroupId = group.Id, Name = "Lunch", Amount = 12, DateTime = DateTimeOffset.UtcNow
         });
-        var queued = await DbContext.Set<PushDelivery>().ToListAsync();
+        var rows = await DbContext.Set<BackgroundJob>().Where(j => j.Type == SendExpensePush.Name).ToListAsync();
+        var queued = rows.Select(row => JsonSerializer.Deserialize<SendExpensePush>(row.Payload)!).ToList();
+        Assert.All(rows, row => Assert.Equal(BackgroundJobStatus.Pending, row.Status));
+        Assert.DoesNotContain(rows, row => row.Payload.Contains("phone") || row.Payload.Contains("tablet"));
         Assert.Equal(2, queued.Count);
         Assert.Equal(new[] { first.Id, second.Id }.Order(), queued.Select(d => d.DeviceId).Order());
         Assert.All(queued, d => { Assert.Equal(recipient.Id, d.UserId); Assert.Equal(group.Id, d.GroupId); });

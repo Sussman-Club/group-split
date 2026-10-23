@@ -131,7 +131,9 @@ public class TransactionService(
     AppDbContext dbContext,
     IExpenseSplitter splitter,
     IGroupParticipants participants,
-    IReceiptAttachmentService receiptAttachments) : ITransactionService
+    IReceiptAttachmentService receiptAttachments,
+    GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue backgroundJobs,
+    TimeProvider clock) : ITransactionService
 {
     /// <summary>
     /// The caller's expenses, and only their expenses.
@@ -331,7 +333,7 @@ public class TransactionService(
             await splitter.WriteSplitsAsync(expense, request.Splits, ct);
 
         dbContext.Add(expense);
-        await GroupSplit.API.Services.Push.ExpensePushQueue.Enqueue(dbContext, group.Id, currentUser.Id, ct);
+        await GroupSplit.API.Services.Push.ExpensePushQueue.Enqueue(dbContext, backgroundJobs, clock, group.Id, currentUser.Id, ct);
         await dbContext.SaveChangesAsync(ct);
 
         return expense;

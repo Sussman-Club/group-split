@@ -1,0 +1,51 @@
+@using System.Globalization
+@using System.Net.Http.Json
+@inject AppLinks AppLinks
+@inject IHttpClientFactory Clients
+
+@if (_available is { } release && !_dismissed)
+{
+    <div class="gs-android-update" role="status">
+        <MudIcon Icon="@Icons.Material.Rounded.SystemUpdate" />
+        <div class="gs-android-update-copy">
+            <strong>Update available</strong>
+            <span>Group Split @release.Version is ready to install.</span>
+        </div>
+        <MudButton Href="@(new Uri(AppLinks.PublicOrigin!, "android").AbsoluteUri)" Target="_blank"
+                   Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill">Update app</MudButton>
+        <MudIconButton Icon="@Icons.Material.Rounded.Close" OnClick="Dismiss" aria-label="Dismiss update notice" />
+    </div>
+}
+
+@code {
+    private AndroidReleaseInfo? _available;
+    private bool _dismissed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !AppLinks.IsNative || AppLinks.AndroidBuild is not > 0) return;
+        try
+        {
+            // Use the public website, never the WebView's local origin or an authenticated API client.
+            using var client = Clients.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var url = new Uri(AppLinks.PublicOrigin!, "downloads/android/latest");
+            var release = await client.GetFromJsonAsync(url, AndroidDownloadJsonContext.Default.AndroidReleaseInfo);
+            // Release tags end in the same monotonic Android version code embedded in the APK.
+            // Display versions alone cannot distinguish two builds of the same release.
+            var suffix = release?.Version?.Split('-').LastOrDefault();
+            if (int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out var build)
+                && release!.Version.Contains('-') && build > AppLinks.AndroidBuild)
+            {
+                _available = release;
+                StateHasChanged();
+            }
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            // Checking for an optional update must not interrupt using the app offline.
+        }
+    }
+
+    private void Dismiss() => _dismissed = true;
+}
