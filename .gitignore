@@ -492,6 +492,8 @@ aspire-output/
 *.keystore
 *.jks
 *.signing-password
+google-services.json
+firebase-service-account*.json
 
 # Agents folders
 .agents/

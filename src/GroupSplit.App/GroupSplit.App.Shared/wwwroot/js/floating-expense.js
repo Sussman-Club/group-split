@@ -1,6 +1,7 @@
 const subscriptions = new WeakMap();
 
 export function observe(button) {
+    if (!(button instanceof HTMLElement) || !button.isConnected) return;
     if (subscriptions.has(button)) return;
     const phone = matchMedia("(max-width: 820px), (max-width: 900px) and (max-height: 500px)");
     const positions = new WeakMap();

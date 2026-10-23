@@ -1,5 +1,6 @@
 ﻿using Android.App;
 using Android.Runtime;
+using GroupSplit.Shared;
 
 namespace GroupSplit.App;
 
@@ -12,4 +13,16 @@ public class MainApplication : MauiApplication
     }
 
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+
+    public override void OnCreate()
+    {
+        base.OnCreate();
+        if (OperatingSystem.IsAndroidVersionAtLeast(26))
+        {
+            var manager = (NotificationManager?)GetSystemService(NotificationService);
+            foreach (var kind in PushNotificationKinds.Settings)
+                manager?.CreateNotificationChannel(new NotificationChannel(PushNotificationKinds.Channel(kind),
+                    PushNotificationKinds.Label(kind), NotificationImportance.Default));
+        }
+    }
 }

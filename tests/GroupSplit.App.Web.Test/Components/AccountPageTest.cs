@@ -83,6 +83,35 @@ public class AccountPageTest : ComponentTest
         return (page, provider);
     }
 
+    [Fact]
+    public async Task A_failed_export_explains_that_the_download_can_be_retried()
+    {
+        JSInterop.Setup<string?>("gs.downloadPersonalData").SetResult("Your records could not be exported. Please retry.");
+        var (page, _) = Open();
+        await Button(page, "Download my records and receipt files (ZIP)").ClickAsync(new());
+        Assert.Contains("Please retry", page.Markup);
+        Assert.False(Button(page, "Download my records and receipt files (ZIP)").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void Native_account_uses_the_public_website_instead_of_an_unauthenticated_local_download()
+    {
+        Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example/")));
+        var (page, _) = Open();
+        Assert.Equal("https://groupsplit.example/account", page.Find("a[target='_blank']").GetAttribute("href"));
+        Assert.DoesNotContain("/api/users/me/export", page.Markup);
+    }
+
+    [Fact]
+    public async Task An_export_timeout_is_reported_without_breaking_the_account_page()
+    {
+        JSInterop.Setup<string?>("gs.downloadPersonalData").SetException(new TaskCanceledException());
+        var (page, _) = Open();
+        await Button(page, "Download my records and receipt files (ZIP)").ClickAsync(new());
+        Assert.Contains("Preparing your archive took too long", page.Markup);
+        Assert.False(Button(page, "Download my records and receipt files (ZIP)").HasAttribute("disabled"));
+    }
+
     private static async Task Delete(IRenderedComponent<Account> page, IRenderedComponent<MudDialogProvider> dialogs)
     {
         // Held rather than awaited: the click is waiting on the confirmation it just opened.

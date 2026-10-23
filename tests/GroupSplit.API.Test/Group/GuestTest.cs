@@ -90,6 +90,28 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     // ---- Adding ------------------------------------------------------------------------
 
     [Fact]
+    public async Task Accepting_a_guest_invitation_notifies_opted_in_existing_members()
+    {
+        var group = await AGroup();
+        var guest = await AddGuest(group.Id, "Carlos");
+        var token = await LinkFor(guest);
+        var owner = GetService<ICurrentUser>().User;
+        DbContext.Add(new GroupSplit.Data.Entities.PushDevice { UserId = owner.Id, Token = "test-token",
+            UpdatedAt = DateTimeOffset.UtcNow, InvitationsEnabled = true });
+        await DbContext.SaveChangesAsync(Ct);
+        var (scope, carlos) = await Signing();
+        using (scope)
+            await scope.ServiceProvider.GetRequiredService<IInvitationService>().Claim(token, Ct);
+        var jobs = DbContext.Set<GroupSplit.Data.Entities.BackgroundJob>()
+            .Where(j => j.Type == GroupSplit.API.Services.Push.SendPushNotification.Name).ToList();
+        var stored = Assert.Single(jobs);
+        var job = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.Push.SendPushNotification>(stored.Payload)!;
+        Assert.Equal(owner.Id, job.UserId);
+        Assert.Equal(group.Id, job.GroupId);
+        Assert.Equal(PushNotificationKind.InvitationAccepted, job.Kind);
+    }
+
+    [Fact]
     public async Task Adding_a_guest_makes_a_stand_in_and_their_rule_and_no_link()
     {
         var group = await AGroup();

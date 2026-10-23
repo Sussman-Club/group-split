@@ -3,12 +3,32 @@
 @using GroupSplit.App.Services
 @inject NativeLinkRouter Links
 @inject NavigationManager Nav
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin UserLogin
+@inject IServiceProvider Services
+@using Microsoft.Extensions.DependencyInjection
 @implements IDisposable
 
 <Routes />
 
 @code {
-    protected override void OnInitialized() => Links.Changed += OnLink;
+    protected override void OnInitialized()
+    {
+        Links.Changed += OnLink;
+        UserLogin.OnLoginChanged += OnLogin;
+    }
+    private void OnLogin(GroupSplit.Shared.UserInfo? user)
+    {
+        if (user is not null) _ = RefreshPush(user.Id);
+    }
+    private async Task RefreshPush(Guid userId)
+    {
+        try
+        {
+            if (Services.GetService<GroupSplit.App.Shared.Services.IPushNotifications>() is { } push)
+                await push.RefreshAsync(userId);
+        }
+        catch (Exception) { /* Retry on the next resume or sign-in. */ }
+    }
     protected override Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) Navigate();
@@ -21,5 +41,9 @@
     {
         if (Links.Take() is { } route) Nav.NavigateTo(route);
     }
-    public void Dispose() => Links.Changed -= OnLink;
+    public void Dispose()
+    {
+        Links.Changed -= OnLink;
+        UserLogin.OnLoginChanged -= OnLogin;
+    }
 }

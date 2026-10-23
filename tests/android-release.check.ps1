@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $fixture = Join-Path ([IO.Path]::GetTempPath()) "groupsplit-release-check-$([guid]::NewGuid().ToString('N'))"
 $repository = Join-Path $fixture 'repository'
 $savedEnvironment = @{}
-foreach ($name in @('RUNNER_TEMP', 'ANDROID_KEYSTORE_BASE64', 'ANDROID_SIGNING_PASSWORD', 'ANDROID_KEY_ALIAS')) {
+foreach ($name in @('RUNNER_TEMP', 'ANDROID_KEYSTORE_BASE64', 'ANDROID_SIGNING_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_GOOGLE_SERVICES_JSON_BASE64')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
 }
 
@@ -15,10 +15,14 @@ function Set-TestSecrets {
     $env:ANDROID_KEYSTORE_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('test-keystore'))
     $env:ANDROID_SIGNING_PASSWORD = 'test-password'
     $env:ANDROID_KEY_ALIAS = 'test-upload'
+    $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+        '{"project_info":{"project_id":"test-project"},"client":[{"client_info":{"android_client_info":{"package_name":"club.sussman.groupsplit"}}}]}'))
 }
 function Assert-Cleaned {
     Assert (@(Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Force).Count -eq 0) 'Signing files survived the build.'
     Assert (-not $env:ANDROID_KEYSTORE_BASE64 -and -not $env:ANDROID_SIGNING_PASSWORD) 'Secrets survived in the build environment.'
+    Assert (-not $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64) 'Firebase input survived in the build environment.'
+    Assert (-not (Test-Path -LiteralPath $firebasePath)) 'Firebase config survived the CI build.'
     foreach ($arguments in $releaseCheckState.Calls) {
         $keyPasswordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyPass=file:*' }) -replace '^-p:AndroidSigningKeyPass=file:', ''
         Assert (-not (Test-Path -LiteralPath $keyPasswordPath)) 'The temporary key password file survived publishing.'
@@ -27,6 +31,8 @@ function Assert-Cleaned {
 
 try {
     New-Item -ItemType Directory -Path (Join-Path $repository 'tools') -Force | Out-Null
+    $firebasePath = Join-Path $repository 'src/GroupSplit.App/GroupSplit.App/Platforms/Android/google-services.json'
+    New-Item -ItemType Directory -Path (Split-Path $firebasePath) -Force | Out-Null
     $env:RUNNER_TEMP = Join-Path $fixture 'runner'
     New-Item -ItemType Directory -Path $env:RUNNER_TEMP | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../tools/Publish-Android.ps1') -Destination (Join-Path $repository 'tools')
@@ -36,6 +42,9 @@ try {
     function dotnet {
         $arguments = @($args)
         Assert (-not $env:ANDROID_KEYSTORE_BASE64 -and -not $env:ANDROID_SIGNING_PASSWORD) 'Build inherited secrets.'
+        Assert (-not $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64) 'Build inherited Firebase input.'
+        $firebase = Get-Content -LiteralPath $firebasePath -Raw | ConvertFrom-Json
+        Assert ($firebase.project_info.project_id -eq 'test-project') 'Firebase config was not supplied to the Android build.'
         $keyPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyStore=*' }) -replace '^-p:AndroidSigningKeyStore=', ''
         $passwordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningStorePass=file:*' }) -replace '^-p:AndroidSigningStorePass=file:', ''
         $keyPasswordPath = ($arguments | Where-Object { $_ -like '-p:AndroidSigningKeyPass=file:*' }) -replace '^-p:AndroidSigningKeyPass=file:', ''
@@ -77,10 +86,16 @@ try {
     Assert ($releaseCheckState.Calls.Count -eq 1) 'Publishing continued after a failure.'
     Assert-Cleaned
 
-    foreach ($invalid in @('missing', 'invalid-base64', 'invalid-version')) {
+    foreach ($invalid in @('missing', 'invalid-base64', 'invalid-version', 'missing-firebase', 'invalid-firebase', 'wrong-package')) {
         Set-TestSecrets
         if ($invalid -eq 'missing') { $env:ANDROID_SIGNING_PASSWORD = $null }
         if ($invalid -eq 'invalid-base64') { $env:ANDROID_KEYSTORE_BASE64 = 'not base64!' }
+        if ($invalid -eq 'missing-firebase') { $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64 = $null }
+        if ($invalid -eq 'invalid-firebase') { $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64 = 'not base64!' }
+        if ($invalid -eq 'wrong-package') {
+            $env:ANDROID_GOOGLE_SERVICES_JSON_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+                '{"project_info":{"project_id":"test-project"},"client":[{"client_info":{"android_client_info":{"package_name":"wrong.app"}}}]}'))
+        }
         $failed = $false
         try {
             $version = if ($invalid -eq 'invalid-version') { '1.2.3;bad' } else { '1.2.3' }

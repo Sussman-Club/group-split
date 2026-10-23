@@ -1,3 +1,5 @@
+using GroupSplit.Shared;
+
 namespace GroupSplit.App.Services;
 
 /// <summary>Keep an invitation received before the WebView is ready, without accepting arbitrary navigation.</summary>
@@ -6,6 +8,23 @@ public sealed class NativeLinkRouter(NativeOptions options)
     private readonly object gate = new();
     private string? pending;
     public event Action<string>? Changed;
+
+    public void OpenGroup(Guid groupId)
+    {
+        if (groupId == Guid.Empty) return;
+        var route = $"/groups/{groupId}";
+        lock (gate) pending = route;
+        Changed?.Invoke(route);
+    }
+
+    public bool OpenNotification(PushNotificationKind kind, Guid groupId, string? requestToken)
+    {
+        var route = PushNotificationKinds.Route(kind, groupId, requestToken);
+        if (route is null) return false;
+        lock (gate) pending = route;
+        Changed?.Invoke(route);
+        return true;
+    }
 
     public bool Open(Uri uri)
     {

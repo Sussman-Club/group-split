@@ -2,7 +2,6 @@ name: Android build
 
 on:
   pull_request:
-    branches: [dev, main]
     paths:
       - 'src/GroupSplit.App/**'
       - 'src/GroupSplit.Shared/**'

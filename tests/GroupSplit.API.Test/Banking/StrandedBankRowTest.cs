@@ -279,6 +279,110 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     // ---- setup ---------------------------------------------------------------------------
 
+    [Fact]
+    public async Task Deletion_unlinks_banks_and_removes_personal_receipt_files_but_keeps_ledger_history()
+    {
+        var row = await Row(12.50m);
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+        var file = await Attach(null, expense.Id);
+        var userId = GetService<ICurrentUser>().User.Id;
+
+        Assert.Empty(await GetService<IAccountService>().DeleteAccount(userId, Ct));
+
+        Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
+        Assert.False(await DbContext.Set<BankTransaction>().AnyAsync(Ct));
+        Assert.Null(await Attachment(file));
+        Assert.True(await DbContext.Set<Expense>().AnyAsync(item => item.Id == expense.Id, Ct));
+        Assert.Equal(UserKind.Deleted, (await DbContext.Set<GroupSplit.Data.Entities.User>().SingleAsync(item => item.Id == userId, Ct)).Kind);
+        Assert.Single(_bank.RemovedTokens);
+        _storage.Verify(storage => storage.DeleteObjectAsync("receipts-test", $"key-{file:N}", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_provider_failure_leaves_account_deletion_retryable()
+    {
+        await Row(12.50m);
+        _bank.RefuseRemoval = true;
+        var userId = GetService<ICurrentUser>().User.Id;
+        await Assert.ThrowsAsync<BadGatewayException>(() => GetService<IAccountService>().DeleteAccount(userId, Ct));
+        Assert.NotEqual(UserKind.Deleted, (await DbContext.Set<GroupSplit.Data.Entities.User>().SingleAsync(item => item.Id == userId, Ct)).Kind);
+        Assert.True(await DbContext.Set<BankConnection>().AnyAsync(Ct));
+        _bank.RefuseRemoval = false;
+        Assert.Empty(await GetService<IAccountService>().DeleteAccount(userId, Ct));
+    }
+
+    [Fact]
+    public async Task Account_deletion_preserves_shared_receipt_files_and_anonymised_ledger_history()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Shared ledger" }, Ct);
+        var row = await Row(12.50m);
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest { GroupId = group.Id }, Ct);
+        var file = await Attach(null, expense.Id);
+        var userId = GetService<ICurrentUser>().User.Id;
+        Assert.Empty(await GetService<IAccountService>().DeleteAccount(userId, Ct));
+        Assert.NotNull(await Attachment(file));
+        Assert.True(await DbContext.Set<Expense>().AnyAsync(item => item.Id == expense.Id, Ct));
+        _storage.Verify(storage => storage.DeleteObjectAsync(It.IsAny<string>(), $"key-{file:N}", It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Unreadable_token_leaves_the_provider_item_actionable_after_local_unlink()
+    {
+        await Row(12.50m);
+        var connection = await DbContext.Set<BankConnection>().SingleAsync(Ct);
+        connection.AccessTokenCiphertext = "not-a-readable-token";
+        await DbContext.SaveChangesAsync(Ct);
+        await GetService<IBankConnectionService>().Unlink(connection.Id, Ct);
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var details = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.ProviderItemReconciliation>(work.Payload)!;
+        Assert.Equal(connection.ProviderItemId, details.Resource);
+        Assert.Equal(BackgroundJobStatus.AwaitingOperator, work.Status);
+        Assert.Equal("Access token unreadable", work.Reason);
+        Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
+        Assert.Empty(_bank.RemovedTokens);
+    }
+
+    [Fact]
+    public async Task Missing_connector_leaves_a_credential_free_provider_cleanup_record()
+    {
+        await Row(12.50m);
+        var connection = await DbContext.Set<BankConnection>().SingleAsync(Ct);
+        connection.Provider = "missing";
+        await DbContext.SaveChangesAsync(Ct);
+        await GetService<IBankConnectionService>().Unlink(connection.Id, Ct);
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var details = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.ProviderItemReconciliation>(work.Payload)!;
+        Assert.Equal("provider-item", work.Type);
+        Assert.Equal(connection.ProviderItemId, details.Resource);
+        Assert.Equal(connection.Id, details.ConnectionId);
+        Assert.Equal("missing", details.Provider);
+        Assert.Equal(BackgroundJobStatus.AwaitingOperator, work.Status);
+    }
+
+    [Fact]
+    public async Task Storage_failure_keeps_durable_work_after_bank_rows_are_removed()
+    {
+        var row = await Row(12.50m);
+        var file = await Attach(row.Id, null);
+        _storage.Setup(storage => storage.DeleteObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("storage unavailable"));
+        await GetService<IBankConnectionService>().Unlink(await ConnectionId(), Ct);
+        Assert.Null(await Attachment(file));
+        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
+        var command = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.DeleteReceiptFile>(work.Payload)!;
+        Assert.Equal("delete-receipt-file", work.Type);
+        Assert.Equal($"key-{file:N}", command.ObjectKey);
+        Assert.Equal(BackgroundJobStatus.Pending, work.Status);
+        Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
+
+        // Resolve the real handler registration, as the durable worker does, once storage recovers.
+        _storage.Setup(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeleteObjectResponse());
+        await GetService<GroupSplit.Jobs.IJobExecutor>().ExecuteAsync(command, Ct);
+        _storage.Verify(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey,
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
     private async Task<Guid> ConnectionId() =>
         (await DbContext.Set<BankConnection>().AsNoTracking().SingleAsync(Ct)).Id;
 

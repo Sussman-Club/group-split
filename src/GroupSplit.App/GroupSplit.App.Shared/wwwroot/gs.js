@@ -280,6 +280,31 @@
     if (document.body) applyRail(); else document.addEventListener("DOMContentLoaded", applyRail);
 
     window.gs = {
+        async downloadPersonalData() {
+            try {
+                const response = await fetch("/api/users/me/export", {
+                    credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(9 * 60 * 1000)
+                });
+                if (response.status === 401 || response.redirected)
+                    return "Please sign in again, then retry your download.";
+                if (!response.ok || !response.headers.get("content-type")?.startsWith("application/zip"))
+                    return "Your records could not be exported. Please retry; if this continues, contact support.";
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "groupsplit-personal-data.zip";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                // Allow the browser to start consuming the object URL before releasing it.
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+                return null;
+            } catch {
+                return "Your records could not be downloaded. Check your connection and retry.";
+            }
+        },
+
         setTheme(isDark) {
             stamp(isDark);
         },
