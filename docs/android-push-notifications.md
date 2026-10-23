@@ -16,7 +16,7 @@ See [Firebase Android setup](https://firebase.google.com/docs/cloud-messaging/an
 
 ## Configure the API
 
-Apply the EF migrations through `UseSharedPushQueue` using the normal database deployment workflow before deploying this API. Device registrations live in `PushDevice`; deliveries use the shared `BackgroundJob` queue. `UseSharedPushQueue` moves unexpired pending deliveries from the earlier `PushDelivery` outbox before removing it. Stop old API instances before applying this migration so their polling workers cannot send concurrently with the conversion.
+Apply the `AndroidPushNotifications` EF migration using the normal database deployment workflow before deploying this API. It adds `PushDevice` registrations; deliveries use the shared `BackgroundJob` queue already in `dev`.
 
 Configure the **API process** (not the web frontend) with:
 
