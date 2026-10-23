@@ -7,6 +7,7 @@ public sealed class BackgroundJob : Entity
 {
     public required string Type { get; set; }
     public int Version { get; set; } = 1;
+    /// <summary>Serialized typed input; PostgreSQL stores and validates it as jsonb.</summary>
     public required string Payload { get; set; }
     public BackgroundJobStatus Status { get; set; }
     public int Attempts { get; set; }

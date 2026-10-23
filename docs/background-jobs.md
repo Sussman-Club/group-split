@@ -2,8 +2,10 @@
 
 `BackgroundJob` is the PostgreSQL outbox for work that must survive an API restart.
 The existing `GroupSplit.Jobs` dispatcher and scheduler remain in memory. Persistence
-is opt-in through `IBackgroundJobQueue`; the worker reuses the same `IJobExecutor`
-and scoped handlers. There is no second scheduler or public job-management endpoint.
+is opt-in through `IBackgroundJobQueue`. A recurring `ProcessBackgroundJobs` job runs
+through the existing scheduler, dispatcher and worker. It claims a bounded batch and
+invokes registered scoped handlers through `IJobExecutor`. There is no separate
+hosted worker, polling loop, scheduler or public job-management endpoint.
 
 ## Register and enqueue
 
@@ -26,11 +28,14 @@ does. An enqueue without a save does not submit work. No external call should ha
 inside that transaction. Payloads must contain only the identifiers necessary for
 the handler to reload its inputs; never put access tokens, credentials, personal
 export contents or raw provider responses in a job. Manual reconciliation records
-follow the same rule.
+follow the same rule. PostgreSQL stores `Payload` as `jsonb`, so malformed JSON cannot
+be saved and operators can query its fields. The C# property holds serialized JSON;
+the registry translates between it and typed jobs.
 
 ## Execution and failures
 
-Workers poll every two seconds and claim one row at a time with an atomic
+The scheduled job runs every two seconds and processes up to ten invocations per run,
+claiming one row at a time with an atomic
 `UPDATE ... RETURNING` over `FOR UPDATE SKIP LOCKED`. Different instances can work
 concurrently. No row lock or database transaction spans execution. A claim records
 a unique lease ID, increments attempts and expires after five minutes. A process

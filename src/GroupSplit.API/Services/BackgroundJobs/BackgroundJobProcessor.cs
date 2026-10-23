@@ -3,31 +3,17 @@ using GroupSplit.Jobs;
 
 namespace GroupSplit.API.Services.BackgroundJobs;
 
-/// <summary>Runs persisted jobs through the existing scoped job executor.</summary>
-public sealed class BackgroundJobWorker(
-    IServiceScopeFactory scopes, BackgroundJobRegistry registry, ILogger<BackgroundJobWorker> logger)
-    : BackgroundService
+public interface IBackgroundJobProcessor
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                if (await RunNext(stoppingToken)) continue;
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception error)
-            {
-                // Neither payloads nor exception messages belong in job logs.
-                logger.LogError("Durable job polling failed ({ErrorType})", error.GetType().Name);
-            }
-            try { await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-        }
-    }
+    Task<bool> RunNext(CancellationToken ct);
+}
 
-    internal async Task<bool> RunNext(CancellationToken ct)
+/// <summary>Handles persistence around an invocation; scheduling and workers belong to GroupSplit.Jobs.</summary>
+public sealed class BackgroundJobProcessor(
+    IServiceScopeFactory scopes, BackgroundJobRegistry registry, ILogger<BackgroundJobProcessor> logger)
+    : IBackgroundJobProcessor
+{
+    public async Task<bool> RunNext(CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IBackgroundJobStore>();

@@ -51,7 +51,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Reason")
                         .HasMaxLength(256)

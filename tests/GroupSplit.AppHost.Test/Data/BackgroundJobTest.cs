@@ -1,12 +1,15 @@
 using Aspire.Hosting.Testing;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.AppHost.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.PostgreSQL;
 using GroupSplit.Jobs;
+using GroupSplit.Jobs.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 
@@ -258,7 +261,7 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
     [Theory(Timeout = 120_000)]
     [InlineData("unregistered-job", 1, "{}")]
     [InlineData("test-job", 99, "{}")]
-    [InlineData("test-job", 1, "not-json")]
+    [InlineData("test-job", 1, "null")]
     public async Task Unknown_or_invalid_contract_is_retained_for_operator_without_execution(string type, int version, string payload)
     {
         Guid id;
@@ -283,6 +286,67 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         Assert.Null(saved.LeaseId);
     }
 
+    [Fact(Timeout = 120_000)]
+    public async Task PostgreSQL_rejects_malformed_JSON_payloads()
+    {
+        await using var db = Context();
+        db.Add(new BackgroundJob { Type = "test-job", Payload = "not-json",
+            CreatedAt = _clock.Now, AvailableAt = _clock.Now });
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));
+        var postgres = Assert.IsType<PostgresException>(failure.InnerException);
+        Assert.Equal("22P02", postgres.SqlState);
+        await using var reader = Context();
+        Assert.Empty(await reader.Set<BackgroundJob>().ToListAsync(Ct));
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task Registration_is_idempotent_and_the_existing_job_worker_processes_durable_invocations()
+    {
+        var jobId = await Enqueue();
+        var calls = 0;
+        var services = new ServiceCollection();
+        services.AddScoped<AppDbContext>(_ => Context());
+        services.AddSingleton<TimeProvider>(_clock);
+        services.AddSingleton(_registry);
+        services.AddBackgroundJobs();
+        var registrations = services.ToArray();
+        services.AddBackgroundJobs();
+        Assert.Equal(registrations, services.ToArray());
+        services.AddJobs().Handlers.Add<TestJob>(_ => new Handler(job =>
+        {
+            Assert.NotEqual(Guid.Empty, job.UserId);
+            Interlocked.Increment(ref calls);
+        }));
+
+        await using var provider = services.BuildServiceProvider();
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        // Persistence adds a scheduled invocation, never another hosted worker or polling loop.
+        Assert.Equal(3, hosted.Length);
+        Assert.All(hosted, service => Assert.Equal(typeof(IJobDispatcher).Assembly, service.GetType().Assembly));
+        var worker = Assert.Single(hosted, service => service.GetType().Name == "DefaultJobWorker");
+        await worker.StartAsync(Ct);
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(15));
+            var dispatcher = provider.GetRequiredService<IJobDispatcher>();
+            var first = await dispatcher.DispatchAsync(new ProcessBackgroundJobs(), timeout.Token);
+            await first.WaitAsync(timeout.Token);
+            var second = await dispatcher.DispatchAsync(new ProcessBackgroundJobs(), timeout.Token);
+            await second.WaitAsync(timeout.Token);
+            Assert.Equal(1, calls);
+            var saved = await Read(jobId);
+            Assert.Equal(BackgroundJobStatus.Completed, saved.Status);
+            Assert.Equal("{}", saved.Payload);
+            Assert.Null(saved.LeaseId);
+        }
+        finally
+        {
+            using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await worker.StopAsync(shutdown.Token);
+        }
+    }
+
     private PostgreSqlAppDbContext Context() => new(new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
         .UseNpgsql(_connectionString).Options);
 
@@ -298,8 +362,8 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         return services;
     }
 
-    private BackgroundJobWorker Worker(ServiceProvider provider) => new(
-        provider.GetRequiredService<IServiceScopeFactory>(), _registry, NullLogger<BackgroundJobWorker>.Instance);
+    private BackgroundJobProcessor Worker(ServiceProvider provider) => new(
+        provider.GetRequiredService<IServiceScopeFactory>(), _registry, NullLogger<BackgroundJobProcessor>.Instance);
 
     private async Task<Guid> Enqueue()
     {
@@ -322,6 +386,15 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     public sealed record TestJob(Guid UserId) : IJob;
+
+    private sealed class Handler(Action<TestJob> handle) : IJobHandler<TestJob>
+    {
+        public ValueTask HandleAsync(TestJob job, CancellationToken cancellationToken)
+        {
+            handle(job);
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class Executor(Func<IJob, CancellationToken, ValueTask<object?>> execute) : IJobExecutor
     {
