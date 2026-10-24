@@ -32,6 +32,7 @@ public sealed class NativeOptionsBuildTest
         using var provider = services.BuildServiceProvider();
         var links = provider.GetRequiredService<AppLinks>();
         Assert.True(links.IsNative);
+        Assert.Equal(OperatingSystem.IsAndroid(), links.IsAndroidNative);
         Assert.Equal(expected, links.AndroidBuild);
         Assert.Equal(new Uri("https://example.test/"), links.PublicOrigin);
     }

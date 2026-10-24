@@ -87,117 +87,98 @@
 }
 
 <div class="gs-stack">
-    @*
-        Whose money -- a question about you, not about a set.
-
-        The three chips were "Paid by you", "Your share" and "Everything you are in". The
-        middle two differ only by a flag nothing showed: one is your part of what other
-        people paid, the other is your part of everything, your own expenses included.
-        Neither label said which. And "Everything you are in" sat beside a ledger control
-        whose own default read "Everything" -- one word, two controls, two meanings, and
-        nothing on the page to say which of them somebody had moved.
-
-        Each chip now carries what it counts underneath itself, so the difference is on the
-        page rather than in whatever the reader happens to remember.
-    *@
-    <div class="gs-inline gs-range gs-chipbar" role="group" aria-label="Whose money">
-        @foreach (var (label, detail, value) in Views)
-        {
-            var view = value;
-            <button type="button" class="gs-chip gs-chip-stacked @(_view == view ? "active" : "")"
-                    aria-pressed="@(_view == view ? "true" : "false")"
-                    @onclick="@(() => SetViewAsync(view))">
-                <span class="gs-chip-label">@label</span>
-                <span class="gs-chip-detail">@detail</span>
-            </button>
-        }
-    </div>
-
-    @*
-        Two controls, not four.
-
-        Where the money is and whether it is shared were a select and three chips, and they
-        contradicted each other: picking a group and then "Personal" asked for personal
-        expenses in a group, which is nothing, so the page had to quietly turn one off when
-        the other moved. They are one question -- *which ledger* -- and one control cannot
-        be set to an answer that does not exist.
-    *@
-    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
-        <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
-
-        @* A rendered menu rather than a native select, for the reason the date filter
-           gives at length: the list a select opens is the operating system's, and on
-           Windows it is white on a dark page whatever the stylesheet says. *@
-        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
-                 Dense="true" PopoverClass="gs-menu">
-            @* See the note in DateRangeFilter: a custom activator has to toggle the menu
-               itself, and one that does not is a button that does nothing. *@
-            <ActivatorContent Context="menu">
-                <button type="button" class="gs-chip gs-chip-menu @(_where == AllLedgers ? "" : "active")"
-                        aria-haspopup="listbox"
-                        @onclick="@(args => menu.ToggleAsync(args))"
-                        aria-label="@($"Which ledger: {WhereLabel}")">
-                    <MudIcon Icon="@Icons.Material.Rounded.Groups" Size="Size.Small" />
-                    <span class="label">@WhereLabel</span>
-                    <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
-                </button>
-            </ActivatorContent>
-            <ChildContent>
-                @* "All groups", not "Everything": that word was also the third view chip's,
-                   where it meant something else entirely. *@
-                <MudMenuItem OnClick="@(() => SetWhereAsync(AllLedgers))">
-                    <span class="gs-menu-item @(_where == AllLedgers ? "is-on" : "")">All groups</span>
-                </MudMenuItem>
-                <MudMenuItem OnClick="@(() => SetWhereAsync(SharedOnly))">
-                    <span class="gs-menu-item @(_where == SharedOnly ? "is-on" : "")">Shared only</span>
-                </MudMenuItem>
-                @* Personal is the absence of a group, which is why it is an entry here
-                   rather than one of the groups below it. *@
-                @if (_view is not ExpenseView.YourShare)
+    <ActivityToolbar FiltersActive="@(IsSearching || _where != AllLedgers)">
+        <Segments>
+            <div class="gs-ledger-segments gs-chipbar" role="group" aria-label="Whose money">
+                @foreach (var (label, detail, value) in Views)
                 {
-                    <MudMenuItem OnClick="@(() => SetWhereAsync(PersonalOnly))">
-                        <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
-                    </MudMenuItem>
+                    var view = value;
+                    <button type="button" class="gs-chip @(_view == view ? "active" : "")"
+                            title="@detail"
+                            aria-pressed="@(_view == view ? "true" : "false")"
+                            @onclick="@(() => SetViewAsync(view))">
+                        <span class="gs-chip-label">@label</span>
+                        <span class="gs-chip-detail gs-sr-only">@detail</span>
+                    </button>
                 }
-                @* The personal group is "Personal only" above, so it is not listed again. *@
-                @if (GroupsService.Groups.Any(group => !group.IsPersonal))
-                {
-                    <MudDivider />
-                    @foreach (var group in GroupsService.Groups.Where(group => !group.IsPersonal))
+            </div>
+
+        </Segments>
+        <DateFilter>
+            <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
+        </DateFilter>
+        <Filters>
+            <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                     Dense="true" PopoverClass="gs-menu" Class="gs-payer-filter">
+                @* See the note in DateRangeFilter: a custom activator has to toggle the menu
+                   itself, and one that does not is a button that does nothing. *@
+                <ActivatorContent Context="menu">
+                    <button type="button" class="gs-ledger-payer"
+                            aria-haspopup="listbox"
+                            @onclick="@(args => menu.ToggleAsync(args))"
+                            aria-label="@($"Which ledger: {WhereLabel}")">
+                        <MudIcon Icon="@Icons.Material.Rounded.Groups" Size="Size.Small" />
+                        <span class="label">@WhereLabel</span>
+                        <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    @* "All groups", not "Everything": that word was also the third view chip's,
+                       where it meant something else entirely. *@
+                    <MudMenuItem OnClick="@(() => SetWhereAsync(AllLedgers))">
+                        <span class="gs-menu-item @(_where == AllLedgers ? "is-on" : "")">All groups</span>
+                    </MudMenuItem>
+                    <MudMenuItem OnClick="@(() => SetWhereAsync(SharedOnly))">
+                        <span class="gs-menu-item @(_where == SharedOnly ? "is-on" : "")">Shared only</span>
+                    </MudMenuItem>
+                    @* Personal is the absence of a group, which is why it is an entry here
+                       rather than one of the groups below it. *@
+                    @if (_view is not ExpenseView.YourShare)
                     {
-                        var id = group.Id.ToString();
-                        <MudMenuItem OnClick="@(() => SetWhereAsync(id))">
-                            <span class="gs-menu-item @(_where == id ? "is-on" : "")">@group.Name</span>
+                        <MudMenuItem OnClick="@(() => SetWhereAsync(PersonalOnly))">
+                            <span class="gs-menu-item @(_where == PersonalOnly ? "is-on" : "")">Personal only</span>
                         </MudMenuItem>
                     }
-                }
-            </ChildContent>
-        </MudMenu>
+                    @* The personal group is "Personal only" above, so it is not listed again. *@
+                    @if (GroupsService.Groups.Any(group => !group.IsPersonal))
+                    {
+                        <MudDivider />
+                        @foreach (var group in GroupsService.Groups.Where(group => !group.IsPersonal))
+                        {
+                            var id = group.Id.ToString();
+                            <MudMenuItem OnClick="@(() => SetWhereAsync(id))">
+                                <span class="gs-menu-item @(_where == id ? "is-on" : "")">@group.Name</span>
+                            </MudMenuItem>
+                        }
+                    }
+                </ChildContent>
+            </MudMenu>
 
-        @* Searches the server, not the rows on screen: what is on screen is one page.
-           Debounced so a request goes out when typing pauses rather than per keystroke.
+        </Filters>
+        <Search>
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="Search"
+                          aria-label="Search by name, category or who paid"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                          Clearable="true"
+                          Margin="Margin.Dense"
+                          Variant="Variant.Outlined"
+                          Class="gs-search" />
+        </Search>
+    </ActivityToolbar>
 
-           It sits with the other two rather than up beside the title, because it is a
-           filter and they are filters. The placeholder says "Search" and the columns it
-           reaches are in the label a screen reader gets: naming all four in the box was
-           thirty-eight characters of column list that truncated to "Search by name, gr…"
-           on a phone, and told a person who could see the results nothing they did not
-           already know. *@
-        <MudTextField @bind-Value="_searchString"
-                      Placeholder="Search"
-                      aria-label="Search by name, category or who paid"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Rounded.Search"
-                      Immediate="true"
-                      DebounceInterval="300"
-                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
-                      Clearable="true"
-                      Margin="Margin.Dense"
-                      Variant="Variant.Outlined"
-                      Class="gs-search" />
+    <div class="gs-mobile-spending" aria-live="polite">
+        <span>
+            @Count expense@(Count == 1 ? "" : "s") · @TotalLabel: @Total.ToMoney(TotalCurrency)
+            <span class="gs-activity-summary-detail">@TotalSub</span>
+        </span>
     </div>
 
-    <div class="gs-stats">
+    <div class="gs-stats gs-ledger-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
             <span class="gs-eyebrow">@CountLabel</span>
@@ -215,7 +196,39 @@
         </div>
     </div>
 
-    <div class="gs-reveal" style="--i: 2">
+    <div class="gs-reveal gs-ledger-listing" style="--i: 2">
+        <ActivityFeed Items="@_mobileEntries" Date="@(entry => entry.DateTime)" Key="@(entry => entry.Id)" Loaded="@_entriesLoaded">
+            <EmptyContent>
+                <div class="gs-empty" role="status">
+                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing here yet")</h3>
+                    <span>@EmptyBlurb</span>
+                </div>
+            </EmptyContent>
+            <ItemTemplate Context="entry">
+                <button type="button" class="gs-feed-entry" aria-label="@($"Details for {entry.Name}")"
+                        @onclick="@(() => ViewAsync(entry))">
+                    <MerchantMark PaidByUserName="@entry.PaidByUserName" MerchantName="@entry.MerchantName" MerchantLogoUrl="@entry.MerchantLogoUrl" />
+                    <span class="gs-feed-copy">
+                        <strong>@entry.Name</strong>
+                        <span class="gs-muted">@PaidBy(entry)@if (Clock.TimeOf(entry.DateTime) is { } time) {<span> · @time.ToString("t")</span>}</span>
+                        <span class="gs-muted">@(entry.GroupName ?? "Personal")@if (!string.IsNullOrWhiteSpace(entry.Category)) {<span> · @entry.Category</span>}</span>
+                        @if (_view is not ExpenseView.PaidByYou && entry is ExpenseShareResponse share)
+                        {
+                            <span class="gs-muted">Your share @share.Share.ToMoney(entry.Currency)</span>
+                        }
+                    </span>
+                    <Money Value="entry.Amount" Currency="@entry.Currency" Class="gs-feed-amount" />
+                </button>
+                @if (CanChange(entry))
+                {
+                    <MudMenu Icon="@Icons.Material.Rounded.MoreVert" aria-label="@($"Actions for {entry.Name}")" PopoverClass="gs-menu">
+                        <MudMenuItem OnClick="@(() => EditAsync(entry))">Edit</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => DeleteAsync(entry))">Delete</MudMenuItem>
+                    </MudMenu>
+                }
+            </ItemTemplate>
+        </ActivityFeed>
         @* Keyed so a URL arriving from outside -- the nav link back to a bare page --
            rebuilds the grid on the page and sort it asks for: both are only read when a
            grid starts.
@@ -406,13 +419,8 @@
     [Parameter, SupplyParameterFromQuery(Name = "expense")] public string? ExpenseParameter { get; set; }
 
     /// <summary>
-    /// The chips, each with the line that says what it counts.
+    /// Compact view labels with accessible descriptions and hover hints.
     /// </summary>
-    /// <remarks>
-    /// The detail is part of the control rather than a tooltip: the difference between the
-    /// last two is the whole reason somebody picks one over the other, and a difference you
-    /// have to hover to find is one nobody finds.
-    /// </remarks>
     private static readonly (string Label, string Detail, ExpenseView Value)[] Views =
     [
         ("You paid", "expenses you covered", ExpenseView.PaidByYou),
@@ -453,6 +461,8 @@
     /// <summary>Which ledger the page is narrowed to: everything, shared, personal, or one group.</summary>
     private string _where = AllLedgers;
 
+    private IReadOnlyList<TransactionResponse> _mobileEntries = [];
+    private bool _entriesLoaded;
     private MudDataGrid<TransactionResponse>? _grid;
     private int _gridGeneration;
     private int _page;
@@ -724,9 +734,13 @@
         var page = await ReadPageAsync(bounds, SortKey(sort), sort?.Descending ?? true,
             state.Page + 1, state.PageSize, cancellationToken);
 
+        cancellationToken.ThrowIfCancellationRequested();
+        _mobileEntries = page?.Items ?? [];
+        _entriesLoaded = true;
+        await InvokeAsync(StateHasChanged);
         return new GridData<TransactionResponse>
         {
-            Items = page?.Items ?? [],
+            Items = _mobileEntries,
             TotalItems = page?.TotalCount ?? 0
         };
     }

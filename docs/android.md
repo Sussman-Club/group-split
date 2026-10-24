@@ -297,6 +297,12 @@ implementation and validation.
 
 ## Validation and outstanding acceptance
 
+The native Android group's Activity tab is a chronological feed: every page requests
+date-descending order. Old sort links and restored table state cannot reverse it, and
+table-column sorting is disabled in this native view. Browser and other native clients
+retain their sortable tables. A new APK is needed for changes to this shared UI to reach
+an installed Android app.
+
 For Android tests against local services, start the AppHost's HTTP profile with
 `NativeDeviceTesting=true` and `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` in its environment.
 This run-mode-only opt-in serves Keycloak over HTTP on loopback port 8180; normal runs
