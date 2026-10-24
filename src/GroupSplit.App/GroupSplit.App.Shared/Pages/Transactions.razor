@@ -60,6 +60,9 @@
     </div>
 </div>
 
+<LoadView Skeleton="SkeletonLayout.Activity" Loading="_initializing" Failed="@(_paidSummary is null || _shareSummary is null)" Retry="InitializeAsync">
+
+
 @* Bank rows are part of Activity's work queue. Keep the existing expense listing intact,
    but make the next decision visible from the same destination instead of sending people
    to a separate top-level Inbox. *@
@@ -171,6 +174,7 @@
         </Search>
     </ActivityToolbar>
 
+    <LoadView Loading="_figuresLoading" Skeleton="SkeletonLayout.Summary">
     <div class="gs-mobile-spending" aria-live="polite">
         <span>
             @Count expense@(Count == 1 ? "" : "s") · @TotalLabel: @Total.ToMoney(TotalCurrency)
@@ -195,6 +199,8 @@
             <span class="gs-muted" style="font-size: .8125rem">@TotalSub</span>
         </div>
     </div>
+
+    </LoadView>
 
     <div class="gs-reveal gs-ledger-listing" style="--i: 2">
         <ActivityFeed Items="@_mobileEntries" Date="@(entry => entry.DateTime)" Key="@(entry => entry.Id)" Loaded="@_entriesLoaded">
@@ -387,6 +393,8 @@
 </div>
 
 <ExtendedFab Label="Add expense" OnClick="@AddTransactionAsync" />
+
+</LoadView>
 
 @code {
     private string NotFiledLabel => $"Review {Inbox.NewCount} bank transaction{(Inbox.NewCount == 1 ? "" : "s")} waiting to be filed";
@@ -819,9 +827,13 @@
     /// missing the same third one. Where somebody stands is the balances, which the home
     /// page and the group's own tab already show.
     /// </remarks>
+    private bool _figuresLoading;
+
     private async Task ReadFiguresAsync()
     {
         var version = ++_figuresVersion;
+        _figuresLoading = true;
+        await InvokeAsync(StateHasChanged);
 
         await ForgetUnknownGroupAsync();
 
@@ -845,6 +857,7 @@
         if (version != _figuresVersion)
             return;
 
+        _figuresLoading = false;
         _paidSummary = paid;
         _shareSummary = shares;
 
@@ -1250,14 +1263,23 @@
         await ReadFiguresAsync();
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        // The group filter lists the caller's groups, so the page waits for them before
-        // reading anything -- a select with no options and a chip that says "all groups"
-        // are the same picture for a moment otherwise.
-        await Task.WhenAll(GroupsService.IsReadyTask, Inbox.EnsureLoadedAsync());
+    private bool _initializing = true;
 
-        await ReadFiguresAsync();
+    protected override Task OnInitializedAsync() => InitializeAsync();
+
+    private async Task InitializeAsync()
+    {
+        _initializing = true;
+        try
+        {
+            // The group filter lists the caller's groups, so the page waits for them before
+            // reading anything -- a select with no options and a chip that says "all groups"
+            // are the same picture for a moment otherwise.
+            await Task.WhenAll(GroupsService.IsReadyTask, Inbox.EnsureLoadedAsync());
+
+            await ReadFiguresAsync();
+        }
+        finally { _initializing = false; }
     }
 
     public async ValueTask DisposeAsync()

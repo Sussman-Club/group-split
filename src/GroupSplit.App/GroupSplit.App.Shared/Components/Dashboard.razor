@@ -35,6 +35,9 @@
     </div>
 </div>
 
+<LoadView Skeleton="SkeletonLayout.Dashboard" Loading="_initializing" Failed="@(GroupsService.Position is null)" Retry="InitializeAsync">
+
+
 <div class="gs-stack">
     @*
         The figure the page leads with is the position, not what the person has paid.
@@ -108,15 +111,19 @@
             @* Everybody's expenses and the settlements too, not only the rows where you
                were the payer -- and each one carries your share, because that is the
                number you owe on it. *@
-            <UserActivityList Entries="Recent" />
+            <LoadView Failed="@(_activity is null)" Retry="ReadAsync">
+                <UserActivityList Entries="Recent" />
+            </LoadView>
         </div>
 
         <div class="gs-stack">
             <div class="gs-card gs-stat gs-reveal" style="--i: 3">
                 <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
                 <span class="gs-eyebrow">Shared, this month</span>
-                <Money Value="ThisMonth" Currency="@_thisMonth?.Currency" Animate Class="gs-stat-value" />
-                <span class="gs-muted" style="font-size: .8125rem">@MonthSub</span>
+                <LoadView Failed="@(_thisMonth is null || _lastMonth is null)" Retry="ReadAsync">
+                    <Money Value="ThisMonth" Currency="@_thisMonth?.Currency" Animate Class="gs-stat-value" />
+                    <span class="gs-muted" style="font-size: .8125rem">@MonthSub</span>
+                </LoadView>
             </div>
 
             <div class="gs-card gs-card-pad gs-reveal" style="--i: 4">
@@ -164,6 +171,8 @@
         </div>
     </div>
 </div>
+
+</LoadView>
 
 @code {
     /// <summary>How many entries the feed shows before sending somebody to the full listing.</summary>
@@ -245,10 +254,20 @@
         Changes.GroupsChanged += ReadAsync;
     }
 
-    protected override async Task OnInitializedAsync()
+    private bool _initializing = true;
+
+    protected override Task OnInitializedAsync() => InitializeAsync();
+
+    private async Task InitializeAsync()
     {
-        await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
-        await ReadAsync();
+        _initializing = true;
+        try
+        {
+            await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
+            if (GroupsService.Position is null) await GroupsService.RefreshAsync();
+            await ReadAsync();
+        }
+        finally { _initializing = false; }
     }
 
     /// <summary>
