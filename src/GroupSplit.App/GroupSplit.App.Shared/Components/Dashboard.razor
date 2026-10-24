@@ -86,8 +86,10 @@
                             @group.GroupName <small>@(group.Balance > 0 ? "owes you" : "you owe")</small>
                         </div>
                         <Money Value="@Math.Abs(group.Balance)" Animate />
-                        <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                   OnClick="@(() => Open(group.GroupId))">Open</MudButton>
+                        <div class="gs-hero-actions">
+                            <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                       OnClick="@(() => Open(group.GroupId))">Open</MudButton>
+                        </div>
                     </div>
                 }
             </div>

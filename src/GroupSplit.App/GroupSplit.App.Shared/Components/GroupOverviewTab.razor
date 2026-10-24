@@ -46,17 +46,19 @@
                                 @* Named for a guest. "They paid" reads as the other person
                                    telling the app, and a guest cannot: it is you saying it on
                                    their behalf, so the button says whose payment it is. *@
-                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                           OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
-                                    @(guest ? $"{owed.UserName} paid" : "They paid")
-                                </MudButton>
-                                @if (!guest)
-                                {
+                                <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                               OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
-                                        Request payment
+                                               OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
+                                        @(guest ? $"{owed.UserName} paid" : "They paid")
                                     </MudButton>
-                                }
+                                    @if (!guest)
+                                    {
+                                        <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                                   OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
+                                            Request payment
+                                        </MudButton>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
@@ -76,10 +78,12 @@
                                 <Avatar Name="@owing.UserName" Size="sm" />
                                 <div class="who">@Named(owing.UserId, owing.UserName) <small>is waiting on you</small></div>
                                 <Money Value="owing.Amount" Animate />
-                                <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                           OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
-                                    I paid
-                                </MudButton>
+                                <div class="gs-hero-actions">
+                                    <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                               OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
+                                        I paid
+                                    </MudButton>
+                                </div>
                             </div>
                         }
                     </div>

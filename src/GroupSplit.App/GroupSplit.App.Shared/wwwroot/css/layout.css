@@ -590,7 +590,7 @@ html:not([data-gs-ready]) .gs-group-card {
     .gs-seg-labels.is-wide .gs-seg-btn {
         min-width: 0;
         height: auto;
-        min-height: 32px;
+        min-height: 44px;
         padding: 6px 10px;
         white-space: normal;
         overflow-wrap: anywhere;

@@ -60,13 +60,13 @@ else
                 <div class="gs-card-title">
                     <h2>Security</h2>
                 </div>
-                <p class="gs-muted" style="margin: 0 0 16px; font-size: .875rem">
+                <p class="gs-muted" style="margin: 0; font-size: .875rem">
                     Passwords, two-factor authentication and active sessions are managed by the
                     identity provider.
                 </p>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
-                           Class="gs-btn-pill"
+                           Class="gs-account-action"
                            StartIcon="@Icons.Material.Rounded.ManageAccounts"
                            EndIcon="@Icons.Material.Rounded.OpenInNew"
                            OnClick="OpenAccountConsole">
@@ -87,13 +87,15 @@ else
                 {
                     <p>To download your records and receipt files, sign in on the website.</p>
                     <MudButton Href="@AppLinks.PublicUrl(Nav.BaseUri, "account")" Target="_blank"
+                               Class="gs-account-action" StartIcon="@Icons.Material.Rounded.OpenInNew"
                                Variant="Variant.Outlined">Open account on website</MudButton>
                 }
                 else
                 {
                     <MudButton OnClick="ExportAsync" Disabled="_exporting" Variant="Variant.Outlined"
+                               Class="gs-account-action" aria-label="Download my records and receipt files (ZIP)"
                                StartIcon="@Icons.Material.Rounded.Download">
-                        @(_exporting ? "Preparing your archive…" : "Download my records and receipt files (ZIP)")
+                        @(_exporting ? "Preparing ZIP…" : "Download ZIP")
                     </MudButton>
                     @if (_exportError is not null)
                     {
@@ -143,7 +145,7 @@ else
 
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Error"
-                           Class="gs-btn-pill"
+                           Class="gs-account-action gs-btn-danger"
                            StartIcon="@Icons.Material.Rounded.DeleteForever"
                            Disabled="@_deleting"
                            OnClick="ConfirmDeleteAsync">

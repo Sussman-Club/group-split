@@ -299,12 +299,28 @@ button.gs-category-row:focus-visible,
 @media (max-width: 640px) {
     .gs-settle-row,
     .gs-plan-row {
-        grid-template-columns: auto 1fr auto;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+    }
+
+    .gs-settle-row > :nth-child(2),
+    .gs-plan-row > :nth-child(2) {
+        min-width: 0;
+    }
+
+    .gs-settle-row .who,
+    .gs-plan-row .who,
+    .gs-settle-row .meta,
+    .gs-plan-row .meta {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
     .gs-settle-row > :last-child,
     .gs-plan-row > :last-child {
         grid-column: 2 / -1;
         justify-self: start;
+        min-height: var(--gs-button-height);
+        max-width: 100%;
     }
 }
