@@ -732,6 +732,39 @@ public class TransactionsPageTest : ComponentTest
     /// the buttons for the same row.
     /// </remarks>
     [Fact]
+    public async Task Mobile_feed_opens_details_and_hides_writes_for_departed_groups()
+    {
+        var wanted = Row("Current expense", Guid.NewGuid(), paidByYou: false);
+        _rows = [wanted, Row("Old expense", Guid.NewGuid(), paidByYou: true, groupId: Guid.NewGuid())];
+        var page = RenderView();
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".gs-feed-entry").Count));
+        Assert.Single(page.FindAll(".gs-feed-row .mud-menu"));
+        Assert.Contains("Current expense", page.Find(".gs-feed-row .mud-menu").GetAttribute("aria-label"));
+        await page.Find(".gs-feed-entry").ClickAsync(new());
+        Assert.Equal(wanted.Id, _viewed);
+    }
+
+    [Fact]
+    public async Task Mobile_feed_refreshes_with_the_grid_and_shows_its_empty_state()
+    {
+        _rows = [Row("Original expense", Guid.NewGuid(), paidByYou: true)];
+        var page = RenderView();
+        page.WaitForElement(".gs-feed-entry");
+        var grid = page.FindComponent<MudDataGrid<TransactionResponse>>().Instance;
+
+        _rows = [Row("Replacement expense", Guid.NewGuid(), paidByYou: true)];
+        await page.InvokeAsync(() => grid.ReloadServerData());
+        page.WaitForAssertion(() => Assert.Contains("Replacement expense", page.Find(".gs-mobile-ledger").TextContent));
+        Assert.DoesNotContain("Original expense", page.Find(".gs-mobile-ledger").TextContent);
+
+        _rows = [];
+        await page.InvokeAsync(() => grid.ReloadServerData());
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".gs-feed-entry")));
+        Assert.Contains("Nothing here yet", page.Find(".gs-mobile-ledger").TextContent);
+    }
+
+    [Fact]
     public void Every_row_can_be_edited_and_deleted_whoever_paid()
     {
         _rows =

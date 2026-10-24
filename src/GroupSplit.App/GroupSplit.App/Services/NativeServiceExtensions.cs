@@ -11,7 +11,11 @@ public static class NativeServiceExtensions
     public static IServiceCollection AddNativeServices(this IServiceCollection services, NativeOptions options)
     {
         services.AddSingleton(options);
-        services.AddSingleton(new AppLinks(options.WebBaseAddress) { AndroidBuild = options.AndroidBuild });
+        services.AddSingleton(new AppLinks(options.WebBaseAddress)
+        {
+            AndroidBuild = options.AndroidBuild,
+            IsAndroidNative = OperatingSystem.IsAndroid()
+        });
         services.AddSingleton<NativeLinkRouter>();
         services.AddSingleton<IWebAuthenticator>(_ => WebAuthenticator.Default);
         services.AddSingleton<ISecureStorage>(_ => SecureStorage.Default);

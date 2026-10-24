@@ -1,0 +1,28 @@
+@namespace GroupSplit.App.Shared.Components
+
+<div class="gs-ledger-toolbar @(_expanded ? "filters-open" : "")">
+    <div class="gs-ledger-filters">
+        @Segments
+        @DateFilter
+        <button type="button" class="gs-mobile-filter-toggle gs-ledger-payer"
+                aria-label="Search and filters" aria-expanded="@_expanded"
+                @onclick="@(() => _expanded = !_expanded)">
+            <MudIcon Icon="@Icons.Material.Rounded.Tune" Size="Size.Small" />
+            @if (FiltersActive)
+            {
+                <span class="gs-filter-dot" aria-label="Filters active"></span>
+            }
+        </button>
+        @Filters
+    </div>
+    @Search
+</div>
+
+@code {
+    [Parameter] public RenderFragment? Segments { get; set; }
+    [Parameter] public RenderFragment? DateFilter { get; set; }
+    [Parameter] public RenderFragment? Filters { get; set; }
+    [Parameter] public RenderFragment? Search { get; set; }
+    [Parameter] public bool FiltersActive { get; set; }
+    private bool _expanded;
+}

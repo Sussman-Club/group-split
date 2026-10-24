@@ -162,12 +162,15 @@
 }
 
 .gs-kv-row dt {
+    flex-shrink: 0;
     color: var(--gs-muted);
     font-size: 0.875rem;
     margin: 0;
 }
 
 .gs-kv-row dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
     margin: 0;
     font-weight: 700;
     font-size: 0.875rem;

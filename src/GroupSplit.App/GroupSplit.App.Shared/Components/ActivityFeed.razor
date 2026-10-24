@@ -1,0 +1,31 @@
+@typeparam TItem
+@namespace GroupSplit.App.Shared.Components
+@inject LocalClock Clock
+
+<div class="gs-mobile-ledger" aria-label="Transactions">
+    @if (Loaded && Items.Count == 0)
+    {
+        @EmptyContent
+    }
+    @foreach (var day in Items.GroupBy(item => Clock.Day(Date(item))))
+    {
+        <section class="gs-feed-day" aria-label="@day.Key.ToString("d MMMM yyyy")">
+            <h3>@day.Key.ToString(day.Key.Year == Clock.Today.Year ? "d MMMM" : "d MMMM yyyy")</h3>
+            @foreach (var item in day)
+            {
+                <div class="gs-feed-row" @key="Key(item)">
+                    @ItemTemplate(item)
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public Func<TItem, DateTimeOffset> Date { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<TItem, object> Key { get; set; } = default!;
+    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public bool Loaded { get; set; }
+}
