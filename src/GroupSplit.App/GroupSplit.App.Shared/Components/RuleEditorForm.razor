@@ -121,7 +121,7 @@
                     Total: @PercentTotal%
                 </MudText>
 
-                <MudStack Row="true" Spacing="2" Class="mt-2">
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">
                         Split Evenly
                     </MudButton>
@@ -154,7 +154,7 @@
                     @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
                 </MudText>
 
-                <MudStack Row="true" Spacing="2" Class="mt-2">
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
                         Clear All Shares
                     </MudButton>

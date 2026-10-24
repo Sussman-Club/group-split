@@ -1,7 +1,7 @@
 /* -------------------------------------------------------------- buttons ---- */
 
 .mud-button-root {
-    border-radius: var(--gs-radius-sm) !important;
+    border-radius: var(--gs-button-radius) !important;
     transition:
         transform var(--gs-base) var(--gs-ease-spring),
         box-shadow var(--gs-base) var(--gs-ease),
@@ -9,9 +9,65 @@
         border-color var(--gs-fast) var(--gs-ease) !important;
 }
 
+.mud-button-root .mud-button-label {
+    font-weight: 600;
+}
+
+/* One density for every text action. Height is a minimum: labels may wrap. */
+.mud-button-root.mud-button {
+    position: relative;
+    overflow: visible;
+    min-width: 0;
+    max-width: 100%;
+    min-height: var(--gs-button-height);
+    height: auto;
+    padding: var(--gs-button-padding-y) 12px;
+    font-size: .8125rem;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
+}
+
+.mud-button-root.mud-button:not(.mud-button-outlined) {
+    border: 1px solid transparent;
+}
+
+.mud-button-root.mud-button .mud-button-label {
+    min-width: 0;
+    max-width: 100%;
+    gap: 7px;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.mud-button-root.mud-button .mud-button-icon-start,
+.mud-button-root.mud-button .mud-button-icon-end {
+    flex: 0 0 16px;
+    margin: 0;
+    font-size: 16px;
+}
+
+.mud-button-root.mud-button .mud-button-icon-start .mud-icon-root,
+.mud-button-root.mud-button .mud-button-icon-end .mud-icon-root {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+}
+
+/* The face stays slim; the invisible hit area extends 6px above and below it.
+   Wrapping action groups reserve at least 12px so neighbouring targets cannot overlap. */
+.mud-button-root.mud-button::before {
+    content: "";
+    position: absolute;
+    inset: -6px 0;
+    min-height: 44px;
+    border-radius: inherit;
+}
+
 .mud-button-filled {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: var(--gs-shadow-sm) !important;
 }
 
@@ -29,15 +85,19 @@
     content: "";
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 28%) 50%, transparent 70%);
-    transform: translateX(-120%);
-    transition: transform 0s;
+    background-size: 250% 100%;
+    background-position: 200% 0;
+    opacity: 0;
+    transition: opacity var(--gs-fast);
     pointer-events: none;
 }
 
 .mud-button-filled:hover::after {
-    transform: translateX(120%);
-    transition: transform 650ms var(--gs-ease);
+    background-position: -100% 0;
+    opacity: 1;
+    transition: background-position 650ms var(--gs-ease), opacity var(--gs-fast);
 }
 
 .mud-button-outlined:hover,
@@ -53,11 +113,6 @@
     transform: scale(1.1);
 }
 
-.gs-btn-pill {
-    border-radius: var(--gs-radius-pill) !important;
-    padding-inline: 18px !important;
-}
-
 /*
     The secondary button the system did not have.
 
@@ -69,8 +124,6 @@
     beside it and still gives it the emphasis.
 */
 .gs-btn-quiet {
-    border-radius: var(--gs-radius-pill) !important;
-    padding-inline: 16px !important;
     background: var(--gs-surface-2) !important;
     border: 1px solid var(--gs-line-strong) !important;
     color: var(--gs-ink-2) !important;
@@ -91,8 +144,6 @@
     commits to red only when reached for.
 */
 .gs-btn-danger {
-    border-radius: var(--gs-radius-pill) !important;
-    padding-inline: 16px !important;
     background: transparent !important;
     border: 1px solid color-mix(in srgb, var(--gs-danger) 32%, transparent) !important;
     color: var(--gs-danger) !important;
@@ -116,7 +167,7 @@
 */
 .gs-btn-row {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     flex-wrap: wrap;
     align-items: center;
     padding-top: 12px;
@@ -126,6 +177,31 @@
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--gs-line);
+}
+
+/* Standalone account actions need room for both an icon and a readable label. */
+.mud-button-root.gs-account-action {
+    min-height: var(--gs-button-height);
+    max-width: 100%;
+    margin-top: 16px;
+    font-size: .8125rem;
+    white-space: normal;
+}
+
+.gs-account-action .mud-button-label {
+    gap: 8px;
+}
+
+.gs-account-action .mud-icon-root {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+}
+
+.gs-account-action .mud-button-icon-start,
+.gs-account-action .mud-button-icon-end {
+    flex: 0 0 auto;
+    margin: 0;
 }
 
 /* ------------------------------------------------------------------ FAB --- */
@@ -141,7 +217,7 @@
     height: 56px;
     padding: 0 16px;
     border: 0;
-    border-radius: var(--gs-radius-pill);
+    border-radius: var(--gs-button-radius);
     background: var(--gs-ink);
     color: var(--gs-bg);
     font: inherit;
