@@ -534,7 +534,7 @@ public class GroupLedgerTabTest : ComponentTest
         var tab = Render();
 
         Assert.Single(_asks);
-        Assert.Equal(("0", "$0.00"), Cards(tab));
+        Assert.Contains("Could not load this view", tab.Markup);
 
         tab.Render(parameters => parameters.Add(component => component.GroupId, Group));
 
@@ -616,7 +616,8 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        Assert.Equal(("0", "$0.00"), Cards(tab));
+        Assert.Contains("Could not load this view", tab.Markup);
+        Assert.Empty(tab.FindAll(".gs-ledger-stats"));
 
         Snackbar.Verify(
             bar => bar.Add(It.Is<string>(message => message.Contains("Could not load this group's ledger.")),

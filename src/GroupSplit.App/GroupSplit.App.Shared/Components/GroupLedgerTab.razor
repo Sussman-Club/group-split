@@ -100,6 +100,7 @@
         </Search>
     </ActivityToolbar>
 
+    <LoadView Skeleton="SkeletonLayout.Summary" Loading="@(_initializing || (_spending is null && _inFlight is not null))" Failed="@(_spending is null || _byCategory is null)" Retry="ReadSummaryAsync">
     <div class="gs-mobile-spending" aria-live="polite">
         <span>@ExpenseCount expense@(ExpenseCount == 1 ? "" : "s") · @Spent.ToMoney() spent</span>
         <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">Details</button>
@@ -143,6 +144,8 @@
             <span class="gs-muted gs-category-empty">No spending matches these filters.</span>
         }
     </section>
+
+    </LoadView>
 
     <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
         <ActivityFeed Items="@_mobileEntries" Date="@(entry => entry.DateTime)" Key="@(entry => entry.Id)" Loaded="@_ledgerLoaded">
@@ -460,6 +463,7 @@
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
     private long _summaryVersion;
+    private bool _initializing = true;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
@@ -779,7 +783,11 @@
         finally
         {
             if (version == _summaryVersion)
+            {
                 _inFlight = null;
+                _initializing = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 

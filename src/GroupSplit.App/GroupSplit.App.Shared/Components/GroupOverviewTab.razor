@@ -156,7 +156,9 @@
                            Href="@($"/groups/{GroupId}/activity")"
                            EndIcon="@Icons.Material.Rounded.ArrowForward">All activity</MudButton>
             </div>
-            <GroupEntryList Entries="Recent" />
+            <LoadView Skeleton="SkeletonLayout.Rows" Loading="_recentLoading" Failed="@(_recent is null)" Retry="LoadRecentAsync">
+                <GroupEntryList Entries="Recent" />
+            </LoadView>
             @if (_recent is { } ledger && ledger.TotalCount > ledger.Items.Count)
             {
                 <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
@@ -245,6 +247,7 @@
     /// announced while the group was still being switched to -- cannot land over a newer.
     /// </summary>
     private int _recentVersion;
+    private bool _recentLoading = true;
 
     /// <summary>
     /// The balances, but only the selected group's own. The state holds one group's at a
@@ -410,6 +413,7 @@
     private async Task LoadRecentAsync()
     {
         var version = ++_recentVersion;
+        _recentLoading = _recent is null;
         var groupId = _loadedFor;
 
         PagedResponse<GroupLedgerEntryResponse>? recent = null;
@@ -426,6 +430,7 @@
         if (version != _recentVersion)
             return;
 
+        _recentLoading = false;
         if (loaded)
             _recent = recent;
 

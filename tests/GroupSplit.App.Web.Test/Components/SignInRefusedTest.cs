@@ -97,8 +97,8 @@ public class SignInRefusedTest : ComponentTest
     }
 
     /// <summary>
-    /// Any other failure to read the user is what it always was: no user, and the app --
-    /// whose pages then deal with the 401 or the outage the way they already do.
+    /// A confirmed anonymous session opens the app. Other failures offer a retry
+    /// without mistaking an unavailable server for a signed-out session.
     /// </summary>
     [Theory]
     [InlineData(401, ErrorCodes.Unauthenticated)]
@@ -109,7 +109,14 @@ public class SignInRefusedTest : ComponentTest
         _users.Setup(client => client.GetCurrentUserAsync())
             .ThrowsAsync(Refusals.Of(status, code));
 
-        Assert.Single(RenderApp().FindAll("#the-app"));
+        var app = RenderApp();
+        if (status == 401)
+            Assert.Single(app.FindAll("#the-app"));
+        else
+        {
+            Assert.Empty(app.FindAll("#the-app"));
+            Assert.Contains("Could not load this view", app.Markup);
+        }
         Assert.Null(Services.GetRequiredService<IUserLogin>().Refusal);
     }
 }

@@ -9,7 +9,19 @@
    otherwise ask the API for something, be refused the same way, and say so in a snackbar
    about whatever it was loading -- which reads as the page being broken rather than the
    account. *@
-@if (_refusal is not null)
+@if (!_initialized)
+{
+    <LayoutView Layout="typeof(FullScreenLayout)">
+        <LoadView Loading="true" />
+    </LayoutView>
+}
+else if (UserLogin.LoginFailed)
+{
+    <LayoutView Layout="typeof(FullScreenLayout)">
+        <LoadView Failed="true" Retry="RetryAsync" />
+    </LayoutView>
+}
+else if (_refusal is not null)
 {
     <LayoutView Layout="typeof(FullScreenLayout)">
         <SignInRefused Refusal="_refusal" />
@@ -17,7 +29,7 @@
 }
 else
 {
-    <CascadingValue Value="@User" TValue="UserInfo">
+    <CascadingValue Value="@User" TValue="UserInfo" @key="User?.Id">
         @ChildContent
     </CascadingValue>
 }
@@ -26,6 +38,7 @@ else
     [Parameter, EditorRequired] public RenderFragment? ChildContent  { get; set; }
     private UserInfo? User { get; set; }
     private SignInRefusal? _refusal;
+    private bool _initialized;
 
     protected override async Task OnInitializedAsync()
     {
@@ -36,7 +49,17 @@ else
 
         User = UserLogin.User;
         _refusal = UserLogin.Refusal;
+        _initialized = true;
         UserLogin.OnLoginChanged += OnUserChanged;
+    }
+
+    private async Task RetryAsync()
+    {
+        _initialized = false;
+        await UserLogin.RefreshLoginAsync();
+        User = UserLogin.User;
+        _refusal = UserLogin.Refusal;
+        _initialized = true;
     }
 
     public void Dispose()

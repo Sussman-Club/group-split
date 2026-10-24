@@ -1,0 +1,148 @@
+@namespace GroupSplit.App.Shared.Components
+
+<div class="gs-skeleton-view" role="status" aria-live="polite" aria-busy="true">
+    <span class="gs-skeleton-status">Loading…</span>
+    <div aria-hidden="true">
+        @switch (Layout)
+        {
+            case SkeletonLayout.Dashboard:
+                <div class="gs-stack">
+                    <div class="gs-hero is-zero gs-skeleton-hero">
+                        <MudSkeleton Width="140px" Height="18px" />
+                        <MudSkeleton Width="210px" Height="64px" />
+                        <MudSkeleton Width="180px" Height="18px" />
+                        <div class="gs-hero-list">
+                            @for (var i = 0; i < 2; i++)
+                            {
+                                <div class="gs-hero-row">
+                                    <MudSkeleton SkeletonType="SkeletonType.Circle" Width="32px" Height="32px" />
+                                    <div class="who">
+                                        <MudSkeleton Width="140px" Height="20px" />
+                                        <MudSkeleton Width="70px" Height="16px" />
+                                    </div>
+                                    <MudSkeleton Width="80px" Height="22px" />
+                                    <div class="gs-hero-actions"><MudSkeleton Width="54px" Height="30px" /></div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="gs-two-col">
+                        <div class="gs-card gs-card-pad">@CardHeading @RowList(6)</div>
+                        <div class="gs-stack">
+                            <div class="gs-card gs-stat">@Figure</div>
+                            <div class="gs-card gs-card-pad">@CardHeading @RowList(3)</div>
+                        </div>
+                    </div>
+                </div>
+                break;
+            case SkeletonLayout.Groups:
+                <div class="gs-group-grid">
+                    @for (var i = 0; i < 3; i++)
+                    {
+                        <div class="gs-card gs-group-card">
+                            <span class="gs-avatar"><MudSkeleton SkeletonType="SkeletonType.Circle" Width="44px" Height="44px" /></span>
+                            <div class="head"><MudSkeleton Width="75%" Height="24px" /></div>
+                            <div class="people"><MudSkeleton Width="90px" Height="18px" /></div>
+                            @if (i > 0)
+                            {
+                                <div class="foot">
+                                    <MudSkeleton Width="90px" Height="14px" />
+                                    <MudSkeleton Width="70px" Height="24px" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                break;
+            case SkeletonLayout.Activity:
+                <div class="gs-stack">
+                    @Toolbar
+                    @Summary
+                    <div class="gs-skeleton-desktop gs-skeleton-table">
+                        @for (var row = 0; row < 6; row++)
+                        {
+                            <div class="gs-skeleton-table-row">
+                                <MudSkeleton Width="75%" Height="20px" />
+                                <div class="gs-skeleton-table-expense">
+                                    <MudSkeleton SkeletonType="SkeletonType.Circle" Width="36px" Height="36px" />
+                                    <div class="gs-skeleton-row-copy"><MudSkeleton Width="85%" Height="20px" /><MudSkeleton Width="65%" Height="16px" /></div>
+                                </div>
+                                @for (var col = 0; col < 5; col++)
+                                {
+                                    <MudSkeleton Width="75%" Height="20px" />
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="gs-skeleton-mobile">@Rows</div>
+                </div>
+                break;
+            case SkeletonLayout.Inbox:
+                <div class="gs-stack">
+                    @Toolbar
+                    <div class="gs-card gs-card-pad">
+                        <div class="gs-list-head"><MudSkeleton Width="130px" Height="32px" /><MudSkeleton Width="80px" Height="18px" /></div>
+                        @Rows
+                    </div>
+                </div>
+                break;
+            case SkeletonLayout.Summary:
+                @Summary
+                break;
+            default:
+                @Rows
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public SkeletonLayout Layout { get; set; } = SkeletonLayout.Rows;
+
+    private RenderFragment Figure => @<text>
+        <span class="gs-stat-icon"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="36px" Height="36px" /></span>
+        <MudSkeleton Width="110px" Height="16px" />
+        <MudSkeleton Width="150px" Height="31px" />
+        <MudSkeleton Width="min(180px, 80%)" Height="18px" />
+    </text>;
+
+    private RenderFragment CardHeading => @<div class="gs-card-title">
+        <MudSkeleton Width="130px" Height="24px" />
+        <MudSkeleton Width="48px" Height="32px" />
+    </div>;
+
+    private RenderFragment Toolbar => @<div class="gs-ledger-toolbar">
+        <div class="gs-ledger-filters gs-skeleton-filters">
+            <MudSkeleton Width="180px" Height="36px" />
+            <MudSkeleton Width="110px" Height="36px" />
+            <MudSkeleton Width="90px" Height="36px" />
+        </div>
+        @if (Layout is SkeletonLayout.Activity)
+        {
+            <MudSkeleton Class="gs-skeleton-search" Width="200px" Height="40px" />
+        }
+    </div>;
+
+    private RenderFragment Summary => @<div class="gs-stats gs-ledger-stats">
+        @for (var i = 0; i < 2; i++)
+        {
+            <div class="gs-card gs-stat">@Figure</div>
+        }
+    </div>;
+
+    private RenderFragment Rows => RowList(4);
+
+    private RenderFragment RowList(int count) => @<div class="gs-list">
+        @for (var i = 0; i < count; i++)
+        {
+            <div class="gs-row gs-skeleton-row">
+                <MudSkeleton SkeletonType="SkeletonType.Circle" Width="40px" Height="40px" />
+                <div class="gs-skeleton-row-copy">
+                    <MudSkeleton Width="@(i % 2 == 0 ? "76%" : "58%")" Height="22px" />
+                    <MudSkeleton Width="45%" Height="16px" />
+                </div>
+                <div><MudSkeleton Width="64px" Height="22px" /><MudSkeleton Width="48px" Height="16px" /></div>
+            </div>
+        }
+    </div>;
+}

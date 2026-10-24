@@ -46,7 +46,7 @@ public class DashboardTest : ComponentTest
 
     private List<GroupResponse> _groupList = [Lisbon, Flat];
 
-    private UserPositionResponse? _position;
+    private UserPositionResponse? _position = new(0m, 0m, 0m, []);
 
     public DashboardTest()
     {
@@ -99,6 +99,23 @@ public class DashboardTest : ComponentTest
 
     private IRenderedComponent<Dashboard> Open() =>
         Render<Dashboard>(parameters => parameters.Add(page => page.UserInfo, Ana));
+
+    [Fact]
+    public void Pending_groups_do_not_render_zero_balances_or_empty_content()
+    {
+        var ready = new TaskCompletionSource();
+        _groups.SetupGet(state => state.IsReadyTask).Returns(ready.Task);
+
+        var page = Open();
+
+        Assert.Single(page.FindAll("[role='status'][aria-busy='true']"));
+        Assert.DoesNotContain("All settled", page.Markup);
+        Assert.DoesNotContain("No groups yet", page.Markup);
+        Assert.DoesNotContain("Nothing recorded yet", page.Markup);
+
+        ready.SetResult();
+        page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
+    }
 
     private static string Text(AngleSharp.Dom.IElement element) =>
         System.Text.RegularExpressions.Regex.Replace(element.TextContent, @"\s+", " ").Trim();
@@ -338,7 +355,8 @@ public class DashboardTest : ComponentTest
         var page = Open();
 
         page.WaitForAssertion(() => ShownOnce("Could not load your recent activity."));
-        Assert.Contains("Nothing recorded yet", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Could not load this view", page.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nothing recorded yet", page.Markup, StringComparison.Ordinal);
         Assert.Equal("$120.00", Text(page.Find(".gs-stat .gs-stat-value")));
     }
 

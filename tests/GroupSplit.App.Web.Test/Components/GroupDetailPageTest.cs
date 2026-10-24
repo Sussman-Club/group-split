@@ -39,6 +39,8 @@ public class GroupDetailPageTest : ComponentTest
     public GroupDetailPageTest()
     {
         _ready.SetResult();
+        _state.SetupGet(state => state.Balance).Returns(new UserGroupBalanceResponse());
+        _state.SetupGet(state => state.Transactions).Returns(new PagedResponseOfTransactionResponse([], 1, 8, 0));
 
         _state.SetupGet(state => state.Groups).Returns(() => _groups);
         _state.SetupProperty(state => state.SelectedGroup, Flat);
@@ -58,6 +60,20 @@ public class GroupDetailPageTest : ComponentTest
         Render<GroupDetail>(parameters => parameters
             .Add(page => page.GroupId, groupId)
             .Add(page => page.Tab, tab));
+
+    [Fact]
+    public void Pending_group_figures_do_not_instantiate_the_tab()
+    {
+        var ready = new TaskCompletionSource();
+        _state.Setup(state => state.EnsureSelectedLoadedAsync()).Returns(ready.Task);
+
+        var page = Open(Lisbon.Id);
+
+        Assert.Null(Section(page));
+        Assert.Single(page.FindAll("[role='status'][aria-busy='true']"));
+        ready.SetResult();
+        page.WaitForAssertion(() => Assert.Equal("balances", Section(page)));
+    }
 
     /// <summary>Which of the four tabs the page is showing, or null for none of them.</summary>
     private static string? Section(IRenderedComponent<GroupDetail> page) =>

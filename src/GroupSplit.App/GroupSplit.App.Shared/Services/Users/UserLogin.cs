@@ -24,18 +24,26 @@ public class UserLogin(UserTracker tracker, IUsersClient usersClient) : IUserLog
         private set => tracker.Refusal = value;
     }
 
+    public bool LoginFailed
+    {
+        get => tracker.LoginFailed;
+        private set => tracker.LoginFailed = value;
+    }
+
     public event AuthenticationStateChangedHandler? OnLoginChanged;
 
     public Task ClearLogin()
     {
         User = null;
         Refusal = null;
+        LoginFailed = false;
         OnLoginChanged?.Invoke(User);
         return Task.CompletedTask;
     }
 
     public async Task RefreshLoginAsync()
     {
+        LoginFailed = false;
         try
         {
             User = await usersClient.GetCurrentUserAsync();
@@ -45,6 +53,9 @@ public class UserLogin(UserTracker tracker, IUsersClient usersClient) : IUserLog
         {
             User = null;
             Refusal = RefusalOf(exception);
+            LoginFailed = Refusal is null &&
+                (!ApiErrors.IsApiFailure(exception) ||
+                 ApiErrors.Read(exception).Kind != ApiErrorKind.Unauthenticated);
         }
 
         LoginAttempted = true;

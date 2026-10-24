@@ -5,6 +5,7 @@ namespace GroupSplit.App.Shared.Services.Users;
 public interface IUserLogin
 {
     bool LoginAttempted { get; }
+    bool LoginFailed { get; }
     UserInfo? User { get; }
 
     /// <summary>

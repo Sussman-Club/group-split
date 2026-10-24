@@ -1,0 +1,156 @@
+/* A quiet shared state; page-specific skeletons can preserve larger layouts. */
+.gs-load-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: clamp(32px, 6vw, 56px) 24px;
+    min-height: 240px;
+    text-align: center;
+}
+
+.gs-load-mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--gs-teal-soft);
+}
+
+/* More specific than Mud's .mud-progress-circular.mud-progress-large: the app
+   loads Mud's stylesheet after ours. The ring and its containing disc must stay
+   the same size regardless of stylesheet order. */
+.gs-load-mark > .mud-progress-circular.gs-load-spinner {
+    position: absolute;
+    inset: 0;
+    width: 72px;
+    height: 72px;
+    color: var(--gs-teal);
+}
+
+.gs-load-mark > .gs-load-brand {
+    display: block;
+    width: 32px;
+    height: 32px;
+}
+
+.gs-load-spinner > .mud-progress-circular-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.gs-load-copy h2 {
+    margin: 0;
+    color: var(--gs-ink);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.gs-load-copy p {
+    max-width: 32ch;
+    margin: 8px 0 0;
+    color: var(--gs-muted);
+    font-size: .875rem;
+    line-height: 1.6;
+    text-wrap: pretty;
+}
+
+.gs-load-error {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    color: var(--gs-muted);
+    background: var(--gs-surface-3);
+    border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gs-load-spinner,
+    .gs-load-spinner * {
+        animation: none !important;
+    }
+}
+
+.gs-skeleton-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.gs-skeleton-view .mud-skeleton {
+    background-color: color-mix(in srgb, var(--gs-muted) 12%, transparent);
+}
+
+/* Reuse page card, row and grid rules so responsive changes stay in sync. */
+.gs-skeleton-hero::before,
+.gs-skeleton-hero::after {
+    animation: none;
+}
+
+.gs-skeleton-row {
+    cursor: default;
+    pointer-events: none;
+}
+
+.gs-skeleton-row .mud-skeleton,
+.gs-skeleton-table .mud-skeleton {
+    max-width: 100%;
+}
+
+.gs-skeleton-filters,
+.gs-skeleton-table-expense {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gs-skeleton-filters { flex-wrap: wrap; }
+
+.gs-skeleton-table-row {
+    display: grid;
+    grid-template-columns: .8fr 2.2fr 1fr 1fr .9fr .9fr .7fr;
+    align-items: center;
+    gap: 16px;
+    min-height: 68px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--gs-line);
+}
+
+.gs-skeleton-table-row:first-child {
+    border-top: 1px solid var(--gs-line);
+}
+
+.gs-skeleton-mobile { display: none; }
+
+@media (max-width: 640px) {
+    .gs-skeleton-desktop,
+    .gs-skeleton-search { display: none; }
+    .gs-skeleton-mobile { display: block; }
+}
+
+.gs-skeleton-row-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+.gs-skeleton-row > .mud-skeleton,
+.gs-skeleton-table-expense > .mud-skeleton {
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gs-skeleton-view .mud-skeleton {
+        animation: none !important;
+    }
+}
