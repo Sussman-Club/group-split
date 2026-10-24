@@ -37,8 +37,8 @@
 }
 
 @media (max-width: 600px) {
-    .gs-inbox-bundle .mud-button-root {
-        min-height: 44px;
+    .gs-inbox-bundle .mud-button-root:not(.mud-icon-button) {
+        min-height: var(--gs-button-height);
     }
 
     .gs-inbox-bundle summary span {

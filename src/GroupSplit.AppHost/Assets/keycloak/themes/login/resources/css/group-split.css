@@ -47,6 +47,10 @@
 
     --gs-radius-xl: 24px;
     --gs-radius-sm: 10px;
+    --gs-button-radius: 14px;
+    --gs-button-height: 32px;
+    --gs-button-padding-y: 6px;
+    --gs-button-line-height: 18px;
     --gs-radius-pill: 999px;
 
     --gs-shadow-sm: 0 1px 2px rgb(42 36 24 / 5%), 0 2px 8px -2px rgb(42 36 24 / 8%);
@@ -413,12 +417,18 @@ input[type="radio"] {
 
 /* ------------------------------------------------------------- buttons ---- */
 
-/* The app's buttons carry the body font at 700 with no uppercasing
-   (ButtonTypography in ThemeService.cs); its primary actions are pills. */
+/* Match the app's shared action-button shape and typography. */
 .pf-v5-c-button {
     font-family: var(--gs-font-body);
-    border-radius: var(--gs-radius-sm);
-    font-weight: 700;
+    min-height: var(--gs-button-height);
+    padding-block: var(--gs-button-padding-y);
+    padding-inline: 12px;
+    font-size: 13px;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-radius: var(--gs-button-radius);
+    font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
     transition:
@@ -433,9 +443,9 @@ input[type="radio"] {
     overflow: hidden;
     background: var(--gs-teal);
     color: var(--gs-on-accent);
-    border-radius: var(--gs-radius-pill);
-    padding-block: 0.7rem;
-    padding-inline: 18px;
+    border-radius: var(--gs-button-radius);
+    padding-block: 6px;
+    padding-inline: 12px;
     box-shadow: var(--gs-shadow-sm);
 }
 
@@ -472,7 +482,7 @@ input[type="radio"] {
 #kc-social-providers .pf-v5-c-button {
     background: var(--gs-surface-2);
     border: 1px solid var(--gs-line);
-    border-radius: var(--gs-radius-sm);
+    border-radius: var(--gs-button-radius);
     color: var(--gs-ink);
 }
 
@@ -501,9 +511,9 @@ input[type="radio"] {
 #kc-register-form #updateProfile {
     background: transparent;
     border: 1px solid var(--gs-line);
-    border-radius: var(--gs-radius-pill);
+    border-radius: var(--gs-button-radius);
     color: var(--gs-ink);
-    padding-block: 0.7rem;
+    padding-block: 6px;
 }
 
 #kc-register-form #updateProfile:hover,
@@ -516,9 +526,9 @@ input[type="radio"] {
 #kc-register-form #linkAccount {
     background: var(--gs-teal);
     border: 1px solid var(--gs-teal);
-    border-radius: var(--gs-radius-pill);
+    border-radius: var(--gs-button-radius);
     color: var(--gs-on-accent);
-    padding-block: 0.7rem;
+    padding-block: 6px;
     box-shadow: var(--gs-shadow-sm);
 }
 

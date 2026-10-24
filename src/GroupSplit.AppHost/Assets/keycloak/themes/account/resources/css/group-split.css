@@ -49,6 +49,10 @@
     --gs-radius-lg: 20px;
     --gs-radius: 14px;
     --gs-radius-sm: 10px;
+    --gs-button-radius: 14px;
+    --gs-button-height: 32px;
+    --gs-button-padding-y: 6px;
+    --gs-button-line-height: 18px;
     --gs-radius-pill: 999px;
 
     --gs-shadow-sm: 0 1px 2px rgb(42 36 24 / 5%), 0 2px 8px -2px rgb(42 36 24 / 8%);
@@ -422,12 +426,18 @@ input[type="radio"] {
 
 /* ------------------------------------------------------------- buttons ---- */
 
-/* As on the login pages: the body font at 700, no uppercasing, primaries as
-   pills. */
+/* Match the app's shared action-button shape and typography. */
 .pf-v5-c-button {
     font-family: var(--gs-font-body);
-    border-radius: var(--gs-radius-sm);
-    font-weight: 700;
+    min-height: var(--gs-button-height);
+    padding-block: var(--gs-button-padding-y);
+    padding-inline: 12px;
+    font-size: 13px;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-radius: var(--gs-button-radius);
+    font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
     transition:
@@ -440,8 +450,8 @@ input[type="radio"] {
 .pf-v5-c-button.pf-m-primary,
 .pf-v5-c-button.pf-m-secondary,
 .pf-v5-c-button.pf-m-danger {
-    border-radius: var(--gs-radius-pill);
-    padding-inline: 18px;
+    border-radius: var(--gs-button-radius);
+    padding-inline: 12px;
 }
 
 .pf-v5-c-button.pf-m-primary {

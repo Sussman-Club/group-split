@@ -144,13 +144,13 @@
 
 .gs-receipt-action,
 .gs-receipt-file-actions .mud-button-root {
-    min-height: 32px;
-    padding: 6px 8px;
-    border-radius: var(--gs-radius-pill);
-    font-size: .75rem;
-    font-weight: 700;
-    line-height: 1.2;
-    white-space: nowrap;
+    min-height: var(--gs-button-height);
+    padding: var(--gs-button-padding-y) 12px;
+    border-radius: var(--gs-button-radius);
+    font-size: .8125rem;
+    font-weight: 600;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
 }
 
 .gs-receipt-action {
@@ -329,7 +329,22 @@
     }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
+    .gs-receipts .mud-button-root,
+    .gs-receipts .gs-receipt-action {
+        min-height: var(--gs-button-height);
+        max-width: 100%;
+        white-space: normal;
+    }
+
+    .gs-receipts-head {
+        flex-wrap: wrap;
+    }
+
+    .gs-receipt-file-actions {
+        gap: 12px;
+    }
+
     .gs-receipt-file,
     .gs-receipt-itemized {
         display: grid;
