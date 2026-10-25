@@ -19,9 +19,13 @@ public static class ReceiptTaxes
         var manual = Enumerable.Range(0, items.Count)
             .Where(index => items[index].IsTaxable != false && items[index].TaxRate is null
                 && items[index].TotalPrice != 0).ToArray();
+        var missing = manual.Where(index => items[index].TaxAmount == 0m && (remaining > 0
+            ? items[index].TotalPrice > 0 : items[index].TotalPrice < 0)).ToArray();
+        var fillMissing = missing.Length > 0 && (allocateUnidentified
+            || items.Any(item => item.TaxRate is not null || item.IsTaxable is not null));
         // Correct cent rounding without hiding a materially incorrect receipt reading.
         var candidates = rated.Length > 0 ? rated : manual;
-        if (Math.Abs(remaining) <= .005m * candidates.Length)
+        if (!fillMissing && Math.Abs(remaining) <= .005m * candidates.Length)
         {
             var direction = Math.Sign(remaining);
             var cents = (int)(Math.Abs(remaining) * 100m);
@@ -36,7 +40,7 @@ public static class ReceiptTaxes
             return taxes;
 
         // Unknown taxable lines can carry tax not otherwise assigned by the reading.
-        var fallback = manual.Where(index => remaining > 0
+        var fallback = fillMissing ? missing : manual.Where(index => remaining > 0
             ? items[index].TotalPrice > 0 : items[index].TotalPrice < 0).ToArray();
         var weight = fallback.Sum(index => Math.Abs(items[index].TotalPrice));
         if (weight == 0)

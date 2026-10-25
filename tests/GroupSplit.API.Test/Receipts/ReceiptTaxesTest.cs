@@ -5,6 +5,32 @@ namespace GroupSplit.API.Test.Receipts;
 public sealed class ReceiptTaxesTest
 {
     [Fact]
+    public void Rates_without_line_tax_calculate_and_reconcile_the_printed_tax()
+    {
+        var amounts = ReceiptTaxes.Calculate(.75m,
+            [new(4m, 0m, 7.5m, null), new(3m, 0m, 7.5m, null), new(3m, 0m, 7.5m, null),
+                new(5m, 0m, null, false)]);
+        Assert.Equal([.30m, .22m, .23m, 0m], amounts);
+        Assert.Equal(.75m, amounts.Sum());
+    }
+
+    [Fact]
+    public void The_remaining_tax_goes_to_missing_lines_before_changing_a_read_line_tax()
+    {
+        var amounts = ReceiptTaxes.Calculate(1.50m,
+            [new(10m, 0m, 5m, true), new(10m, .25m, null, null), new(10m, 0m, null, null)]);
+        Assert.Equal([.50m, .25m, .75m], amounts);
+    }
+
+    [Fact]
+    public void Even_a_remaining_cent_goes_to_a_missing_line_before_adjusting_known_rates()
+    {
+        var amounts = ReceiptTaxes.Calculate(.21m,
+            [new(1m, 0m, 10m, true), new(1m, 0m, 10m, true), new(1m, 0m, null, null)]);
+        Assert.Equal([.10m, .10m, .01m], amounts);
+    }
+
+    [Fact]
     public void Unidentified_tax_can_be_explicitly_distributed_without_taxing_exempt_items()
     {
         var amounts = ReceiptTaxes.Calculate(.75m,

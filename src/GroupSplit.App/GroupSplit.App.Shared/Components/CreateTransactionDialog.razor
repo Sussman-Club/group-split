@@ -165,6 +165,14 @@
                                      EvenRuleId="@_evenRuleId"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
+                                     ShowByBill="true"
+                                     DraftBill="true"
+                                     Bill="@_draftBill"
+                                     BillRuleId="@_billRuleId"
+                                     GroupId="@_groupId"
+                                     CategoryRuleId="@_categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.DefaultSplitRuleId"
+                                     CategoryName="@_categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name"
+                                     BillChanged="OnDraftBillChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
                                      Awaiting="@_awaiting"
@@ -186,7 +194,7 @@
         <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@_readingReceipt" OnClick="@Submit">
+                   Disabled="@(_readingReceipt || ReceiptNeedsRules)" OnClick="@Submit">
             Add expense
         </MudButton>
     </DialogActions>
@@ -268,6 +276,27 @@
 
     private IBrowserFile? _receiptFile;
     private SaveReceiptRequest? _receipt;
+    private ReceiptResponse? _draftBill;
+    private Guid? _billRuleId;
+    private bool ReceiptNeedsRules => _billRuleId is not null && _model.SplitRuleId == _billRuleId
+        && (_draftBill is null || _draftBill.Items.Any(item => item.SplitRuleVersionId is null));
+
+    private ReceiptResponse DraftBillOf(SaveReceiptRequest receipt) => new(
+        Guid.NewGuid(), Guid.Empty, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
+        receipt.Items.Count(item => item.SplitRuleVersionId is null), false, false,
+        receipt.Items.Select(item => new ReceiptItemResponse(Guid.NewGuid(), item.Name, item.UnitPrice,
+            item.Quantity, item.TotalPrice, item.TaxAmount, item.SplitRuleVersionId, null, null)
+        { TaxRate = item.TaxRate, IsTaxable = item.IsTaxable, Description = item.Description }).ToArray());
+
+    private async Task OnDraftBillChangedAsync(ReceiptResponse bill)
+    {
+        if (_receipt is not { } receipt)
+            return;
+        _draftBill = bill;
+        _receipt = receipt with { Items = receipt.Items.Select((item, index) =>
+            item with { SplitRuleVersionId = bill.Items[index].SplitRuleVersionId }).ToArray() };
+        await RefreshPreviewAsync();
+    }
     private bool _readingReceipt;
     private string? _receiptError;
 
@@ -306,6 +335,12 @@
         if (string.IsNullOrWhiteSpace(_model.Name))
             return "Name it to see how it divides.";
 
+        if (_receipt is { } receipt && receipt.Total != _model.Amount)
+            return "Match the expense amount to the receipt total before splitting.";
+
+        if (ReceiptNeedsRules)
+            return "Choose a split rule for every receipt item.";
+
         return null;
     }
 
@@ -333,6 +368,9 @@
         _receiptFile = args.File;
         _filingSuggestion = null;
         _receipt = null;
+        _draftBill = null;
+        if (_model.SplitRuleId == _billRuleId)
+            _model.SplitRuleId = null;
         _receiptError = null;
         return InvokeAsync(StateHasChanged);
     }
@@ -368,6 +406,7 @@
             if (result is { Canceled: false, Data: SaveReceiptRequest receipt })
             {
                 _receipt = receipt;
+                _draftBill = DraftBillOf(receipt);
                 _model.Amount = receipt.Total;
                 if (receipt.PurchaseDate is { } purchaseDate)
                     _selectedDate = purchaseDate.ToDateTime(TimeOnly.MinValue);
@@ -663,6 +702,12 @@
         // anywhere else.
         _model.SplitRuleId = null;
         _preview = null;
+        _billRuleId = null;
+        if (_receipt is { } receipt)
+        {
+            _receipt = receipt with { Items = receipt.Items.Select(item => item with { SplitRuleVersionId = null }).ToArray() };
+            _draftBill = DraftBillOf(_receipt);
+        }
 
         if (_groupId is not { } groupId)
         {
@@ -725,6 +770,7 @@
         var listed = await rules;
         _memberRules = MemberRulesOf(listed, _members);
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
+        _billRuleId = listed?.FirstOrDefault(rule => rule.DividesByBill)?.Id;
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the
@@ -813,6 +859,7 @@
 
         if (_groupId is null || _awaiting is not null)
         {
+            _previewing?.Cancel();
             _preview = null;
             _previewError = null;
             StateHasChanged();
@@ -862,6 +909,7 @@
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
+        _model.Receipt = _receipt;
 
         // Stated only for a personal expense. In a group the API takes the group's own when
         // none is named, and naming the one picked while it was personal would be refused.
@@ -882,7 +930,7 @@
     /// </summary>
     private async Task Submit()
     {
-        if (_readingReceipt)
+        if (_readingReceipt || ReceiptNeedsRules)
             return;
 
         await _form.ValidateAsync();

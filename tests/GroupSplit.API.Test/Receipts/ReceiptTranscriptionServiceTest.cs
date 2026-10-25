@@ -17,6 +17,22 @@ namespace GroupSplit.API.Test.Receipts;
 public class ReceiptTranscriptionServiceTest
 {
     [Fact]
+    public async Task A_scan_with_rates_but_no_item_taxes_returns_calculated_taxes_before_review()
+    {
+        var provider = new StubProvider(new TranscribedReceipt(10m, .75m, 0m, 10.75m,
+            [new TranscribedReceiptItem("Milk", 4m, 1m, 4m, 0m) { TaxRate = 7.5m },
+                new TranscribedReceiptItem("Bread", 3m, 1m, 3m, 0m) { TaxRate = 7.5m },
+                new TranscribedReceiptItem("Apples", 3m, 1m, 3m, 0m) { TaxRate = 7.5m }]));
+        await using var content = new MemoryStream([1]);
+        var file = new FormFile(content, 0, content.Length, "receipt", "receipt.jpg")
+            { Headers = new HeaderDictionary(), ContentType = "image/jpeg" };
+        var result = await new ReceiptTranscriptionService(Mock.Of<IReceiptAttachmentService>(), provider)
+            .Transcribe(file, TestContext.Current.CancellationToken);
+        Assert.Equal([.30m, .22m, .23m], result.Receipt.Items.Select(item => item.TaxAmount));
+        Assert.Equal(result.Receipt.Tax, result.Receipt.Items.Sum(item => item.TaxAmount));
+    }
+
+    [Fact]
     public async Task It_keeps_storage_and_provider_details_behind_the_transcription_boundary()
     {
         var expenseId = Guid.NewGuid();

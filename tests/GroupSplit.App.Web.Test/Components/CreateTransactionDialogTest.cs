@@ -22,6 +22,59 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </remarks>
 public class CreateTransactionDialogTest : ComponentTest
 {
+    [Fact]
+    public async Task A_new_scanned_expense_can_assign_receipt_lines_before_it_is_saved()
+    {
+        var itemized = Guid.NewGuid();
+        var even = Guid.NewGuid();
+        var evenVersion = Guid.NewGuid();
+        _splitRules.Setup(service => service.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new SplitRuleResponse(itemized, GroupId, "Receipt", true, DividesByBill: true),
+                new SplitRuleResponse(even, GroupId, "Even", true, DividesEvenly: true)]);
+        _splitRules.Setup(service => service.GetAsync(itemized, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleDetailsResponse { Id = itemized, GroupId = GroupId, Name = "Receipt",
+                VersionId = Guid.NewGuid(), Definition = new ItemizedSplitRuleDto() });
+        _splitRules.Setup(service => service.GetAsync(even, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitRuleDetailsResponse { Id = even, GroupId = GroupId, Name = "Even",
+                VersionId = evenVersion, Definition = new EvenSplitRuleDto() });
+        _commands.Setup(service => service.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana", 12m)], "Receipt"));
+        var receipt = new SaveReceiptRequest { Subtotal = 12m, Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var receipts = new Mock<IReceiptCommands>();
+        receipts.Setup(service => service.TranscribeAsync(It.IsAny<Microsoft.AspNetCore.Components.Forms.IBrowserFile>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ReceiptDraftResponse("test", receipt));
+        Services.AddSingleton(receipts.Object);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { component => component.SelectedGroupId, GroupId } }));
+        var picker = provider.FindComponent<ReceiptFilePicker>();
+        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+            [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1])])));
+        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ReceiptDraftDialog>()));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        await reading;
+        await provider.Find("button[aria-label='Receipt: split from receipt items']").ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<BillDivision>()));
+        Assert.True(provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
+            .HasAttribute("disabled"));
+        var division = provider.FindComponent<BillDivision>();
+        division.WaitForAssertion(() => Assert.Single(division.FindComponents<MudSelect<Guid?>>()));
+        await division.InvokeAsync(() => division.FindComponent<MudSelect<Guid?>>().Instance.ValueChanged.InvokeAsync(evenVersion));
+        await provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+        var answer = await reference!.GetReturnValueAsync<CreateTransactionDialog.Answer>();
+        Assert.NotNull(answer);
+        Assert.Equal(itemized, answer.Request.SplitRuleId);
+        Assert.Equal(evenVersion, Assert.Single(answer.Request.Receipt!.Items).SplitRuleVersionId);
+        Assert.Null(answer.Request.Receipt.Items[0].Id);
+        receipts.Verify(service => service.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -450,7 +503,7 @@ public class CreateTransactionDialogTest : ComponentTest
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task The_four_ways_to_divide_are_there_before_the_rules_are()
+    public async Task The_five_ways_to_divide_are_there_before_the_rules_are()
     {
         _splitRules
             .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
@@ -473,11 +526,12 @@ public class CreateTransactionDialogTest : ComponentTest
 
         var segments = provider.FindAll(".gs-seg-btn");
 
-        Assert.Equal(4, segments.Count);
+        Assert.Equal(5, segments.Count);
 
-        // And the control is told to lay out four, which is what actually decides the
+        // And the control is told to lay out five, which is what actually decides the
         // widths: a count that moved would move every option with it.
-        Assert.Contains("--gs-seg-n: 4", provider.Find(".gs-seg").GetAttribute("style"));
+        Assert.Contains("--gs-seg-n: 5", provider.Find(".gs-seg").GetAttribute("style"));
+        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "Receipt").HasAttribute("disabled"));
 
         // The middle one says not yet rather than offering a rule it cannot name.
         Assert.True(segments.Single(segment => segment.TextContent.Trim() == "One pays")

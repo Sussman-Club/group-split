@@ -217,6 +217,7 @@
 
     /// <summary>The expense the bill belongs to, so a line's rule can be written to it.</summary>
     [Parameter, EditorRequired] public Guid TransactionId { get; set; }
+    [Parameter] public bool IsDraft { get; set; }
 
     /// <summary>The group whose rules the lines divide by.</summary>
     [Parameter] public Guid? GroupId { get; set; }
@@ -378,7 +379,21 @@
 
         try
         {
-            if (await Bills.SetRuleAsync(TransactionId, itemId, versionId) is { } bill)
+            ReceiptResponse? updated;
+            if (IsDraft)
+            {
+                var rule = _rules.FirstOrDefault(candidate => candidate.VersionId == versionId);
+                var items = Receipt.Items.Select(item => item.Id == itemId ? item with
+                {
+                    SplitRuleVersionId = versionId, SplitRuleName = rule?.Name, SplitRule = rule?.Definition
+                } : item).ToArray();
+                updated = Receipt with { Items = items, MissingRuleItemCount = items.Count(item => item.SplitRuleVersionId is null) };
+            }
+            else
+            {
+                updated = await Bills.SetRuleAsync(TransactionId, itemId, versionId);
+            }
+            if (updated is { } bill)
             {
                 Receipt = bill;
 

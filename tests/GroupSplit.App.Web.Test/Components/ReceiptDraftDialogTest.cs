@@ -65,6 +65,35 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Rates_with_missing_line_taxes_show_calculated_values_without_an_error_or_manual_distribution()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 4m, TotalPrice = 4m, TaxRate = 7.5m },
+                new ReceiptItemInput { Name = "Bread", UnitPrice = 3m, TotalPrice = 3m, TaxRate = 7.5m },
+                new ReceiptItemInput { Name = "Apples", UnitPrice = 3m, TotalPrice = 3m, TaxRate = 7.5m }]
+        };
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", receipt) }
+            }));
+        var taxes = provider.FindComponents<MudNumericField<decimal>>()
+            .Where(field => field.Instance.Label == "Line tax").ToArray();
+        Assert.Equal(["0.30", "0.22", "0.23"], taxes.Select(field => field.Find("input").GetAttribute("value")));
+        Assert.DoesNotContain("Line tax must add up", provider.Markup);
+        Assert.DoesNotContain(provider.FindAll("button"), button => button.TextContent.Contains("Distribute tax"));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.NotNull(result);
+        Assert.Equal(.75m, result.Items.Sum(item => item.TaxAmount));
+    }
+
+    [Fact]
     public async Task Unassigned_scanned_tax_can_be_distributed_before_using_the_receipt()
     {
         var provider = Render<MudDialogProvider>();

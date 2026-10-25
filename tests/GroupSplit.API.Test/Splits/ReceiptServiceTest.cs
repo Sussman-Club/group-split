@@ -37,6 +37,56 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Total = items.Sum(i => i.TotalPrice)
     };
 
+    [Fact]
+    public async Task A_new_expense_previews_and_saves_its_itemized_receipt_in_one_operation()
+    {
+        var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Receipt dinner" }, Ct);
+        var other = await CreateNewUser();
+        await JoinGroup(group.Id, other);
+        var mine = await Rules.Create(new CreateSplitRuleRequest
+            { GroupId = group.Id, Name = "Mine", Definition = new SoleSplitRuleDto(Self) }, Ct);
+        var theirs = await Rules.Create(new CreateSplitRuleRequest
+            { GroupId = group.Id, Name = "Theirs", Definition = new SoleSplitRuleDto(other.Id) }, Ct);
+        var itemized = await DbContext.Set<ItemizedSplitRuleVersion>().Include(version => version.SplitRule)
+            .SingleAsync(version => version.SplitRule.Group.Id == group.Id && version.SupersededAt == null, Ct);
+        var request = new CreateTransactionRequest
+        {
+            GroupId = group.Id, Name = "Dinner from receipt", Amount = 32.25m, DateTime = DateTimeOffset.UtcNow,
+            SplitRuleId = itemized.SplitRule.Id,
+            Receipt = new SaveReceiptRequest
+            {
+                Subtotal = 30m, Tax = 2.25m, Total = 32.25m,
+                Items = [Item("My meal", 10m, mine.Current!.Id) with { TaxRate = 7.5m },
+                    Item("Their meal", 20m, theirs.Current!.Id) with { TaxRate = 7.5m }]
+            }
+        };
+        var before = await DbContext.Set<Expense>().CountAsync(Ct);
+        var preview = await Transactions.Preview(request, Ct);
+        Assert.Equal(before, await DbContext.Set<Expense>().CountAsync(Ct));
+        Assert.Equal(10.75m, preview.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(21.50m, preview.Splits.Single(split => split.UserId == other.Id).Amount);
+
+        var saved = await Transactions.Create(request, Ct);
+        var bill = await Receipts.ForExpense(saved.Id, Ct);
+        Assert.Equal(2, bill.Items.Count);
+        Assert.Equal(2.25m, bill.Items.Sum(item => item.TaxAmount));
+        Assert.Equal(10.75m, saved.Splits.Single(split => split.UserId == Self).Amount);
+        Assert.Equal(21.50m, saved.Splits.Single(split => split.UserId == other.Id).Amount);
+        Assert.True((await Receipts.ResponseFor(bill, ct: Ct)).DividesItsExpense);
+    }
+
+    [Fact]
+    public async Task An_invalid_creation_receipt_does_not_leave_an_expense_saved_with_another_split()
+    {
+        var before = await DbContext.Set<Expense>().CountAsync(Ct);
+        await Assert.ThrowsAsync<UnprocessableException>(async () => await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Invalid receipt", Amount = 30m, DateTime = DateTimeOffset.UtcNow,
+            Receipt = Bill(Item("Meal", 20m, null))
+        }, Ct));
+        Assert.Equal(before, await DbContext.Set<Expense>().CountAsync(Ct));
+    }
+
     /// <summary>A group of two, an expense of 48 in it, and a rule its lines can name.</summary>
     private async Task<(Expense Expense, Guid Group, Guid Even)> AnExpense(SplitRuleDto? divides = null)
     {

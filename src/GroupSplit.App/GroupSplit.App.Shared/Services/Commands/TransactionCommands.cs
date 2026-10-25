@@ -31,7 +31,7 @@ public sealed class TransactionCommands(
         // Save the extracted bill first. ReceiptService also links any unassociated source
         // files to the new receipt, so the original document and its itemized data remain
         // one thing in the details view.
-        if (receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
+        if (request.Receipt is null && receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
         {
             snackbar.Add("The expense was added, but its receipt details could not be saved.",
                 Severity.Warning);

@@ -121,11 +121,16 @@
                         <DecimalField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
                                       Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                         <div class="gs-stack" style="gap: 4px">
-                            <DecimalField @bind-Value="item.TaxAmount" Label="Line tax" Variant="Variant.Outlined"
+                            <DecimalField @key="(item.Key, item.TaxRate is not null || item.IsTaxable == false ? CalculatedTaxes[_items.IndexOf(item)] : (decimal?)null)"
+                                          Value="@CalculatedTaxes[_items.IndexOf(item)]"
+                                          TextUpdateSuppression="false"
+                                          ValueChanged="@((decimal value) => item.TaxAmount = value)"
+                                          ReadOnly="@(item.TaxRate is not null || item.IsTaxable == false)"
+                                          Label="Line tax" Variant="Variant.Outlined"
                                           Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                             @if (CalculatedTaxes[_items.IndexOf(item)] != item.TaxAmount)
                             {
-                                <MudText Typo="Typo.caption">Calculated tax: @CalculatedTaxes[_items.IndexOf(item)].ToString("0.00") @Currency (includes rounding adjustment)</MudText>
+                                <MudText Typo="Typo.caption">Calculated from the rate and receipt total, including rounding.</MudText>
                             }
                         </div>
                         @if (item.IsTaxable != false)
