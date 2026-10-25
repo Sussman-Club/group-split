@@ -243,9 +243,13 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Suggest(row);
 
-        var options = Assert.Single(_model.Asked).Options.Values;
+        var asked = Assert.Single(_model.Asked);
+        var options = asked.Options.Values;
         Assert.Contains(options, option => option.Contains("The flat we share near the station"));
         Assert.Contains(options, option => option.Contains("Food and household supplies"));
+        Assert.Contains("Give substantial weight", asked.Instructions);
+        Assert.Contains("group description and category description", asked.Instructions);
+        Assert.Contains("outweigh", asked.Instructions);
     }
 
     [Fact]
@@ -454,7 +458,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         private bool _fail;
         private double? _firstOptionConfidence;
 
-        public List<(string State, IReadOnlyDictionary<string, string> Options)> Asked { get; } = [];
+        public List<(string State, IReadOnlyDictionary<string, string> Options, string Instructions)> Asked { get; } = [];
 
         public void Answer(string choice, double confidence)
         {
@@ -476,7 +480,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
         {
             lock (Asked)
-                Asked.Add((JsonSerializer.Serialize(state, Readable), options));
+                Asked.Add((JsonSerializer.Serialize(state, Readable), options, instructions));
 
             return _fail
                 ? Task.FromException<DecisionAnswer?>(new HttpRequestException("model unavailable"))
