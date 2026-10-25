@@ -5,12 +5,30 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using GroupSplit.App.Shared.Services;
+using GroupSplit.Shared;
 using Moq;
 
 namespace GroupSplit.App.Web.Test.Components;
 
 public class ReceiptFilePickerTest : ComponentTest
 {
+    [Fact]
+    public void A_failed_or_selected_file_can_be_replaced_without_removing_its_input()
+    {
+        var picker = Render<ReceiptFilePicker>(parameters => parameters
+            .Add(component => component.IsAttached, true)
+            .Add(component => component.FileName, "bad.pdf")
+            .Add(component => component.Error, "Could not read the receipt."));
+        var input = picker.Find("input[type=file]");
+        var inputId = input.Id;
+        Assert.Equal(ReceiptFileTypes.Accept, picker.Find(".gs-file-picker-replace input[type=file]").GetAttribute("accept"));
+        Assert.Contains("Change file", picker.Find("label.gs-file-picker-replace").TextContent);
+        picker.Render(parameters => parameters.Add(component => component.IsBusy, true));
+        Assert.Equal(inputId, picker.Find("input[type=file]").Id);
+        Assert.True(picker.Find("input[type=file]").HasAttribute("disabled"));
+        Assert.True(picker.Find(".gs-file-picker-replace input[type=file]").HasAttribute("disabled"));
+    }
+
     [Fact]
     public async Task Native_capture_delivers_a_readable_file_to_the_same_selection_callback()
     {

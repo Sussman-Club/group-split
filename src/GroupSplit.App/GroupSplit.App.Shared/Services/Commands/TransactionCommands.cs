@@ -24,7 +24,7 @@ public sealed class TransactionCommands(
     public async Task<bool> CreateWithReceiptAsync(CreateTransactionRequest request,
         IBrowserFile file, SaveReceiptRequest? receipt, CancellationToken ct = default)
     {
-        var created = await CreateExpenseAsync(request, ct);
+        var created = await CreateExpenseAsync(request, ct, complete: false);
         if (created is null)
             return false;
 
@@ -44,31 +44,36 @@ public sealed class TransactionCommands(
                 Severity.Warning);
         }
 
+        await CompleteCreationAsync(created, ct);
+
         return true;
     }
 
     private async Task<TransactionResponse?> CreateExpenseAsync(
-        CreateTransactionRequest request, CancellationToken ct)
+        CreateTransactionRequest request, CancellationToken ct, bool complete = true)
     {
         TransactionResponse? created = null;
         var succeeded = await errors.TryAsync(async () =>
         {
             created = await transactions.CreateTransactionAsync(request, ct);
-
-            // Names what happened to what. "Transaction created successfully" was true of
-            // every expense anybody ever recorded.
-            snackbar.Add(
-                created.GroupName is { Length: > 0 } group
-                    ? $"{created.Name} added to {group}."
-                    : $"{created.Name} added to your personal expenses.",
-                Severity.Success);
-
-            await changes.NotifyTransactionsChangedAsync();
-
-            await OfferBankRowsAsync(created, ct);
+            if (complete)
+                await CompleteCreationAsync(created, ct);
         }, "Could not save the expense.");
 
         return succeeded ? created : null;
+    }
+
+    private async Task CompleteCreationAsync(TransactionResponse created, CancellationToken ct)
+    {
+        // Announce only after the original receipt is attached. A success toast invites
+        // navigation, which cancels the page's remaining upload work.
+        snackbar.Add(
+            created.GroupName is { Length: > 0 } group
+                ? $"{created.Name} added to {group}."
+                : $"{created.Name} added to your personal expenses.",
+            Severity.Success);
+        await changes.NotifyTransactionsChangedAsync();
+        await OfferBankRowsAsync(created, ct);
     }
 
     /// <summary>

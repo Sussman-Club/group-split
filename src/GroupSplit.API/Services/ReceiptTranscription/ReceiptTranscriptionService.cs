@@ -62,15 +62,6 @@ public sealed class ReceiptTranscriptionService(
     IReceiptTranscriptionProvider provider) : IReceiptTranscriptionService
 {
     private const long MaximumLength = 10 * 1024 * 1024;
-    private static readonly IReadOnlyDictionary<string, string> AllowedTypes =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            [".jpg"] = "image/jpeg",
-            [".jpeg"] = "image/jpeg",
-            [".png"] = "image/png",
-            [".webp"] = "image/webp",
-            [".pdf"] = "application/pdf"
-        };
 
     public async Task<ReceiptTranscriptionResponse> Transcribe(
         Guid expenseId, Guid attachmentId, CancellationToken ct = default)
@@ -99,11 +90,10 @@ public sealed class ReceiptTranscriptionService(
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        var extension = Path.GetExtension(Path.GetFileName(file.FileName));
+        var expectedType = ReceiptFileTypes.Resolve(file.FileName, file.ContentType);
         if (file.Length is <= 0 or > MaximumLength
             || file.FileName.Length > 256
-            || !AllowedTypes.TryGetValue(extension, out var expectedType)
-            || !string.Equals(file.ContentType, expectedType, StringComparison.OrdinalIgnoreCase))
+            || expectedType is null)
         {
             throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid,
                 "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.");

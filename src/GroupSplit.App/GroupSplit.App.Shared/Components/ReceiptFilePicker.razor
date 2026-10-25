@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Forms
+@using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
 @inject IServiceProvider Services
 
@@ -54,6 +55,14 @@
                 <span class="gs-file-picker-title">@(FileName ?? "Receipt attached")</span>
                 <span class="gs-file-picker-subtitle">@AttachedDescription</span>
             </span>
+            <div class="gs-file-picker-actions">
+                <label class="gs-btn-pill gs-file-picker-replace" aria-disabled="@(IsBusy ? "true" : "false")">
+                    Change file
+                    @* A direct native input tap also works in phone browsers. Keep both
+                       inputs mounted so replacing one never invalidates the other handle. *@
+                    <InputFile OnChange="FileChanged" accept="@Accept" disabled="@IsBusy"
+                               class="gs-file-picker-replace-input" aria-label="Change receipt file" />
+                </label>
             @if (ReadRequested.HasDelegate)
             {
                 <MudButton Variant="Variant.Outlined"
@@ -66,6 +75,7 @@
                     @(HasTranscript ? "Read again" : "Read receipt")
                 </MudButton>
             }
+            </div>
         </div>
     }
 
@@ -127,7 +137,7 @@
 
     [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
     [Parameter] public EventCallback ReadRequested { get; set; }
-    [Parameter] public string Accept { get; set; } = ".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf";
+    [Parameter] public string Accept { get; set; } = ReceiptFileTypes.Accept;
     [Parameter] public string Title { get; set; } = "Attach the original receipt";
     [Parameter] public string Description { get; set; } = "Keep the file now. Read it when you are ready.";
     [Parameter] public string? FileName { get; set; }

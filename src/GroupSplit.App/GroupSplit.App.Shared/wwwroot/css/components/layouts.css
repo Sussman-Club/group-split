@@ -238,6 +238,46 @@
     flex: 0 0 auto;
 }
 
+.gs-file-picker-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.gs-file-picker-replace {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: var(--gs-primary);
+    font-size: .8125rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gs-file-picker-replace-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.gs-file-picker-replace:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
+}
+
+.gs-file-picker-replace[aria-disabled="true"] {
+    opacity: .5;
+    cursor: default;
+}
+
 .gs-file-picker-status,
 .gs-file-picker-transcript {
     display: flex;
@@ -300,7 +340,7 @@
         flex-wrap: wrap;
     }
 
-    .gs-file-picker-attached .gs-file-picker-read {
-        margin-left: 50px;
+    .gs-file-picker-attached .gs-file-picker-actions {
+        flex-basis: 100%;
     }
 }
