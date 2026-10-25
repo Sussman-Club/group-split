@@ -13,6 +13,24 @@ namespace GroupSplit.API.Test.Receipts;
 
 public sealed class AzureOpenAIReceiptTranscriptionProviderTest
 {
+    [Theory]
+    [InlineData(0.075, 0.75, 7.5)]
+    [InlineData(7.5, 0.75, 7.5)]
+    [InlineData(0.5, 0.05, 0.5)]
+    public async Task Tax_rates_use_percentage_points(decimal rate, decimal tax, decimal expected)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            subtotal = 10m, tax, tip = 0, total = 10m + tax,
+            items = new[] { new { name = "Item", unitPrice = 10m, quantity = 1,
+                totalPrice = 10m, taxAmount = tax, taxRate = rate, isTaxable = true } }
+        });
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(new StubChatClient(json),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]));
+        Assert.Equal(expected, Assert.Single(receipt.Items).TaxRate);
+    }
+
     [Fact]
     public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {

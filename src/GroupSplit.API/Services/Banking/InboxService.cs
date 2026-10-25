@@ -348,11 +348,17 @@ public sealed class InboxService(
 
         var duplicates = await matcher.ExpensesLike(rows, ct);
 
-        return await suggester.Suggest(
+        var suggestions = await suggester.Suggest(
             [.. rows
                 .Where(row => duplicates.GetValueOrDefault(row.Id) is not { Count: > 0 })
-                .Select(row => (row, receipts[row.Id]))],
+                .Select(row => (new FilingInput(row.Id, row.AuthorizedDate ?? row.Date,
+                    row.Amount, row.Currency, row.Description, row.MerchantName, row.MerchantId,
+                    row.ProviderCategory, row.ProviderCategoryDetailed, row.Account.Name,
+                    row.PaymentChannel, row.City), receipts[row.Id]))],
             ct);
+        return [.. suggestions.Select(result => new FilingSuggestionResponse(result.SourceId,
+            result.Destination.GroupId, result.Destination.GroupName, result.Destination.IsPersonal,
+            result.Destination.CategoryId, result.Destination.CategoryName, result.Destination.Confidence))];
     }
 
     public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)

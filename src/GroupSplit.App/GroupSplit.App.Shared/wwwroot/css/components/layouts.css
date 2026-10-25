@@ -124,6 +124,28 @@
     overflow-wrap: anywhere;
     font-weight: 600;
     cursor: pointer;
+    background: transparent;
+    font-family: inherit;
+    overflow: hidden;
+}
+
+.gs-file-picker-dropzone[hidden] {
+    display: none;
+}
+
+.gs-file-picker-camera-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.gs-file-picker-camera-action:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
 }
 
 .gs-file-picker-dropzone:hover {
@@ -261,7 +283,7 @@
         display: inline-flex;
         justify-content: center;
         gap: 8px;
-        min-height: var(--gs-button-height);
+        min-height: 44px;
     }
 
     .gs-file-picker-camera-action .mud-icon-root {

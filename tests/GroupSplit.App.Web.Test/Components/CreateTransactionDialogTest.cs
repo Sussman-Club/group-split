@@ -22,6 +22,103 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </remarks>
 public class CreateTransactionDialogTest : ComponentTest
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Actions_stay_locked_during_a_receipt_read_and_unlock_after_failure(bool throws)
+    {
+        var pending = new TaskCompletionSource<ReceiptDraftResponse?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var receipts = new Mock<IReceiptCommands>();
+        receipts.Setup(service => service.TranscribeAsync(It.IsAny<Microsoft.AspNetCore.Components.Forms.IBrowserFile>(),
+            It.IsAny<CancellationToken>())).Returns(pending.Task);
+        Services.AddSingleton(receipts.Object);
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>(),
+                new DialogOptions { CloseButton = true, BackdropClick = true, CloseOnEscapeKey = true }));
+        var picker = provider.FindComponent<ReceiptFilePicker>();
+        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+            [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1])])));
+        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
+        provider.WaitForAssertion(() => Assert.True(provider.Find("fieldset").HasAttribute("inert")));
+        Assert.True(provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "How much?").Find("input").HasAttribute("disabled"));
+        Assert.All(provider.FindAll(".mud-dialog-actions button"), button => Assert.True(button.HasAttribute("disabled")));
+        Assert.Empty(provider.FindAll("button[aria-label='Close']"));
+        if (throws)
+        {
+            pending.SetException(new IOException("Test scan failure"));
+            await reading;
+        }
+        else
+        {
+            pending.SetResult(null);
+            await reading;
+        }
+        provider.WaitForAssertion(() => Assert.False(provider.Find("fieldset").HasAttribute("inert")));
+        Assert.All(provider.FindAll(".mud-dialog-actions button"), button => Assert.False(button.HasAttribute("disabled")));
+        Assert.NotEmpty(provider.FindAll("button[aria-label='Close']"));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task A_reviewed_receipt_supplies_the_date_and_merchant_and_offers_a_group_and_category(bool knownMerchant, bool fixedGroup)
+    {
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 12m, Total = 12m, MerchantName = "Corner shop", PurchaseDate = new DateOnly(2026, 9, 12),
+            Items = [new ReceiptItemInput { Name = "Milk", Quantity = 1m, UnitPrice = 12m, TotalPrice = 12m }]
+        };
+        var merchantId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var receipts = new Mock<IReceiptCommands>();
+        receipts.Setup(service => service.TranscribeAsync(It.IsAny<Microsoft.AspNetCore.Components.Forms.IBrowserFile>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptDraftResponse("test", receipt));
+        receipts.Setup(service => service.SuggestFilingAsync(It.IsAny<SuggestReceiptFilingRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FilingDestinationSuggestion(GroupId, "Trip", false, categoryId, "Groceries", .95));
+        Services.AddSingleton(receipts.Object);
+        var merchants = new Mock<IMerchantCommands>();
+        merchants.Setup(service => service.SearchAsync("Corner shop", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(knownMerchant ? [new MerchantResponse(merchantId, "Corner shop", null, DateTimeOffset.UtcNow, 0)] : []);
+        merchants.Setup(service => service.CreateAsync("Corner shop", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MerchantResponse(merchantId, "Corner shop", null, DateTimeOffset.UtcNow, 0));
+        Services.AddSingleton(merchants.Object);
+        _categories.Setup(client => client.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new CategoryResponse(categoryId, GroupId, "Groceries", null, null)]);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            {
+                { component => component.SelectedGroupId, fixedGroup ? GroupId : null }
+            }));
+        var picker = provider.FindComponent<ReceiptFilePicker>();
+        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+            [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1, 2, 3])])));
+        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ReceiptDraftDialog>()));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt")).ClickAsync(new MouseEventArgs());
+        await reading;
+        Assert.Contains("Corner shop", provider.FindAll("button.gs-expense-chip").Single(button =>
+            button.GetAttribute("aria-label")!.StartsWith("where:")).TextContent);
+        merchants.Verify(service => service.CreateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        var suggestion = provider.FindAll("button").Single(button => button.TextContent.Contains("Use suggested"));
+        Assert.Contains(fixedGroup ? "Groceries" : "Trip", suggestion.TextContent);
+        await suggestion.ClickAsync(new MouseEventArgs());
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Add expense").ClickAsync(new MouseEventArgs());
+        var answer = await reference!.GetReturnValueAsync<CreateTransactionDialog.Answer>();
+        Assert.NotNull(answer);
+        Assert.Equal(merchantId, answer.Request.MerchantId);
+        Assert.Equal(GroupId, answer.Request.GroupId);
+        Assert.Equal(categoryId, answer.Request.CategoryId);
+        Assert.Equal(receipt.PurchaseDate, DateOnly.FromDateTime(Services.GetRequiredService<LocalClock>().Local(answer.Request.DateTime).DateTime));
+        receipts.Verify(service => service.SuggestFilingAsync(It.Is<SuggestReceiptFilingRequest>(request => request.GroupId == (fixedGroup ? GroupId : null)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static readonly Guid GroupId = Guid.NewGuid();
     private static readonly Guid MeId = Guid.NewGuid();
 

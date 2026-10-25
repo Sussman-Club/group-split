@@ -52,7 +52,7 @@
     @if (ShowWhere)
     {
         <ExpenseChip Label="where" Lead="at" Value="@MerchantName"
-                     Set="@(MerchantId is not null)"
+                     Set="@(MerchantId is not null || !string.IsNullOrWhiteSpace(MerchantName))"
                      Open="@(_open == Picker.Where)"
                      OnClick="@(() => Toggle(Picker.Where))">
             @* The same mark the picker offered it under, and the same one the row will

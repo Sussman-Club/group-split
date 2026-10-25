@@ -54,7 +54,8 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="_form" Model="_model">
+        <ReceiptReadLock IsLocked="@_readingReceipt">
+        <MudForm @ref="_form" Model="_model" Disabled="@_readingReceipt">
             <div class="gs-stack" style="gap: 16px">
 
                 <div class="gs-card gs-card-pad" style="padding: 14px 16px">
@@ -71,6 +72,14 @@
                                        TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
                                        Error="@_receiptError" />
                 </div>
+
+                @if (_filingSuggestion is { } suggestion)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button"
+                               OnClick="UseReceiptSuggestionAsync">
+                        Use suggested @(GroupFixed ? suggestion.CategoryName : suggestion.Destination)
+                    </MudButton>
+                }
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
                 <DecimalField @bind-Value="_model.Amount"
@@ -170,6 +179,7 @@
                 }
             </div>
         </MudForm>
+        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
@@ -309,6 +319,7 @@
     /// </remarks>
     private async Task OnGroupPickedAsync(Guid? id)
     {
+        _filingSuggestion = null;
         _groupId = id;
 
         await OnGroupChangedAsync();
@@ -316,10 +327,11 @@
 
     private Task SelectReceiptAsync(InputFileChangeEventArgs args)
     {
-        if (args.FileCount == 0)
+        if (_readingReceipt || args.FileCount == 0)
             return Task.CompletedTask;
 
         _receiptFile = args.File;
+        _filingSuggestion = null;
         _receipt = null;
         _receiptError = null;
         return InvokeAsync(StateHasChanged);
@@ -357,12 +369,40 @@
             {
                 _receipt = receipt;
                 _model.Amount = receipt.Total;
+                if (receipt.PurchaseDate is { } purchaseDate)
+                    _selectedDate = purchaseDate.ToDateTime(TimeOnly.MinValue);
+
+                if (!string.IsNullOrWhiteSpace(receipt.MerchantName))
+                {
+                    var name = receipt.MerchantName.Trim();
+                    var matches = await Merchants.SearchAsync(name);
+                    var merchant = matches?.FirstOrDefault(candidate =>
+                        string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                    _model.MerchantId = merchant?.Id;
+                    _merchantName = merchant?.Name ?? name;
+                    _merchantLogo = merchant?.LogoUrl;
+                    _pendingMerchantName = merchant is null ? name : null;
+                }
 
                 if (string.IsNullOrWhiteSpace(_model.Name))
                     _model.Name = SuggestedName(receipt);
 
                 await OnMoneyChangedAsync();
+                var groupLoad = _groupLoad;
+                var currency = ReceiptCurrency;
+                var categoryId = _model.CategoryId;
+                var suggestion = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest
+                {
+                    Receipt = receipt, Currency = currency,
+                    GroupId = _groupId ?? (GroupFixed ? Login.User?.Id : null)
+                });
+                if (groupLoad == _groupLoad && currency == ReceiptCurrency && categoryId == _model.CategoryId)
+                    _filingSuggestion = suggestion;
             }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            _receiptError = "Could not read that receipt. Choose the file again and retry.";
         }
         finally
         {
@@ -389,6 +429,7 @@
 
     private async Task OnCategoryPickedAsync(Guid? id)
     {
+        _filingSuggestion = null;
         _model.CategoryId = id;
 
         await OnMoneyChangedAsync();
@@ -420,6 +461,22 @@
 
     /// <summary>The mark for that merchant, when it has one. Null renders initials-free.</summary>
     private string? _merchantLogo;
+    private string? _pendingMerchantName;
+    private FilingDestinationSuggestion? _filingSuggestion;
+
+    private async Task UseReceiptSuggestionAsync()
+    {
+        if (_filingSuggestion is not { } suggestion)
+            return;
+        var groupId = suggestion.IsPersonal ? (Guid?)null : suggestion.GroupId;
+        if (GroupFixed && groupId != _groupId)
+            return;
+        if (!GroupFixed && groupId != _groupId)
+            await OnGroupPickedAsync(groupId);
+        if (_categories.Any(category => category.Id == suggestion.CategoryId))
+            await OnCategoryPickedAsync(suggestion.CategoryId);
+        _filingSuggestion = null;
+    }
 
     /// <summary>
     /// Whether the group was settled by where this was opened from, in which case it is
@@ -442,7 +499,11 @@
 
     private string ReceiptCurrency => Currency;
 
-    private void OnCurrencyPicked(string currency) => _currency = currency;
+    private void OnCurrencyPicked(string currency)
+    {
+        _currency = currency;
+        _filingSuggestion = null;
+    }
 
 
 
@@ -711,6 +772,7 @@
     /// </remarks>
     private async Task OnMerchantChangedAsync(Guid? merchantId)
     {
+        _pendingMerchantName = null;
         _model.MerchantId = merchantId;
 
         if (merchantId is null)
@@ -844,7 +906,6 @@
         }
 
         ApplyDate();
-        var request = Request();
 
         // IBrowserFile is backed by the InputFile DOM element. The dialog is disposed as
         // soon as this result is returned, so hand the page a buffered copy instead of a
@@ -868,10 +929,23 @@
             }
         }
 
+        if (_pendingMerchantName is { } merchantName)
+        {
+            var merchant = await Merchants.CreateAsync(merchantName);
+            if (merchant is null)
+                return;
+            _model.MerchantId = merchant.Id;
+            _pendingMerchantName = null;
+        }
+        var request = Request();
         MudDialog.Close(file is { } bufferedFile
             ? DialogResult.Ok(new Answer(request, bufferedFile, _receipt))
             : DialogResult.Ok(request));
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        if (!_readingReceipt)
+            MudDialog.Cancel();
+    }
 }

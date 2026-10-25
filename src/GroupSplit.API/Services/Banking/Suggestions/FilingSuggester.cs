@@ -11,10 +11,11 @@ using Microsoft.Extensions.Options;
 namespace GroupSplit.API.Services.Banking.Suggestions;
 
 /// <summary>
-/// Suggests a group and a category for imported rows.
+/// Suggests a group and category from spending facts supplied by any entry flow.
 /// </summary>
 public interface IFilingSuggester
 {
+    Task<FilingDestinationSuggestion?> SuggestReceipt(SuggestReceiptFilingRequest request, CancellationToken ct = default);
     /// <summary>
     /// A suggestion for each row that gets one. Rows the model abstains on, or is not
     /// confident enough about, are simply not in the answer.
@@ -23,8 +24,8 @@ public interface IFilingSuggester
     /// Never throws for the model's sake: a call that fails is an abstention, so the inbox
     /// looks the way it did before suggestions existed rather than failing to load.
     /// </remarks>
-    Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(
-        IReadOnlyList<(BankTransaction Row, FilingReceipt? Receipt)> rows,
+    Task<IReadOnlyList<FilingSuggestionResult>> Suggest(
+        IReadOnlyList<(FilingInput Row, FilingReceipt? Receipt)> rows,
         CancellationToken ct = default);
 }
 
@@ -62,13 +63,13 @@ public sealed class FilingSuggester(
     };
 
     internal const string Instructions =
-        "This is one card or bank charge belonging to the account holder. Which of their own "
+        "This is one expense belonging to the account holder. Which of their own "
         + "groups and categories should it be filed under? Earlier filings of the same merchant "
         + "and the receipt, when given, are the strongest evidence. If nothing fits, or the "
         + "evidence does not point anywhere, answer \"cannot tell\".";
 
-    public async Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(
-        IReadOnlyList<(BankTransaction Row, FilingReceipt? Receipt)> rows,
+    public async Task<IReadOnlyList<FilingSuggestionResult>> Suggest(
+        IReadOnlyList<(FilingInput Row, FilingReceipt? Receipt)> rows,
         CancellationToken ct = default)
     {
         var settings = options.Value;
@@ -85,7 +86,7 @@ public sealed class FilingSuggester(
 
         var history = await HistoryAsync(rows.Select(item => item.Row), destinations, settings.HistoryLimit, ct);
 
-        var answers = new FilingSuggestionResponse?[rows.Count];
+        var answers = new FilingDestinationSuggestion?[rows.Count];
 
         await Parallel.ForEachAsync(
             Enumerable.Range(0, rows.Count),
@@ -100,11 +101,32 @@ public sealed class FilingSuggester(
                 answers[index] = await SuggestOne(row, receipt, destinations, earlier, settings, token);
             });
 
-        return [.. answers.OfType<FilingSuggestionResponse>()];
+        return [.. answers.Select((answer, index) => answer is null ? null : new FilingSuggestionResult(rows[index].Row.Id, answer)).OfType<FilingSuggestionResult>()];
     }
 
-    private async Task<FilingSuggestionResponse?> SuggestOne(
-        BankTransaction row,
+    public async Task<FilingDestinationSuggestion?> SuggestReceipt(SuggestReceiptFilingRequest request, CancellationToken ct = default)
+    {
+        var settings = options.Value;
+        if (!settings.IsConfigured)
+            return null;
+        var destinations = await DestinationsAsync(ct);
+        if (request.GroupId is { } groupId)
+            destinations = destinations.Where(destination => destination.GroupId == groupId).ToList();
+        if (destinations.Count == 0)
+            return null;
+
+        var row = new FilingInput(Guid.Empty, request.Receipt.PurchaseDate, request.Receipt.Total,
+            request.Currency, request.Receipt.MerchantName ?? "Receipt", request.Receipt.MerchantName);
+        var receipt = new FilingReceipt
+        {
+            MerchantName = request.Receipt.MerchantName,
+            Items = request.Receipt.Items.Select(item => item.Name).Take(FilingReceipt.MaxItems).ToArray()
+        };
+        return await SuggestOne(row, receipt, destinations, [], settings, ct);
+    }
+
+    private async Task<FilingDestinationSuggestion?> SuggestOne(
+        FilingInput row,
         FilingReceipt? receipt,
         IReadOnlyList<Destination> destinations,
         IReadOnlyList<Destination> earlier,
@@ -156,8 +178,8 @@ public sealed class FilingSuggester(
     }
 
     /// <summary>Calls the classifier. A failure is not a cacheable abstention.</summary>
-    private async Task<FilingSuggestionResponse?> AskAsync(
-        BankTransaction row,
+    private async Task<FilingDestinationSuggestion?> AskAsync(
+        FilingInput row,
         FilingReceipt? receipt,
         IReadOnlyList<Destination> earlier,
         IReadOnlyDictionary<string, Destination> labelled,
@@ -178,7 +200,7 @@ public sealed class FilingSuggester(
             exception is HttpRequestException or TaskCanceledException or JsonException
             && !ct.IsCancellationRequested)
         {
-            logger.LogWarning(exception, "Filing suggestion for bank row {BankTransactionId} failed; none given.", row.Id);
+            logger.LogWarning(exception, "Filing suggestion for spending input {SourceId} failed; none given.", row.Id);
             throw new DecisionFailedException();
         }
 
@@ -189,8 +211,7 @@ public sealed class FilingSuggester(
             return null;
         }
 
-        return new FilingSuggestionResponse(
-            row.Id,
+        return new FilingDestinationSuggestion(
             chosen.GroupId,
             chosen.GroupName,
             chosen.IsPersonal,
@@ -204,7 +225,7 @@ public sealed class FilingSuggester(
     /// receipt details into Redis keys. Each change naturally names a fresh cache entry.
     /// </summary>
     private static string CacheKey(
-        BankTransaction row,
+        FilingInput row,
         FilingReceipt? receipt,
         IReadOnlyList<Destination> allDestinations,
         IReadOnlyList<Destination> destinations,
@@ -213,7 +234,7 @@ public sealed class FilingSuggester(
     {
         var inputs = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            row = row.Id,
+            input = row,
             // The entire caller-visible set participates too. A newly added category gets a
             // fresh answer even if the request's size cap would not offer it this time.
             allDestinations = allDestinations.Select(destination => new
@@ -244,23 +265,23 @@ public sealed class FilingSuggester(
             settings.Threshold
         });
 
-        return "filing-suggestion:v1:" + Convert.ToHexString(SHA256.HashData(inputs));
+        return "filing-suggestion:v2:" + Convert.ToHexString(SHA256.HashData(inputs));
     }
 
     /// <summary>
     /// What the model judges. Only facts about the money and where it could go; nobody's
     /// name but the merchant's.
     /// </summary>
-    internal static object State(BankTransaction row, FilingReceipt? receipt, IReadOnlyList<Destination> earlier) => new
+    internal static object State(FilingInput row, FilingReceipt? receipt, IReadOnlyList<Destination> earlier) => new
     {
         merchant = Merchant(row),
         bankDescription = row.Description,
         amount = row.Amount,
         currency = row.Currency,
-        date = (row.AuthorizedDate ?? row.Date).ToString("yyyy-MM-dd"),
+        date = row.Date?.ToString("yyyy-MM-dd"),
         bankCategory = row.ProviderCategory,
         bankCategoryDetailed = row.ProviderCategoryDetailed,
-        account = row.Account?.Name,
+        account = row.AccountName,
         paymentChannel = row.PaymentChannel,
         city = row.City,
         earlierFilingsOfThisMerchant = earlier.Count == 0
@@ -275,7 +296,7 @@ public sealed class FilingSuggester(
             : new { merchant = receipt.MerchantName, items = receipt.Items }
     };
 
-    private static string Merchant(BankTransaction row) =>
+    private static string Merchant(FilingInput row) =>
         string.IsNullOrWhiteSpace(row.MerchantName) ? row.Description : row.MerchantName;
 
     /// <summary>
@@ -337,7 +358,7 @@ public sealed class FilingSuggester(
     /// counting only the ones that landed somewhere still on offer.
     /// </summary>
     private async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Destination>>> HistoryAsync(
-        IEnumerable<BankTransaction> rows,
+        IEnumerable<FilingInput> rows,
         IReadOnlyList<Destination> destinations,
         int limit,
         CancellationToken ct)
@@ -394,7 +415,7 @@ public sealed class FilingSuggester(
             string.IsNullOrWhiteSpace(description) ? string.Empty : $" {kind}: \"{description}\".";
     }
 
-    private sealed record CachedSuggestion(FilingSuggestionResponse? Value);
+    private sealed record CachedSuggestion(FilingDestinationSuggestion? Value);
 
     private sealed class DecisionFailedException : Exception;
 }

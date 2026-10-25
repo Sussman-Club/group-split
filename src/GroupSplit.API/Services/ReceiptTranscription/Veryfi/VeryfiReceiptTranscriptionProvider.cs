@@ -140,7 +140,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             {
                 NormalizedName = item.NormalizedName,
                 Description = item.Description,
-                TaxRate = item.TaxRate,
+                TaxRate = ReceiptTaxRates.Normalize(item.TaxRate, item.TotalPrice, itemTaxes[index]),
                 IsTaxable = item.IsTaxable
             }).ToArray();
 

@@ -22,8 +22,6 @@ public static class ReceiptSplitCalculator
     public static void CalculateLineTaxes(Receipt receipt)
     {
         var items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id).ToList();
-        if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
-            return;
         var taxes = CalculateTaxes(receipt, items);
         foreach (var item in items)
             item.TaxAmount = taxes[item.Id];
@@ -165,35 +163,10 @@ public static class ReceiptSplitCalculator
     /// what the receipt tax still leaves over is spread across such lines.</summary>
     private static IReadOnlyDictionary<Guid, decimal> CalculateTaxes(Receipt receipt, IReadOnlyList<ReceiptItem> items)
     {
-        if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
-            return items.ToDictionary(item => item.Id, item => item.TaxAmount);
-
-        // An unrated line's own figure stands: it may be a reviewer's correction or a
-        // provider's per-line reading, and one flag elsewhere on the bill says nothing
-        // about it. Only a line marked exempt is forced to zero.
-        var taxes = items.ToDictionary(item => item.Id, item => item.TaxRate is { } rate
-            ? RoundMoney(item.TotalPrice * rate / 100m)
-            : item.IsTaxable == false ? 0m : item.TaxAmount);
-        var remaining = receipt.Tax - taxes.Values.Sum();
-        if (remaining == 0m)
-            return taxes;
-
-        var fallback = items.Where(item => item.TaxRate is null && item.IsTaxable != false &&
-            (remaining > 0 ? item.TotalPrice > 0 : item.TotalPrice < 0)).ToList();
-        // A till taxes the rate's whole base once, while each line here is rounded on its
-        // own, so a fully rated bill can differ from the printed tax by up to half a cent
-        // per line. That difference is rounding rather than a misread and belongs to the
-        // rated lines themselves; anything larger is left to be refused as not adding up.
-        if (fallback.Count == 0)
-        {
-            var rated = items.Where(item => item.TaxRate is > 0 && item.TotalPrice != 0m).ToList();
-            if (Math.Abs(remaining) <= .005m * rated.Count)
-                fallback = rated;
-        }
-        foreach (var (item, share) in Allocate(Math.Abs(remaining), fallback.Select(item => Math.Abs(item.TotalPrice)).ToArray())
-                     .Select((share, index) => (fallback[index], share)))
-            taxes[item.Id] += Math.Sign(remaining) * share;
-        return taxes;
+        var taxes = ReceiptTaxes.Calculate(receipt.Tax, items.Select(item =>
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+        return items.Select((item, index) => (item.Id, Tax: taxes[index]))
+            .ToDictionary(item => item.Id, item => item.Tax);
     }
 
     private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights)

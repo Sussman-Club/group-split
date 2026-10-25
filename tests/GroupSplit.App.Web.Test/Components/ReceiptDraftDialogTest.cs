@@ -65,6 +65,33 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Unassigned_scanned_tax_can_be_distributed_before_using_the_receipt()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 4m, TotalPrice = 4m },
+                new ReceiptItemInput { Name = "Bread", UnitPrice = 3m, TotalPrice = 3m },
+                new ReceiptItemInput { Name = "Apples", UnitPrice = 3m, TotalPrice = 3m }]
+        };
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", receipt) }
+            }));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Distribute tax"))
+            .ClickAsync(new MouseEventArgs());
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.NotNull(result);
+        Assert.Equal([.30m, .23m, .22m], result.Items.Select(item => item.TaxAmount));
+        Assert.Equal(result.Tax, result.Items.Sum(item => item.TaxAmount));
+    }
+
+    [Fact]
     public async Task A_new_scan_returns_to_the_expense_sheet_instead_of_saving_a_receipt()
     {
         var provider = Render<MudDialogProvider>();
