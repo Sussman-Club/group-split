@@ -58,6 +58,42 @@ public sealed class ReceiptTaxesTest
     }
 
     [Fact]
+    public void A_large_disagreement_does_not_silently_inflate_an_already_read_line_tax()
+    {
+        var amounts = ReceiptTaxes.Calculate(3m,
+            [new(100m, 0m, 1m, true), new(10m, .50m, null, true)]);
+        Assert.Equal([1m, .50m], amounts);
+    }
+
+    [Fact]
+    public void Mixed_rates_discounts_and_exempt_lines_reconcile_deterministically_under_stress()
+    {
+        var random = new Random(481);
+        decimal[] rates = [0m, .5m, 5m, 7.5m, 10m, 20m];
+        for (var sample = 0; sample < 500; sample++)
+        {
+            var items = Enumerable.Range(0, random.Next(2, 151)).Select(index =>
+                new ReceiptTaxLine((index % 7 == 0 ? -1 : 1) * random.Next(1, 10000) / 100m,
+                    0m, rates[random.Next(rates.Length)], index % 5 != 0)).ToArray();
+            var exact = items.Select(item => item.IsTaxable == false ? 0m
+                : item.TotalPrice * item.TaxRate!.Value / 100m).ToArray();
+            var printedTax = decimal.Round(exact.Sum(), 2, MidpointRounding.AwayFromZero);
+            var amounts = ReceiptTaxes.Calculate(printedTax, items);
+            Assert.Equal(printedTax, amounts.Sum());
+            for (var index = 0; index < items.Length; index++)
+            {
+                Assert.Equal(amounts[index], decimal.Round(amounts[index], 2));
+                if (items[index].IsTaxable == false || items[index].TaxRate == 0)
+                    Assert.Equal(0m, amounts[index]);
+                else
+                    Assert.InRange(Math.Abs(amounts[index] - exact[index]), 0m, .01m);
+            }
+            Assert.Equal(amounts, ReceiptTaxes.Calculate(printedTax,
+                items.Select((item, index) => item with { TaxAmount = amounts[index] }).ToArray()));
+        }
+    }
+
+    [Fact]
     public void A_negative_rounding_cent_does_not_require_a_discount_line()
     {
         var amounts = ReceiptTaxes.Calculate(.21m, [new(1m, .11m, null, null), new(1m, .11m, null, null)]);

@@ -14,6 +14,7 @@
     </TitleContent>
 
     <DialogContent>
+        <MudForm @ref="_form">
         <div class="gs-stack" style="gap: 16px">
             <MudAlert Severity="Severity.Info" Dense="true">
                 @if (IsEditing)
@@ -147,6 +148,7 @@
                 </div>
             }
         </div>
+        </MudForm>
     </DialogContent>
 
     <DialogActions>
@@ -179,6 +181,7 @@
     private string? _sourceValues;
     private List<EditableLine> _items = [];
     private bool _saving;
+    private MudForm _form = null!;
     private string? _validationError;
     private string? _loadedSource;
 
@@ -196,6 +199,16 @@
     {
         get
         {
+            if (new[] { _subtotal, _tax, _tip, _total }.Any(value => value < 0 || decimal.Round(value, 2) != value))
+                return "Receipt subtotal, tax, tip, and total must be non-negative amounts with at most two decimal places.";
+            if (_items.Any(item => item.Quantity <= 0 || decimal.Round(item.Quantity, 3) != item.Quantity))
+                return "Quantities must be positive with at most three decimal places.";
+            if (_items.Any(item => item.TaxRate is < 0 or > 100
+                || item.TaxRate is { } rate && decimal.Round(rate, 4) != rate))
+                return "Tax rates must be between 0 and 100 with at most four decimal places.";
+            if (_items.Any(item => new[] { item.UnitPrice, item.TotalPrice, item.TaxAmount }
+                    .Any(value => decimal.Round(value, 2) != value)))
+                return "Line prices and taxes must have at most two decimal places.";
             if (_items.Any(item => item.IsTaxable == false && item.TaxRate is > 0))
                 return "A tax-exempt item cannot have a positive tax rate.";
             if (_subtotal + _tax + _tip != _total)
@@ -249,6 +262,14 @@
 
     private async Task SaveAsync()
     {
+        if (_saving)
+            return;
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            _validationError = "Correct the highlighted receipt fields before saving.";
+            return;
+        }
         if (_items.Count == 0)
         {
             _validationError = "Add at least one named item before saving.";

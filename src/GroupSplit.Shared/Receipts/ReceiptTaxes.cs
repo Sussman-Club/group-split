@@ -40,8 +40,10 @@ public static class ReceiptTaxes
             return taxes;
 
         // Unknown taxable lines can carry tax not otherwise assigned by the reading.
-        var fallback = fillMissing ? missing : manual.Where(index => remaining > 0
-            ? items[index].TotalPrice > 0 : items[index].TotalPrice < 0).ToArray();
+        // A printed/manual line tax is evidence, not an unidentified amount. Only an
+        // explicit redistribution may change it beyond a rounding cent.
+        var fallback = fillMissing ? missing : allocateUnidentified ? manual.Where(index => remaining > 0
+            ? items[index].TotalPrice > 0 : items[index].TotalPrice < 0).ToArray() : [];
         var weight = fallback.Sum(index => Math.Abs(items[index].TotalPrice));
         if (weight == 0)
             return taxes;

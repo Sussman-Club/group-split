@@ -87,6 +87,47 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(before, await DbContext.Set<Expense>().CountAsync(Ct));
     }
 
+    [Fact]
+    public async Task A_complex_receipt_with_weighted_produce_multiple_rates_coupon_free_item_and_tip_saves_exactly()
+    {
+        var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Complex receipt" }, Ct);
+        await JoinGroup(group.Id, await CreateNewUser());
+        var even = await Rules.Create(new CreateSplitRuleRequest
+            { GroupId = group.Id, Name = "Together", Definition = new EvenSplitRuleDto() }, Ct);
+        var itemized = await DbContext.Set<ItemizedSplitRuleVersion>().Include(version => version.SplitRule)
+            .SingleAsync(version => version.SplitRule.Group.Id == group.Id && version.SupersededAt == null, Ct);
+        ReceiptItemInput Taxed(string name, decimal price, decimal rate) =>
+            Item(name, price, even.Current!.Id) with { TaxRate = rate, IsTaxable = true };
+        var request = new CreateTransactionRequest
+        {
+            Name = "Mixed grocery receipt", GroupId = group.Id, Amount = 53.78m,
+            DateTime = DateTimeOffset.UtcNow, SplitRuleId = itemized.SplitRule.Id,
+            Receipt = new SaveReceiptRequest
+            {
+                Subtotal = 43.23m, Tax = 2.55m, Tip = 8m, Total = 53.78m,
+                Items = [Taxed("Milk", 4m, 7.5m), Taxed("Bread", 3m, 7.5m), Taxed("Apples", 3m, 7.5m),
+                    Item("Weighted produce", 8.24m, even.Current!.Id) with
+                        { UnitPrice = 5.99m, Quantity = 1.375m, IsTaxable = false },
+                    Taxed("Detergent", 19.99m, 7.5m), Taxed("Coupon", -2m, 7.5m),
+                    Taxed("Nuts A", 1.05m, 10m), Taxed("Nuts B", 1.05m, 10m),
+                    Item("Deposit", .10m, even.Current!.Id) with { IsTaxable = false },
+                    Item("Free sample", 0m, even.Current!.Id) with { IsTaxable = false },
+                    Taxed("Tea", 4.80m, 5m) with { UnitPrice = 1.60m, Quantity = 3m }]
+            }
+        };
+        var preview = await Transactions.Preview(request, Ct);
+        var saved = await Transactions.Create(request, Ct);
+        var receipt = await Receipts.ForExpense(saved.Id, Ct);
+        Assert.Equal(11, receipt.Items.Count);
+        Assert.Equal(2.55m, receipt.Items.Sum(item => item.TaxAmount));
+        Assert.Equal(-.15m, receipt.Items.Single(item => item.Name == "Coupon").TaxAmount);
+        Assert.All(receipt.Items.Where(item => item.IsTaxable == false), item => Assert.Equal(0m, item.TaxAmount));
+        Assert.Equal(53.78m, saved.Splits.Sum(split => split.Amount));
+        Assert.Equal(preview.Splits.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)),
+            saved.Splits.OrderBy(split => split.UserId).Select(split => (split.UserId, split.Amount)));
+        Assert.True((await Receipts.ResponseFor(receipt, ct: Ct)).DividesItsExpense);
+    }
+
     /// <summary>A group of two, an expense of 48 in it, and a rule its lines can name.</summary>
     private async Task<(Expense Expense, Guid Group, Guid Even)> AnExpense(SplitRuleDto? divides = null)
     {

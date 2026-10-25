@@ -2,6 +2,7 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -91,6 +92,59 @@ public class ReceiptDraftDialogTest : ComponentTest
         var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
         Assert.NotNull(result);
         Assert.Equal(.75m, result.Items.Sum(item => item.TaxAmount));
+    }
+
+    [Theory]
+    [InlineData("Quantity", 0, "Quantities must be positive")]
+    [InlineData("Quantity", -1, "Quantities must be positive")]
+    [InlineData("Quantity", 1.0001, "Quantities must be positive")]
+    [InlineData("Tax rate", -1, "Tax rates must be between")]
+    [InlineData("Tax rate", 101, "Tax rates must be between")]
+    public async Task Invalid_numeric_edits_stay_in_review_instead_of_closing_the_draft(
+        string label, decimal value, string message)
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", Draft()) }
+            }));
+        if (label == "Tax rate")
+        {
+            var field = provider.FindComponents<MudNumericField<decimal?>>()
+                .First(field => field.Instance.Label == label);
+            await provider.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync(value));
+        }
+        else
+        {
+            var field = provider.FindComponents<MudNumericField<decimal>>()
+                .First(field => field.Instance.Label == label);
+            await provider.InvokeAsync(() => field.Instance.ValueChanged.InvokeAsync(value));
+        }
+        Assert.Contains(message, provider.Markup);
+        var save = provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"));
+        Assert.True(save.HasAttribute("disabled"));
+        Assert.False(reference!.Result!.IsCompleted);
+    }
+
+    [Fact]
+    public async Task An_unparseable_amount_cannot_silently_save_the_previous_value()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", Draft()) }
+            }));
+        var field = provider.FindComponents<MudNumericField<decimal>>()
+            .First(field => field.Instance.Label == "Line total");
+        await field.Find("input").ChangeAsync(new ChangeEventArgs { Value = "1.234,56" });
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        Assert.False(reference!.Result!.IsCompleted);
+        Assert.Contains("Correct the highlighted", provider.Markup);
     }
 
     [Fact]
