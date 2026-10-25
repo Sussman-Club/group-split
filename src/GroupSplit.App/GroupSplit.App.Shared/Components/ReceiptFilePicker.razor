@@ -56,13 +56,14 @@
                 <span class="gs-file-picker-subtitle">@AttachedDescription</span>
             </span>
             <div class="gs-file-picker-actions">
-                <label class="gs-btn-pill gs-file-picker-replace" aria-disabled="@(IsBusy ? "true" : "false")">
+                <MudButton HtmlTag="label" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           Class="gs-btn-pill gs-file-picker-replace" Disabled="@IsBusy">
                     Change file
                     @* A direct native input tap also works in phone browsers. Keep both
                        inputs mounted so replacing one never invalidates the other handle. *@
                     <InputFile OnChange="FileChanged" accept="@Accept" disabled="@IsBusy"
                                class="gs-file-picker-replace-input" aria-label="Change receipt file" />
-                </label>
+                </MudButton>
             @if (ReadRequested.HasDelegate)
             {
                 <MudButton Variant="Variant.Outlined"

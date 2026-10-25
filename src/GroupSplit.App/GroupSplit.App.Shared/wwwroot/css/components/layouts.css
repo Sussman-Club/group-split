@@ -248,15 +248,6 @@
 
 .gs-file-picker-replace {
     position: relative;
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    color: var(--gs-primary);
-    font-size: .8125rem;
-    font-weight: 600;
-    cursor: pointer;
 }
 
 .gs-file-picker-replace-input {
@@ -271,11 +262,6 @@
 .gs-file-picker-replace:focus-within {
     outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
     outline-offset: 3px;
-}
-
-.gs-file-picker-replace[aria-disabled="true"] {
-    opacity: .5;
-    cursor: default;
 }
 
 .gs-file-picker-status,
