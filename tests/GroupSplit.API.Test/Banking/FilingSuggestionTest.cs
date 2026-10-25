@@ -43,6 +43,46 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task Receipt_suggestions_are_limited_to_the_selected_group_and_do_not_import_a_row()
+    {
+        var (group, groceries) = await Home();
+        _model.Answer("Home · Groceries", 0.9);
+        var before = await GetService<GroupSplit.Data.AppDbContext>().Set<BankTransaction>().CountAsync(Ct);
+        var suggestion = await GetService<IFilingSuggester>().SuggestReceipt(new SuggestReceiptFilingRequest
+        {
+            GroupId = group.Id, Currency = "USD",
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Corner shop", Total = 12m,
+                Items = [new ReceiptItemInput { Name = "Milk" }]
+            }
+        }, Ct);
+        Assert.NotNull(suggestion);
+        Assert.Equal(groceries, suggestion.CategoryId);
+        Assert.DoesNotContain(Assert.Single(_model.Asked).Options.Keys, label => label.StartsWith("Personal"));
+        Assert.Equal(before, await GetService<GroupSplit.Data.AppDbContext>().Set<BankTransaction>().CountAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Receipt_suggestions_cache_the_spending_facts_and_refresh_when_the_amount_changes()
+    {
+        var (group, _) = await Home();
+        _model.Answer("Home · Groceries", .9);
+        var request = new SuggestReceiptFilingRequest
+        {
+            GroupId = group.Id, Currency = "USD",
+            Receipt = new SaveReceiptRequest { MerchantName = "Corner shop", Total = 12m,
+                Items = [new ReceiptItemInput { Name = "Milk" }] }
+        };
+        var service = GetService<IFilingSuggester>();
+        Assert.NotNull(await service.SuggestReceipt(request, Ct));
+        Assert.NotNull(await service.SuggestReceipt(request, Ct));
+        Assert.Single(_model.Asked);
+        Assert.NotNull(await service.SuggestReceipt(request with { Receipt = request.Receipt with { Total = 24m } }, Ct));
+        Assert.Equal(2, _model.Asked.Count);
+    }
+
+    [Fact]
     public async Task Suggests_the_group_and_category_the_model_picks()
     {
         var (group, groceries) = await Home();
@@ -203,9 +243,13 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Suggest(row);
 
-        var options = Assert.Single(_model.Asked).Options.Values;
+        var asked = Assert.Single(_model.Asked);
+        var options = asked.Options.Values;
         Assert.Contains(options, option => option.Contains("The flat we share near the station"));
         Assert.Contains(options, option => option.Contains("Food and household supplies"));
+        Assert.Contains("Give substantial weight", asked.Instructions);
+        Assert.Contains("group description and category description", asked.Instructions);
+        Assert.Contains("outweigh", asked.Instructions);
     }
 
     [Fact]
@@ -414,7 +458,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         private bool _fail;
         private double? _firstOptionConfidence;
 
-        public List<(string State, IReadOnlyDictionary<string, string> Options)> Asked { get; } = [];
+        public List<(string State, IReadOnlyDictionary<string, string> Options, string Instructions)> Asked { get; } = [];
 
         public void Answer(string choice, double confidence)
         {
@@ -436,7 +480,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
         {
             lock (Asked)
-                Asked.Add((JsonSerializer.Serialize(state, Readable), options));
+                Asked.Add((JsonSerializer.Serialize(state, Readable), options, instructions));
 
             return _fail
                 ? Task.FromException<DecisionAnswer?>(new HttpRequestException("model unavailable"))

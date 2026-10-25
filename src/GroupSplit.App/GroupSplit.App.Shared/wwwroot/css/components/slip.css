@@ -146,6 +146,8 @@
 
 .gs-slip-qty {
     color: var(--gs-paper-faint);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .gs-slip-qty::after {
@@ -156,6 +158,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .gs-slip-name {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
 }
 
 /* On the baseline, where a printed leader sits. The grid aligns to baseline already, and an

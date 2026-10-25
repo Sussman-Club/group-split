@@ -1,0 +1,30 @@
+@namespace GroupSplit.App.Shared.Components
+
+<fieldset disabled="@IsLocked" inert="@IsLocked" aria-busy="@(IsLocked ? "true" : "false")"
+          style="border: 0; padding: 0; margin: 0; min-width: 0; width: 100%">
+    @ChildContent
+</fieldset>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public bool IsLocked { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private DialogOptions? _originalOptions;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsLocked && _originalOptions is null)
+        {
+            _originalOptions = MudDialog.Options;
+            await MudDialog.SetOptionsAsync(_originalOptions with
+            {
+                CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false
+            });
+        }
+        else if (!IsLocked && _originalOptions is { } options)
+        {
+            _originalOptions = null;
+            await MudDialog.SetOptionsAsync(options);
+        }
+    }
+}

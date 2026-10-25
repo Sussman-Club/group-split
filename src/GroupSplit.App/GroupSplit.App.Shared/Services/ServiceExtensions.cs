@@ -80,9 +80,13 @@ public static class ServiceExtensions
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
             services.AddApiClient<IMerchantsClient, MerchantsClient>();
-            services.AddApiClient<IReceiptsClient, ReceiptsClient>();
+            // OCR has a two-minute provider budget. Leave time for upload and the
+            // response too, on native, browser, and server-side clients alike.
+            services.AddApiClient<IReceiptsClient, ReceiptsClient>()
+                .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromMinutes(3));
             services.AddApiClient<IBankConnectionsClient, BankConnectionsClient>();
-            services.AddApiClient<IInboxClient, InboxClient>();
+            services.AddApiClient<IInboxClient, InboxClient>()
+                .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromMinutes(3));
             
             return services;
         }

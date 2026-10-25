@@ -43,6 +43,7 @@
     </TitleContent>
 
     <DialogContent>
+        <ReceiptReadLock IsLocked="@(_transcribingAttachmentId is not null)">
         @if (_initializing)
         {
             <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
@@ -59,7 +60,7 @@
         }
         else
         {
-            <MudForm @ref="_form" Model="@_model">
+            <MudForm @ref="_form" Model="@_model" Disabled="@(_transcribingAttachmentId is not null)">
                 <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up: what an edit is usually about is this figure, and
@@ -203,13 +204,14 @@
                 </div>
             </MudForm>
         }
+        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null)"
+                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _transcribingAttachmentId is not null)"
                    OnClick="Submit">
             Save
         </MudButton>
@@ -688,6 +690,8 @@
 
     private async Task TranscribeAttachmentAsync(ReceiptAttachmentResponse attachment)
     {
+        if (_transcribingAttachmentId is not null)
+            return;
         _transcribingAttachmentId = attachment.Id;
         try
         {
@@ -1126,7 +1130,7 @@
         // Stays open on it, with the refusal on screen and the edit intact, rather than
         // closing onto a save the API will refuse. The button is off as well; this is for
         // a submit that arrives some other way.
-        if (CurrencyRefusal is not null)
+        if (_transcribingAttachmentId is not null || CurrencyRefusal is not null)
             return;
 
         await _form.ValidateAsync();
@@ -1161,7 +1165,11 @@
         MudDialog.Close(DialogResult.Ok(CreatePatch(original, _model, _redivide)));
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        if (_transcribingAttachmentId is null)
+            MudDialog.Cancel();
+    }
 
     /// <param name="redivide">
     /// Whether the person asked for the division to be worked out again. It cannot be read

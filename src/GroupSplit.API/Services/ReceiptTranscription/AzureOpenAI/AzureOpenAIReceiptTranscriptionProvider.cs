@@ -72,7 +72,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         Tax and tip. Report tax only when it is charged on top of the line prices. When the prices
         already include it and the tax block only restates what the total already contains, set
         tax and every taxAmount to 0. Capture taxRate for a line whenever the receipt shows it,
-        and isTaxable when a tax flag is legible. Otherwise leave both null. taxAmount must be the
+        and isTaxable when a tax flag is legible. Otherwise leave both null.
+        Use percentage points for taxRate: 7.5 means 7.5%, never 0.075. taxAmount must be the
         result of taxRate on the signed taxable line whenever a rate is present. Put service,
         cover, or gratuity charges in tip. Use 0 for an absent tip or tax rather than guessing.
 
@@ -184,7 +185,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             RoundMoney(receipt.Tax),
             RoundMoney(receipt.Tip),
             RoundMoney(receipt.Total),
-            items)
+            ReceiptTaxRates.Normalize(RoundMoney(receipt.Tax), items))
         {
             MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
             PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
@@ -212,19 +213,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
         return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount))
         {
-            TaxRate = TaxRateFrom(item.TaxRate),
+            TaxRate = item.TaxRate,
             IsTaxable = item.IsTaxable
         };
     }
-
-    /// <summary>
-    /// The bill keeps a rate of 0 to 100, to four places. Anything outside that is not a rate
-    /// somebody can correct but a misreading, and an empty field says so better.
-    /// </summary>
-    private static decimal? TaxRateFrom(decimal? rate) =>
-        rate is { } value && Math.Round(value, 4, MidpointRounding.AwayFromZero) is >= 0m and <= 100m and var rounded
-            ? rounded
-            : null;
 
     /// <summary>
     /// The reading as the model gave it, for the reviewer to check against the paper. Kept

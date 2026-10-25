@@ -189,6 +189,8 @@
 
 .gs-receipt-preview img {
     max-height: 440px;
+    /* Transparent scans need paper behind their text, including in dark mode. */
+    background: #fff;
 }
 
 .gs-receipt-preview iframe {
