@@ -185,7 +185,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             RoundMoney(receipt.Tax),
             RoundMoney(receipt.Tip),
             RoundMoney(receipt.Total),
-            items)
+            ReceiptTaxRates.Normalize(RoundMoney(receipt.Tax), items))
         {
             MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
             PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
@@ -213,7 +213,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
         return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount))
         {
-            TaxRate = ReceiptTaxRates.Normalize(item.TaxRate, totalPrice, RoundMoney(item.TaxAmount)),
+            TaxRate = item.TaxRate,
             IsTaxable = item.IsTaxable
         };
     }

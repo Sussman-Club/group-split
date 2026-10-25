@@ -177,6 +177,32 @@ public class ReceiptTranscriptionServiceTest
         Assert.Equal([1, 2, 3], provider.Document.Content);
     }
 
+    [Theory]
+    [InlineData(0.5, 0.05, 0.5)]
+    [InlineData(0.075, 0.75, 7.5)]
+    public async Task Veryfi_missing_line_tax_resolves_rate_units_before_allocating_tax(
+        decimal rate, decimal tax, decimal expected)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            tax, total = 10m + tax,
+            line_items = new[] { new { description = "Item", price = 10m, quantity = 1,
+                total = 10m, tax_rate = rate } }
+        });
+        var server = new VeryfiServer(payload);
+        using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
+        var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
+        {
+            Enabled = true, ClientId = "client-id", Username = "username", ApiKey = "api-key"
+        }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(
+            Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]), TestContext.Current.CancellationToken);
+        var item = Assert.Single(receipt.Items);
+        Assert.Equal(expected, item.TaxRate);
+        Assert.Equal(tax, Assert.Single(ReceiptTaxes.Calculate(receipt.Tax,
+            [new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)])));
+    }
+
     [Fact]
     public async Task Veryfi_provider_posts_the_document_with_safe_retry_identity_and_maps_the_draft()
     {
