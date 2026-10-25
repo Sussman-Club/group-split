@@ -30,7 +30,7 @@
     <div>
         <div class="gs-eyebrow">Activity</div>
         <h1>Not filed</h1>
-        @if (Selectable)
+        @if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
         {
             <p role="status" aria-live="polite">@Counted(State.TotalCount) left to review in this range.</p>
         }
@@ -40,6 +40,9 @@
         }
     </div>
 </div>
+
+<LoadView Skeleton="SkeletonLayout.Inbox" Loading="@(_initializing || State.IsLoading)" Failed="@(!State.RowsLoaded)" Retry="InitializeAsync">
+
 
 <div class="gs-stack">
     @* Which rows, and over what span, on one line. They were two bands with the date
@@ -402,6 +405,8 @@
     </div>
 }
 
+</LoadView>
+
 @code {
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
@@ -614,12 +619,23 @@
         }
     }
 
+    private bool _initializing = true;
+
     protected override async Task OnInitializedAsync()
     {
         State.OnChanged += OnChanged;
+        await InitializeAsync();
+    }
 
-        await State.EnsureLoadedAsync();
-        await LoadAskedAsync();
+    private async Task InitializeAsync()
+    {
+        _initializing = true;
+        try
+        {
+            await State.EnsureLoadedAsync();
+            await LoadAskedAsync();
+        }
+        finally { _initializing = false; }
     }
 
     // Which rows, over what span and how many pages of them, are in the URL, so a refresh

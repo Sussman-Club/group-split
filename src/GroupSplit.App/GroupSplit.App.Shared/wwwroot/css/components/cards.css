@@ -59,6 +59,16 @@
     line-height: 1.1;
 }
 
+.gs-page-head > div {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.gs-page-head .gs-inline > div {
+    min-width: 0;
+}
+
 .gs-page-head p {
     margin: 6px 0 0;
     color: var(--gs-muted);

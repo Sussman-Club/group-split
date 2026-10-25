@@ -14,6 +14,7 @@
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject DataChangeNotifier Changes
+@inject AppLinks AppLinks
 @inject LocalClock Clock
 @implements IDisposable
 
@@ -37,8 +38,8 @@
 <div class="gs-stack">
     @* One row: what kind, over what span, matching what. Three controls is the whole
        filter, and it was two rows and nine buttons before the span collapsed into one. *@
-    <div class="gs-ledger-toolbar @(_mobileFiltersOpen ? "filters-open" : "")">
-        <div class="gs-ledger-filters">
+    <ActivityToolbar FiltersActive="@(IsSearching || _paidBy is not null)">
+        <Segments>
             @* Not in a personal group: nothing is settled there, so every entry is an
                expense and the chips would all show the same rows. *@
             @if (!Personal)
@@ -54,17 +55,11 @@
                 </div>
             }
 
+        </Segments>
+        <DateFilter>
             <DateRangeFilter Value="@_range" ValueChanged="OnRangeChangedAsync" />
-
-            <button type="button" class="gs-mobile-filter-toggle gs-ledger-payer"
-                    aria-label="Search and filters" aria-expanded="@_mobileFiltersOpen"
-                    @onclick="@(() => _mobileFiltersOpen = !_mobileFiltersOpen)">
-                <MudIcon Icon="@Icons.Material.Rounded.Tune" Size="Size.Small" />
-                @if (IsSearching || _paidBy is not null)
-                {
-                    <span class="gs-filter-dot" aria-label="Filters active"></span>
-                }
-            </button>
+        </DateFilter>
+        <Filters>
             @if (!Personal)
             {
                 <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
@@ -85,25 +80,27 @@
                     </ChildContent>
                 </MudMenu>
             }
-        </div>
+        </Filters>
+        <Search>
+            @* "Search" and nothing more in the box; what it reaches is in the label a screen
+               reader gets. A placeholder listing the columns is a spec, not a hint, and it is
+               the first thing to truncate on a phone. *@
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="Search"
+                          aria-label="Search this group by name, note, category or either party"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          OnDebounceIntervalElapsed="OnSearchChangedAsync"
+                          Clearable="true"
+                          Margin="Margin.Dense"
+                          Variant="Variant.Outlined"
+                          Class="gs-search" />
+        </Search>
+    </ActivityToolbar>
 
-        @* "Search" and nothing more in the box; what it reaches is in the label a screen
-           reader gets. A placeholder listing the columns is a spec, not a hint, and it is
-           the first thing to truncate on a phone. *@
-        <MudTextField @bind-Value="_searchString"
-                      Placeholder="Search"
-                      aria-label="Search this group by name, note, category or either party"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Rounded.Search"
-                      Immediate="true"
-                      DebounceInterval="300"
-                      OnDebounceIntervalElapsed="OnSearchChangedAsync"
-                      Clearable="true"
-                      Margin="Margin.Dense"
-                      Variant="Variant.Outlined"
-                      Class="gs-search" />
-    </div>
-
+    <LoadView Skeleton="SkeletonLayout.Summary" Loading="@(_initializing || (_spending is null && _inFlight is not null))" Failed="@(_spending is null || _byCategory is null)" Retry="ReadSummaryAsync">
     <div class="gs-mobile-spending" aria-live="polite">
         <span>@ExpenseCount expense@(ExpenseCount == 1 ? "" : "s") · @Spent.ToMoney() spent</span>
         <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">Details</button>
@@ -148,10 +145,11 @@
         }
     </section>
 
+    </LoadView>
+
     <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
-        <div class="gs-mobile-ledger" aria-label="Transactions">
-            @if (_ledgerLoaded && _mobileEntries.Count == 0)
-            {
+        <ActivityFeed Items="@_mobileEntries" Date="@(entry => entry.DateTime)" Key="@(entry => entry.Id)" Loaded="@_ledgerLoaded">
+            <EmptyContent>
                 <div class="gs-empty" role="status">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
                     <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
@@ -161,52 +159,43 @@
                         <MudButton OnClick="ClearSearchAsync">Clear search</MudButton>
                     }
                 </div>
-            }
-            @foreach (var day in _mobileEntries.GroupBy(entry => Clock.Day(entry.DateTime)))
-            {
-                <section class="gs-feed-day" aria-label="@day.Key.ToString("d MMMM yyyy")">
-                    <h3>@day.Key.ToString(day.Key.Year == Clock.Today.Year ? "d MMMM" : "d MMMM yyyy")</h3>
-                    @foreach (var entry in day)
+            </EmptyContent>
+            <ItemTemplate Context="entry">
+                <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
+                        aria-label="@($"Details for {Headline(entry)}")"
+                        @onclick="@(() => ViewAsync(entry))">
+                    @if (entry.Kind is ActivityKind.Transfer)
                     {
-                        <div class="gs-feed-row" @key="entry.Id">
-                            <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
-                                    aria-label="@($"Details for {Headline(entry)}")"
-                                    @onclick="@(() => ViewAsync(entry))">
-                                @if (entry.Kind is ActivityKind.Transfer)
-                                {
-                                    <span class="gs-row-icon transfer"><MudIcon Icon="@Icons.Material.Rounded.SwapHoriz" /></span>
-                                }
-                                else
-                                {
-                                    <MerchantMark PaidByUserName="@entry.PaidByUserName"
-                                                  MerchantName="@entry.MerchantName" MerchantLogoUrl="@entry.MerchantLogoUrl" />
-                                }
-                                <span class="gs-feed-copy">
-                                    <strong>@Headline(entry)</strong>
-                                    <span class="gs-muted">
-                                        @(entry.Kind is ActivityKind.Transfer ? "Settlement" + entry.CoversThrough.ThroughSuffix() : Detail(entry))
-                                        @if (Clock.TimeOf(entry.DateTime) is { } time)
-                                        {
-                                            <span> · @time.ToString("t")</span>
-                                        }
-                                    </span>
-                                    @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
-                                    {
-                                        <span class="gs-muted">Your share @share.ToMoney()</span>
-                                    }
-                                </span>
-                                <Money Value="entry.Amount" Class="gs-feed-amount" />
-                            </button>
-                            <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
-                                     aria-label="@($"Actions for {Headline(entry)}")" PopoverClass="gs-menu">
-                                <MudMenuItem OnClick="@(() => EditAsync(entry))">Edit</MudMenuItem>
-                                <MudMenuItem OnClick="@(() => DeleteAsync(entry))">Delete</MudMenuItem>
-                            </MudMenu>
-                        </div>
+                        <span class="gs-row-icon transfer"><MudIcon Icon="@Icons.Material.Rounded.SwapHoriz" /></span>
                     }
-                </section>
-            }
-        </div>
+                    else
+                    {
+                        <MerchantMark PaidByUserName="@entry.PaidByUserName"
+                                      MerchantName="@entry.MerchantName" MerchantLogoUrl="@entry.MerchantLogoUrl" />
+                    }
+                    <span class="gs-feed-copy">
+                        <strong>@Headline(entry)</strong>
+                        <span class="gs-muted">
+                            @(entry.Kind is ActivityKind.Transfer ? "Settlement" + entry.CoversThrough.ThroughSuffix() : Detail(entry))
+                            @if (Clock.TimeOf(entry.DateTime) is { } time)
+                            {
+                                <span> · @time.ToString("t")</span>
+                            }
+                        </span>
+                        @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
+                        {
+                            <span class="gs-muted">Your share @share.ToMoney()</span>
+                        }
+                    </span>
+                    <Money Value="entry.Amount" Class="gs-feed-amount" />
+                </button>
+                <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
+                         aria-label="@($"Actions for {Headline(entry)}")" PopoverClass="gs-menu">
+                    <MudMenuItem OnClick="@(() => EditAsync(entry))">Edit</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => DeleteAsync(entry))">Delete</MudMenuItem>
+                </MudMenu>
+            </ItemTemplate>
+        </ActivityFeed>
         @* Keyed so a URL arriving from outside rebuilds the grid on the page and sort it
            asks for: both are only read when a grid starts.
 
@@ -219,7 +208,7 @@
                      ServerData="LoadPageAsync"
                      @bind-RowsPerPage="_pageSize"
                      @bind-CurrentPage="_page"
-                     SortMode="SortMode.Single"
+                     SortMode="@(AppLinks.IsAndroidNative ? SortMode.None : SortMode.Single)"
                      Hover="true"
                      Bordered="false"
                      Elevation="0"
@@ -470,11 +459,11 @@
     private TransactionSummaryResponse? _spending;
     private IReadOnlyList<GroupLedgerEntryResponse> _mobileEntries = [];
     private bool _ledgerLoaded;
-    private bool _mobileFiltersOpen;
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
     private long _summaryVersion;
+    private bool _initializing = true;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
 
@@ -588,7 +577,11 @@
         var sort = state.SortDefinitions.FirstOrDefault();
 
         // Every narrowing ends up here, so this is where the URL catches up with it.
-        _sort = sort is null ? ListingQuery.DefaultSort : (Camel(sort.SortBy), sort.Descending);
+        // Android shows a chronological feed, not a sortable table. Its hidden grid
+        // must not restore an ascending or non-date sort, including on later pages.
+        _sort = AppLinks.IsAndroidNative || sort is null
+            ? ListingQuery.DefaultSort
+            : (Camel(sort.SortBy), sort.Descending);
         await WriteUrlAsync();
 
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
@@ -602,8 +595,8 @@
             categoryId: _categoryId,
             uncategorized: _uncategorized ? true : null,
             paidBy: _paidBy,
-            sortBy: sort is null ? "dateTime" : Camel(sort.SortBy),
-            sortDescending: sort?.Descending ?? true,
+            sortBy: _sort.Key,
+            sortDescending: _sort.Descending,
             page: state.Page + 1,
             pageSize: state.PageSize,
             cancellationToken: cancellationToken));
@@ -790,7 +783,11 @@
         finally
         {
             if (version == _summaryVersion)
+            {
                 _inFlight = null;
+                _initializing = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -1094,7 +1091,9 @@
         _range = ListingQuery.ParseRange(query.Range, query.From, query.To, OpensOn);
         _page = ListingQuery.ParsePage(query.Page);
         _pageSize = ListingQuery.ParsePageSize(query.Size);
-        _sort = ListingQuery.ParseSort(query.Sort, "dateTime", "name", "amount");
+        _sort = AppLinks.IsAndroidNative
+            ? ListingQuery.DefaultSort
+            : ListingQuery.ParseSort(query.Sort, "dateTime", "name", "amount");
         _expense = Guid.TryParse(query.Expense, out var expense) ? expense : null;
         _categoryId = Guid.TryParse(query.Category, out var category) ? category : null;
         _uncategorized = string.Equals(query.Category, "uncategorized", StringComparison.OrdinalIgnoreCase);

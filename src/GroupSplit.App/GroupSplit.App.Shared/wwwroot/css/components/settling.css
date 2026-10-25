@@ -294,111 +294,33 @@ button.gs-category-row:focus-visible,
     }
 }
 
-/* --------------------------------------------------------- stacked chip -- */
-
-.gs-mobile-ledger { display: none; }
-
-@media (max-width: 640px) {
-    .gs-mobile-ledger { display: block; }
-    .gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
-    /* Keep the grid's empty state and pager so both layouts use the same server page. */
-    .gs-ledger-listing { padding-bottom: 100px; }
-    .gs-feed-day { margin-bottom: 20px; }
-    .gs-feed-day h3 {
-        margin: 0;
-        padding: 12px 0 10px;
-        border-bottom: 1px solid var(--gs-line);
-        font-size: .9375rem;
-        font-weight: 700;
-    }
-    .gs-feed-row {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        border-bottom: 1px solid var(--gs-line);
-    }
-    .gs-feed-entry {
-        display: grid;
-        grid-template-columns: 40px minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: center;
-        flex: 1;
-        min-width: 0;
-        padding: 14px 0;
-        border: 0;
-        background: transparent;
-        color: var(--gs-ink);
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-    }
-    .gs-feed-entry:disabled { color: var(--gs-ink); cursor: default; }
-    .gs-feed-entry:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
-    .gs-feed-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .gs-feed-copy strong { font-size: .875rem; overflow-wrap: anywhere; line-height: 1.3; }
-    .gs-feed-copy > .gs-muted { font-size: .75rem; line-height: 1.4; }
-    .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
-    .gs-feed-row > .mud-menu { flex-shrink: 0; }
-    .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
-}
-
-/* A chip with a second line under its label. The three view chips on the You page
-   differed only in wording that did not distinguish them -- "Your share" beside
-   "Everything you are in" -- so each one now states what it counts. */
-
-.gs-range .gs-chip-stacked {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-    height: auto;
-    min-height: 34px;
-    padding: 6px 14px;
-    text-align: left;
-    line-height: 1.25;
-}
-
-.gs-chip-stacked .gs-chip-label {
-    font-weight: 700;
-}
-
-/* Quieter than the label and quieter still when the chip is off, so a row of three
-   reads as three labels first and three explanations second. */
-.gs-chip-stacked .gs-chip-detail {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    opacity: 0.72;
-}
-
-.gs-chip-stacked.active .gs-chip-detail {
-    opacity: 0.85;
-}
-
-/* On a narrow screen three stacked chips will not sit on one line, and a chip whose
-   second line has wrapped is unreadable. The detail is dropped rather than wrapped:
-   the label still says which view is on, and the heading under it repeats the
-   sentence in full. */
-@media (max-width: 560px) {
-    .gs-chip-stacked .gs-chip-detail {
-        display: none;
-    }
-
-    .gs-range .gs-chip-stacked {
-        flex-direction: row;
-        align-items: center;
-    }
-}
-
 /* Under 640px the four-column settle rows would put the amount and the button
    on top of each other. The action drops to its own line instead. */
 @media (max-width: 640px) {
     .gs-settle-row,
     .gs-plan-row {
-        grid-template-columns: auto 1fr auto;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+    }
+
+    .gs-settle-row > :nth-child(2),
+    .gs-plan-row > :nth-child(2) {
+        min-width: 0;
+    }
+
+    .gs-settle-row .who,
+    .gs-plan-row .who,
+    .gs-settle-row .meta,
+    .gs-plan-row .meta {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
     .gs-settle-row > :last-child,
     .gs-plan-row > :last-child {
         grid-column: 2 / -1;
         justify-self: start;
+        min-height: var(--gs-button-height);
+        max-width: 100%;
     }
 }

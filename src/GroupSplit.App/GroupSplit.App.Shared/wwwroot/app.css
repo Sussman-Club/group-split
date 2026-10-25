@@ -4,6 +4,7 @@
 @import url("css/layout.css");
 @import url("css/components/avatars.css");
 @import url("css/components/cards.css");
+@import url("css/components/loading.css");
 @import url("css/components/linked-banks.css");
 @import url("css/components/dashboard.css");
 @import url("css/components/transactions.css");
@@ -20,6 +21,7 @@
 @import url("css/components/dashboard-groups.css");
 @import url("css/components/group-tabs.css");
 @import url("css/components/settling.css");
+@import url("css/components/activity.css");
 @import url("css/components/filters.css");
 @import url("css/responsive-phone.css");
 @import url("css/components/inbox.css");

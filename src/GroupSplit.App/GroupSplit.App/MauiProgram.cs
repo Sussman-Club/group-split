@@ -13,6 +13,9 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddMudServices();
         builder.Services.AddTransient<MainPage>();
+#if ANDROID
+        builder.Services.AddSingleton<Shared.Services.IReceiptCamera, NativeReceiptCamera>();
+#endif
 
 #if DEBUG
         const bool development = true;

@@ -49,6 +49,7 @@
     </TitleContent>
 
     <DialogContent>
+        <ReceiptReadLock IsLocked="@ReceiptBusy">
         <div class="gs-stack" style="gap: 16px">
             @* What the bank sent, in the same summary card the expense dialog uses for its
                own figures. It stands where the amount field stands there, because it is
@@ -227,6 +228,7 @@
             }
             }
         </div>
+        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
@@ -699,7 +701,11 @@
             ? "same day, same amount"
             : $"{match.DaysApart} day{(match.DaysApart == 1 ? "" : "s")} apart · {match.AmountDifference:0.00} difference";
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        if (!ReceiptBusy)
+            MudDialog.Cancel();
+    }
 
     private void SelectMatch(ExpenseMatchResponse match)
     {

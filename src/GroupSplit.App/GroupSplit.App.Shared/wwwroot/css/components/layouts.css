@@ -18,6 +18,7 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    row-gap: 12px;
 }
 
 .gs-match-choice {
@@ -108,17 +109,43 @@
 }
 
 .gs-file-picker-camera-action {
+    position: relative;
     display: none;
     flex: 0 0 auto;
     align-items: center;
     gap: 5px;
-    padding: 7px 10px;
+    padding: var(--gs-button-padding-y) 12px;
     border: 1px solid var(--gs-primary);
-    border-radius: 999px;
+    border-radius: var(--gs-button-radius);
     color: var(--gs-primary);
-    font-size: .75rem;
-    font-weight: 700;
+    font-size: .8125rem;
+    line-height: var(--gs-button-line-height);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-weight: 600;
     cursor: pointer;
+    background: transparent;
+    font-family: inherit;
+    overflow: hidden;
+}
+
+.gs-file-picker-dropzone[hidden] {
+    display: none;
+}
+
+.gs-file-picker-camera-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.gs-file-picker-camera-action:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
 }
 
 .gs-file-picker-dropzone:hover {
@@ -188,17 +215,53 @@
 }
 
 .gs-file-picker-action {
+    position: relative;
     flex: 0 0 auto;
-    padding: 7px 11px;
+    padding: var(--gs-button-padding-y) 12px;
     border: 1px solid var(--gs-primary);
-    border-radius: 999px;
+    border-radius: var(--gs-button-radius);
     color: var(--gs-primary);
-    font-size: .75rem;
-    font-weight: 700;
+    font-size: .8125rem;
+    line-height: var(--gs-button-line-height);
+    font-weight: 600;
+}
+
+.gs-file-picker-action::before,
+.gs-file-picker-camera-action::before {
+    content: "";
+    position: absolute;
+    inset: -6px 0;
+    min-height: 44px;
 }
 
 .gs-file-picker-read {
     flex: 0 0 auto;
+}
+
+.gs-file-picker-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.gs-file-picker-replace {
+    position: relative;
+}
+
+.gs-file-picker-replace-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.gs-file-picker-replace:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
 }
 
 .gs-file-picker-status,
@@ -214,17 +277,56 @@
     color: var(--gs-success);
 }
 
-@media (max-width: 520px) {
-    .gs-file-picker-camera-action {
-        display: inline-flex;
+@media (max-width: 820px), (max-width: 900px) and (max-height: 500px) {
+    .gs-file-picker-dropzone {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
     }
 
+    .gs-file-picker-main-action {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .gs-file-picker-title,
+    .gs-file-picker-subtitle,
+    .gs-file-picker-formats {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .gs-file-picker-action {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: var(--gs-button-height);
+    }
+
+    .gs-file-picker-camera-action {
+        display: inline-flex;
+        justify-content: center;
+        gap: 8px;
+        min-height: 44px;
+    }
+
+    .gs-file-picker-camera-action .mud-icon-root {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 520px) {
     .gs-file-picker-attached {
         align-items: flex-start;
         flex-wrap: wrap;
     }
 
-    .gs-file-picker-attached .gs-file-picker-read {
-        margin-left: 50px;
+    .gs-file-picker-attached .gs-file-picker-actions {
+        flex-basis: 100%;
     }
 }

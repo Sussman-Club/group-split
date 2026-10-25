@@ -24,6 +24,7 @@
 
 <PageTitle>Settle up - Group Split</PageTitle>
 
+<LoadView Loading="_initializing">
 <div class="gs-page-head">
     <div>
         <div class="gs-eyebrow">Across every group</div>
@@ -185,6 +186,8 @@
     </section>
 </div>
 
+</LoadView>
+
 @code {
     private SettlementPlanResponse? Plan => Settling.Plan;
     private PagedResponse<SettlementResponse>? History => Settling.History;
@@ -279,6 +282,8 @@
 
     protected override void OnInitialized() => Settling.OnChanged += ReRender;
 
+    private bool _initializing = true;
+
     protected override async Task OnInitializedAsync()
     {
         await Settling.EnsureLoadedAsync();
@@ -287,6 +292,7 @@
         // Only this page reads the history, so only this page asks for it.
         await Settling.LoadHistoryAsync();
         _historyFailed = History is null;
+        _initializing = false;
     }
 
     /// <summary>

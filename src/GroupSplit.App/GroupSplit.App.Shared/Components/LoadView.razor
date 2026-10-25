@@ -1,0 +1,52 @@
+@* Do not instantiate children until their data is ready. Empty states belong to the
+   children and therefore cannot be mistaken for an unfinished or failed request. *@
+@if (Loading)
+{
+    @if (Skeleton is { } layout)
+    {
+        <LoadingSkeleton Layout="layout" />
+    }
+    else
+    {
+        <div class="gs-card gs-load-view" role="status" aria-live="polite" aria-busy="true">
+            <div class="gs-load-mark" aria-hidden="true">
+                <BrandMark Size="32" Class="gs-load-brand" />
+                <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="gs-load-spinner" />
+            </div>
+            <div class="gs-load-copy">
+                <h2>@LoadingTitle</h2>
+                <p>@LoadingMessage</p>
+            </div>
+        </div>
+    }
+}
+else if (Failed)
+{
+    <div class="gs-card gs-load-view" role="alert">
+        <div class="gs-load-error" aria-hidden="true">
+            <MudIcon Icon="@Icons.Material.Rounded.CloudOff" />
+        </div>
+        <div class="gs-load-copy">
+            <h2>Could not load this view</h2>
+            <p>Check your connection and try again.</p>
+        </div>
+        @if (Retry.HasDelegate)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Retry">Try again</MudButton>
+        }
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool Failed { get; set; }
+    [Parameter] public SkeletonLayout? Skeleton { get; set; }
+    [Parameter] public string LoadingTitle { get; set; } = "Loading…";
+    [Parameter] public string LoadingMessage { get; set; } = "Your latest details will appear here shortly.";
+    [Parameter] public EventCallback Retry { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

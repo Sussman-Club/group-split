@@ -8,6 +8,8 @@ public interface IInboxStateService
 {
     /// <summary>The rows currently shown, for the filter in force.</summary>
     IReadOnlyList<BankTransactionResponse> Rows { get; }
+    bool RowsLoaded { get; }
+    bool IsLoading { get; }
 
     /// <summary>How many rows are waiting, whatever the filter shows. What the nav badge reads.</summary>
     int NewCount { get; }
@@ -117,6 +119,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     private readonly LocalClock _clock;
 
     private readonly Lock _lock = new();
+
+    public bool RowsLoaded { get; private set; }
+    public bool IsLoading => _pendingLoads > 0;
+    private int _pendingLoads;
 
     private Task? _loaded;
     private bool _rowsWanted;
@@ -315,7 +321,6 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             Announce();
             _ = SuggestAsync();
         }, "your bank inbox");
-
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
         // than the one after it.
         if (!loaded && _pages == page)
@@ -360,50 +365,64 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     private Task RefreshAsync() => RefreshAsync(CancellationToken.None);
 
-    public Task RefreshAsync(CancellationToken ct = default) =>
-        _guard.RunAsync(async () =>
+    public async Task RefreshAsync(CancellationToken ct = default)
+    {
+        _pendingLoads++;
+        Announce();
+        try
         {
-            var version = ++_version;
-
-            // Read once, here: the filter and the span can move while this is in flight,
-            // and the rows have to be the answer to one question.
-            var filter = Filter;
-            var range = Range;
-            var pages = _pages;
-
-            var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
-            var connections = await _connections.GetBankConnectionsAsync(ct);
-
-            (IReadOnlyList<BankTransactionResponse> Rows, int TotalCount)? shown = null;
-
-            if (_rowsWanted)
+            await _guard.RunAsync(async () =>
             {
-                // A bank row is dated by the day the bank put on it, so the span is asked
-                // for as days. Which month "this month" is remains the person's question,
-                // which is what the clock is for.
-                shown = await PagesAsync(filter, range.Days(_clock.Today), pages, ct);
-            }
+                var version = ++_version;
+                if (_rowsWanted) RowsLoaded = false;
 
-            // Something has been asked for since this went out. That answer is the one
-            // the page is waiting for; this one would put the previous filter's rows back.
-            if (version != _version)
-                return;
+                // Read once, here: the filter and the span can move while this is in flight,
+                // and the rows have to be the answer to one question.
+                var filter = Filter;
+                var range = Range;
+                var pages = _pages;
 
-            NewCount = summary.NewCount;
-            PossibleDuplicates = summary.PossibleDuplicates;
-            Connections = connections;
+                var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
+                var connections = await _connections.GetBankConnectionsAsync(ct);
 
-            if (shown is { } read)
-            {
-                Rows = WithSuggestions(read.Rows);
-                TotalCount = read.TotalCount;
-            }
+                (IReadOnlyList<BankTransactionResponse> Rows, int TotalCount)? shown = null;
 
-            _written = version;
+                if (_rowsWanted)
+                {
+                    // A bank row is dated by the day the bank put on it, so the span is asked
+                    // for as days. Which month "this month" is remains the person's question,
+                    // which is what the clock is for.
+                    shown = await PagesAsync(filter, range.Days(_clock.Today), pages, ct);
+                }
 
+                // Something has been asked for since this went out. That answer is the one
+                // the page is waiting for; this one would put the previous filter's rows back.
+                if (version != _version)
+                    return;
+
+                NewCount = summary.NewCount;
+                PossibleDuplicates = summary.PossibleDuplicates;
+                Connections = connections;
+
+                if (shown is { } read)
+                {
+                    RowsLoaded = true;
+                    Rows = WithSuggestions(read.Rows);
+                    TotalCount = read.TotalCount;
+                }
+
+                _written = version;
+
+                Announce();
+                _ = SuggestAsync();
+            }, "your bank inbox");
+        }
+        finally
+        {
+            _pendingLoads--;
             Announce();
-            _ = SuggestAsync();
-        }, "your bank inbox");
+        }
+    }
 
     /// <summary>The rows, each carrying the suggestion already had for it.</summary>
     private IReadOnlyList<BankTransactionResponse> WithSuggestions(IReadOnlyList<BankTransactionResponse> rows) =>

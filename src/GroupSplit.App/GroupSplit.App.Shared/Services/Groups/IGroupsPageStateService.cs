@@ -53,6 +53,7 @@ public interface IGroupsPageStateService
     event Action? OnGroupsChanged;
 
     Task IsReadyTask { get; }
+    Task RefreshAsync();
 
     Task<bool> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default);
     IAsyncEnumerable<UserInfo> GetGroupMembersAsync(CancellationToken cancellationToken = default);

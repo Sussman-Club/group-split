@@ -43,6 +43,19 @@
     margin: 0 0 28px;
 }
 
+/* The landing page's primary invitation is larger than routine in-app actions. */
+.mud-button-root.mud-button.gs-landing-cta {
+    --gs-button-height: 44px;
+    --gs-button-padding-y: 10px;
+    --gs-button-line-height: 22px;
+    padding-inline: 20px;
+    font-size: 1rem;
+}
+
+.mud-button-root.gs-landing-cta .mud-button-label {
+    gap: 10px;
+}
+
 .gs-landing-art {
     position: relative;
     display: grid;
@@ -162,12 +175,15 @@
 }
 
 .gs-kv-row dt {
+    flex-shrink: 0;
     color: var(--gs-muted);
     font-size: 0.875rem;
     margin: 0;
 }
 
 .gs-kv-row dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
     margin: 0;
     font-weight: 700;
     font-size: 0.875rem;

@@ -161,6 +161,8 @@ public class GroupsPageStateService : IGroupsPageStateService
     /// Re-reads the list of groups, then the selected group through it. Complete once both
     /// halves have landed, so a caller that awaits it sees the whole picture.
     /// </summary>
+    public Task RefreshAsync() => RefreshGroupsAsync();
+
     private async Task RefreshGroupsAsync()
     {
         await _guard.RunAsync(async () =>

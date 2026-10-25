@@ -13,6 +13,8 @@ namespace GroupSplit.API.Services;
 
 public interface IReceiptService
 {
+    /// <summary>Builds and validates a receipt for creation or preview without saving it.</summary>
+    Task<Receipt> PrepareDraft(Expense expense, SaveReceiptRequest request, CancellationToken ct = default);
     Task<Receipt> ForExpense(Guid expenseId, CancellationToken ct = default);
     Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request, CancellationToken ct = default);
 
@@ -90,18 +92,15 @@ public class ReceiptService(
             };
     }
 
-    public async Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request,
-        CancellationToken ct = default)
+    public async Task<Receipt> PrepareDraft(Expense expense, SaveReceiptRequest request, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        var expense = await MineToChange(expenseId, ct);
-        var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
-        // A receipt can be edited before anybody divides by it. Once it is the source of
-        // the stored ledger shares, though, keeping the paper and the money in separate
-        // saves would leave balances describing the old bill. Capture that state before the
-        // draft is applied; a hand-stated division must remain hand-stated.
-        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
         var members = await participants.IdsOf(expense.GroupId, ct);
+        return await BuildDraft(expense, request, null, members, ct);
+    }
+
+    private async Task<Receipt> BuildDraft(Expense expense, SaveReceiptRequest request, Receipt? existing,
+        IReadOnlyCollection<Guid> members, CancellationToken ct)
+    {
         var versions = await Versions().Where(v => request.Items.Select(i => i.SplitRuleVersionId).Contains(v.Id))
             .ToListAsync(ct);
         // An id on an incoming line says "this is that stored line, corrected", so it has to
@@ -115,7 +114,7 @@ public class ReceiptService(
         // Validate a detached draft first: a refused request never mutates the tracked bill.
         var draft = new Receipt
         {
-            ExpenseId = expenseId, Subtotal = request.Subtotal,
+            ExpenseId = expense.Id, Subtotal = request.Subtotal,
             MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
             SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip,
             Total = request.Total
@@ -169,6 +168,23 @@ public class ReceiptService(
                 .WithExtension("total", draft.Total)
                 .WithExtension("amount", expense.Amount)
                 .WithExtension("difference", expense.Amount - draft.Total);
+
+        return draft;
+    }
+
+    public async Task<Receipt> SaveForExpense(Guid expenseId, SaveReceiptRequest request,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var expense = await MineToChange(expenseId, ct);
+        var existing = await Loaded().FirstOrDefaultAsync(r => r.ExpenseId == expenseId, ct);
+        // A receipt can be edited before anybody divides by it. Once it is the source of
+        // the stored ledger shares, though, keeping the paper and the money in separate
+        // saves would leave balances describing the old bill. Capture that state before the
+        // draft is applied; a hand-stated division must remain hand-stated.
+        var redivide = await ReceiptCurrentlyDrivesLedger(expense, ct);
+        var members = await participants.IdsOf(expense.GroupId, ct);
+        var draft = await BuildDraft(expense, request, existing, members, ct);
 
         // Keep an incomplete receipt editable without making the receipt endpoint refuse it
         // merely because the expense was already divided. The existing ledger remains the

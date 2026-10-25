@@ -11,6 +11,9 @@ public class UserTracker
     [PersistentState]
     public bool LoginAttempted { get; set; }
 
+    [PersistentState]
+    public bool LoginFailed { get; set; }
+
     /// <summary>
     /// Why the API would not let this person in at all, when that is the reason there is no
     /// <see cref="User"/>. Persisted with the rest, so the interactive render shows what the

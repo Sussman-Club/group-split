@@ -5,6 +5,7 @@ namespace GroupSplit.App.Shared.Services.Commands;
 
 public interface IReceiptCommands
 {
+    Task<FilingDestinationSuggestion?> SuggestFilingAsync(SuggestReceiptFilingRequest request, CancellationToken ct = default);
     Task<ReceiptDraftResponse?> TranscribeAsync(IBrowserFile file, CancellationToken ct = default);
     Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default);
     Task<ReceiptResponse?> SaveAsync(Guid transactionId, SaveReceiptRequest request, CancellationToken ct = default);

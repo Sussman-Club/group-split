@@ -306,7 +306,7 @@ public class SettlePageTest : ComponentTest
 
         Assert.DoesNotContain("All settled", page.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Not loaded", page.Markup, StringComparison.Ordinal);
-        Assert.Contains("Working out what clears everything.", page.Markup, StringComparison.Ordinal);
+        Assert.Contains("Loading…", page.Markup, StringComparison.Ordinal);
 
         answer.SetResult(new SettlementPlanResponse(-90m, 0m, 90m, [OmarAcrossBoth], [], null));
 

@@ -29,6 +29,9 @@
     </MudButton>
 </div>
 
+<LoadView Skeleton="SkeletonLayout.Groups" Loading="@(!GroupsService.IsReadyTask.IsCompleted || _retrying)" Failed="@(GroupsService.Position is null)" Retry="RetryAsync">
+
+
 <div class="gs-stack">
     @if (Active.Count > 0)
     {
@@ -72,6 +75,8 @@
         </div>
     }
 </div>
+
+</LoadView>
 
 @code {
     private RenderFragment GroupCard(GroupResponse group, int index) =>
@@ -119,6 +124,14 @@
     };
 
     private void Open(GroupResponse group) => Nav.NavigateTo($"/groups/{group.Id}");
+
+    private bool _retrying;
+    private async Task RetryAsync()
+    {
+        _retrying = true;
+        try { await GroupsService.RefreshAsync(); }
+        finally { _retrying = false; }
+    }
 
     private void ReRender() => InvokeAsync(StateHasChanged);
 

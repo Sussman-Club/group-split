@@ -14,6 +14,7 @@
     person and not to a group: nobody else ever sees these, or the rows they bring in.
 *@
 
+<LoadView Skeleton="SkeletonLayout.Rows" Loading="_initializing" Failed="@(Inbox.Connections is null)" Retry="ReloadAsync">
 <div class="gs-card gs-card-pad gs-reveal" style="--i: @Reveal">
     <div class="gs-card-title">
         <h2>Linked banks</h2>
@@ -113,7 +114,7 @@
             </div>
         }
 
-        <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="gs-btn-pill mt-4"
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="gs-account-action mt-4"
                    StartIcon="@Icons.Material.Rounded.AddLink" Disabled="@_busy"
                    OnClick="LinkAsync">
             Link a bank
@@ -121,11 +122,27 @@
     }
 </div>
 
+</LoadView>
+
 @code {
     /// <summary>Where this sits in the page's entrance sequence.</summary>
     [Parameter] public int Reveal { get; set; }
 
     private bool _busy;
+    private bool _initializing = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Inbox.EnsureLoadedAsync();
+        _initializing = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _initializing = true;
+        try { await Inbox.RefreshAsync(); }
+        finally { _initializing = false; }
+    }
 
     private IReadOnlyList<BankConnectionResponse> Connections =>
         Inbox.Connections?.Connections ?? [];

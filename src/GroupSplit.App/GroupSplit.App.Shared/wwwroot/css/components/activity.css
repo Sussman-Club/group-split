@@ -1,0 +1,53 @@
+/* Shared mobile Activity feed for personal and group listings. */
+
+.gs-mobile-ledger { display: none; }
+
+.gs-activity-summary-detail {
+    display: block;
+    margin-top: 2px;
+    font-size: .75rem;
+}
+
+@media (max-width: 640px) {
+    .gs-mobile-ledger { display: block; }
+    .gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
+    /* Keep the grid's empty state and pager so both layouts use the same server page. */
+    .gs-ledger-listing { padding-bottom: 100px; }
+    .gs-feed-day { margin-bottom: 20px; }
+    .gs-feed-day h3 {
+        margin: 0;
+        padding: 12px 0 10px;
+        border-bottom: 1px solid var(--gs-line);
+        font-size: .9375rem;
+        font-weight: 700;
+    }
+    .gs-feed-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--gs-line);
+    }
+    .gs-feed-entry {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+        padding: 14px 0;
+        border: 0;
+        background: transparent;
+        color: var(--gs-ink);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .gs-feed-entry:disabled { color: var(--gs-ink); cursor: default; }
+    .gs-feed-entry:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+    .gs-feed-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .gs-feed-copy strong { font-size: .875rem; overflow-wrap: anywhere; line-height: 1.3; }
+    .gs-feed-copy > .gs-muted { font-size: .75rem; line-height: 1.4; }
+    .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
+    .gs-feed-row > .mud-menu { flex-shrink: 0; }
+    .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
+}

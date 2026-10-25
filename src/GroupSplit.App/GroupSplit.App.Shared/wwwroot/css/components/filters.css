@@ -49,7 +49,7 @@
 }
 
 /* Ledger controls share one height and quiet chrome; entry type is the selected state. */
-.gs-mobile-filter-toggle,
+.gs-ledger-filters .gs-mobile-filter-toggle,
 .gs-mobile-spending { display: none; }
 
 .gs-filter-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gs-teal); }

@@ -5,6 +5,8 @@ namespace GroupSplit.Shared;
 
 public record CreateTransactionRequest
 {
+    /// <summary>The reviewed itemized receipt to validate and save with the new expense.</summary>
+    public SaveReceiptRequest? Receipt { get; set; }
     public Guid? PaidByUserId { get; set; }
 
     /// <summary>

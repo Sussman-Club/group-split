@@ -2,6 +2,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.ReceiptTranscription;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.JsonPatch.SystemTextJson;
@@ -35,6 +36,13 @@ public static class ReceiptsApi
                 .RequireAuthorization()
                 .ProducesStandardProblems()
                 .WithTags("Receipts");
+
+            group.MapPost("/suggest-filing", async (SuggestReceiptFilingRequest request,
+                    IFilingSuggester suggester, CancellationToken ct) =>
+                    Results.Ok(await suggester.SuggestReceipt(request, ct)))
+                .WithName("SuggestReceiptFiling")
+                .Produces<FilingDestinationSuggestion>()
+                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
 
             group.MapPost("/transcribe", async (
                     IFormFile file,

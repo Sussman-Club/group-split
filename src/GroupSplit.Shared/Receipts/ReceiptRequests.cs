@@ -43,6 +43,7 @@ public record ReceiptItemInput
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
     [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }
     [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
+    /// <summary>Percentage points: 7.5 means 7.5%, rather than a ratio of 0.075.</summary>
     [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; init; }
     public bool? IsTaxable { get; init; }
     /// <summary>

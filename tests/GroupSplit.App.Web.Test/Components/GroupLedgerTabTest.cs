@@ -2,6 +2,7 @@ using AngleSharp.Dom;
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
+using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Transactions;
 using GroupSplit.Shared;
@@ -46,6 +47,7 @@ public class GroupLedgerTabTest : ComponentTest
     private readonly List<int?> _kinds = [];
 
     private readonly List<(string Key, bool? Descending)> _orders = [];
+    private readonly List<int?> _pages = [];
 
     private Func<Ask, Task<TransactionSummaryResponse>> _answer =
         _ => Task.FromResult(new TransactionSummaryResponse(5, 29m));
@@ -97,10 +99,11 @@ public class GroupLedgerTabTest : ComponentTest
                 It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string search, Guid? _,
-                bool? _, Guid? _, string sortBy, bool? descending, int? _, int? _, CancellationToken _) =>
+                bool? _, Guid? _, string sortBy, bool? descending, int? page, int? _, CancellationToken _) =>
             {
                 _kinds.Add(kind);
                 _orders.Add((sortBy, descending));
+                _pages.Add(page);
 
                 // What the server holds at the moment it is asked, which is not necessarily
                 // what it holds by the time the answer arrives.
@@ -157,13 +160,19 @@ public class GroupLedgerTabTest : ComponentTest
         base.Render<GroupLedgerTab>(parameters => parameters.Add(tab => tab.GroupId, Group));
 
     [Theory]
-    [InlineData(null, true)]
-    [InlineData("-dateTime", true)]
-    [InlineData("dateTime", false)]
-    [InlineData("unknown", true)]
+    [InlineData(null, true, false)]
+    [InlineData("-dateTime", true, false)]
+    [InlineData("dateTime", false, false)]
+    [InlineData("unknown", true, false)]
+    [InlineData(null, true, true)]
+    [InlineData("-dateTime", true, true)]
+    [InlineData("dateTime", false, true)]
+    [InlineData("unknown", true, true)]
     public async Task Mobile_activity_uses_newest_first_unless_the_link_requests_oldest_first(
-        string? requestedSort, bool descending)
+        string? requestedSort, bool descending, bool native)
     {
+        if (native)
+            Services.AddSingleton(new AppLinks(new Uri("https://example.test/")));
         ReaderAt(TimeSpan.Zero);
         var day = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
         _entries =
@@ -189,6 +198,55 @@ public class GroupLedgerTabTest : ComponentTest
                 (order.Key, order.Descending)));
         });
 
+        AssertOrder();
+        await tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
+        AssertOrder();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("dateTime")]
+    [InlineData("name")]
+    [InlineData("-amount")]
+    public async Task Android_activity_stays_newest_first_with_old_sort_links_and_ascending_grid_state(string? requestedSort)
+    {
+        Services.AddSingleton(new AppLinks(new Uri("https://example.test/")) { IsAndroidNative = true });
+        ReaderAt(TimeSpan.Zero);
+        var day = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        _entries =
+        [
+            Expense(Guid.NewGuid(), "Older") with { DateTime = day.AddDays(-1) },
+            Expense(Guid.NewGuid(), "Newest") with { DateTime = day.AddHours(2) },
+            Expense(Guid.NewGuid(), "Earlier today") with { DateTime = day }
+        ];
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(navigation.GetUriWithQueryParameter("sort", requestedSort));
+        var tab = Render();
+        string[] expected = ["Newest", "Earlier today", "Older"];
+
+        void AssertOrder() => tab.WaitForAssertion(() =>
+        {
+            Assert.Equal(expected, tab.FindAll(".gs-feed-copy strong").Select(entry => entry.TextContent));
+            Assert.NotEmpty(_orders);
+            Assert.All(_orders, order => Assert.Equal(("dateTime", (bool?)true), order));
+        });
+
+        AssertOrder();
+        var grid = tab.FindComponent<MudDataGrid<GroupLedgerEntryResponse>>().Instance;
+        Assert.Equal(SortMode.None, grid.SortMode);
+
+        // A stale ascending state must not change the server ordering, including page two.
+        await tab.InvokeAsync(async () =>
+        {
+            var result = await grid.ServerData!(new GridState<GroupLedgerEntryResponse>
+            {
+                Page = 1,
+                PageSize = 10,
+                SortDefinitions = [new("DateTime", false, 0, entry => entry.DateTime, null!)]
+            }, CancellationToken.None);
+            Assert.Equal(expected, result.Items.Select(entry => entry.Name));
+        });
+        Assert.Contains(2, _pages);
         AssertOrder();
         await tab.InvokeAsync(() => Changes.NotifyTransactionsChangedAsync());
         AssertOrder();
@@ -476,7 +534,7 @@ public class GroupLedgerTabTest : ComponentTest
         var tab = Render();
 
         Assert.Single(_asks);
-        Assert.Equal(("0", "$0.00"), Cards(tab));
+        Assert.Contains("Could not load this view", tab.Markup);
 
         tab.Render(parameters => parameters.Add(component => component.GroupId, Group));
 
@@ -558,7 +616,8 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        Assert.Equal(("0", "$0.00"), Cards(tab));
+        Assert.Contains("Could not load this view", tab.Markup);
+        Assert.Empty(tab.FindAll(".gs-ledger-stats"));
 
         Snackbar.Verify(
             bar => bar.Add(It.Is<string>(message => message.Contains("Could not load this group's ledger.")),

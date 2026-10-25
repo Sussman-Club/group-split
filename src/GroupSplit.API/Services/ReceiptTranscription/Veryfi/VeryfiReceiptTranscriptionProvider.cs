@@ -144,6 +144,12 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 IsTaxable = item.IsTaxable
             }).ToArray();
 
+            // Allocated tax is inferred, so it must not decide the provider's rate units.
+            var normalized = ReceiptTaxRates.Normalize(tax, mappedItems.Select((item, index) =>
+                item with { TaxAmount = candidates[index].TaxAmount }).ToArray());
+            mappedItems = mappedItems.Select((item, index) =>
+                item with { TaxRate = normalized[index].TaxRate }).ToArray();
+
             string? vendor = Vendor.ValueKind switch
             {
                 JsonValueKind.String => Vendor.GetString(),

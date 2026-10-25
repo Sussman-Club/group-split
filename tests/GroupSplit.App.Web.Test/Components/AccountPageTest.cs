@@ -88,9 +88,9 @@ public class AccountPageTest : ComponentTest
     {
         JSInterop.Setup<string?>("gs.downloadPersonalData").SetResult("Your records could not be exported. Please retry.");
         var (page, _) = Open();
-        await Button(page, "Download my records and receipt files (ZIP)").ClickAsync(new());
+        await Button(page, "Download ZIP").ClickAsync(new());
         Assert.Contains("Please retry", page.Markup);
-        Assert.False(Button(page, "Download my records and receipt files (ZIP)").HasAttribute("disabled"));
+        Assert.False(Button(page, "Download ZIP").HasAttribute("disabled"));
     }
 
     [Fact]
@@ -107,9 +107,9 @@ public class AccountPageTest : ComponentTest
     {
         JSInterop.Setup<string?>("gs.downloadPersonalData").SetException(new TaskCanceledException());
         var (page, _) = Open();
-        await Button(page, "Download my records and receipt files (ZIP)").ClickAsync(new());
+        await Button(page, "Download ZIP").ClickAsync(new());
         Assert.Contains("Preparing your archive took too long", page.Markup);
-        Assert.False(Button(page, "Download my records and receipt files (ZIP)").HasAttribute("disabled"));
+        Assert.False(Button(page, "Download ZIP").HasAttribute("disabled"));
     }
 
     private static async Task Delete(IRenderedComponent<Account> page, IRenderedComponent<MudDialogProvider> dialogs)

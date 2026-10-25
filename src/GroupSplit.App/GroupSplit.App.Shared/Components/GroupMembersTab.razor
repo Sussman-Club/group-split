@@ -32,6 +32,7 @@
     and removed like anybody else once they are square.
 *@
 
+<LoadView Skeleton="SkeletonLayout.Rows" Loading="_initializing">
 <div class="gs-two-col">
     <div class="gs-stack">
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
@@ -223,6 +224,8 @@
     </div>
 </div>
 
+</LoadView>
+
 @code {
     [Parameter, EditorRequired] public Guid GroupId { get; set; }
 
@@ -270,6 +273,7 @@
     /// and offers to read it again.
     /// </summary>
     private bool _loadFailed;
+    private bool _initializing = true;
 
     /// <summary>Whose link was last copied, so the row can say it landed.</summary>
     private Guid? _copied;
@@ -319,6 +323,7 @@
             return;
 
         _loadFailed = !loaded;
+        _initializing = false;
 
         // What was on screen stays there when the read failed: it is this group's, only a
         // moment behind, and an empty card would claim nobody is in it.

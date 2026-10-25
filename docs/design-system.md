@@ -29,7 +29,25 @@ The token names are identical across the CSS files, so a change is usually the s
 pasted into each. The two Keycloak stylesheets carry only the subset their pages
 can use.
 
+## Action buttons
+
+All action buttons use `--gs-button-radius: 14px`, including filled, outlined, quiet,
+destructive, glass, floating, and receipt-picker actions. MudBlazor buttons inherit this
+from `.mud-button-root`; custom buttons reference the same token. Variants change colour
+and emphasis, not corner shape. `gs-btn-pill` is a legacy class and no longer changes
+geometry; new variants must not add their own radius or density overrides.
+
+Text actions use the Slim density: a 32px minimum face, 6px vertical padding, an 18px
+line height, and 13px labels at weight 600. Long labels wrap; never set a fixed height or
+truncate action text. Their invisible hit area extends 6px above and below the face.
+Wrapping action groups must reserve at least a 12px row gap so hit areas do not overlap.
+Account actions share `gs-account-action` for spacing and content-sized widths. Filter chips,
+segmented selectors, badges, and navigation retain their own shapes because they express
+selection or location. Icon-only buttons retain their 44px touch size. The Keycloak themes
+and email buttons mirror the 14px action radius.
+
 ## Both schemes, every time
+
 
 Light and dark are equal citizens. The app flips on `data-theme="dark"`; both Keycloak
 themes flip on `pf-v5-theme-dark`, the class Keycloak itself puts on `<html>`. Never key a

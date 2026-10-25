@@ -25,6 +25,7 @@
 
 <PageTitle>@(Group?.Name ?? "Group") - Group Split</PageTitle>
 
+<LoadView Loading="_initializing" Failed="@(Group is not null && (GroupsService.Balance is null || GroupsService.Transactions is null))" Retry="ReloadAsync">
 @if (Group is { } group)
 {
     <div class="gs-page-head gs-group-heading" @key="@($"head-{group.Id}")">
@@ -111,6 +112,8 @@ else if (NotFound)
         <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4" Href="/groups">Back to your groups</MudButton>
     </div>
 }
+
+</LoadView>
 
 @code {
     [Parameter] public Guid GroupId { get; set; }
@@ -273,12 +276,25 @@ else if (NotFound)
     /// persists the two separately, and this used to take a matching selection as read and
     /// leave whatever figures came with it -- the previous group's -- on the page for good.
     /// Awaiting them also means the prerendered page carries them, so the interactive one
-    /// has nothing to fetch. The page renders at the first await either way, so the header
-    /// is up before the server has answered.
+    /// has nothing to fetch. Keep the view in its loading state until all required
+    /// figures describe the group in the current route.
     /// </remarks>
+    private bool _initializing = true;
+    private int _initializationVersion;
+
+    private async Task ReloadAsync()
+    {
+        _initializing = true;
+        await GroupsService.RefreshAsync();
+        await OnParametersSetAsync();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
+        _initializing = true;
+        var version = ++_initializationVersion;
         await GroupsService.IsReadyTask;
+        if (version != _initializationVersion) return;
 
         if (GroupsService.SelectedGroup?.Id != GroupId
             && GroupsService.Groups.FirstOrDefault(candidate => candidate.Id == GroupId) is { } group)
@@ -288,6 +304,8 @@ else if (NotFound)
 
         if (GroupsService.SelectedGroup?.Id == GroupId)
             await GroupsService.EnsureSelectedLoadedAsync();
+
+        if (version == _initializationVersion) _initializing = false;
     }
 
     private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
