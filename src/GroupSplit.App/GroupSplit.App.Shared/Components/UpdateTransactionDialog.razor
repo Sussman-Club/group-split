@@ -43,6 +43,7 @@
     </TitleContent>
 
     <DialogContent>
+        <ReceiptReadLock IsLocked="@(_transcribingAttachmentId is not null)">
         @if (_initializing)
         {
             <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
@@ -59,7 +60,7 @@
         }
         else
         {
-            <MudForm @ref="_form" Model="@_model" Disabled="@_reviewing">
+            <MudForm @ref="_form" Model="@_model" Disabled="@(_reviewing || _transcribingAttachmentId is not null)">
                 <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up: what an edit is usually about is this figure, and
@@ -212,13 +213,14 @@
                 </div>
             </MudForm>
         }
+        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _reviewing)"
+                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _reviewing || _transcribingAttachmentId is not null)"
                    OnClick="Submit">
             Review changes
         </MudButton>
@@ -701,6 +703,8 @@
 
     private async Task TranscribeAttachmentAsync(ReceiptAttachmentResponse attachment)
     {
+        if (_transcribingAttachmentId is not null)
+            return;
         _transcribingAttachmentId = attachment.Id;
         try
         {
@@ -1145,7 +1149,7 @@
         // Stays open on it, with the refusal on screen and the edit intact, rather than
         // closing onto a save the API will refuse. The button is off as well; this is for
         // a submit that arrives some other way.
-        if (CurrencyRefusal is not null)
+        if (_transcribingAttachmentId is not null || CurrencyRefusal is not null)
             return;
 
         await _form.ValidateAsync();
@@ -1222,6 +1226,7 @@
 
     private async Task Cancel()
     {
+        if (_transcribingAttachmentId is not null) return;
         if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
         {
             var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",

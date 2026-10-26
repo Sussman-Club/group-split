@@ -146,6 +146,15 @@
         overflow-wrap: anywhere;
     }
 
+    .mud-dialog-container > .mud-dialog.gs-transaction-dialog {
+        width: calc(100% - 24px);
+    }
+
+    .gs-transaction-dialog .gs-dialog-head > .gs-inline {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     .mud-dialog .mud-dialog-title:has(.gs-dialog-head) {
         padding-right: 16px;
     }

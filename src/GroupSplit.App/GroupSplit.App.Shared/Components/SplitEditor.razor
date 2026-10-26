@@ -84,6 +84,7 @@
         @if (Bill is { } bill)
         {
             <BillDivision Receipt="bill"
+                          IsDraft="@DraftBill"
                           TransactionId="TransactionId"
                           GroupId="GroupId"
                           Members="Members"
@@ -216,7 +217,10 @@
            will be stored and not a second copy of the arithmetic that has to agree with
            it. Said out loud, because "as the category says" is exactly the case where
            nobody can tell what it says without being told. *@
-        <MudText Typo="Typo.caption">@Explanation</MudText>
+        @if (Chosen != Mode.ByBill || Preview is not null)
+        {
+            <MudText Typo="Typo.caption">@Explanation</MudText>
+        }
 
         @if (Superseded is { } changed)
         {
@@ -326,8 +330,7 @@
     /// Whether "By its bill" is one of the options at all.
     /// </summary>
     /// <remarks>
-    /// A property of the dialog and not of the expense: a create dialog has nowhere to put a
-    /// receipt, so the option would be permanently off there. Settled before the first render
+    /// A property of the dialog and not of the expense. Settled before the first render
     /// and constant afterwards, which is what keeps the control from resizing under the
     /// pointer -- whether there is <em>actually</em> a bill is <see cref="Bill"/>, and that
     /// only enables or disables the button.
@@ -336,6 +339,7 @@
 
     /// <summary>The expense's itemised bill, when it has one.</summary>
     [Parameter] public ReceiptResponse? Bill { get; set; }
+    [Parameter] public bool DraftBill { get; set; }
 
     /// <summary>
     /// The amount the expense is saved with, when it is being edited -- see

@@ -1,5 +1,22 @@
 /* ---- a bill inside a dialog ---- */
 
+.gs-receipt-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    min-width: 0;
+}
+
+.gs-receipt-fields > * {
+    min-width: 0;
+}
+
+@media (max-width: 600px) {
+    .gs-receipt-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 /* The paper takes the width it is given rather than the dialog's own, which on a phone is
    the difference between a slip and a slip with a horizontal scrollbar under it. */
 .gs-itemized-slip {

@@ -133,6 +133,7 @@ public class TransactionService(
     IExpenseSplitter splitter,
     IGroupParticipants participants,
     IReceiptAttachmentService receiptAttachments,
+    IReceiptService receipts,
     GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue backgroundJobs,
     TimeProvider clock,
     PushNotificationQueue notifications) : ITransactionService
@@ -321,13 +322,22 @@ public class TransactionService(
             Name = request.Name,
             Description = request.Description,
             Group = group,
+            GroupId = group.Id,
             Category = category,
+            CategoryId = category?.Id,
             MerchantId = await MerchantFor(request.MerchantId, ct),
             // The division it was told to use, which the splitter then keeps rather than
             // reaching for the category's. Null is the ordinary expense.
             SplitRuleVersionId = selectedRuleVersionId,
-            User = payer
+            User = payer,
+            UserId = payer.Id
         };
+
+        if (request.Receipt is { } receipt)
+        {
+            expense.Receipt = await receipts.PrepareDraft(expense, receipt, ct);
+            expense.Receipt.Expense = expense;
+        }
 
         if (selectedRuleVersionId is { } selected)
             await splitter.WriteSplitsByRuleAsync(expense, selected, ct);
@@ -372,6 +382,9 @@ public class TransactionService(
             SplitRuleVersionId = selectedRuleVersionId,
             UserId = payer.Id
         };
+
+        if (request.Receipt is { } receipt)
+            draft.Receipt = await receipts.PrepareDraft(draft, receipt, ct);
 
         if (selectedRuleVersionId is { } selected)
             await splitter.WriteSplitsByRuleAsync(draft, selected, ct);

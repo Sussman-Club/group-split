@@ -19,6 +19,24 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </remarks>
 public class BillDivisionTest : ComponentTest
 {
+    [Fact]
+    public async Task A_draft_line_rule_is_kept_locally_until_the_expense_is_created()
+    {
+        ReceiptResponse? changed = null;
+        var page = Render<BillDivision>(parameters => parameters
+            .Add(component => component.Receipt, Bill(Line("Dinner", 20m, null, null)))
+            .Add(component => component.IsDraft, true)
+            .Add(component => component.GroupId, _group)
+            .Add(component => component.Amount, 20m)
+            .Add(component => component.ReceiptChanged, bill => changed = bill));
+        page.WaitForAssertion(() => Assert.Single(page.FindComponents<MudSelect<Guid?>>()));
+        await page.InvokeAsync(() => page.FindComponent<MudSelect<Guid?>>().Instance.ValueChanged.InvokeAsync(_versionId));
+        Assert.NotNull(changed);
+        Assert.Equal(_versionId, changed.Items[0].SplitRuleVersionId);
+        Assert.Equal(0, changed.MissingRuleItemCount);
+        _bills.Verify(service => service.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
+    }
+
     private readonly Mock<ISplitRuleCommands> _rules = new();
     private readonly Mock<IReceiptCommands> _bills = new();
     private readonly Guid _group = Guid.NewGuid();

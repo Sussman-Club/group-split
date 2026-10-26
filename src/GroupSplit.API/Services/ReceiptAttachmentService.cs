@@ -47,14 +47,6 @@ public sealed class ReceiptAttachmentService(
     TimeProvider clock) : IReceiptAttachmentService
 {
     private const long MaximumLength = 10 * 1024 * 1024;
-    private static readonly IReadOnlyDictionary<string, string> AllowedTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        [".jpg"] = "image/jpeg",
-        [".jpeg"] = "image/jpeg",
-        [".png"] = "image/png",
-        [".webp"] = "image/webp",
-        [".pdf"] = "application/pdf"
-    };
 
     public async Task<IReadOnlyList<ReceiptAttachmentResponse>> List(Guid expenseId, CancellationToken ct = default)
     {
@@ -113,7 +105,7 @@ public sealed class ReceiptAttachmentService(
 
     private ReceiptAttachment NewAttachment(IFormFile file, Guid? expenseId, Guid? bankTransactionId)
     {
-        Validate(file);
+        var contentType = Validate(file);
         var ownerId = expenseId ?? bankTransactionId ?? throw new ArgumentException("An attachment owner is required.");
         return new ReceiptAttachment
         {
@@ -121,7 +113,7 @@ public sealed class ReceiptAttachmentService(
             BankTransactionId = bankTransactionId,
             ObjectKey = $"{ownerId:N}/{Guid.NewGuid():N}",
             FileName = Path.GetFileName(file.FileName),
-            ContentType = AllowedTypes[Path.GetExtension(Path.GetFileName(file.FileName))],
+            ContentType = contentType,
             Length = file.Length,
             UploadedByUserId = currentUser.User.Id,
             UploadedAt = clock.GetUtcNow()
@@ -259,17 +251,17 @@ public sealed class ReceiptAttachmentService(
         new(attachment.Id, attachment.ExpenseId, attachment.BankTransactionId, attachment.ReceiptId, attachment.FileName,
             attachment.ContentType, attachment.Length, attachment.UploadedAt);
 
-    private static void Validate(IFormFile file)
+    private static string Validate(IFormFile file)
     {
-        var extension = Path.GetExtension(Path.GetFileName(file.FileName));
+        var contentType = ReceiptFileTypes.Resolve(file.FileName, file.ContentType);
         if (file.Length is <= 0 or > MaximumLength
             || file.FileName.Length > 256
-            || !AllowedTypes.TryGetValue(extension, out var expectedType)
-            || !string.Equals(file.ContentType, expectedType, StringComparison.OrdinalIgnoreCase))
+            || contentType is null)
         {
             throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid,
                 "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.");
         }
+        return contentType;
     }
 
     private async Task<ReceiptAttachment> FindAttachment(Guid expenseId, Guid attachmentId, CancellationToken ct) =>

@@ -94,6 +94,33 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
 
     public async ValueTask DisposeAsync() => await _host.DisposeAsync();
 
+    [Theory]
+    [InlineData("receipt.png", "image/png", "image/png")]
+    [InlineData("receipt.JPG", "image/jpeg", "image/jpeg")]
+    [InlineData("receipt.jpeg", "image/jpeg", "image/jpeg")]
+    [InlineData("receipt.jpe", "image/jpeg", "image/jpeg")]
+    [InlineData("receipt.jpge", "application/octet-stream", "image/jpeg")]
+    [InlineData("blank.jpge", "", "image/jpeg")]
+    [InlineData("receipt.jpg", "image/jpg", "image/jpeg")]
+    [InlineData("receipt.webp", "image/webp", "image/webp")]
+    [InlineData("receipt.pdf", "application/pdf", "application/pdf")]
+    [InlineData("scanner.pdf", "application/octet-stream", "application/pdf")]
+    public async Task File_variants_are_stored_and_downloaded_with_the_canonical_type(
+        string name, string type, string expected)
+    {
+        var expenseId = await CreateExpense();
+        var upload = await Client.PostAsync($"/transactions/{expenseId}/receipt-attachments",
+            FileContent(name, type), Ct);
+        upload.EnsureSuccessStatusCode();
+        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        Assert.Equal(name, attachment.FileName);
+        Assert.Equal(expected, attachment.ContentType);
+        using var download = await Client.GetAsync(
+            $"/transactions/{expenseId}/receipt-attachments/{attachment.Id}", Ct);
+        Assert.Equal(expected, download.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(StoredFile, await download.Content.ReadAsByteArrayAsync(Ct));
+    }
+
     [Fact]
     public async Task An_expense_attachment_can_be_uploaded_listed_downloaded_transcribed_and_deleted()
     {
@@ -321,7 +348,8 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
     {
         var content = new MultipartFormDataContent();
         var file = new ByteArrayContent(StoredFile);
-        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        if (!string.IsNullOrWhiteSpace(contentType))
+            file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(file, "file", name);
         return content;
     }

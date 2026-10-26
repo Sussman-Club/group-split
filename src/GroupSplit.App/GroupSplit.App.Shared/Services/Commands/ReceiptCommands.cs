@@ -8,6 +8,13 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
 {
     private const long MaximumLength = 10 * 1024 * 1024;
 
+    public async Task<FilingDestinationSuggestion?> SuggestFilingAsync(SuggestReceiptFilingRequest request, CancellationToken ct = default)
+    {
+        try { return await receipts.SuggestReceiptFilingAsync(request, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return null; }
+    }
+
     public async Task<ReceiptDraftResponse?> TranscribeAsync(IBrowserFile file, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(file);

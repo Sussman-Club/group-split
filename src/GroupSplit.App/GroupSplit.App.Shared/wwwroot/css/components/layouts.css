@@ -124,6 +124,28 @@
     overflow-wrap: anywhere;
     font-weight: 600;
     cursor: pointer;
+    background: transparent;
+    font-family: inherit;
+    overflow: hidden;
+}
+
+.gs-file-picker-dropzone[hidden] {
+    display: none;
+}
+
+.gs-file-picker-camera-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.gs-file-picker-camera-action:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
 }
 
 .gs-file-picker-dropzone:hover {
@@ -216,6 +238,32 @@
     flex: 0 0 auto;
 }
 
+.gs-file-picker-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.gs-file-picker-replace {
+    position: relative;
+}
+
+.gs-file-picker-replace-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.gs-file-picker-replace:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--gs-primary) 35%, transparent);
+    outline-offset: 3px;
+}
+
 .gs-file-picker-status,
 .gs-file-picker-transcript {
     display: flex;
@@ -261,7 +309,7 @@
         display: inline-flex;
         justify-content: center;
         gap: 8px;
-        min-height: var(--gs-button-height);
+        min-height: 44px;
     }
 
     .gs-file-picker-camera-action .mud-icon-root {
@@ -278,7 +326,7 @@
         flex-wrap: wrap;
     }
 
-    .gs-file-picker-attached .gs-file-picker-read {
-        margin-left: 50px;
+    .gs-file-picker-attached .gs-file-picker-actions {
+        flex-basis: 100%;
     }
 }

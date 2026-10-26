@@ -164,7 +164,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             RoundMoney(receipt.Tax),
             RoundMoney(receipt.Tip),
             RoundMoney(receipt.Total),
-            items)
+            ReceiptTaxRates.Normalize(RoundMoney(receipt.Tax), items))
         {
             MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
             PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
@@ -193,19 +193,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         // ReceiptSplitCalculator applies the extracted rate and reconciles rounding.
         return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount ?? 0m))
         {
-            TaxRate = TaxRateFrom(item.TaxRate),
+            TaxRate = item.TaxRate,
             IsTaxable = item.IsTaxable
         };
     }
-
-    /// <summary>
-    /// The bill keeps a rate of 0 to 100, to four places. Anything outside that is not a rate
-    /// somebody can correct but a misreading, and an empty field says so better.
-    /// </summary>
-    private static decimal? TaxRateFrom(decimal? rate) =>
-        rate is { } value && Math.Round(value, 4, MidpointRounding.AwayFromZero) is >= 0m and <= 100m and var rounded
-            ? rounded
-            : null;
 
     /// <summary>What a line with money on it but no legible name is called until somebody names it.</summary>
     private const string UnnamedItem = "Unnamed item";

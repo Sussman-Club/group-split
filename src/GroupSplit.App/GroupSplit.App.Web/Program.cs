@@ -48,6 +48,7 @@ builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
 // Add shared services
 builder.Services.AddSharedServices();
+builder.Services.AddReceiptClientPolicies();
 builder.Services.ConfigureReceiptHttpClient();
 
 // Initialize render mode configuration

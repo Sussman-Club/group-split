@@ -54,7 +54,8 @@
     </TitleContent>
 
     <DialogContent>
-        <MudForm @ref="_form" Model="_model">
+        <ReceiptReadLock IsLocked="@_readingReceipt">
+        <MudForm @ref="_form" Model="_model" Disabled="@_readingReceipt">
             <div class="gs-stack" style="gap: 16px">
 
 
@@ -78,7 +79,15 @@
                     </div>
                 </div>
 
-                @* Manual entry remains available below the receipt shortcut. *@
+                @if (_filingSuggestion is { } suggestion)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button"
+                               OnClick="UseReceiptSuggestionAsync">
+                        Use suggested @(GroupFixed ? suggestion.CategoryName : suggestion.Destination)
+                    </MudButton>
+                }
+
+                @* First, and a size up from everything else. It is why the dialog is open. *@
                 <DecimalField @bind-Value="_model.Amount"
                               @bind-Value:after="OnMoneyChangedAsync"
                               For="@(() => _model.Amount)"
@@ -170,6 +179,14 @@
                                      EvenRuleId="@_evenRuleId"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
+                                     ShowByBill="true"
+                                     DraftBill="true"
+                                     Bill="@_draftBill"
+                                     BillRuleId="@_billRuleId"
+                                     GroupId="@_groupId"
+                                     CategoryRuleId="@_categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.DefaultSplitRuleId"
+                                     CategoryName="@_categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.Name"
+                                     BillChanged="OnDraftBillChangedAsync"
                                      Preview="@_preview"
                                      PreviewError="@_previewError"
                                      Awaiting="@_awaiting"
@@ -186,13 +203,14 @@
 
             </div>
         </MudForm>
+        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@_readingReceipt" OnClick="@Submit">
+                   Disabled="@(_readingReceipt || ReceiptNeedsRules)" OnClick="@Submit">
             Add expense
         </MudButton>
     </DialogActions>
@@ -275,6 +293,27 @@
 
     private IBrowserFile? _receiptFile;
     private SaveReceiptRequest? _receipt;
+    private ReceiptResponse? _draftBill;
+    private Guid? _billRuleId;
+    private bool ReceiptNeedsRules => _billRuleId is not null && _model.SplitRuleId == _billRuleId
+        && (_draftBill is null || _draftBill.Items.Any(item => item.SplitRuleVersionId is null));
+
+    private ReceiptResponse DraftBillOf(SaveReceiptRequest receipt) => new(
+        Guid.NewGuid(), Guid.Empty, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
+        receipt.Items.Count(item => item.SplitRuleVersionId is null), false, false,
+        receipt.Items.Select(item => new ReceiptItemResponse(Guid.NewGuid(), item.Name, item.UnitPrice,
+            item.Quantity, item.TotalPrice, item.TaxAmount, item.SplitRuleVersionId, null, null)
+        { TaxRate = item.TaxRate, IsTaxable = item.IsTaxable, Description = item.Description }).ToArray());
+
+    private async Task OnDraftBillChangedAsync(ReceiptResponse bill)
+    {
+        if (_receipt is not { } receipt)
+            return;
+        _draftBill = bill;
+        _receipt = receipt with { Items = receipt.Items.Select((item, index) =>
+            item with { SplitRuleVersionId = bill.Items[index].SplitRuleVersionId }).ToArray() };
+        await RefreshPreviewAsync();
+    }
     private bool _readingReceipt;
     private string? _receiptError;
 
@@ -313,6 +352,12 @@
         if (string.IsNullOrWhiteSpace(_model.Name))
             return "Name it to see how it divides.";
 
+        if (_receipt is { } receipt && receipt.Total != _model.Amount)
+            return "Match the expense amount to the receipt total before splitting.";
+
+        if (ReceiptNeedsRules)
+            return "Choose a split rule for every receipt item.";
+
         return null;
     }
 
@@ -326,6 +371,7 @@
     /// </remarks>
     private async Task OnGroupPickedAsync(Guid? id)
     {
+        _filingSuggestion = null;
         _groupId = id;
 
         await OnGroupChangedAsync();
@@ -337,7 +383,11 @@
             return;
 
         _receiptFile = args.File;
+        _filingSuggestion = null;
         _receipt = null;
+        _draftBill = null;
+        if (_model.SplitRuleId == _billRuleId)
+            _model.SplitRuleId = null;
         _receiptError = null;
         await ReadReceiptAsync();
     }
@@ -373,13 +423,42 @@
             if (result is { Canceled: false, Data: SaveReceiptRequest receipt })
             {
                 _receipt = receipt;
+                _draftBill = DraftBillOf(receipt);
                 _model.Amount = receipt.Total;
+                if (receipt.PurchaseDate is { } purchaseDate)
+                    _selectedDate = purchaseDate.ToDateTime(TimeOnly.MinValue);
+
+                if (!string.IsNullOrWhiteSpace(receipt.MerchantName))
+                {
+                    var name = receipt.MerchantName.Trim();
+                    var matches = await Merchants.SearchAsync(name);
+                    var merchant = matches?.FirstOrDefault(candidate =>
+                        string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                    _model.MerchantId = merchant?.Id;
+                    _merchantName = merchant?.Name ?? name;
+                    _merchantLogo = merchant?.LogoUrl;
+                    _pendingMerchantName = merchant is null ? name : null;
+                }
 
                 if (string.IsNullOrWhiteSpace(_model.Name))
                     _model.Name = SuggestedName(receipt);
 
                 await OnMoneyChangedAsync();
+                var groupLoad = _groupLoad;
+                var currency = ReceiptCurrency;
+                var categoryId = _model.CategoryId;
+                var suggestion = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest
+                {
+                    Receipt = receipt, Currency = currency,
+                    GroupId = _groupId ?? (GroupFixed ? Login.User?.Id : null)
+                });
+                if (groupLoad == _groupLoad && currency == ReceiptCurrency && categoryId == _model.CategoryId)
+                    _filingSuggestion = suggestion;
             }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            _receiptError = "Could not read that receipt. Choose the file again and retry.";
         }
         finally
         {
@@ -406,6 +485,7 @@
 
     private async Task OnCategoryPickedAsync(Guid? id)
     {
+        _filingSuggestion = null;
         _model.CategoryId = id;
 
         await OnMoneyChangedAsync();
@@ -437,6 +517,22 @@
 
     /// <summary>The mark for that merchant, when it has one. Null renders initials-free.</summary>
     private string? _merchantLogo;
+    private string? _pendingMerchantName;
+    private FilingDestinationSuggestion? _filingSuggestion;
+
+    private async Task UseReceiptSuggestionAsync()
+    {
+        if (_filingSuggestion is not { } suggestion)
+            return;
+        var groupId = suggestion.IsPersonal ? (Guid?)null : suggestion.GroupId;
+        if (GroupFixed && groupId != _groupId)
+            return;
+        if (!GroupFixed && groupId != _groupId)
+            await OnGroupPickedAsync(groupId);
+        if (_categories.Any(category => category.Id == suggestion.CategoryId))
+            await OnCategoryPickedAsync(suggestion.CategoryId);
+        _filingSuggestion = null;
+    }
 
     /// <summary>
     /// Whether the group was settled by where this was opened from, in which case it is
@@ -459,7 +555,11 @@
 
     private string ReceiptCurrency => Currency;
 
-    private void OnCurrencyPicked(string currency) => _currency = currency;
+    private void OnCurrencyPicked(string currency)
+    {
+        _currency = currency;
+        _filingSuggestion = null;
+    }
 
 
 
@@ -619,6 +719,12 @@
         // anywhere else.
         _model.SplitRuleId = null;
         _preview = null;
+        _billRuleId = null;
+        if (_receipt is { } receipt)
+        {
+            _receipt = receipt with { Items = receipt.Items.Select(item => item with { SplitRuleVersionId = null }).ToArray() };
+            _draftBill = DraftBillOf(_receipt);
+        }
 
         if (_groupId is not { } groupId)
         {
@@ -681,6 +787,7 @@
         var listed = await rules;
         _memberRules = MemberRulesOf(listed, _members);
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
+        _billRuleId = listed?.FirstOrDefault(rule => rule.DividesByBill)?.Id;
 
         // Whoever is recording it paid for it, until they say otherwise. The API already
         // assumed as much for an absent payer, so this was only ever missing from the
@@ -728,6 +835,7 @@
     /// </remarks>
     private async Task OnMerchantChangedAsync(Guid? merchantId)
     {
+        _pendingMerchantName = null;
         _model.MerchantId = merchantId;
 
         if (merchantId is null)
@@ -768,6 +876,7 @@
 
         if (_groupId is null || _awaiting is not null)
         {
+            _previewing?.Cancel();
             _preview = null;
             _previewError = null;
             StateHasChanged();
@@ -817,6 +926,7 @@
     private CreateTransactionRequest Request()
     {
         _model.GroupId = _groupId;
+        _model.Receipt = _receipt;
 
         // Stated only for a personal expense. In a group the API takes the group's own when
         // none is named, and naming the one picked while it was personal would be refused.
@@ -837,7 +947,7 @@
     /// </summary>
     private async Task Submit()
     {
-        if (_readingReceipt)
+        if (_readingReceipt || ReceiptNeedsRules)
             return;
 
         await _form.ValidateAsync();
@@ -864,7 +974,6 @@
         }
 
         ApplyDate();
-        var request = Request();
 
         // IBrowserFile is backed by the InputFile DOM element. The dialog is disposed as
         // soon as this result is returned, so hand the page a buffered copy instead of a
@@ -888,6 +997,15 @@
             }
         }
 
+        if (_pendingMerchantName is { } merchantName)
+        {
+            var merchant = await Merchants.CreateAsync(merchantName);
+            if (merchant is null)
+                return;
+            _model.MerchantId = merchant.Id;
+            _pendingMerchantName = null;
+        }
+        var request = Request();
         MudDialog.Close(file is { } bufferedFile
             ? DialogResult.Ok(new Answer(request, bufferedFile, _receipt))
             : DialogResult.Ok(request));
@@ -895,6 +1013,7 @@
 
     private async Task Cancel()
     {
+        if (_readingReceipt) return;
         if (_model.Amount != 0 || !string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrWhiteSpace(_model.Description) || _receiptFile is not null)
         {
             var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",

@@ -60,15 +60,6 @@ public sealed class ReceiptTranscriptionService(
     IReceiptTranscriptionProvider provider) : IReceiptTranscriptionService
 {
     private const long MaximumLength = 10 * 1024 * 1024;
-    private static readonly IReadOnlyDictionary<string, string> AllowedTypes =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            [".jpg"] = "image/jpeg",
-            [".jpeg"] = "image/jpeg",
-            [".png"] = "image/png",
-            [".webp"] = "image/webp",
-            [".pdf"] = "application/pdf"
-        };
 
     public async Task<ReceiptTranscriptionResponse> Transcribe(
         Guid expenseId, Guid attachmentId, CancellationToken ct = default)
@@ -97,11 +88,10 @@ public sealed class ReceiptTranscriptionService(
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        var extension = Path.GetExtension(Path.GetFileName(file.FileName));
+        var expectedType = ReceiptFileTypes.Resolve(file.FileName, file.ContentType);
         if (file.Length is <= 0 or > MaximumLength
             || file.FileName.Length > 256
-            || !AllowedTypes.TryGetValue(extension, out var expectedType)
-            || !string.Equals(file.ContentType, expectedType, StringComparison.OrdinalIgnoreCase))
+            || expectedType is null)
         {
             throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid,
                 "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.");
@@ -117,27 +107,32 @@ public sealed class ReceiptTranscriptionService(
         return new ReceiptDraftResponse(provider.Name, ToRequest(transcription));
     }
 
-    private static SaveReceiptRequest ToRequest(TranscribedReceipt transcription) => new()
+    private static SaveReceiptRequest ToRequest(TranscribedReceipt transcription)
     {
-        Subtotal = transcription.Subtotal,
-        Tax = transcription.Tax,
-        Tip = transcription.Tip,
-        Total = transcription.Total,
-        MerchantName = transcription.MerchantName,
-        PurchaseDate = transcription.PurchaseDate,
-        Items = transcription.Items.Select(item => new ReceiptItemInput
+        var taxes = ReceiptTaxes.Calculate(transcription.Tax, transcription.Items.Select(item =>
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+        return new SaveReceiptRequest
         {
-            Name = item.Name,
-            NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
-            Description = item.Description,
-            UnitPrice = item.UnitPrice,
-            Quantity = item.Quantity,
-            TotalPrice = item.TotalPrice,
-            TaxAmount = item.TaxAmount,
-            TaxRate = item.TaxRate,
-            IsTaxable = item.IsTaxable
-        }).ToArray()
-    };
+            Subtotal = transcription.Subtotal,
+            Tax = transcription.Tax,
+            Tip = transcription.Tip,
+            Total = transcription.Total,
+            MerchantName = transcription.MerchantName,
+            PurchaseDate = transcription.PurchaseDate,
+            Items = transcription.Items.Select((item, index) => new ReceiptItemInput
+            {
+                Name = item.Name,
+                NormalizedName = item.NormalizedName ?? item.Name.Trim().ToLowerInvariant(),
+                Description = item.Description,
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.TotalPrice,
+                TaxAmount = taxes[index],
+                TaxRate = item.TaxRate,
+                IsTaxable = item.IsTaxable
+            }).ToArray()
+        };
+    }
 }
 
 /// <summary>Lets the API start without OCR credentials while making the missing setup explicit.</summary>

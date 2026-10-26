@@ -1,5 +1,7 @@
 @using Microsoft.AspNetCore.Components.Forms
+@using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
+@inject IServiceProvider Services
 
 <div class="gs-file-picker">
     @* Keep the input mounted after selection. Blazor's IBrowserFile reads from the
@@ -11,35 +13,39 @@
                disabled="@IsBusy"
                class="gs-file-picker-input"
                aria-label="Receipt file" />
-    <InputFile id="@_cameraId"
-               OnChange="FileChanged"
-               accept="image/*"
-               capture="environment"
-               disabled="@IsBusy"
-               class="gs-file-picker-input"
-               aria-label="Scan receipt with camera" />
-
-    @if (!IsAttached)
-    {
-        <div class="gs-file-picker-dropzone">
-            <label for="@_inputId" class="gs-file-picker-main-action">
-                <span class="gs-file-picker-mark" aria-hidden="true">
-                    <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
-                </span>
-                <span class="gs-file-picker-copy">
-                    <span class="gs-file-picker-title">@Title</span>
-                    <span class="gs-file-picker-subtitle">@Description</span>
-                    <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
-                </span>
-                <span class="gs-file-picker-action">Browse</span>
-            </label>
-            <label for="@_cameraId" class="gs-file-picker-camera-action">
+    <div class="gs-file-picker-dropzone" hidden="@IsAttached">
+        <label for="@_inputId" class="gs-file-picker-main-action">
+            <span class="gs-file-picker-mark" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+            </span>
+            <span class="gs-file-picker-copy">
+                <span class="gs-file-picker-title">@Title</span>
+                <span class="gs-file-picker-subtitle">@Description</span>
+                <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
+            </span>
+            <span class="gs-file-picker-action">Browse</span>
+        </label>
+        @if (Camera is not null)
+        {
+            <button type="button" class="gs-file-picker-camera-action" disabled="@(IsBusy || _capturing)" @onclick="CaptureAsync">
                 <MudIcon Icon="@Icons.Material.Rounded.PhotoCamera" Size="Size.Small" />
                 <span>Scan receipt</span>
+            </button>
+        }
+        else
+        {
+            <label class="gs-file-picker-camera-action">
+                <MudIcon Icon="@Icons.Material.Rounded.PhotoCamera" Size="Size.Small" />
+                <span>Scan receipt</span>
+                @* A direct tap on the input preserves the browser's camera activation.
+                   Keep it mounted after selection so its file handle remains readable. *@
+                <InputFile OnChange="FileChanged" accept="image/*" capture="environment"
+                           disabled="@IsBusy" class="gs-file-picker-camera-input"
+                           aria-label="Scan receipt with camera" />
             </label>
-        </div>
-    }
-    else
+        }
+    </div>
+    @if (IsAttached)
     {
         <div class="gs-file-picker-attached">
             <span class="gs-file-picker-mark is-success" aria-hidden="true">
@@ -49,6 +55,15 @@
                 <span class="gs-file-picker-title">@(FileName ?? "Receipt attached")</span>
                 <span class="gs-file-picker-subtitle">@AttachedDescription</span>
             </span>
+            <div class="gs-file-picker-actions">
+                <MudButton HtmlTag="label" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           Class="gs-btn-pill gs-file-picker-replace" Disabled="@IsBusy">
+                    Change file
+                    @* A direct native input tap also works in phone browsers. Keep both
+                       inputs mounted so replacing one never invalidates the other handle. *@
+                    <InputFile OnChange="FileChanged" accept="@Accept" disabled="@IsBusy"
+                               class="gs-file-picker-replace-input" aria-label="Change receipt file" />
+                </MudButton>
             @if (ReadRequested.HasDelegate)
             {
                 <MudButton Variant="Variant.Outlined"
@@ -61,6 +76,7 @@
                     @(HasTranscript ? "Read again" : "Read receipt")
                 </MudButton>
             }
+            </div>
         </div>
     }
 
@@ -84,15 +100,45 @@
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Error</MudAlert>
     }
+    @if (_cameraError is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_cameraError</MudAlert>
+    }
 </div>
 
 @code {
     private readonly string _inputId = $"receipt-picker-{Guid.NewGuid():N}";
-    private readonly string _cameraId = $"receipt-camera-{Guid.NewGuid():N}";
+    private GroupSplit.App.Shared.Services.IReceiptCamera? Camera =>
+        Services.GetService(typeof(GroupSplit.App.Shared.Services.IReceiptCamera)) as GroupSplit.App.Shared.Services.IReceiptCamera;
+    private bool _capturing;
+    private string? _cameraError;
+
+    private async Task CaptureAsync()
+    {
+        if (IsBusy || _capturing || Camera is not { } camera)
+            return;
+        _capturing = true;
+        _cameraError = null;
+        try
+        {
+            var file = await camera.CaptureAsync();
+            if (file is not null)
+                await FileChanged.InvokeAsync(new InputFileChangeEventArgs([file]));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            _cameraError = "Could not take a receipt photo. Check camera permission in your phone settings, or use Browse to attach a photo.";
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
 
     [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
     [Parameter] public EventCallback ReadRequested { get; set; }
-    [Parameter] public string Accept { get; set; } = ".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf";
+    [Parameter] public string Accept { get; set; } = ReceiptFileTypes.Accept;
     [Parameter] public string Title { get; set; } = "Attach the original receipt";
     [Parameter] public string Description { get; set; } = "Keep the file now. Read it when you are ready.";
     [Parameter] public string? FileName { get; set; }

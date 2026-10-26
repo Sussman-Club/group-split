@@ -44,6 +44,78 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.True(item.IsTaxable);
     }
 
+    [Theory]
+    [InlineData(0.5, 0.05, 0.5)]
+    [InlineData(0.075, 0.75, 7.5)]
+    [InlineData(0.5, 0, 0.5)]
+    public async Task Missing_line_tax_uses_receipt_evidence_to_resolve_rate_units(
+        decimal rate, decimal tax, decimal expected)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            subtotal = 10m, tax, tip = 0, total = 10m + tax,
+            items = new[] { new { name = "Item", unitPrice = 10m, quantity = 1,
+                totalPrice = 10m, taxAmount = 0m, taxRate = rate, isTaxable = true } }
+        });
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(new StubChatClient(json),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]));
+        var item = Assert.Single(receipt.Items);
+        Assert.Equal(expected, item.TaxRate);
+        if (tax != 0)
+            Assert.Equal(tax, Assert.Single(ReceiptTaxes.Calculate(receipt.Tax,
+                [new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)])));
+    }
+
+    [Theory]
+    [InlineData(0.075, 0.75, 7.5)]
+    [InlineData(7.5, 0.75, 7.5)]
+    [InlineData(0.5, 0.05, 0.5)]
+    public async Task Tax_rates_use_percentage_points(decimal rate, decimal tax, decimal expected)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            subtotal = 10m, tax, tip = 0, total = 10m + tax,
+            items = new[] { new { name = "Item", unitPrice = 10m, quantity = 1,
+                totalPrice = 10m, taxAmount = tax, taxRate = rate, isTaxable = true } }
+        });
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(new StubChatClient(json),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]));
+        Assert.Equal(expected, Assert.Single(receipt.Items).TaxRate);
+    }
+
+    [Theory]
+    [InlineData(0.5, 0.55, 0.5)]
+    [InlineData(0.075, 1.25, 7.5)]
+    public async Task Receipt_rate_inference_accounts_for_other_rates_exemptions_and_discounts(
+        decimal rate, decimal tax, decimal expected)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            subtotal = 25m, tax, tip = 0, total = 25m + tax,
+            items = new[]
+            {
+                new { name = "Item", unitPrice = 12m, quantity = 1, totalPrice = 12m,
+                    taxAmount = 0m, taxRate = rate, isTaxable = true },
+                new { name = "Coupon", unitPrice = -2m, quantity = 1, totalPrice = -2m,
+                    taxAmount = 0m, taxRate = rate, isTaxable = true },
+                new { name = "Other rate", unitPrice = 10m, quantity = 1, totalPrice = 10m,
+                    taxAmount = .5m, taxRate = 5m, isTaxable = true },
+                new { name = "Exempt", unitPrice = 5m, quantity = 1, totalPrice = 5m,
+                    taxAmount = 0m, taxRate = 0m, isTaxable = false }
+            }
+        });
+        var provider = new AzureOpenAIReceiptTranscriptionProvider(new StubChatClient(json),
+            NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance);
+        var receipt = await provider.Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]));
+        Assert.Equal(expected, receipt.Items[0].TaxRate);
+        Assert.Equal(expected, receipt.Items[1].TaxRate);
+        Assert.Equal(5m, receipt.Items[2].TaxRate);
+        Assert.Equal(tax, ReceiptTaxes.Calculate(receipt.Tax, receipt.Items.Select(item =>
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray()).Sum());
+    }
+
     [Fact]
     public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {
