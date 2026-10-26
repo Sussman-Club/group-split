@@ -426,3 +426,20 @@
         width: 100%;
     }
 }
+
+/* Keep the summary and its navigation action on the same row, including phones. */
+.gs-receipts .gs-receipts-head { flex-wrap: nowrap; align-items: center; gap: 8px; }
+.gs-receipts-heading { flex: 1 1 auto; }
+.gs-receipts .gs-receipts-head-actions { flex: 0 0 auto; margin-top: 0; }
+.gs-receipts-head-actions .mud-button-root { white-space: nowrap; }
+
+.gs-pdf-preview { min-width: 0; background: var(--gs-surface-3); }
+.gs-pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; background: var(--gs-surface); border-bottom: 1px solid var(--gs-line); }
+.gs-pdf-pages, .gs-pdf-zoom { display: flex; align-items: center; gap: 4px; }
+.gs-pdf-pages > span { min-width: 86px; text-align: center; font-size: .75rem; }
+.gs-pdf-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; min-width: 36px; padding: 4px 8px; border: 1px solid var(--gs-line-strong); border-radius: 8px; background: var(--gs-surface-2); color: var(--gs-ink); font: 700 .75rem var(--gs-font-body); cursor: pointer; }
+.gs-pdf-toolbar button:disabled { opacity: .4; cursor: default; }
+.gs-pdf-toolbar button:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+.gs-pdf-viewport { padding: 8px; overflow-x: auto; }
+.gs-pdf-viewport canvas { display: block; margin: 0 auto; background: white; box-shadow: var(--gs-shadow-sm); }
+.gs-pdf-status { margin: 0; padding: 16px; color: var(--gs-muted); font-size: .8125rem; }

@@ -48,7 +48,6 @@ public static class ReceiptExtensions
         {
             MerchantName = receipt.MerchantName,
             PurchaseDate = receipt.PurchaseDate,
-            SourceValues = receipt.SourceValues
         };
     }
 }

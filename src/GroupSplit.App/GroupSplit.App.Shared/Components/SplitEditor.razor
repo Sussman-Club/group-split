@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
+@inject IDialogService ChoiceDialogs
 
 @*
     How one expense is divided, for the two dialogs that write one.
@@ -48,81 +49,9 @@
            selector in the same product reads as a component from somewhere else. Short,
            outcome-focused labels make the five choices scannable; the sentence below tells
            the fuller story of the selected choice. *@
-        <div class="gs-seg gs-seg-labels @(Options > 3 ? "is-wide" : "")"
-             role="radiogroup"
-             aria-label="How to divide it"
-             style="--gs-seg-n: @Options; --gs-seg-i: @Position">
-            <span class="gs-seg-thumb" aria-hidden="true"></span>
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.Automatic ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.Automatic ? "true" : "false")"
-                    aria-label="Default: use the category or group default"
-                    title="Use the category or group default"
-                    disabled="@(!Members.Any())"
-                    @onclick="@(() => OnModeChanged(Mode.Automatic))">
-                Default
-            </button>
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.Even ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.Even ? "true" : "false")"
-                    aria-label="Evenly: divide the total evenly"
-                    title="Divide the total evenly"
-                    disabled="@(!Members.Any() || EvenRuleId is null)"
-                    @onclick="@(() => OnModeChanged(Mode.Even))">
-                Evenly
-            </button>
-
-            @* Always drawn, and disabled until the group's rules are in hand -- which is a
-               round trip, and one the dialog makes while this is already on screen. Drawn
-               only once they arrived, the control went from two options to three as they
-               landed and resized itself under the pointer: the thumb is positioned from
-               --gs-seg-n, so an option appearing moves every option. A disabled button that
-               becomes enabled moves nothing. *@
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.AllForOne ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.AllForOne ? "true" : "false")"
-                    aria-label="One pays: choose one person to cover the full expense"
-                    title="Choose one person to cover the full expense"
-                    disabled="@(!Members.Any() || MemberRules.Count == 0)"
-                    @onclick="@(() => OnModeChanged(Mode.AllForOne))">
-                One pays
-            </button>
-
-            @* Only where an expense can have a bill at all, which is a fact the dialog knows
-               before this renders and never changes while it is open -- a create dialog has
-               nowhere to put a receipt, so offering the option there would be a control that
-               is permanently off. Drawn from the start on an edit, disabled until the bill
-               read lands, for the reason given above. *@
-            @if (ShowByBill)
-            {
-                <button type="button"
-                        class="gs-seg-btn @(Chosen is Mode.ByBill ? "active" : "")"
-                        role="radio"
-                        aria-checked="@(Chosen is Mode.ByBill ? "true" : "false")"
-                        aria-label="Receipt: split from receipt items"
-                        title="Split from receipt items"
-                        disabled="@(!Members.Any() || Bill is null || BillRuleId is null)"
-                        @onclick="@(() => OnModeChanged(Mode.ByBill))">
-                    Receipt
-                </button>
-            }
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.ByHand ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.ByHand ? "true" : "false")"
-                    aria-label="Custom: enter each person's amount"
-                    title="Enter each person's amount"
-                    disabled="@(!Members.Any())"
-                    @onclick="@(() => OnModeChanged(Mode.ByHand))">
-                Custom
-            </button>
-        </div>
+        <MudButton Variant="Variant.Outlined" OnClick="ChooseSplitAsync" EndIcon="@Icons.Material.Outlined.ChevronRight">
+            @ChosenLabel
+        </MudButton>
     </MudStack>
 
     <div class="gs-split-mode-hint" aria-live="polite">
@@ -141,19 +70,9 @@
         @* One control, and then the same read-only list every automatic division shows:
            what this chooses is a rule, so the API divides by it and answers with the
            figures, exactly as it does for the category's own rule. *@
-        <MudSelect T="Guid?"
-                   Label="Who should cover it?"
-                   Value="@AllFor"
-                   ValueChanged="@OnAllForChanged"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense">
-            @foreach (var rule in MemberRules)
-            {
-                <MudSelectItem T="Guid?" Value="@rule.Id" @key="rule.Id">
-                    @NameOf(rule)
-                </MudSelectItem>
-            }
-        </MudSelect>
+        <MudButton Variant="Variant.Outlined" OnClick="ChoosePersonAsync" EndIcon="@Icons.Material.Outlined.ChevronRight">
+            @(MemberRules.FirstOrDefault(rule => rule.Id == AllFor) is { } selectedRule ? NameOf(selectedRule) : "Who should cover it?")
+        </MudButton>
 
         @Divided
     }
@@ -254,6 +173,38 @@
 </MudStack>
 
 @code {
+    private async Task ChoosePersonAsync()
+    {
+        var options = MemberRules.Select(rule => new ExpenseChoiceDialog.Option(rule.Id.ToString(), NameOf(rule))).ToList();
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>("Who covers this expense?",
+            new DialogParameters<ExpenseChoiceDialog> { { x => x.Items, options }, { x => x.Selected, AllFor?.ToString() ?? "" } },
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false, Data: string selected } && Guid.TryParse(selected, out var id))
+            await OnAllForChanged(id);
+    }
+
+    private string ChosenLabel => Chosen switch
+    {
+        Mode.Automatic => "Category default", Mode.Even => "Evenly", Mode.AllForOne => "One person",
+        Mode.ByBill => "Receipt items", _ => "Custom amounts"
+    };
+    private async Task ChooseSplitAsync()
+    {
+        var items = new List<ExpenseChoiceDialog.Option>
+        {
+            new(nameof(Mode.Automatic), "Category default", "Follow the category or group rule", !Members.Any()),
+            new(nameof(Mode.Even), "Evenly", "Equal shares, rounded to the cent", !Members.Any() || EvenRuleId is null),
+            new(nameof(Mode.AllForOne), "One person", "One person covers the full expense", !Members.Any() || MemberRules.Count == 0),
+            new(nameof(Mode.ByHand), "Custom amounts", "Enter each person's exact amount", !Members.Any())
+        };
+        if (ShowByBill) items.Insert(3, new(nameof(Mode.ByBill), "Receipt items", "Assign items from the bill", !Members.Any() || Bill is null || BillRuleId is null));
+        var parameters = new DialogParameters<ExpenseChoiceDialog> { { x => x.Items, items }, { x => x.Selected, Chosen.ToString() } };
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>("How should it split?", parameters,
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false, Data: string picked } && Enum.TryParse<Mode>(picked, out var mode))
+            await OnModeChanged(mode);
+    }
+
     /// <summary>
     /// The division as the API worked it out, which is what both automatic answers
     /// show: the category's rule, and the rule the expense names for itself. One

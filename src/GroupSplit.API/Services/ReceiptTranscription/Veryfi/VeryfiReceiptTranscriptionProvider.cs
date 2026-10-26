@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using GroupSplit.API.Errors;
@@ -68,7 +67,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
             var parsed = JsonSerializer.Deserialize<VeryfiDocument>(payload, Json)
                 ?? throw new JsonException("Veryfi returned an empty document response.");
-            var receipt = parsed.ToReceipt(payload);
+            var receipt = parsed.ToReceipt();
             logger.LogInformation(
                 "Veryfi returned {StructuredLineItemCount} structured line item(s) and mapped {MappedItemCount} named item(s) for receipt attachment {AttachmentId}.",
                 parsed.LineItems?.Count ?? 0,
@@ -109,7 +108,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         [JsonPropertyName("date")] public string? Date { get; init; }
         [JsonPropertyName("line_items")] public IReadOnlyList<VeryfiLineItem?>? LineItems { get; init; }
 
-        public TranscribedReceipt ToReceipt(string payload)
+        public TranscribedReceipt ToReceipt()
         {
             // A null in the list is a line Veryfi had nothing to say about.
             var candidates = (LineItems ?? []).Select(line => line?.ToRow()).OfType<ReceiptItemDraft>().ToList();
@@ -155,7 +154,6 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             {
                 MerchantName = Clean(vendor) ?? Clean(RawVendorName),
                 PurchaseDate = PurchaseDateFrom(Date),
-                SourceValues = Evidence(payload)
             };
         }
 
@@ -169,38 +167,6 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 DateTimeStyles.None, out var date)
                 ? date
                 : null;
-
-        /// <summary>
-        /// The part of the response a reviewer needs to check the reading against the paper.
-        /// The whole body also carries signed image links and payment details, and every
-        /// member who can open the bill would see it, so only these fields are kept.
-        /// </summary>
-        private static string? Evidence(string payload)
-        {
-            if (JsonNode.Parse(payload) is not JsonObject source)
-                return null;
-            var evidence = new JsonObject();
-            foreach (var key in EvidenceFields)
-                if (source[key] is { } value)
-                    evidence[key] = value.DeepClone();
-            if (source["vendor"] is JsonObject vendor && vendor["name"] is { } vendorName)
-                evidence["vendor"] = new JsonObject { ["name"] = vendorName.DeepClone() };
-
-            var text = evidence.ToJsonString();
-            if (text.Length > SaveReceiptRequest.SourceValuesMaxLength)
-            {
-                // The OCR text is the bulk of a long receipt and the structured lines above
-                // already say what it was read as.
-                evidence.Remove("ocr_text");
-                text = evidence.ToJsonString();
-            }
-            return text.Length > SaveReceiptRequest.SourceValuesMaxLength
-                ? text[..SaveReceiptRequest.SourceValuesMaxLength]
-                : text;
-        }
-
-        private static readonly string[] EvidenceFields =
-            ["raw_vendor_name", "date", "subtotal", "tax", "tip", "total", "line_items", "ocr_text"];
 
         private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }

@@ -78,7 +78,6 @@ public class ReceiptTranscriptionServiceTest
             }, new TranscribedReceiptItem("Loyalty coupon SAVE250", -2.50m, 1m, -2.50m, 0m)])
         {
             MerchantName = "Corner Store", PurchaseDate = new DateOnly(2026, 9, 23),
-            SourceValues = "CORNER STORE\nCOFFEE"
         });
 
         var response = await new ReceiptTranscriptionService(attachments.Object, provider)
@@ -86,7 +85,6 @@ public class ReceiptTranscriptionServiceTest
 
         Assert.Equal("Corner Store", response.Receipt.MerchantName);
         Assert.Equal(new DateOnly(2026, 9, 23), response.Receipt.PurchaseDate);
-        Assert.Equal("CORNER STORE\nCOFFEE", response.Receipt.SourceValues);
         Assert.Equal(2, response.Receipt.Items.Count);
         var item = response.Receipt.Items[0];
         Assert.Equal(6.75m, item.TaxRate);
@@ -160,7 +158,6 @@ public class ReceiptTranscriptionServiceTest
         Assert.Equal("PZA LG", line.Description);
         Assert.Equal("Corner Pizza", receipt.MerchantName);
         Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
-        Assert.Contains("CORNER PZA", receipt.SourceValues);
         Assert.Equal(9m, line.UnitPrice);
         Assert.Equal(2m, line.Quantity);
         Assert.Equal(18m, line.TotalPrice);
@@ -225,11 +222,6 @@ public class ReceiptTranscriptionServiceTest
 
         Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
         Assert.Equal("Pizza", Assert.Single(receipt.Items).Name);
-        Assert.Contains("CORNER PZA", receipt.SourceValues);
-        Assert.Contains("Corner Pizza", receipt.SourceValues);
-        Assert.DoesNotContain("token=secret", receipt.SourceValues);
-        Assert.DoesNotContain("5430", receipt.SourceValues);
-        Assert.DoesNotContain("555-0100", receipt.SourceValues);
     }
 
     /// <summary>
@@ -326,7 +318,6 @@ public class ReceiptTranscriptionServiceTest
 
         Assert.Equal(19m, receipt.Items.Sum(item => item.TotalPrice));
         Assert.Equal(19m, receipt.Subtotal);
-        Assert.Contains("\"subtotal\":20.00", receipt.SourceValues);
         Assert.Equal(2m, receipt.Items.Sum(item => item.TaxAmount));
         Assert.Equal(4, receipt.Items.Count);
         Assert.All(receipt.Items.Take(2), item =>

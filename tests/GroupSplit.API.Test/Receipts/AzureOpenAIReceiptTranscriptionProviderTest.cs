@@ -13,6 +13,37 @@ namespace GroupSplit.API.Test.Receipts;
 
 public sealed class AzureOpenAIReceiptTranscriptionProviderTest
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public void Taxable_exempt_and_unknown_status_survive_azure_mapping(bool? taxable)
+    {
+        var receipt = AzureOpenAIReceiptTranscriptionProvider.ToReceipt(new()
+        {
+            Subtotal = 10m, Tax = 1m, Total = 11m,
+            Items = [new() { Name = "Item", UnitPrice = 10m, Quantity = 1m, TotalPrice = 10m,
+                IsTaxable = taxable, TaxAmount = 0m }]
+        });
+        Assert.Equal(taxable, Assert.Single(receipt.Items).IsTaxable);
+        Assert.Equal(0m, receipt.Items[0].TaxAmount);
+    }
+
+    [Fact]
+    public void Missing_printed_item_tax_is_left_for_the_backend_rate_calculator()
+    {
+        var receipt = AzureOpenAIReceiptTranscriptionProvider.ToReceipt(new()
+        {
+            Subtotal = 10m, Tax = .8m, Total = 10.8m,
+            Items = [new() { Name = "Item", UnitPrice = 10m, Quantity = 1m, TotalPrice = 10m,
+                TaxAmount = null, TaxRate = 8m, IsTaxable = true }]
+        });
+        var item = Assert.Single(receipt.Items);
+        Assert.Equal(0m, item.TaxAmount);
+        Assert.Equal(8m, item.TaxRate);
+        Assert.True(item.IsTaxable);
+    }
+
     [Fact]
     public async Task Sends_the_receipt_to_the_keyed_chat_client_and_maps_structured_output()
     {
@@ -41,7 +72,6 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.True(item.IsTaxable);
         Assert.Equal("Corner Pizza", receipt.MerchantName);
         Assert.Equal(new DateOnly(2026, 9, 23), receipt.PurchaseDate);
-        Assert.Contains("PZA LG", receipt.SourceValues);
         Assert.Equal(-2m, receipt.Items[1].TotalPrice);
         Assert.Contains("discount", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("negative-priced item", client.Prompt, StringComparison.OrdinalIgnoreCase);
@@ -49,6 +79,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         Assert.Contains("Coupon [printed code]", client.Prompt, StringComparison.Ordinal);
         Assert.Contains("do not invent a product", client.Prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dinner.jpg", client.AttachmentDescription);
+        Assert.Contains("Do not calculate item taxes", client.Prompt);
     }
 
     [Fact]
@@ -168,34 +199,12 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
             new ReceiptSourceDocument(Guid.NewGuid(), "dinner.jpg", "image/jpeg", [1]), cancelled.Token));
     }
 
-    /// <summary>
-    /// The model's free text is the bulk of a long receipt, and a bill keeps 64 KB of
-    /// evidence. Non-Latin text must not be escaped six characters to the letter on the way.
-    /// </summary>
     [Fact]
-    public async Task The_evidence_kept_fits_the_bill_and_keeps_non_latin_text_readable()
+    public void Receipt_schema_and_contract_do_not_include_raw_source_text()
     {
-        var shortReading = await new AzureOpenAIReceiptTranscriptionProvider(
-                new StubChatClient("{\"rawText\":\"ラーメン\",\"subtotal\":9,\"tax\":0,\"tip\":0,\"total\":9," +
-                    "\"items\":[{\"name\":\"ラーメン\",\"unitPrice\":9,\"quantity\":1,\"totalPrice\":9,\"taxAmount\":0}]}"),
-                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
-            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "ramen.jpg", "image/jpeg", [1]),
-                TestContext.Current.CancellationToken);
-
-        Assert.Contains("ラーメン", shortReading.SourceValues);
-
-        var rawText = new string('ラ', SaveReceiptRequest.SourceValuesMaxLength);
-        var longReading = await new AzureOpenAIReceiptTranscriptionProvider(
-                new StubChatClient("{\"rawText\":\"" + rawText + "\",\"subtotal\":9,\"tax\":0,\"tip\":0,\"total\":9," +
-                    "\"items\":[{\"name\":\"Ramen\",\"unitPrice\":9,\"quantity\":1,\"totalPrice\":9,\"taxAmount\":0}]}"),
-                NullLogger<AzureOpenAIReceiptTranscriptionProvider>.Instance)
-            .Transcribe(new ReceiptSourceDocument(Guid.NewGuid(), "ramen.jpg", "image/jpeg", [1]),
-                TestContext.Current.CancellationToken);
-
-        Assert.NotNull(longReading.SourceValues);
-        Assert.True(longReading.SourceValues.Length <= SaveReceiptRequest.SourceValuesMaxLength);
-        Assert.DoesNotContain("rawText", longReading.SourceValues);
-        Assert.Contains("Ramen", longReading.SourceValues);
+        Assert.Null(typeof(AzureOpenAIReceiptTranscriptionProvider.AzureReceipt).GetProperty("RawText"));
+        Assert.Null(typeof(SaveReceiptRequest).GetProperty("SourceValues"));
+        Assert.Null(typeof(ReceiptResponse).GetProperty("SourceValues"));
     }
 
     [Fact]

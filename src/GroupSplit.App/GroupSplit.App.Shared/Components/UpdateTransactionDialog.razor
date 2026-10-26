@@ -37,7 +37,7 @@
    at the bottom. It rides the dialog rather than every DialogOptions that opens
    one, which is both fewer places to forget and the right owner: how this looks
    on a small screen is the dialog's business, not its caller's. *@
-<MudDialog Class="gs-sheet gs-transaction-dialog">
+<MudDialog Class="gs-sheet gs-transaction-dialog gs-expandable-expense">
     <TitleContent>
         <MudText Typo="Typo.h5" Class="font-weight-bold">@MudDialog.Title</MudText>
     </TitleContent>
@@ -59,7 +59,7 @@
         }
         else
         {
-            <MudForm @ref="_form" Model="@_model">
+            <MudForm @ref="_form" Model="@_model" Disabled="@_reviewing">
                 <div class="gs-stack" style="gap: 16px">
 
                 @* First, and a size up: what an edit is usually about is this figure, and
@@ -87,25 +87,12 @@
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
-                <MudTextField @bind-Value="_model.Description"
-                              For="@(() => _model.Description)"
-                              Label="Note"
-                              Placeholder="Anything worth remembering about it"
-                              HelperText="Optional"
-                              Variant="Variant.Outlined"
-                              Lines="2"
-                              Immediate="true"/>
-
-                @* The group is a chip here and not the heading, unlike the create dialog:
-                   this is the one screen where it can genuinely move. A personal expense is
-                   shared by giving it a group, a shared one taken back by choosing Personal,
-                   and the category, payer and shares all belong to whichever it says. *@
-                <ExpenseDecisions @ref="_decisions"
+                <ExpenseDecisions UseSelectionSheets="true" @ref="_decisions"
                                   Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_model.GroupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
                                   GroupName="@Where"
-                                  ShowCategory="true"
+                                  ShowCategory="true" ShowWhen="true" ShowWhere="true"
                                   Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.CategoryId, c.Name, c.Splits)).ToList())"
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
@@ -122,6 +109,25 @@
                                   MerchantIdChanged="@OnMerchantChangedAsync"
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
+                <details class="gs-expense-disclosure" open="@_showDetailErrors">
+                    <summary>Note <span>Optional</span></summary>
+                    <div class="gs-expense-disclosure-body">
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Placeholder="Anything worth remembering about it"
+                              HelperText="Optional"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              Immediate="true"/>
+
+                @* The group is a chip here and not the heading, unlike the create dialog:
+                   this is the one screen where it can genuinely move. A personal expense is
+                   shared by giving it a group, a shared one taken back by choosing Personal,
+                   and the category, payer and shares all belong to whichever it says. *@
+
+                    </div>
+                </details>
 
                 @if (CurrencyRefusal is { } refusal)
                 {
@@ -149,7 +155,9 @@
                 }
                 else if (CurrencyRefusal is null)
                 {
-                    <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                    <details class="gs-expense-disclosure" open>
+                        <summary>People &amp; shares <span>Review how this expense is divided</span></summary>
+                        <div class="gs-expense-disclosure-body">
                         @if (SplitRuleNeedsManualOverride)
                         {
                             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
@@ -187,6 +195,7 @@
                                      Awaiting="@_awaiting"
                                      SaveRefused="@_saveRefused"/>
                     </div>
+                    </details>
                 }
 
                 <ReceiptSection TransactionId="@Original.Id"
@@ -209,9 +218,9 @@
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null)"
+                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _reviewing)"
                    OnClick="Submit">
-            Save
+            Review changes
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -266,6 +275,8 @@
         (_model.SplitRuleId is { } ruleId && ruleId == _billRuleId)
         || (_model.SplitRuleId is null && (bill ?? _receipt)?.DividesItsExpense == true);
 
+    private bool _reviewing;
+    private bool _showDetailErrors;
     private MudForm _form = null!;
 
     /// <summary>Whether Save was refused over shares that do not add up.</summary>
@@ -397,6 +408,8 @@
     /// tell a pick from the state it started in.
     /// </summary>
     private Guid? _openedSplitRuleId;
+    private readonly Dictionary<Guid, string> _splitRuleNames = [];
+    private string RuleLabel(Guid? id) => id is { } value ? _splitRuleNames.GetValueOrDefault(value, "Selected rule") : "Category default";
 
     private Guid? _openedCategoryId;
 
@@ -813,6 +826,7 @@
             _members = [.. await members];
 
             var listed = await rules;
+            foreach (var rule in listed ?? []) _splitRuleNames[rule.Id] = rule.Name;
 
             _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
             var currentMemberIds = _members.Select(member => member.Id).ToHashSet();
@@ -1123,6 +1137,11 @@
     /// </remarks>
     private async Task Submit()
     {
+        if (_reviewing) return;
+        _reviewing = true;
+        try
+        {
+
         // Stays open on it, with the refusal on screen and the edit intact, rather than
         // closing onto a save the API will refuse. The button is off as well; this is for
         // a submit that arrives some other way.
@@ -1132,7 +1151,10 @@
         await _form.ValidateAsync();
 
         if (!_form.IsValid)
+        {
+            _showDetailErrors = true;
             return;
+        }
 
         // The same failure for the shares. Hand-typed shares that summed to the old amount
         // do not sum to a new one, and the dialog used to close over them: the API refused
@@ -1143,7 +1165,40 @@
             return;
         }
 
+        await RefreshPreviewAsync();
+        if (IsShared && _model.Splits is null && _preview is null)
+            return;
+
         ApplyDate();
+        IReadOnlyList<SplitInput> after = !IsShared
+            ? [new SplitInput { UserId = _model.PaidByUserId, Amount = _model.Amount }]
+            : _model.Splits ?? _preview?.Splits.Select(x => new SplitInput { UserId = x.UserId, Amount = x.Amount }).ToList() ?? _storedSplits;
+        var people = _storedSplits.Select(x => x.UserId).Union(after.Select(x => x.UserId));
+        var shares = people.Select(id => new ExpenseReviewDialog.Share(
+            _storedRows.FirstOrDefault(x => x.UserId == id)?.UserName ?? _members.FirstOrDefault(x => x.Id == id).Label(),
+            _storedSplits.FirstOrDefault(x => x.UserId == id)?.Amount ?? 0,
+            after.FirstOrDefault(x => x.UserId == id)?.Amount ?? 0)).ToList();
+        var changes = new List<ExpenseReviewDialog.Change>
+        {
+            new("Name", Original.Name, _model.Name, Original.Name != _model.Name),
+            new("Amount", Original.Amount.ToMoney(Original.Currency), _model.Amount.ToMoney(Original.Currency), Original.Amount != _model.Amount),
+            new("Note", Original.Description ?? "No note", _model.Description ?? "No note", Original.Description != _model.Description),
+            new("When", Clock.Stamp(Original.DateTime, "d MMM yyyy", "HH:mm"), Clock.Stamp(_model.DateTime, "d MMM yyyy", "HH:mm"), Original.DateTime != _model.DateTime),
+            new("Group", Original.GroupName ?? "Personal", Where, OriginalGroupId != _model.GroupId),
+            new("Paid by", Original.PaidByUserName, PayerChoices.FirstOrDefault(x => x.Id == _model.PaidByUserId).Label(), Original.PaidByUserId != _model.PaidByUserId),
+            new("Category", Original.Category ?? "No category", _categories.FirstOrDefault(x => x.CategoryId == _model.CategoryId)?.Name ?? "No category", _openedCategoryId != _model.CategoryId),
+            new("Merchant", Original.MerchantName ?? "No merchant", _merchantName ?? "No merchant", _openedMerchantId != _model.MerchantId)
+        };
+        if (_model.SplitRuleId != _openedSplitRuleId)
+            changes.Add(new("Split rule", RuleLabel(_openedSplitRuleId), RuleLabel(_model.SplitRuleId), true));
+        else if (_redivide)
+            changes.Add(new("Split", "Saved division", "Recalculate using the selected split"));
+        var review = await DialogService.ShowAsync<ExpenseReviewDialog>("Review changes",
+            new DialogParameters<ExpenseReviewDialog>
+            {
+                { x => x.Changes, changes }, { x => x.Shares, shares }, { x => x.Currency, Original.Currency }
+            }, new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await review.Result is not { Canceled: false }) return;
 
         var original = new UpdateTransactionRequest
         {
@@ -1155,13 +1210,30 @@
             CategoryId = _openedCategoryId,
             MerchantId = _openedMerchantId,
             SplitRuleId = _openedSplitRuleId,
-            PaidByUserId = Original.PaidByUserId
+            PaidByUserId = Original.PaidByUserId,
+            Splits = _storedSplits
         };
 
         MudDialog.Close(DialogResult.Ok(CreatePatch(original, _model, _redivide)));
+
+        }
+        finally { _reviewing = false; }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task Cancel()
+    {
+        if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
+        {
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",
+                new DialogParameters<ConfirmationDialog>
+                {
+                    { x => x.ContentText, "Discard your unsaved expense changes? Receipt changes saved separately are kept." },
+                    { x => x.ButtonText, "Discard changes" }
+                }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            if (await dialog.Result is not { Canceled: false }) return;
+        }
+        MudDialog.Cancel();
+    }
 
     /// <param name="redivide">
     /// Whether the person asked for the division to be worked out again. It cannot be read
@@ -1218,7 +1290,11 @@
         // every edit is precisely the bulk pass that moved 1,394.72 onto one member on
         // 2026-09-08, and the operation below is emitted only when somebody chose it.
         if (updated.Splits is not null)
-            patch.Replace(x => x.Splits, updated.Splits);
+        {
+            if (original.Splits is null || !original.Splits.OrderBy(x => x.UserId)
+                    .SequenceEqual(updated.Splits.OrderBy(x => x.UserId)))
+                patch.Replace(x => x.Splits, updated.Splits);
+        }
         else if (redivide)
             patch.Replace(x => x.Splits, null);
 

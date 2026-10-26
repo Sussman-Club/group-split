@@ -49,14 +49,6 @@
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
             </div>
 
-            @if (!string.IsNullOrWhiteSpace(_sourceValues))
-            {
-                <details class="gs-muted" style="font-size: .8rem">
-                    <summary>View extracted source values</summary>
-                    <pre style="white-space: pre-wrap; overflow-wrap: anywhere">@_sourceValues</pre>
-                </details>
-            }
-
             <div class="gs-muted" style="font-size: .85rem">
                 @if (ExpenseAmount is { } expenseAmount)
                 {
@@ -81,6 +73,15 @@
             @if (FigureError is { } figureError)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">@figureError</MudAlert>
+            }
+
+            @if (FinancialValuesChanged)
+            {
+                <MudButton OnClick="SpreadTax" Disabled="@(!CanSpreadTax || _saving)"
+                           Variant="Variant.Outlined" Color="Color.Primary">
+                    Spread tax across items
+                </MudButton>
+                <p class="gs-muted">Recalculate tax by price for taxable items. Exempt and unidentified items stay unchanged.</p>
             }
 
             <div class="gs-inline" style="justify-content: space-between; align-items: center">
@@ -136,7 +137,7 @@
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                    Disabled="@(_saving || HasInvalidItemName || FigureError is not null || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
                    OnClick="SaveAsync">
-            @(_saving ? "Savingâ€¦" : PrimaryActionText)
+            @(_saving ? "Saving…" : PrimaryActionText)
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -158,11 +159,39 @@
     private decimal _total;
     private string? _merchantName;
     private DateTime? _purchaseDate;
-    private string? _sourceValues;
     private List<EditableLine> _items = [];
     private bool _saving;
     private string? _validationError;
     private string? _loadedSource;
+
+    private (decimal Subtotal, decimal Tax, decimal Tip, decimal Total) _originalTotals;
+    private (Guid Key, decimal Quantity, decimal Price, decimal Total, decimal Tax, decimal? Rate)[] _originalLines = [];
+    private bool FinancialValuesChanged => _originalTotals != (_subtotal, _tax, _tip, _total)
+        || !_originalLines.SequenceEqual(_items.Select(item =>
+            (item.Key, item.Quantity, item.UnitPrice, item.TotalPrice, item.TaxAmount, item.TaxRate)));
+    private bool CanSpreadTax => _tax >= 0m
+        && _items.Any(item => item.IsTaxable == true && item.TotalPrice > 0m)
+        && _tax >= _items.Where(item => item.IsTaxable != true || item.TotalPrice <= 0m).Sum(item => item.TaxAmount);
+
+    private void SpreadTax()
+    {
+        if (!CanSpreadTax) return;
+        var eligible = _items.Where(item => item.IsTaxable == true && item.TotalPrice > 0m).ToList();
+        var remaining = _tax - _items.Except(eligible).Sum(item => item.TaxAmount);
+        var weight = eligible.Sum(item => item.TotalPrice);
+        var exact = eligible.Select(item => remaining * 100m * item.TotalPrice / weight).ToArray();
+        var cents = exact.Select(decimal.Floor).ToArray();
+        foreach (var index in Enumerable.Range(0, eligible.Count)
+            .OrderByDescending(index => exact[index] - cents[index]).ThenBy(index => index)
+            .Take((int)(decimal.Round(remaining * 100m) - cents.Sum())))
+            cents[index]++;
+        for (var index = 0; index < eligible.Count; index++)
+        {
+            eligible[index].TaxAmount = cents[index] / 100m;
+            eligible[index].TaxRate = null;
+        }
+        _validationError = null;
+    }
 
     private bool HasInvalidItemName => _items.Any(item => ValidateItemName(item.Name).Any());
     private string? FigureError
@@ -193,13 +222,11 @@
             ? (Key: $"receipt:{saved.Id}", Subtotal: saved.Subtotal, Tax: saved.Tax,
                 Tip: saved.Tip, Total: saved.Total,
                 MerchantName: saved.MerchantName, PurchaseDate: saved.PurchaseDate,
-                SourceValues: saved.SourceValues,
                 Items: saved.Items.Select(item => new EditableLine(item)).ToList())
             : Transcription is { } draft
                 ? (Key: $"transcription:{draft.AttachmentId}", Subtotal: draft.Receipt.Subtotal,
                     Tax: draft.Receipt.Tax, Tip: draft.Receipt.Tip, Total: draft.Receipt.Total,
                     MerchantName: draft.Receipt.MerchantName, PurchaseDate: draft.Receipt.PurchaseDate,
-                    SourceValues: draft.Receipt.SourceValues,
                     Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList())
                 : throw new InvalidOperationException("A receipt draft or saved receipt is required.");
 
@@ -213,8 +240,10 @@
         _total = source.Total;
         _merchantName = source.MerchantName;
         _purchaseDate = source.PurchaseDate?.ToDateTime(TimeOnly.MinValue);
-        _sourceValues = source.SourceValues;
         _items = source.Items;
+        _originalTotals = (_subtotal, _tax, _tip, _total);
+        _originalLines = _items.Select(item =>
+            (item.Key, item.Quantity, item.UnitPrice, item.TotalPrice, item.TaxAmount, item.TaxRate)).ToArray();
     }
 
     private void AddItem() => _items.Add(new EditableLine());
@@ -258,7 +287,6 @@
                 Total = _total,
                 MerchantName = _merchantName,
                 PurchaseDate = _purchaseDate is { } date ? DateOnly.FromDateTime(date) : null,
-                SourceValues = _sourceValues,
                 Items = _items.Select(item => new ReceiptItemInput
                 {
                     Id = item.Id,

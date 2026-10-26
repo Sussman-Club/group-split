@@ -1,0 +1,42 @@
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog Class="gs-selection-sheet">
+    <TitleContent><h2 class="gs-dialog-title">@MudDialog.Title</h2></TitleContent>
+    <DialogContent>
+        @if (ChooseMerchant)
+        {
+            <MerchantPicker @bind-Value="_merchant" />
+        }
+        else
+        {
+            <MudStack Spacing="4">
+                <MudDatePicker @bind-Date="_date" Label="Date" Variant="Variant.Outlined" />
+                <MudTimePicker @bind-Time="_time" Label="Time" Variant="Variant.Outlined" AmPm="true" />
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm">Use selection</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public sealed record Selection(DateTime? Date, TimeSpan? Time, Guid? MerchantId);
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public bool ChooseMerchant { get; set; }
+    [Parameter] public DateTime? Date { get; set; }
+    [Parameter] public TimeSpan? Time { get; set; }
+    [Parameter] public Guid? MerchantId { get; set; }
+    private DateTime? _date;
+    private TimeSpan? _time;
+    private Guid? _merchant;
+    protected override void OnInitialized()
+    {
+        _date = Date;
+        _time = Time;
+        _merchant = MerchantId;
+    }
+    private void Cancel() => MudDialog.Cancel();
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(new Selection(_date, _time, _merchant)));
+}

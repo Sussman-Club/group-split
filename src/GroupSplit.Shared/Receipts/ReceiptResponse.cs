@@ -19,7 +19,6 @@ public sealed record ReceiptResponse(
     public bool CanEdit { get; init; }
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
-    public string? SourceValues { get; init; }
 }
 
 /// <summary>

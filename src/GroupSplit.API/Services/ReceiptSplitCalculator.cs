@@ -18,12 +18,10 @@ namespace GroupSplit.API.Services;
 public static class ReceiptSplitCalculator
 {
     /// <summary>Writes the tax implied by the receipt's rates and taxable flags. Existing
-    /// receipts with no tax metadata retain their manually reviewed line tax values.</summary>
+    /// line taxes are retained; missing tax is distributed across identified taxable items.</summary>
     public static void CalculateLineTaxes(Receipt receipt)
     {
         var items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id).ToList();
-        if (items.All(item => item.TaxRate is null && item.IsTaxable is null))
-            return;
         var taxes = CalculateTaxes(receipt, items);
         foreach (var item in items)
             item.TaxAmount = taxes[item.Id];
@@ -169,16 +167,17 @@ public static class ReceiptSplitCalculator
             return items.ToDictionary(item => item.Id, item => item.TaxAmount);
 
         // An unrated line's own figure stands: it may be a reviewer's correction or a
-        // provider's per-line reading, and one flag elsewhere on the bill says nothing
-        // about it. Only a line marked exempt is forced to zero.
-        var taxes = items.ToDictionary(item => item.Id, item => item.TaxRate is { } rate
-            ? RoundMoney(item.TotalPrice * rate / 100m)
-            : item.IsTaxable == false ? 0m : item.TaxAmount);
+        // provider's per-line reading. Only identified taxable lines without an extracted
+        // amount can receive the remaining receipt tax; unknown status is not taxable.
+        var taxes = items.ToDictionary(item => item.Id, item => item.IsTaxable == false
+            ? 0m
+            : item.TaxAmount != 0m ? item.TaxAmount
+            : item.TaxRate is { } rate ? RoundMoney(item.TotalPrice * rate / 100m) : 0m);
         var remaining = receipt.Tax - taxes.Values.Sum();
         if (remaining == 0m)
             return taxes;
 
-        var fallback = items.Where(item => item.TaxRate is null && item.IsTaxable != false &&
+        var fallback = items.Where(item => item.TaxRate is null && item.IsTaxable == true && item.TaxAmount == 0m &&
             (remaining > 0 ? item.TotalPrice > 0 : item.TotalPrice < 0)).ToList();
         // A till taxes the rate's whole base once, while each line here is rounded on its
         // own, so a fully rated bill can differ from the printed tax by up to half a cent
@@ -186,7 +185,7 @@ public static class ReceiptSplitCalculator
         // rated lines themselves; anything larger is left to be refused as not adding up.
         if (fallback.Count == 0)
         {
-            var rated = items.Where(item => item.TaxRate is > 0 && item.TotalPrice != 0m).ToList();
+            var rated = items.Where(item => item.TaxRate is > 0 && item.TotalPrice != 0m && item.TaxAmount == 0m).ToList();
             if (Math.Abs(remaining) <= .005m * rated.Count)
                 fallback = rated;
         }

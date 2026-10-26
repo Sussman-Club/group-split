@@ -20,12 +20,26 @@
    advertised no expandable state at all. The comment sits here rather than among the
    attributes, where Razor reads it as an attribute name and the render throws. *@
 
+@if (ReadOnly)
+{
+    <span class="gs-expense-chip is-readonly" aria-label="@($"{Label}: {Value}")">@ChipContent</span>
+}
+else
+{
 <button type="button"
         class="gs-expense-chip @(Set ? "" : "is-empty") @(Open ? "is-open" : "")"
         aria-expanded="@(Open ? "true" : "false")"
         aria-label="@(Set ? $"{Label}: {Value}. Change it" : $"Add {Label}")"
         @onclick="OnClick">
 
+    @ChipContent
+</button>
+}
+
+
+@code {
+    [Parameter] public bool ReadOnly { get; set; }
+    private RenderFragment ChipContent => @<text>
     @if (!Set)
     {
         <MudIcon Icon="@Icons.Material.Outlined.Add"/>
@@ -35,7 +49,11 @@
 
     @if (Set)
     {
-        @if (Lead is { Length: > 0 })
+        @if (AsRow)
+        {
+            <span class="k">@(Label switch { "group" => "Group", "payer" => "Paid by", "category" => "Category", "when" => "When", "where" => "Merchant", _ => Label })</span>
+        }
+        else if (Lead is { Length: > 0 })
         {
             <span class="k">@Lead</span>
         }
@@ -47,9 +65,9 @@
         <span class="v">@Label</span>
     }
 
-</button>
+    </text>;
 
-@code {
+    [Parameter] public bool AsRow { get; set; }
     /// <summary>What this decides, in a word: "category", "paid by", "when", "where".</summary>
     [Parameter] public string Label { get; set; } = "";
 
