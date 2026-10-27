@@ -280,6 +280,16 @@
     if (document.body) applyRail(); else document.addEventListener("DOMContentLoaded", applyRail);
 
     window.gs = {
+        scrollToSection(id) {
+            const section = document.getElementById(id);
+            if (!section) return;
+
+            section.scrollIntoView({
+                block: "start",
+                behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"
+            });
+        },
+
         async downloadPersonalData() {
             try {
                 const response = await fetch("/api/users/me/export", {

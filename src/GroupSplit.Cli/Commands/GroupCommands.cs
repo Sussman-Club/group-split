@@ -53,7 +53,7 @@ public static class GroupCommands
 
         command.SetHandler(async (context, ct) =>
         {
-            var groups = await context.Groups.GetGroupsAsync(ct);
+            var groups = await context.Groups.GetGroupsAsync(cancellationToken: ct);
 
             context.Output.Write(groups, value =>
             {

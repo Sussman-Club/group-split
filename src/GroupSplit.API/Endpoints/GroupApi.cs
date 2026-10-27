@@ -84,15 +84,23 @@ public static class GroupApi
         private RouteHandlerBuilder MapGetAllGroups()
         {
             return group.MapGet(string.Empty, async (
+                    int? page,
+                    int? pageSize,
+                    bool? archived,
                     IGroupService groupService,
                     CancellationToken ct) =>
                 {
-                    var groups = await groupService.GetAllGroups(ct);
+                    var paging = page.HasValue || pageSize.HasValue
+                        ? new PageRequest(page ?? 1, pageSize ?? PageRequest.DefaultPageSize)
+                        : null;
+                    var groups = await groupService.GetGroups(paging, archived, ct);
                     var groupResponses = await groupService.Describe(groups)
                         .ToListAsync(cancellationToken: ct);
                     return Results.Ok(groupResponses);
                 })
                 .WithName("GetGroups")
+                .WithDescription("Lists the caller's groups. Supply page and pageSize for database-side pagination, " +
+                    "and archived to filter by the caller's archive status. Omitting pagination preserves the complete-list response.")
                 .Produces<GroupResponse[]>();
         }
 

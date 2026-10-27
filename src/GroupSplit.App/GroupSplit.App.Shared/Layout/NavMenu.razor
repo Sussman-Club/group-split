@@ -22,13 +22,12 @@
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    // The primary flow has two destinations. Account, settlement, and bank filing remain
-    // available from the places where those decisions are made, instead of competing for
-    // permanent navigation space.
+    // Shared by the desktop sidebar and the mobile action tabs.
     private static readonly List<MenuItem> SignedIn =
     [
         new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
-        new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups }
+        new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
+        new() { Href = "/settings", Text = "Settings", Icon = Icons.Material.Rounded.Settings }
     ];
 
     // Everything else needs a session, and a link that only bounces to the
@@ -56,6 +55,7 @@
     private void Resolve()
     {
         var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
+        if (string.Equals(path, "/account", StringComparison.OrdinalIgnoreCase)) path = "/settings";
 
         ActiveIndex = Items.FindIndex(item => item.Match == NavLinkMatch.All
             ? string.Equals(path, item.Href, StringComparison.OrdinalIgnoreCase)

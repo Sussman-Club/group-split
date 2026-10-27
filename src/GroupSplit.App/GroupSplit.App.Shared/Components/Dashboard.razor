@@ -1,12 +1,10 @@
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
-@using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @namespace GroupSplit.App.Shared.Components
-@inject IGroupsPageStateService GroupsService
-@inject ITransactionsPageStateService TransactionsService
+@inject IGroupsClient GroupsClient
 @inject IUsersClient UsersClient
 @inject ITransactionsClient TransactionsClient
 @inject ApiErrorPresenter Errors
@@ -35,7 +33,7 @@
     </div>
 </div>
 
-<LoadView Skeleton="SkeletonLayout.Dashboard" Loading="_initializing" Failed="@(GroupsService.Position is null)" Retry="InitializeAsync">
+<LoadView Skeleton="SkeletonLayout.Dashboard" Loading="_initializing" Failed="@(Position is null)" Retry="InitializeAsync">
 
 
 <div class="gs-stack">
@@ -130,6 +128,7 @@
                     <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups"
                                EndIcon="@Icons.Material.Rounded.ArrowForward">Open</MudButton>
                 </div>
+                <LoadView Failed="@(_homeGroups is null)" Retry="ReadAsync">
                 @if (ActiveGroups.Count == 0)
                 {
                     <div class="gs-empty">
@@ -165,6 +164,7 @@
                         }
                     </div>
                 }
+                </LoadView>
             </div>
         </div>
     </div>
@@ -178,7 +178,8 @@
 
     [Parameter, EditorRequired] public UserInfo UserInfo { get; set; } = null!;
 
-    private List<GroupResponse> ActiveGroups => [.. GroupsService.Groups.Where(g => !g.IsArchive)];
+    private ICollection<GroupResponse>? _homeGroups;
+    private ICollection<GroupResponse> ActiveGroups => _homeGroups ?? [];
 
     private PagedResponse<UserActivityResponse>? _activity;
     private ExpenseShareSummaryResponse? _thisMonth;
@@ -214,7 +215,7 @@
         }
     }
 
-    private UserPositionResponse? Position => GroupsService.Position;
+    private UserPositionResponse? Position { get; set; }
     private decimal Net => Position?.Net ?? 0m;
     private decimal OwedToYou => Position?.OwedToYou ?? 0m;
     private decimal YouOwe => Position?.YouOwe ?? 0m;
@@ -240,14 +241,8 @@
 
     // Greeting lives in Dashboard.razor.cs; see the note there.
 
-    private void ReRender() => InvokeAsync(StateHasChanged);
-
     protected override void OnInitialized()
     {
-        GroupsService.OnGroupsChanged += ReRender;
-        GroupsService.OnTransactionsChanged += ReRender;
-        TransactionsService.OnTransactionsChanged += ReRender;
-
         Changes.TransactionsChanged += ReadAsync;
         Changes.GroupsChanged += ReadAsync;
     }
@@ -261,16 +256,14 @@
         _initializing = true;
         try
         {
-            await Task.WhenAll(GroupsService.IsReadyTask, TransactionsService.IsReadyTask);
-            if (GroupsService.Position is null) await GroupsService.RefreshAsync();
             await ReadAsync();
         }
         finally { _initializing = false; }
     }
 
     /// <summary>
-    /// The two things this page reads for itself: the cross-group feed, and last month's
-    /// total for the figure to be compared against.
+    /// Reads the position, bounded groups preview, activity feed, and monthly totals.
+    /// Home never initializes the full Groups or Transactions page state services.
     /// </summary>
     private async Task ReadAsync()
     {
@@ -279,6 +272,15 @@
         PagedResponse<UserActivityResponse>? activity = null;
         ExpenseShareSummaryResponse? thisMonth = null;
         ExpenseShareSummaryResponse? lastMonth = null;
+        UserPositionResponse? position = null;
+        ICollection<GroupResponse>? homeGroups = null;
+
+        var positionLoaded = await Errors.TryAsync(async () =>
+                position = await UsersClient.GetCurrentUserPositionAsync(),
+            "Could not load your balances.");
+        var groupsLoaded = await Errors.TryAsync(async () =>
+                homeGroups = await GroupsClient.GetGroupsAsync(page: 1, pageSize: 4, archived: false),
+            "Could not load your groups.");
 
         var activityLoaded = await Errors.TryAsync(async () =>
                 activity = await UsersClient.GetCurrentUserActivityAsync(page: 1, pageSize: RecentCount),
@@ -295,6 +297,8 @@
             return;
 
         if (activityLoaded) _activity = activity;
+        if (positionLoaded) Position = position;
+        if (groupsLoaded) _homeGroups = homeGroups;
 
         if (monthsLoaded)
         {
@@ -320,10 +324,6 @@
 
     public void Dispose()
     {
-        GroupsService.OnGroupsChanged -= ReRender;
-        GroupsService.OnTransactionsChanged -= ReRender;
-        TransactionsService.OnTransactionsChanged -= ReRender;
-
         Changes.TransactionsChanged -= ReadAsync;
         Changes.GroupsChanged -= ReadAsync;
     }

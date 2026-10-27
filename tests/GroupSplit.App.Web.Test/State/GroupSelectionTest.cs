@@ -45,7 +45,7 @@ public class GroupSelectionTest
         // The flat first, so the first read -- which selects the first group and waits for
         // its figures -- is never the one a test wants to hold open.
         _groupsClient
-            .Setup(c => c.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()))
             .Returns(() => new[] { Flat, Trip }.ToAsyncEnumerable());
 
         _groupsClient

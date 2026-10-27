@@ -34,8 +34,7 @@ public class DashboardTest : ComponentTest
 
     private static readonly UserInfo Ana = new(Guid.NewGuid(), "Ana", "Ruiz", "ana@example.com");
 
-    private readonly Mock<IGroupsPageStateService> _groups = new();
-    private readonly Mock<ITransactionsPageStateService> _transactions = new();
+    private readonly Mock<IGroupsClient> _groups = new();
     private readonly Mock<IUsersClient> _users = new();
     private readonly Mock<ITransactionsClient> _client = new();
 
@@ -52,10 +51,10 @@ public class DashboardTest : ComponentTest
     {
         _clock = ReaderAt(TimeSpan.Zero);
 
-        _groups.SetupGet(state => state.Groups).Returns(() => _groupList);
-        _groups.SetupGet(state => state.Position).Returns(() => _position);
-        _groups.SetupGet(state => state.IsReadyTask).Returns(Task.CompletedTask);
-        _transactions.SetupGet(state => state.IsReadyTask).Returns(Task.CompletedTask);
+        _groups.Setup(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => (ICollection<GroupResponse>)_groupList.Where(g => !g.IsArchive).Take(4).ToList());
+        _users.Setup(client => client.GetCurrentUserPositionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => _position!);
 
         _users
             .Setup(client => client.GetCurrentUserActivityAsync(It.IsAny<int?>(), It.IsAny<int?>(),
@@ -78,7 +77,6 @@ public class DashboardTest : ComponentTest
                     : new ExpenseShareSummaryResponse(14, 80m, 30m, 20m));
 
         Services.AddSingleton(_groups.Object);
-        Services.AddSingleton(_transactions.Object);
         Services.AddSingleton(_users.Object);
         Services.AddSingleton(_client.Object);
 
@@ -101,10 +99,24 @@ public class DashboardTest : ComponentTest
         Render<Dashboard>(parameters => parameters.Add(page => page.UserInfo, Ana));
 
     [Fact]
+    public void Home_requests_the_bounded_preview_instead_of_the_full_groups_list()
+    {
+        _groupList = Enumerable.Range(1, 8).Select(i => new GroupResponse(Guid.NewGuid(), $"Group {i}", 2)).ToList();
+        var page = Open();
+
+        var groupsCard = page.FindAll(".gs-card").Single(card => card.QuerySelector(".gs-card-title h2")?.TextContent == "Your groups");
+        Assert.Equal(4, groupsCard.QuerySelectorAll("a.gs-row[role=button]").Length);
+        _groups.Verify(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()), Times.Once);
+        _groups.Verify(client => client.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
+        _groups.Verify(client => client.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Single(page.FindAll("a[href='/groups']"));
+    }
+
+    [Fact]
     public void Pending_groups_do_not_render_zero_balances_or_empty_content()
     {
-        var ready = new TaskCompletionSource();
-        _groups.SetupGet(state => state.IsReadyTask).Returns(ready.Task);
+        var ready = new TaskCompletionSource<UserPositionResponse>();
+        _users.Setup(client => client.GetCurrentUserPositionAsync(It.IsAny<CancellationToken>())).Returns(ready.Task);
 
         var page = Open();
 
@@ -113,7 +125,7 @@ public class DashboardTest : ComponentTest
         Assert.DoesNotContain("No groups yet", page.Markup);
         Assert.DoesNotContain("Nothing recorded yet", page.Markup);
 
-        ready.SetResult();
+        ready.SetResult(_position!);
         page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
     }
 
