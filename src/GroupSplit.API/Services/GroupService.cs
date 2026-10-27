@@ -41,6 +41,9 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetAllGroups(CancellationToken cancellationToken = default);
 
+    /// <summary>The four active groups shown on Home, limited in the database query.</summary>
+    Task<IQueryable<Group>> GetHomeGroups(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets a group by ID for the current user.
     /// </summary>
@@ -300,6 +303,20 @@ public class GroupService(
     private IQueryable<Group> GroupsOf(Guid userId) =>
         context.Set<Group>()
             .Where(g => g.Users.Any(u => u.Id == userId));
+
+    public Task<IQueryable<Group>> GetHomeGroups(CancellationToken cancellationToken = default)
+    {
+        var userId = userContext.User.Id;
+        var active = from g in GroupsOf(userId)
+                     join membership in context.Set<GroupMembership>()
+                         on new { GroupId = g.Id, UserId = userId }
+                         equals new { membership.GroupId, membership.UserId }
+                     where membership.ArchivedAt == null
+                     orderby g.Id == userId descending, g.Name, g.Id
+                     select g;
+
+        return Task.FromResult(active.Take(4));
+    }
 
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {

@@ -24,6 +24,7 @@ public static class GroupApi
 
             group.MapCreate();
             group.MapGetAllGroups();
+            group.MapGetHomeGroups();
             group.MapGetGroup();
             group.MapUpdateGroup();
             group.MapGetGroupTransactions();
@@ -114,6 +115,17 @@ public static class GroupApi
                 .WithName("GetGroup")
                 .Produces<GroupResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        private RouteHandlerBuilder MapGetHomeGroups()
+        {
+            return group.MapGet("home", async (IGroupService groupService, CancellationToken ct) =>
+                {
+                    var groups = await groupService.GetHomeGroups(ct);
+                    return Results.Ok(await groupService.Describe(groups).ToListAsync(ct));
+                })
+                .WithName("GetHomeGroups")
+                .Produces<GroupResponse[]>();
         }
 
         private RouteHandlerBuilder MapUpdateGroup()
