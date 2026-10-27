@@ -141,7 +141,7 @@
                 else
                 {
                     <div class="gs-list">
-                        @foreach (var group in ActiveGroups)
+                        @foreach (var group in ActiveGroups.Take(4))
                         {
                             var g = group;
                             var balance = BalanceIn(g.Id);
