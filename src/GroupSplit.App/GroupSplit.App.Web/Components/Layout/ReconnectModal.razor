@@ -1,0 +1,20 @@
+@namespace GroupSplit.App.Web.Components.Layout
+
+<dialog id="components-reconnect-modal" class="components-reconnect-hide" aria-labelledby="gs-reconnect-title" data-nosnippet>
+    <div class="gs-reconnect-brand"><img src="_content/GroupSplit.App.Shared/favicon.svg" alt="" />Group Split</div>
+    <div class="gs-reconnect-spinner" aria-hidden="true"></div>
+    <h2 id="gs-reconnect-title">Connection interrupted</h2>
+    <div aria-live="polite" role="status">
+        <p class="gs-reconnect-waiting">Reconnecting to Group Split...</p>
+        <p class="gs-reconnect-failed">We couldn't reconnect. Check your connection and try again.</p>
+        <p class="gs-reconnect-paused">Your session is paused. Resume to continue.</p>
+        <p class="gs-reconnect-resume-failed">We couldn't resume your session. Try again or reload the page.</p>
+        <p class="gs-reconnect-rejected">This session has ended. Reload to continue.</p>
+    </div>
+    <div class="gs-reconnect-actions">
+        <button type="button" id="components-reconnect-button" class="gs-reconnect-primary gs-reconnect-failed">Try again</button>
+        <button type="button" id="components-resume-button" class="gs-reconnect-primary gs-reconnect-paused gs-reconnect-resume-failed">Resume</button>
+        <button type="button" id="gs-reconnect-reload">Reload page</button>
+    </div>
+</dialog>
+<script type="module" src="@Assets["reconnect.js"]"></script>

@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
+@inject IDialogService ChoiceDialogs
 
 @*
     Everything about an expense that is picked rather than typed, as one row of chips with
@@ -75,7 +76,13 @@
    shown in place, so nothing about choosing is new except where it appears. *@
 @if (_open is not Picker.None)
 {
-    <div class="gs-picker">
+    <div class="@(UseSelectionSheets ? "gs-inline-sheet-backdrop" : "")">
+        <MudFocusTrap Disabled="@(!UseSelectionSheets)">
+        <div class="gs-picker @(UseSelectionSheets ? "gs-inline-selection-sheet" : "")" role="@(UseSelectionSheets ? "dialog" : null)" aria-label="Expense selection">
+        @if (UseSelectionSheets)
+        {
+            <MudButton OnClick="Close" StartIcon="@Icons.Material.Outlined.ArrowBack">Cancel</MudButton>
+        }
         @switch (_open)
         {
             case Picker.Group:
@@ -146,21 +153,57 @@
                     @* Both report: the version of a rule that divides an expense is the one
                        that stood on the day it was spent, so the day is part of the
                        division. *@
-                    <MudDatePicker Date="@Date" DateChanged="@OnDatePickedAsync" Label="Date"
+                    <MudDatePicker Date="@(UseSelectionSheets ? _sheetDate : Date)" DateChanged="@OnSheetDateChangedAsync" Label="Date"
                                    Variant="Variant.Outlined"/>
-                    <MudTimePicker Time="@Time" TimeChanged="@OnTimePickedAsync" Label="Time"
+                    <MudTimePicker Time="@(UseSelectionSheets ? _sheetTime : Time)" TimeChanged="@OnSheetTimeChangedAsync" Label="Time"
                                    Variant="Variant.Outlined" AmPm="true"/>
                 </MudStack>
                 break;
 
             case Picker.Where:
-                <MerchantPicker Value="@MerchantId" ValueChanged="@OnMerchantPickedAsync"/>
+                <MerchantPicker Value="@(UseSelectionSheets ? _sheetMerchant : MerchantId)" ValueChanged="@OnSheetMerchantChangedAsync"/>
                 break;
         }
+        @if (UseSelectionSheets)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySheetAsync">Use selection</MudButton>
+        }
+    </div>
+        </MudFocusTrap>
     </div>
 }
 
 @code {
+    private DateTime? _sheetDate;
+    private TimeSpan? _sheetTime;
+    private Guid? _sheetMerchant;
+    private async Task OnSheetDateChangedAsync(DateTime? date)
+    {
+        if (UseSelectionSheets) _sheetDate = date;
+        else await OnDatePickedAsync(date);
+    }
+    private async Task OnSheetTimeChangedAsync(TimeSpan? time)
+    {
+        if (UseSelectionSheets) _sheetTime = time;
+        else await OnTimePickedAsync(time);
+    }
+    private async Task OnSheetMerchantChangedAsync(Guid? merchant)
+    {
+        if (UseSelectionSheets) _sheetMerchant = merchant;
+        else await OnMerchantPickedAsync(merchant);
+    }
+    private async Task ApplySheetAsync()
+    {
+        var picker = _open;
+        _open = Picker.None;
+        if (picker == Picker.When)
+        {
+            await OnDatePickedAsync(_sheetDate);
+            await OnTimePickedAsync(_sheetTime);
+        }
+        else if (picker == Picker.Where) await OnMerchantPickedAsync(_sheetMerchant);
+    }
+
     /// <summary>A group this expense could be recorded in.</summary>
     public sealed record GroupChoice(Guid Id, string Name);
 
@@ -296,7 +339,76 @@
     private string PayerName =>
         Members.FirstOrDefault(member => member.Id == PayerId).Label();
 
-    private void Toggle(Picker which) => _open = _open == which ? Picker.None : which;
+    private async Task Toggle(Picker which)
+    {
+        if (!UseSelectionSheets)
+        {
+            _sheetDate = Date;
+            _sheetTime = Time;
+            _sheetMerchant = MerchantId;
+            _open = _open == which ? Picker.None : which;
+            return;
+        }
+        if (which is Picker.When or Picker.Where)
+        {
+            var details = await ChoiceDialogs.ShowAsync<ExpenseDetailsChoiceDialog>(
+                which == Picker.When ? "Choose date and time" : "Choose a merchant",
+                new DialogParameters<ExpenseDetailsChoiceDialog>
+                {
+                    { x => x.ChooseMerchant, which == Picker.Where },
+                    { x => x.Date, Date }, { x => x.Time, Time }, { x => x.MerchantId, MerchantId }
+                }, new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await details.Result is { Canceled: false, Data: ExpenseDetailsChoiceDialog.Selection selection })
+            {
+                if (which == Picker.When)
+                {
+                    await OnDatePickedAsync(selection.Date);
+                    await OnTimePickedAsync(selection.Time);
+                }
+                else await OnMerchantPickedAsync(selection.MerchantId);
+            }
+            return;
+        }
+        var choices = new List<ExpenseChoiceDialog.Option>();
+        var selected = "";
+        var title = "Choose an option";
+        switch (which)
+        {
+            case Picker.Group:
+                title = "Choose a group";
+                selected = GroupValue?.ToString() ?? "";
+                if (AllowPersonal) choices.Add(new(Personal.ToString(), "Personal", "Just you; no shared balance"));
+                choices.AddRange(Groups.Select(g => new ExpenseChoiceDialog.Option(g.Id.ToString(), g.Name)));
+                break;
+            case Picker.Category:
+                title = "Choose a category";
+                selected = CategoryId?.ToString() ?? "";
+                choices.Add(new("", "No category"));
+                choices.AddRange(Categories.Select(c => new ExpenseChoiceDialog.Option(c.Id.ToString(), c.Name, c.Divides)));
+                break;
+            case Picker.Payer:
+                title = "Who paid?";
+                selected = PayerId?.ToString() ?? "";
+                choices.AddRange(Members.Select(m => new ExpenseChoiceDialog.Option(m.Id.ToString(), m.Label())));
+                break;
+        }
+        var parameters = new DialogParameters<ExpenseChoiceDialog>
+        {
+            { x => x.Items, choices }, { x => x.Selected, selected }
+        };
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>(title, parameters,
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is not { Canceled: false, Data: string picked }) return;
+        var id = Guid.TryParse(picked, out var value) ? value : (Guid?)null;
+        switch (which)
+        {
+            case Picker.Group: await OnGroupPickedAsync(id); break;
+            case Picker.Category: await OnCategoryPickedAsync(id); break;
+            case Picker.Payer: await OnPayerPickedAsync(id); break;
+        }
+    }
+
+    [Parameter] public bool UseSelectionSheets { get; set; }
 
     /// <summary>
     /// Reports the pick, with Personal turned back into the absent group it stands for.

@@ -2,6 +2,7 @@ using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
+using MudBlazor;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -17,6 +18,9 @@ namespace GroupSplit.App.Web.Test.Components;
 /// </remarks>
 public class SplitEditorTest : ComponentTest
 {
+    private IRenderedComponent<MudDialogProvider>? _dialogs;
+    private IRenderedComponent<MudDialogProvider> Dialogs => _dialogs ??= Render<MudDialogProvider>();
+
     private static readonly Guid Ana = Guid.NewGuid();
     private static readonly Guid Omar = Guid.NewGuid();
 
@@ -49,14 +53,14 @@ public class SplitEditorTest : ComponentTest
     /// Each choice names its outcome, and the selected choice explains what will happen.
     /// </summary>
     [Fact]
-    public void The_ways_to_divide_are_named_and_the_selected_one_is_explained()
+    public async Task The_ways_to_divide_are_named_and_the_selected_one_is_explained()
     {
         var editor = Render(preview: Divided("Rent"));
 
-        Assert.Contains("Default", editor.Markup, StringComparison.Ordinal);
-        Assert.Contains("Evenly", editor.Markup, StringComparison.Ordinal);
-        Assert.Contains("One pays", editor.Markup, StringComparison.Ordinal);
-        Assert.Contains("Custom", editor.Markup, StringComparison.Ordinal);
+        var opening = OpenChoices(editor);
+        Assert.Equal(["Category default", "Evenly", "One person", "Custom amounts"],
+            Dialogs.FindAll(".gs-selection-option strong").Select(option => option.TextContent));
+        await DismissChoices(opening);
         Assert.Contains("Use the category's split, or the group default when it is uncategorized.",
             editor.Markup, StringComparison.Ordinal);
     }
@@ -281,12 +285,14 @@ public class SplitEditorTest : ComponentTest
     /// nowhere to put one, and a permanently dead option is worse than none.
     /// </summary>
     [Fact]
-    public void Creating_an_expense_is_not_offered_the_bill()
+    public async Task Creating_an_expense_is_not_offered_the_bill()
     {
         var editor = Render(preview: Divided(null));
 
-        Assert.DoesNotContain("Receipt", editor.Markup, StringComparison.Ordinal);
-        Assert.Equal(4, editor.FindAll(".gs-seg-btn").Count);
+        var opening = OpenChoices(editor);
+        Assert.DoesNotContain("Receipt items", Dialogs.Markup, StringComparison.Ordinal);
+        Assert.Equal(4, Dialogs.FindAll(".gs-selection-option").Count);
+        await DismissChoices(opening);
     }
 
     /// <summary>
@@ -295,7 +301,7 @@ public class SplitEditorTest : ComponentTest
     /// built with a fixed width to avoid.
     /// </summary>
     [Fact]
-    public void An_edit_draws_the_bill_option_before_the_bill_has_arrived()
+    public async Task An_edit_draws_the_bill_option_before_the_bill_has_arrived()
     {
         var editor = Render<SplitEditor>(parameters => parameters
             .Add(e => e.Members, Members)
@@ -303,11 +309,11 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.ShowByBill, true)
             .Add(e => e.Preview, Divided(null)));
 
-        var bill = editor.FindAll(".gs-seg-btn")
-            .First(element => element.TextContent.Contains("Receipt", StringComparison.Ordinal));
-
-        Assert.Equal(5, editor.FindAll(".gs-seg-btn").Count);
+        var opening = OpenChoices(editor);
+        var bill = Dialogs.FindAll(".gs-selection-option").Single(option => option.TextContent.Contains("Receipt items"));
+        Assert.Equal(5, Dialogs.FindAll(".gs-selection-option").Count);
         Assert.True(bill.HasAttribute("disabled"));
+        await DismissChoices(opening);
     }
 
     /// <summary>
@@ -361,10 +367,7 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.SplitRuleId, (Guid?)null)
             .Add(e => e.Preview, Divided("Divide by the bill")));
 
-        var bill = editor.FindAll(".gs-seg-btn")
-            .First(element => element.TextContent.Contains("Receipt", StringComparison.Ordinal));
-
-        Assert.Contains("active", bill.ClassName ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("Receipt items", editor.Find("button").TextContent, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -408,10 +411,9 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.BillRuleId, Guid.NewGuid())
             .Add(e => e.Preview, Divided(null)));
 
-        var chosen = editor.FindAll(".gs-seg-btn")
-            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+        var chosen = editor.Find("button");
 
-        Assert.Contains("Default", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Category default", chosen.TextContent, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -435,10 +437,9 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.SplitRuleId, Guid.NewGuid())
             .Add(e => e.Preview, Divided("Rent")));
 
-        var chosen = editor.FindAll(".gs-seg-btn")
-            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+        var chosen = editor.Find("button");
 
-        Assert.Contains("Default", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Category default", chosen.TextContent, StringComparison.Ordinal);
         Assert.DoesNotContain("Who should cover it?", editor.Markup, StringComparison.Ordinal);
     }
 
@@ -457,10 +458,9 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.SplitRuleId, rule.Id)
             .Add(e => e.Preview, Divided("Rent")));
 
-        var chosen = editor.FindAll(".gs-seg-btn")
-            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+        var chosen = editor.Find("button");
 
-        Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("One person", chosen.TextContent, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -482,10 +482,9 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.SplitRuleId, rule.Id)
             .Add(e => e.Preview, Divided("All for Luz")));
 
-        var chosen = editor.FindAll(".gs-seg-btn")
-            .First(element => element.ClassName?.Contains("active", StringComparison.Ordinal) == true);
+        var chosen = editor.Find("button");
 
-        Assert.Contains("One pays", chosen.TextContent, StringComparison.Ordinal);
+        Assert.Contains("One person", chosen.TextContent, StringComparison.Ordinal);
         Assert.Contains("Luz Garcia (guest)", editor.Markup, StringComparison.Ordinal);
     }
 
@@ -596,19 +595,37 @@ public class SplitEditorTest : ComponentTest
             remaining.TextContent, StringComparison.Ordinal);
     }
 
-    private static Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
+    private Task ByHand(IRenderedComponent<SplitEditor> editor) => Choose(editor, "Custom");
 
-    private static Task Automatically(IRenderedComponent<SplitEditor> editor) =>
+    private Task Automatically(IRenderedComponent<SplitEditor> editor) =>
         Choose(editor, "Default");
 
     /// <summary>
     /// Clicks one of the two options, found by the text somebody would read.
     /// </summary>
-    private static async Task Choose(IRenderedComponent<SplitEditor> editor, string option)
+    private Task OpenChoices(IRenderedComponent<SplitEditor> editor)
     {
-        var item = editor.FindAll(".gs-seg-btn")
-            .First(element => element.TextContent.Contains(option, StringComparison.Ordinal));
+        _ = Dialogs;
+        var opening = editor.Find("button").ClickAsync(new MouseEventArgs());
+        Dialogs.WaitForAssertion(() => Assert.NotEmpty(Dialogs.FindAll(".gs-selection-option")));
+        return opening;
+    }
 
-        await item.ClickAsync(new MouseEventArgs());
+    private async Task DismissChoices(Task opening)
+    {
+        await Dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        await opening.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    private async Task Choose(IRenderedComponent<SplitEditor> editor, string option)
+    {
+        var label = option switch { "Default" => "Category default", "Custom" => "Custom amounts",
+            "Receipt" => "Receipt items", "One pays" => "One person", _ => option };
+        var opening = OpenChoices(editor);
+        await Dialogs.FindAll(".gs-selection-option").Single(item => item.QuerySelector("strong")!.TextContent == label)
+            .ClickAsync(new MouseEventArgs());
+        await Dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Use selection")
+            .ClickAsync(new MouseEventArgs());
+        await opening.WaitAsync(TimeSpan.FromSeconds(5));
     }
 }

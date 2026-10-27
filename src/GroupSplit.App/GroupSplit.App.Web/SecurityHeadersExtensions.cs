@@ -139,6 +139,7 @@ public static class SecurityHeadersExtensions
             $"frame-src {PlaidLink}",
             "frame-ancestors 'none'",
             "object-src 'none'",
+            "worker-src 'self'",
             "base-uri 'self'");
     }
 }

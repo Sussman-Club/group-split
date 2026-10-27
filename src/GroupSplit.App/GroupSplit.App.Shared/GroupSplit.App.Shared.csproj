@@ -44,4 +44,5 @@
         </OpenApiReference>
     </ItemGroup>
 
+    <Import Project="../../../build/PdfJs.targets" />
 </Project>

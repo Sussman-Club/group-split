@@ -36,7 +36,7 @@
    at the bottom. It rides the dialog rather than every DialogOptions that opens
    one, which is both fewer places to forget and the right owner: how this looks
    on a small screen is the dialog's business, not its caller's. *@
-<MudDialog Class="gs-sheet">
+<MudDialog Class="gs-sheet gs-transaction-dialog gs-expandable-expense">
     <TitleContent>
         <div class="gs-dialog-head">
             <div style="min-width: 0">
@@ -58,6 +58,10 @@
         <MudForm @ref="_form" Model="_model" Disabled="@_readingReceipt">
             <div class="gs-stack" style="gap: 16px">
 
+
+
+                <div class="gs-expense-receipt">
+                    <div class="gs-expense-disclosure-body">
                 <div class="gs-card gs-card-pad" style="padding: 14px 16px">
                     <ReceiptFilePicker FileChanged="SelectReceiptAsync"
                                        ReadRequested="ReadReceiptAsync"
@@ -71,6 +75,8 @@
                                        HasTranscript="@(_receipt is not null)"
                                        TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
                                        Error="@_receiptError" />
+                </div>
+                    </div>
                 </div>
 
                 @if (_filingSuggestion is { } suggestion)
@@ -119,21 +125,12 @@
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
-                <MudTextField @bind-Value="_model.Description"
-                              For="@(() => _model.Description)"
-                              Label="Note"
-                              Placeholder="Anything worth remembering about it"
-                              HelperText="Optional"
-                              Variant="Variant.Outlined"
-                              Lines="2"
-                              Immediate="true"/>
-
-                <ExpenseDecisions ShowGroup="@(!GroupFixed)"
+                <ExpenseDecisions UseSelectionSheets="true" ShowGroup="@(!GroupFixed)"
                                   Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_groupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
                                   GroupName="@Where"
-                                  ShowCategory="true"
+                                  ShowCategory="true" ShowWhen="true" ShowWhere="true"
                                   Categories="@(_categories.Select(c => new ExpenseDecisions.CategoryChoice(c.Id, c.Name, IsShared ? Divides(c) : "")).ToList())"
                                   CategoryId="@_model.CategoryId"
                                   CategoryIdChanged="@OnCategoryPickedAsync"
@@ -150,10 +147,27 @@
                                   MerchantIdChanged="@OnMerchantChangedAsync"
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
+                <details class="gs-expense-disclosure" open="@_showDetailErrors">
+                    <summary>Note <span>Optional</span></summary>
+                    <div class="gs-expense-disclosure-body">
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Note"
+                              Placeholder="Anything worth remembering about it"
+                              HelperText="Optional"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              Immediate="true"/>
+
+
+                    </div>
+                </details>
 
                 @if (IsShared)
                 {
-                    <div style="border-top: 1px solid var(--gs-line); padding-top: 14px">
+                    <details class="gs-expense-disclosure" open>
+                        <summary>People &amp; shares <span>Review how this expense is divided</span></summary>
+                        <div class="gs-expense-disclosure-body">
                         @* One component and one list of people: editable when the person is
                            stating the division, read-only when the API worked it out. *@
                         <SplitEditor Members="@_members"
@@ -178,6 +192,7 @@
                                      Awaiting="@_awaiting"
                                      SaveRefused="@_saveRefused"/>
                     </div>
+                    </details>
                 }
                 else
                 {
@@ -185,6 +200,7 @@
                         A personal expense is not shared with anybody, so there is nothing to divide.
                     </MudAlert>
                 }
+
             </div>
         </MudForm>
         </ReceiptReadLock>
@@ -237,6 +253,7 @@
     /// </remarks>
     private Guid? _groupId;
 
+    private bool _showDetailErrors;
     private MudForm _form = null!;
 
     private readonly CreateTransactionRequest _model = new()
@@ -360,10 +377,10 @@
         await OnGroupChangedAsync();
     }
 
-    private Task SelectReceiptAsync(InputFileChangeEventArgs args)
+    private async Task SelectReceiptAsync(InputFileChangeEventArgs args)
     {
         if (_readingReceipt || args.FileCount == 0)
-            return Task.CompletedTask;
+            return;
 
         _receiptFile = args.File;
         _filingSuggestion = null;
@@ -372,7 +389,7 @@
         if (_model.SplitRuleId == _billRuleId)
             _model.SplitRuleId = null;
         _receiptError = null;
-        return InvokeAsync(StateHasChanged);
+        await ReadReceiptAsync();
     }
 
     private async Task ReadReceiptAsync()
@@ -936,7 +953,10 @@
         await _form.ValidateAsync();
 
         if (!_form.IsValid)
+        {
+            _showDetailErrors = true;
             return;
+        }
 
         // Shares typed by hand that do not add up are refused here, where they can still be
         // fixed: past this point the dialog is gone, the API refuses the request, and the
@@ -991,9 +1011,19 @@
             : DialogResult.Ok(request));
     }
 
-    private void Cancel()
+    private async Task Cancel()
     {
-        if (!_readingReceipt)
-            MudDialog.Cancel();
+        if (_readingReceipt) return;
+        if (_model.Amount != 0 || !string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrWhiteSpace(_model.Description) || _receiptFile is not null)
+        {
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",
+                new DialogParameters<ConfirmationDialog>
+                {
+                    { x => x.ContentText, "Discard your unsaved expense changes? Receipt changes saved separately are kept." },
+                    { x => x.ButtonText, "Discard changes" }
+                }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            if (await dialog.Result is not { Canceled: false }) return;
+        }
+        MudDialog.Cancel();
     }
 }

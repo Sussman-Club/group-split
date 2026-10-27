@@ -1,0 +1,37 @@
+@namespace GroupSplit.App.Shared.Components
+<MudDialog Class="gs-selection-sheet">
+    <TitleContent><h2 class="gs-dialog-title">@MudDialog.Title</h2></TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_search" Label="Search options" Immediate="true" Variant="Variant.Outlined" />
+        <div class="gs-selection-list" role="group" aria-label="Options">
+            @foreach (var option in Items.Where(x => x.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || (x.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)))
+            {
+                <button type="button" class="gs-selection-option @(_selected == option.Id ? "is-selected" : "")"
+                        disabled="@option.Disabled" aria-pressed="@(_selected == option.Id ? "true" : "false")"
+                        @onclick="@(() => _selected = option.Id)">
+                    <span><strong>@option.Label</strong><small>@option.Description</small></span>
+                    <MudIcon Icon="@(_selected == option.Id ? Icons.Material.Outlined.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)" />
+                </button>
+            }
+            @if (!Items.Any(x => x.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || (x.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)))
+            {
+                <p class="gs-muted">No matching options. Try another name.</p>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Items.Any(x => x.Id == _selected && !x.Disabled))" OnClick="Confirm">Use selection</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    public sealed record Option(string Id, string Label, string? Description = null, bool Disabled = false);
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<Option> Items { get; set; } = [];
+    [Parameter] public string Selected { get; set; } = "";
+    private string _selected = "";
+    private string _search = "";
+    protected override void OnInitialized() => _selected = Selected;
+    private void Cancel() => MudDialog.Cancel();
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(_selected));
+}

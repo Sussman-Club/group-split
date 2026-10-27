@@ -2,6 +2,7 @@
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @namespace GroupSplit.App.Shared.Components
+@inject IDialogService Dialogs
 
 <section class="gs-receipts" aria-labelledby="@_headingId">
     <div class="gs-receipts-head">
@@ -21,10 +22,8 @@
                 <MudButton Variant="Variant.Text"
                            Size="Size.Small"
                            Class="gs-btn-quiet"
-                           aria-expanded="@(_showContent ? "true" : "false")"
-                           aria-controls="@_contentId"
-                           OnClick="ToggleContent">
-                    @(_showContent ? "Hide" : "View")
+                           OnClick="OpenWorkspaceAsync">
+                    Open receipts
                 </MudButton>
             }
             else
@@ -40,8 +39,11 @@
         </div>
     </div>
 
-    @if (_showContent)
-    {
+</section>
+
+
+@code {
+    private RenderFragment ReceiptContent => @<text>
         <div id="@_contentId" class="gs-receipts-body">
             @foreach (var attachment in Attachments)
             {
@@ -57,12 +59,9 @@
                     </div>
 
                     <div class="gs-receipt-file-actions">
-                        <MudButton Variant="Variant.Text"
-                                   Size="Size.Small"
-                                   Class="gs-btn-quiet"
-                                   OnClick="@(() => TogglePreview(attachment.Id))">
-                            @(_previewingAttachmentId == attachment.Id ? "Hide preview" : "View original")
-                        </MudButton>
+                        <DisclosureToggle Label="Original preview" Expanded="@(_previewingAttachmentId == attachment.Id)"
+                                          Controls="@($"receipt-preview-{attachment.Id}")"
+                                          OnClick="@(() => TogglePreview(attachment.Id))" />
 
                         <MudButton Variant="Variant.Text"
                                    Size="Size.Small"
@@ -94,25 +93,11 @@
 
                 @if (_previewingAttachmentId == attachment.Id)
                 {
-                    <div class="gs-receipt-preview">
+                    <div id="@($"receipt-preview-{attachment.Id}")" class="gs-receipt-preview">
                         @if (IsPdf(attachment))
                         {
-                            <div class="gs-receipt-pdf-fallback" role="status">
-                                <span class="gs-receipt-file-mark is-pdf" aria-hidden="true">
-                                    <MudIcon Icon="@Icons.Material.Rounded.PictureAsPdf" Size="Size.Small" />
-                                </span>
-                                <div class="gs-receipt-pdf-copy">
-                                    <strong class="gs-receipt-pdf-title">PDF preview</strong>
-                                    <span class="gs-receipt-pdf-message">
-                                        This browser can’t show PDF pages inline. Download the original to view it.
-                                    </span>
-                                </div>
-                                <a class="gs-receipt-action gs-btn-quiet gs-receipt-pdf-download"
-                                   href="@DownloadUrl(attachment)"
-                                   download="@attachment.FileName">
-                                    Download PDF
-                                </a>
-                            </div>
+                            <PdfReceiptPreview @key="attachment.Id" Url="@InlineUrl(attachment)"
+                                               DownloadUrl="@DownloadUrl(attachment)" FileName="@attachment.FileName" />
                         }
                         else
                         {
@@ -162,22 +147,12 @@
                         </MudButton>
                     }
 
-                    <MudButton Variant="Variant.Text"
-                               Size="Size.Small"
-                               Class="gs-btn-quiet"
-                               aria-expanded="@(_showBill ? "true" : "false")"
-                               aria-controls="@_billId"
-                               OnClick="ToggleBill">
-                        @(_showBill ? "Hide itemized receipt" : "View itemized receipt")
-                    </MudButton>
+
                 </div>
 
-                @if (_showBill)
-                {
                     <div id="@_billId" class="gs-receipt-itemized-panel">
                         <BillSheet Receipt="bill" Title="@Title" Where="@Where" />
                     </div>
-                }
             }
 
             @if (_showUploader)
@@ -210,21 +185,16 @@
                 </div>
             }
         </div>
-    }
-</section>
+    </text>;
 
-@code {
     private readonly string _headingId = $"gs-receipts-heading-{Guid.NewGuid():N}";
     private readonly string _contentId = $"gs-receipts-content-{Guid.NewGuid():N}";
     private readonly string _billId = $"gs-receipts-bill-{Guid.NewGuid():N}";
 
-    private bool _showContent;
     private bool _showUploader;
-    private bool _showBill;
     private Guid? _previewingAttachmentId;
     private bool _parametersInitialised;
     private int _knownAttachmentCount;
-    private Guid? _knownReceiptId;
 
     [Parameter, EditorRequired]
     public Guid TransactionId { get; set; }
@@ -273,13 +243,10 @@
 
     protected override void OnParametersSet()
     {
-        var receiptId = Receipt?.Id;
 
         if (!_parametersInitialised)
         {
-            _showContent = HasContent;
             _knownAttachmentCount = Attachments.Count;
-            _knownReceiptId = receiptId;
             _parametersInitialised = true;
             return;
         }
@@ -287,45 +254,47 @@
         if (Attachments.Count > _knownAttachmentCount)
             _showUploader = false;
 
-        if (receiptId is { } savedReceiptId && savedReceiptId != _knownReceiptId)
-        {
-            _showContent = true;
-            _showBill = true;
-        }
-
         if (!HasContent && !_showUploader)
         {
-            _showContent = false;
             _previewingAttachmentId = null;
         }
 
         _knownAttachmentCount = Attachments.Count;
-        _knownReceiptId = receiptId;
+        _refreshWorkspace?.Invoke();
     }
 
-    private void ToggleContent()
+    private bool _workspaceOpen;
+    private Action? _refreshWorkspace;
+    private async Task OpenWorkspaceAsync()
     {
-        _showContent = !_showContent;
-        if (!_showContent)
-        {
-            _showUploader = false;
-            _showBill = false;
-            _previewingAttachmentId = null;
-        }
+        if (_workspaceOpen) return;
+        _workspaceOpen = true;
+        var dialog = await Dialogs.ShowAsync<ReceiptWorkspaceDialog>("Receipts",
+            new DialogParameters<ReceiptWorkspaceDialog>
+            {
+                { x => x.Content, ReceiptContent },
+                { x => x.RegisterRefresh, new Action<Action>(refresh => _refreshWorkspace = refresh) }
+            }, new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Medium });
+        _ = ObserveWorkspaceCloseAsync(dialog);
     }
-
-    private void OpenUploader()
+    private async Task ObserveWorkspaceCloseAsync(IDialogReference dialog)
     {
-        _showContent = true;
+        await dialog.Result!;
+        _workspaceOpen = false;
+        _refreshWorkspace = null;
+    }
+    private async Task OpenUploader()
+    {
         _showUploader = true;
+        _refreshWorkspace?.Invoke();
+        await OpenWorkspaceAsync();
     }
-
-    private void CloseUploader() => _showUploader = false;
-
-    private void ToggleBill() => _showBill = !_showBill;
-
-    private void TogglePreview(Guid attachmentId) =>
+    private void CloseUploader() { _showUploader = false; _refreshWorkspace?.Invoke(); }
+    private void TogglePreview(Guid attachmentId)
+    {
         _previewingAttachmentId = _previewingAttachmentId == attachmentId ? null : attachmentId;
+        _refreshWorkspace?.Invoke();
+    }
 
     private async Task RequestDeleteAsync(ReceiptAttachmentResponse attachment)
     {

@@ -37,7 +37,7 @@
     here, beside the itemised bill it came from.
 *@
 
-<MudDialog Class="gs-transaction-dialog">
+<MudDialog Class="gs-sheet gs-transaction-dialog gs-expandable-expense">
     <TitleContent>
         @* The subject, not the screen. Until it loads there is no subject, so the heading
            says what kind of thing is coming rather than sitting empty. *@
@@ -95,19 +95,45 @@
                     @if (!IsSettlement && MyShare is { } mine)
                     {
                         <div class="gs-figure">
-                            <span class="gs-eyebrow">@(PaidByMe ? "Your share" : "You owe")</span>
+                            <span class="gs-eyebrow">Your share</span>
                             <span class="gs-figure-value gs-num is-quiet">@mine.ToMoney(details.Currency)</span>
-                            @* Which of the two it is changes what the figure means: your
-                               share of your own expense is money you already have. *@
-                            <span class="gs-figure-note">
-                                @(PaidByMe
-                                    ? "you fronted the rest"
-                                    : $"{details.PaidByUserName} paid")
-                            </span>
+
                         </div>
                     }
                 </div>
 
+                @if (!IsSettlement)
+                {
+                    <div class="gs-chip-row" aria-label="Expense details">
+                        <ExpenseChip ReadOnly="true" Set="true" Label="when"
+                                     Value="@Clock.Stamp(details.DateTime, "d MMM yyyy", "HH:mm")" />
+                        <ExpenseChip ReadOnly="true" Set="true" Label="where" Lead="at"
+                                     Value="@(details.MerchantName ?? "not specified")">
+                            <Mark>
+                                @if (HasUsableMerchantLogo)
+                                {
+                                    <img class="gs-mark-inline" src="@details.MerchantLogoUrl" alt=""
+                                         width="20" height="20" loading="lazy" @onerror="HandleMerchantLogoError" />
+                                }
+                                else if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                                {
+                                    <span class="gs-mark-inline-fallback @details.MerchantName.AvatarTone()" aria-hidden="true">
+                                        @details.MerchantName.Initials()
+                                    </span>
+                                }
+                            </Mark>
+                        </ExpenseChip>
+                        <ExpenseChip ReadOnly="true" Set="true" Label="category" Lead="for"
+                                     Value="@(string.IsNullOrWhiteSpace(details.Category) ? "uncategorized" : details.Category)" />
+                        <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
+                                     Value="@($"{(PaidByMe ? "You" : details.PaidByUserName)}{(details.PaidByIsGuest ? " (guest)" : "")}")" />
+                    </div>
+                }
+                else
+                {
+                <details class="gs-expense-disclosure">
+                    <summary>Transaction details <span>Payer, category, merchant &amp; date</span></summary>
+                    <div class="gs-expense-disclosure-body">
                 <dl class="gs-kv">
                     <div class="gs-kv-row">
                         <dt>When</dt>
@@ -189,6 +215,9 @@
                         </div>
                     }
                 </dl>
+                    </div>
+                </details>
+                }
 
                 @*
                     What a settlement made through a day covers, as things stand now -- worked

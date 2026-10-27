@@ -18,7 +18,7 @@ public sealed class ReceiptTaxesTest
     public void The_remaining_tax_goes_to_missing_lines_before_changing_a_read_line_tax()
     {
         var amounts = ReceiptTaxes.Calculate(1.50m,
-            [new(10m, 0m, 5m, true), new(10m, .25m, null, null), new(10m, 0m, null, null)]);
+            [new(10m, 0m, 5m, true), new(10m, .25m, null, null), new(10m, 0m, null, true)]);
         Assert.Equal([.50m, .25m, .75m], amounts);
     }
 
@@ -26,7 +26,7 @@ public sealed class ReceiptTaxesTest
     public void Even_a_remaining_cent_goes_to_a_missing_line_before_adjusting_known_rates()
     {
         var amounts = ReceiptTaxes.Calculate(.21m,
-            [new(1m, 0m, 10m, true), new(1m, 0m, 10m, true), new(1m, 0m, null, null)]);
+            [new(1m, 0m, 10m, true), new(1m, 0m, 10m, true), new(1m, 0m, null, true)]);
         Assert.Equal([.10m, .10m, .01m], amounts);
     }
 
@@ -94,9 +94,9 @@ public sealed class ReceiptTaxesTest
     }
 
     [Fact]
-    public void A_negative_rounding_cent_does_not_require_a_discount_line()
+    public void Printed_line_taxes_are_preserved_even_when_the_receipt_disagrees_by_a_cent()
     {
         var amounts = ReceiptTaxes.Calculate(.21m, [new(1m, .11m, null, null), new(1m, .11m, null, null)]);
-        Assert.Equal(.21m, amounts.Sum());
+        Assert.Equal([.11m, .11m], amounts);
     }
 }

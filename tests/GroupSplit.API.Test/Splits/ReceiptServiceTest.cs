@@ -150,6 +150,22 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// record but is never offered as a group division.
     /// </summary>
     [Fact]
+    public async Task Marking_a_previously_taxed_line_exempt_clears_its_old_tax_before_allocation()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Receipt", Amount = 21m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 20m, Tax = 1m, Total = 21m,
+            Items = [
+                new ReceiptItemInput { Name = "Now exempt", UnitPrice = 10m, TotalPrice = 10m, TaxAmount = .5m, IsTaxable = false },
+                new ReceiptItemInput { Name = "Taxable", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = true }]
+        }, Ct);
+        Assert.Equal(0m, bill.Items.Single(item => item.Name == "Now exempt").TaxAmount);
+        Assert.Equal(1m, bill.Items.Single(item => item.Name == "Taxable").TaxAmount);
+    }
+
+    [Fact]
     public async Task A_personal_expense_keeps_an_itemized_receipt_without_dividing()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
@@ -177,7 +193,6 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         {
             MerchantName = "Corner Store",
             PurchaseDate = new DateOnly(2026, 9, 23),
-            SourceValues = "CORNER STORE\nSubtotal 12.00\nCoupon 2.00",
             Subtotal = 10m,
             Tax = 0m,
             Tip = 0m,
@@ -193,12 +208,9 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal("Corner Store", response.MerchantName);
         Assert.Equal(new DateOnly(2026, 9, 23), response.PurchaseDate);
-        Assert.Equal("CORNER STORE\nSubtotal 12.00\nCoupon 2.00", response.SourceValues);
         Assert.Equal(12m, response.Items[0].TotalPrice);
         Assert.Equal(-2m, response.Items[1].TotalPrice);
 
-        // Older whole-receipt clients do not know about OCR evidence. An omitted source
-        // field on their next save must not erase what the reviewer can inspect.
         var updated = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
             Subtotal = 10m, Total = 10m,
@@ -208,7 +220,6 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 new ReceiptItemInput { Id = response.Items[1].Id, Name = "Loyalty coupon SAVE2",
                     UnitPrice = -2m, TotalPrice = -2m }]
         }, Ct);
-        Assert.Equal(response.SourceValues, updated.SourceValues);
     }
 
     [Fact]
@@ -245,6 +256,60 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(3, bill.Items.Count);
         Assert.Equal(23m, preview.Shares.Single(share => share.UserId == Self).Amount);
         Assert.Equal(25m, preview.Shares.Single(share => share.UserId != Self).Amount);
+    }
+
+    [Theory]
+    [InlineData(4, 8, .96, .32, .64)]
+    [InlineData(1, 1, .01, .01, 0)]
+    public async Task Total_only_tax_is_allocated_on_save_and_survives_round_trip(
+        double first, double second, double tax, double firstTax, double secondTax)
+    {
+        var subtotal = (decimal)first + (decimal)second;
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Receipt", Amount = subtotal + (decimal)tax, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var request = new SaveReceiptRequest
+        {
+            Subtotal = subtotal, Tax = (decimal)tax, Total = subtotal + (decimal)tax,
+            Items = [new ReceiptItemInput { Name = "First", UnitPrice = (decimal)first, TotalPrice = (decimal)first, IsTaxable = true },
+                new ReceiptItemInput { Name = "Second", UnitPrice = (decimal)second, TotalPrice = (decimal)second, IsTaxable = true },
+                Item("Free", 0m, null)]
+        };
+        var bill = await Receipts.SaveForExpense(expense.Id, request, Ct);
+        Assert.Equal((decimal)firstTax, bill.Items.Single(item => item.Name == "First").TaxAmount);
+        Assert.Equal((decimal)secondTax, bill.Items.Single(item => item.Name == "Second").TaxAmount);
+        Assert.Equal(0m, bill.Items.Single(item => item.Name == "Free").TaxAmount);
+        Assert.Equal((decimal)tax, bill.Items.Sum(item => item.TaxAmount));
+        var savedAgain = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = subtotal, Tax = (decimal)tax, Total = subtotal + (decimal)tax,
+            Items = bill.Items.Select(item => new ReceiptItemInput
+            {
+                Id = item.Id, Name = item.Name, UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity, TotalPrice = item.TotalPrice, TaxAmount = item.TaxAmount, IsTaxable = item.IsTaxable
+            }).ToArray()
+        }, Ct);
+        Assert.Equal((decimal)tax, savedAgain.Items.Sum(item => item.TaxAmount));
+    }
+
+    [Fact]
+    public async Task Extracted_tax_is_kept_and_only_missing_tax_on_identified_taxable_items_is_spread()
+    {
+        var expense = await Transactions.Create(new CreateTransactionRequest
+            { Name = "Receipt", Amount = 32m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
+        {
+            Subtotal = 30m, Tax = 2m, Total = 32m,
+            Items = [
+                new ReceiptItemInput { Name = "Printed", UnitPrice = 10m, TotalPrice = 10m,
+                    TaxAmount = .80m, TaxRate = 10m, IsTaxable = true },
+                new ReceiptItemInput { Name = "Taxable", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = true },
+                new ReceiptItemInput { Name = "Exempt", UnitPrice = 5m, TotalPrice = 5m, IsTaxable = false },
+                new ReceiptItemInput { Name = "Unknown", UnitPrice = 5m, TotalPrice = 5m }]
+        }, Ct);
+        Assert.Equal(.80m, bill.Items.Single(item => item.Name == "Printed").TaxAmount);
+        Assert.Equal(1.20m, bill.Items.Single(item => item.Name == "Taxable").TaxAmount);
+        Assert.Equal(0m, bill.Items.Single(item => item.Name == "Exempt").TaxAmount);
+        Assert.Equal(0m, bill.Items.Single(item => item.Name == "Unknown").TaxAmount);
     }
 
     [Fact]

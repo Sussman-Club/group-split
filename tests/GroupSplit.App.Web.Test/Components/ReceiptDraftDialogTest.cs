@@ -66,6 +66,62 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Changing_numbers_offers_manual_tax_recalculation_for_taxable_items()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference reference = null!;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", new SaveReceiptRequest
+                {
+                    Subtotal = 15m, Tax = 1m, Total = 16m,
+                    Items = [new() { Name = "A", UnitPrice = 4m, TotalPrice = 4m, IsTaxable = true },
+                        new() { Name = "B", UnitPrice = 8m, TotalPrice = 8m, IsTaxable = true },
+                        new() { Name = "Exempt", UnitPrice = 3m, TotalPrice = 3m, IsTaxable = false }]
+                }) }
+            }));
+        Assert.DoesNotContain("Spread tax across items", provider.Markup);
+        var tax = provider.FindComponents<DecimalField<decimal>>().Single(field => field.Instance.Label == "Tax");
+        var total = provider.FindComponents<DecimalField<decimal>>().Single(field => field.Instance.Label == "Total paid");
+        await provider.InvokeAsync(() => tax.Instance.ValueChanged.InvokeAsync(.97m));
+        await provider.InvokeAsync(() => total.Instance.ValueChanged.InvokeAsync(15.97m));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Spread tax across items"))
+            .ClickAsync(new MouseEventArgs());
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        var result = await reference.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.Equal(.32m, result!.Items[0].TaxAmount);
+        Assert.Equal(.65m, result.Items[1].TaxAmount);
+        Assert.Equal(0m, result.Items[2].TaxAmount);
+    }
+
+    [Fact]
+    public async Task Receipt_with_only_total_tax_can_be_accepted_without_a_tax_decision()
+    {
+        var draft = new SaveReceiptRequest
+        {
+            Subtotal = 28m, Tax = .96m, Total = 28.96m, Items = Draft().Items.Select(item => new ReceiptItemInput
+            { Name = item.Name, UnitPrice = item.UnitPrice, TotalPrice = item.TotalPrice, IsTaxable = item.TotalPrice > 0 ? true : null }).ToArray()
+        };
+        var provider = Render<MudDialogProvider>();
+        IDialogReference reference = null!;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", draft) }
+            }));
+        var accept = () => provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"));
+        Assert.False(accept().HasAttribute("disabled"));
+        await accept().ClickAsync(new MouseEventArgs());
+        var result = await reference.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.Equal(.96m, result!.Tax);
+        Assert.DoesNotContain("Spread tax across items", provider.Markup);
+        Assert.All(result.Items.Where(item => item.TotalPrice > 0), item => Assert.True(item.IsTaxable));
+        Assert.All(result.Items.Where(item => item.TotalPrice <= 0), item => Assert.Null(item.IsTaxable));
+    }
+
+    [Fact]
     public async Task Rates_with_missing_line_taxes_show_calculated_values_without_an_error_or_manual_distribution()
     {
         var provider = Render<MudDialogProvider>();

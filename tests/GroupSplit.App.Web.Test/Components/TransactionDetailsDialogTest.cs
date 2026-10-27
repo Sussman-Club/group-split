@@ -86,8 +86,8 @@ public class TransactionDetailsDialogTest : ComponentTest
     {
         var dialog = await Open(Bill());
 
-        dialog.WaitForAssertion(() => Assert.Contains("View itemized receipt", dialog.Markup));
-        Assert.Contains("2 items", dialog.Markup);
+        dialog.WaitForAssertion(() => Assert.Contains("Open receipts", dialog.Markup));
+        Assert.Contains("Itemized receipt ready", dialog.Markup);
         Assert.DoesNotContain("Chicken burrito", dialog.Markup);
     }
 
@@ -96,35 +96,35 @@ public class TransactionDetailsDialogTest : ComponentTest
     /// leaves the dialog: no second sheet, no second way to close.
     /// </summary>
     [Fact]
-    public async Task Opening_it_prints_the_bill_without_a_second_dialog()
+    public async Task Opening_receipts_shows_the_bill_in_a_dedicated_dialog()
     {
         var dialog = await Open(Bill());
 
-        dialog.WaitForAssertion(() => Assert.Contains("View itemized receipt", dialog.Markup));
+        dialog.WaitForAssertion(() => Assert.Contains("Open receipts", dialog.Markup));
 
-        dialog.FindAll("button").Single(b => b.TextContent.Contains("View itemized receipt")).Click();
+        dialog.FindAll("button").Single(b => b.TextContent.Contains("Open receipts")).Click();
 
         dialog.WaitForAssertion(() => Assert.Contains("Chicken burrito", dialog.Markup));
         Assert.Contains("Poke bowl", dialog.Markup);
-        Assert.Contains("Hide itemized receipt", dialog.Markup);
+        Assert.DoesNotContain("Hide itemized receipt", dialog.Markup);
 
-        // One dialog, still. The bill is not a dialog anywhere in the app any more.
-        Assert.Single(dialog.FindAll(".mud-dialog"));
+        // Receipts have their own scrollable view above the expense.
+        Assert.Equal(2, dialog.FindAll(".mud-dialog").Count);
     }
 
     [Fact]
-    public async Task Folding_it_away_again_leaves_the_summary()
+    public async Task Closing_receipts_leaves_the_expense_summary()
     {
         var dialog = await Open(Bill());
 
-        dialog.WaitForAssertion(() => Assert.Contains("View itemized receipt", dialog.Markup));
-        dialog.FindAll("button").Single(b => b.TextContent.Contains("View itemized receipt")).Click();
-        dialog.WaitForAssertion(() => Assert.Contains("Hide itemized receipt", dialog.Markup));
+        dialog.WaitForAssertion(() => Assert.Contains("Open receipts", dialog.Markup));
+        dialog.FindAll("button").Single(b => b.TextContent.Contains("Open receipts")).Click();
+        dialog.WaitForAssertion(() => Assert.Contains("Chicken burrito", dialog.Markup));
 
-        dialog.FindAll("button").Single(b => b.TextContent.Contains("Hide itemized receipt")).Click();
+        dialog.FindAll(".gs-receipt-workspace button").Single(b => b.TextContent.Trim() == "Close").Click();
 
         dialog.WaitForAssertion(() => Assert.DoesNotContain("Chicken burrito", dialog.Markup));
-        Assert.Contains("View itemized receipt", dialog.Markup);
+        Assert.Contains("Open receipts", dialog.Markup);
     }
 
     /// <summary>
@@ -137,7 +137,7 @@ public class TransactionDetailsDialogTest : ComponentTest
         var dialog = await Open(bill: null);
 
         dialog.WaitForAssertion(() => Assert.Contains("Glovo", dialog.Markup));
-        Assert.DoesNotContain("View itemized receipt", dialog.Markup);
+        Assert.DoesNotContain("Open receipts", dialog.Markup);
         Assert.Contains("Receipts", dialog.Markup);
         Assert.Contains("No receipt added yet", dialog.Markup);
         Assert.Contains("Add receipt", dialog.Markup);
@@ -207,6 +207,8 @@ public class TransactionDetailsDialogTest : ComponentTest
             .ReturnsAsync(bill);
 
         var dialog = await Open(bill);
+        dialog.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialog.WaitForAssertion(() => Assert.Contains("Edit itemized receipt", dialog.Markup));
 
         dialog.FindAll("button")
             .Single(button => button.TextContent.Contains("Edit itemized receipt"))
@@ -334,9 +336,7 @@ public class TransactionDetailsDialogTest : ComponentTest
             });
 
     private static string When(IRenderedComponent<MudDialogProvider> dialog) =>
-        dialog.FindAll(".gs-kv-row")
-            .First(row => row.QuerySelector("dt")?.TextContent.Trim() == "When")
-            .QuerySelector("dd")!.TextContent.Trim();
+        dialog.Find(".gs-expense-chip[aria-label^='when:'] .v").TextContent.Trim();
 
     /// <summary>
     /// The bank's date, alone: midnight UTC on the 9th is 19:00 on the 8th in New York and

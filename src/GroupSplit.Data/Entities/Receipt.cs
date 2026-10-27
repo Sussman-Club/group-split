@@ -14,8 +14,6 @@ public class Receipt : Entity
     /// <summary>The calendar day printed on the receipt, when the provider can read one.</summary>
     public DateOnly? PurchaseDate { get; set; }
 
-    /// <summary>Provider-returned text/values retained for a person reviewing an OCR result.</summary>
-    public string? SourceValues { get; set; }
 
     /// <summary>
     /// What the bill charged in tax, which is the lines' own tax added up -- tax is carried

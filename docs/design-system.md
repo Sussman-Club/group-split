@@ -13,6 +13,19 @@ that fans a token out, and nothing fails when one of them drifts; the app starts
 newer than the sign-in page in front of it. Changing a colour, a font, a radius or
 a shadow means editing every file in the table below that carries it.
 
+## Expandable content
+
+Use a triangle beside a stable clickable heading for small content disclosures: right
+when closed, down when open. Use native `details`/`summary`, or `DisclosureToggle` for
+controlled state with `aria-expanded` and `aria-controls`. Do not add View/Hide actions
+for the same content, or switch the heading's wording when it expands.
+
+Long receipts open through **Open receipts** in a dedicated dialog. Its itemized bill
+is visible without another expansion, with one scrolling content area. Keep Edit, Read,
+Download and Add actions separate. View/Open actions navigate to another view; triangle
+controls expand content in place. Selection chips and Show all/Show fewer list controls
+have their own purpose and are not section expanders.
+
 ## Where each copy lives
 
 | File | Covers | Form |

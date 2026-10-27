@@ -751,9 +751,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<DateOnly?>("PurchaseDate")
                         .HasColumnType("date");
 
-                    b.Property<string>("SourceValues")
-                        .HasColumnType("text");
-
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
