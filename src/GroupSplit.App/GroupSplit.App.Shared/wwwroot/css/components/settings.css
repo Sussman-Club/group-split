@@ -31,6 +31,10 @@
 .gs-settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .gs-settings-appearance h3 { font-size: 1rem; margin: 0; }
 .gs-settings-appearance p { margin: 6px 0 0; font-size: .875rem; }
+.gs-settings-data-details { margin: 16px 0; font-size: .875rem; }
+.gs-settings-data-details summary { width: fit-content; padding: 8px 0; color: var(--gs-ink-2); font-weight: 600; cursor: pointer; }
+.gs-settings-data-details summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; border-radius: 2px; }
+.gs-settings-data-details[open] summary { margin-bottom: 8px; }
 
 .gs-notifications-intro { margin: 0 0 8px; font-size: .875rem; }
 .gs-notification-options { display: flex; flex-direction: column; }

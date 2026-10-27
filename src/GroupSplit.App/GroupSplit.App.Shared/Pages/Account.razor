@@ -51,10 +51,10 @@ else
 
     <div class="gs-settings-layout">
         <nav class="gs-settings-nav" aria-label="Settings sections">
-            <a href="#settings-profile"><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />Profile &amp; security</a>
-            <a href="#settings-preferences"><MudIcon Icon="@Icons.Material.Rounded.Tune" />Preferences</a>
-            <a href="#settings-banks"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />Connected banks</a>
-            <a href="#settings-data"><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />Data &amp; privacy</a>
+            <a href="@SectionHref("settings-profile")"><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />Profile &amp; security</a>
+            <a href="@SectionHref("settings-preferences")"><MudIcon Icon="@Icons.Material.Rounded.Tune" />Preferences</a>
+            <a href="@SectionHref("settings-banks")"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />Connected banks</a>
+            <a href="@SectionHref("settings-data")"><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />Data &amp; privacy</a>
         </nav>
         <div class="gs-settings-content">
         <section id="settings-profile" class="gs-settings-section" aria-labelledby="settings-profile-title">
@@ -109,8 +109,7 @@ else
             <div class="gs-settings-heading"><h2 id="settings-data-title">Data &amp; privacy</h2><p>Keep a copy of your records or manage your account's future.</p></div>
             <div class="gs-card gs-card-pad">
                 <div class="gs-card-title"><h2>Your records</h2></div>
-                <p class="gs-muted">Download a ZIP with your records in JSON, spreadsheet-ready
-                    ledger tables, and original receipt files. Includes a format guide and checksums.</p>
+                <p class="gs-muted">Download your records and original receipts as a ZIP.</p>
                 @if (AppLinks.IsNative)
                 {
                     <p>To download your records and receipt files, sign in on the website.</p>
@@ -136,21 +135,26 @@ else
                 <div class="gs-card-title">
                     <h2>Delete account</h2>
                 </div>
-                <p class="gs-muted" style="margin: 0 0 16px; font-size: .875rem">
-                    Removes your name and email address, and deletes your sign-in: your password,
-                    any linked Google account and every session you have open. Expenses you
-                    recorded stay in their groups, because they are what everyone else's share
-                    was worked out from. You have to settle up in every group first.
-                </p>
-                <p class="gs-muted">
-                    Linked banks and imported bank rows are removed. A bank provider failure may
-                    leave deletion unfinished; retry after the bank service recovers. Items whose
-                    access cannot be read are recorded for administrator cleanup. Personal receipt
-                    files are deleted; shared expenses, their receipts, settlements and anonymised
-                    personal ledger records are retained. Failed receipt or sign-in cleanup is
-                    recorded for retry. Backups may retain older data until the operator's configured
-                    backup expiry; there is no application-enforced expiry period.
-                </p>
+                <p class="gs-muted">Settle up in every group first. Deletes your profile, sign-in,
+                    bank connections and personal receipts. Shared expenses and anonymised ledger records remain.</p>
+                <details class="gs-settings-data-details">
+                    <summary>What happens to your data</summary>
+                    <p class="gs-muted" style="margin: 0 0 16px; font-size: .875rem">
+                        Removes your name and email address, and deletes your sign-in: your password,
+                        any linked Google account and every session you have open. Expenses you
+                        recorded stay in their groups, because they are what everyone else's share
+                        was worked out from. You have to settle up in every group first.
+                    </p>
+                    <p class="gs-muted">
+                        Linked banks and imported bank rows are removed. A bank provider failure may
+                        leave deletion unfinished; retry after the bank service recovers. Items whose
+                        access cannot be read are recorded for administrator cleanup. Personal receipt
+                        files are deleted; shared expenses, their receipts, settlements and anonymised
+                        personal ledger records are retained. Failed receipt or sign-in cleanup is
+                        recorded for retry. Backups may retain older data until the operator's configured
+                        backup expiry; there is no application-enforced expiry period.
+                    </p>
+                </details>
 
                 @if (_blocking is { Count: > 0 })
                 {
@@ -195,6 +199,10 @@ else
     private bool _deleting;
     private bool _exporting;
     private string? _exportError;
+
+    // Fragment-only links resolve against the app's <base href="/">, not this page.
+    // Keep the current route (including /account) and replace only its fragment.
+    private string SectionHref(string section) => $"{Nav.Uri.Split('#')[0]}#{section}";
 
     private async Task ExportAsync()
     {

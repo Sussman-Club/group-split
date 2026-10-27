@@ -4,6 +4,7 @@ using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using MudBlazor;
@@ -40,6 +41,27 @@ public class AccountPageTest : ComponentTest
         page.Find("button[data-mode='Dark']").Click();
         Assert.Equal(ThemeMode.Dark, Services.GetRequiredService<ThemePreference>().Mode);
         Assert.Equal("true", page.Find("button[data-mode='Dark']").GetAttribute("aria-checked"));
+    }
+
+    [Theory]
+    [InlineData("/settings")]
+    [InlineData("/account")]
+    [InlineData("/settings?source=menu#settings-data")]
+    public void Section_links_stay_on_the_current_page_when_resolved_against_the_app_base(string route)
+    {
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(route);
+        var current = new Uri(navigation.Uri);
+        var (page, _) = Open();
+        var links = page.FindAll(".gs-settings-nav a");
+
+        Assert.Equal(4, links.Count);
+        foreach (var link in links)
+        {
+            var destination = new Uri(new Uri(navigation.BaseUri), link.GetAttribute("href"));
+            Assert.Equal(current.GetLeftPart(UriPartial.Query), destination.GetLeftPart(UriPartial.Query));
+            Assert.Single(page.FindAll(destination.Fragment));
+        }
     }
 
     [Fact]
