@@ -487,12 +487,7 @@ html:not([data-gs-ready]) .gs-group-card {
 }
 
 .gs-tabbar .gs-nav-pill::before {
-    left: 18px;
-    right: 18px;
-    top: auto;
-    bottom: 4px;
-    width: auto;
-    height: 3px;
+    content: none;
 }
 
 /* ------------------------------------------------------ theme switcher ---- */
