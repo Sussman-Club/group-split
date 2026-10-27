@@ -51,14 +51,13 @@ public class CreateTransactionDialogTest : ComponentTest
             .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
             { { component => component.SelectedGroupId, GroupId } }));
         var picker = provider.FindComponent<ReceiptFilePicker>();
-        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+        var reading = provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
             [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1])])));
-        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
         provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ReceiptDraftDialog>()));
         await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
             .ClickAsync(new MouseEventArgs());
         await reading;
-        await provider.Find("button[aria-label='Receipt: split from receipt items']").ClickAsync(new MouseEventArgs());
+        await ChooseSplitAsync(provider, "Receipt items");
         provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<BillDivision>()));
         Assert.True(provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
             .HasAttribute("disabled"));
@@ -90,9 +89,8 @@ public class CreateTransactionDialogTest : ComponentTest
             .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>(),
                 new DialogOptions { CloseButton = true, BackdropClick = true, CloseOnEscapeKey = true }));
         var picker = provider.FindComponent<ReceiptFilePicker>();
-        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+        var reading = provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
             [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1])])));
-        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
         provider.WaitForAssertion(() => Assert.True(provider.Find("fieldset").HasAttribute("inert")));
         Assert.True(provider.FindComponents<MudNumericField<decimal>>()
             .Single(field => field.Instance.Label == "How much?").Find("input").HasAttribute("disabled"));
@@ -149,9 +147,8 @@ public class CreateTransactionDialogTest : ComponentTest
                 { component => component.SelectedGroupId, fixedGroup ? GroupId : null }
             }));
         var picker = provider.FindComponent<ReceiptFilePicker>();
-        await provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+        var reading = provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
             [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1, 2, 3])])));
-        var reading = provider.InvokeAsync(() => picker.Instance.ReadRequested.InvokeAsync());
         provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ReceiptDraftDialog>()));
         await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt")).ClickAsync(new MouseEventArgs());
         await reading;
@@ -170,6 +167,28 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.Equal(receipt.PurchaseDate, DateOnly.FromDateTime(Services.GetRequiredService<LocalClock>().Local(answer.Request.DateTime).DateTime));
         receipts.Verify(service => service.SuggestFilingAsync(It.Is<SuggestReceiptFilingRequest>(request => request.GroupId == (fixedGroup ? GroupId : null)),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static Task OpenSplitChoices(IRenderedComponent<MudDialogProvider> provider)
+    {
+        var opening = provider.FindComponent<SplitEditor>().Find("button").ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseChoiceDialog>()));
+        return opening;
+    }
+
+    private static async Task CancelChoiceAsync(IRenderedComponent<MudDialogProvider> provider, Task opening)
+    {
+        await provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        await opening.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    private static async Task ChooseSplitAsync(IRenderedComponent<MudDialogProvider> provider, string label)
+    {
+        var opening = OpenSplitChoices(provider);
+        await provider.FindAll(".gs-selection-option").Single(option => option.QuerySelector("strong")!.TextContent == label)
+            .ClickAsync(new MouseEventArgs());
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Use selection").ClickAsync(new MouseEventArgs());
+        await opening.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     private static readonly Guid GroupId = Guid.NewGuid();
@@ -266,20 +285,15 @@ public class CreateTransactionDialogTest : ComponentTest
 
         // The category is a chip now, and its select opens underneath when the chip is
         // pressed -- so the list under test does not exist until somebody asks for it.
-        await provider.FindAll("button.gs-expense-chip")
+        _ = provider.FindAll("button.gs-expense-chip")
             .Single(chip => chip.GetAttribute("aria-label")!.Contains("category", StringComparison.Ordinal))
             .ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseChoiceDialog>()));
 
-        var select = provider.FindComponents<MudSelect<Guid?>>()
-            .Single(component => component.Instance.Label == "Category");
+        Assert.Contains("By room size", provider.Markup, StringComparison.Ordinal);
+        Assert.Contains("even split", provider.Markup, StringComparison.Ordinal);
+        await provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
 
-        await provider.InvokeAsync(() => select.Instance.OpenMenu());
-
-        popovers.WaitForAssertion(() =>
-        {
-            Assert.Contains("By room size", popovers.Markup, StringComparison.Ordinal);
-            Assert.Contains("even split", popovers.Markup, StringComparison.Ordinal);
-        });
     }
 
     /// <summary>
@@ -443,8 +457,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("The gym"));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "One pays")
-            .ClickAsync(new MouseEventArgs());
+        await ChooseSplitAsync(provider, "One person");
 
         await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
             .ClickAsync(new MouseEventArgs());
@@ -481,9 +494,10 @@ public class CreateTransactionDialogTest : ComponentTest
         var editor = provider.FindComponent<SplitEditor>();
 
         Assert.Empty(editor.Instance.MemberRules);
-        Assert.True(provider.FindAll(".gs-seg-btn")
-            .Single(button => button.TextContent.Trim() == "One pays")
+        var opening = OpenSplitChoices(provider);
+        Assert.True(provider.FindAll(".gs-selection-option").Single(option => option.TextContent.Contains("One person"))
             .HasAttribute("disabled"));
+        await CancelChoiceAsync(provider, opening);
     }
 
     /// <summary>
@@ -524,20 +538,13 @@ public class CreateTransactionDialogTest : ComponentTest
             await Services.GetRequiredService<IDialogService>()
                 .ShowAsync<CreateTransactionDialog>("Add an expense", parameters));
 
-        var segments = provider.FindAll(".gs-seg-btn");
+        var opening = OpenSplitChoices(provider);
+        var options = provider.FindAll(".gs-selection-option");
+        Assert.Equal(5, options.Count);
+        foreach (var label in new[] { "Receipt items", "One person", "Evenly" })
+            Assert.True(options.Single(option => option.QuerySelector("strong")!.TextContent == label).HasAttribute("disabled"));
+        await CancelChoiceAsync(provider, opening);
 
-        Assert.Equal(5, segments.Count);
-
-        // And the control is told to lay out five, which is what actually decides the
-        // widths: a count that moved would move every option with it.
-        Assert.Contains("--gs-seg-n: 5", provider.Find(".gs-seg").GetAttribute("style"));
-        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "Receipt").HasAttribute("disabled"));
-
-        // The middle one says not yet rather than offering a rule it cannot name.
-        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "One pays")
-            .HasAttribute("disabled"));
-        Assert.True(segments.Single(segment => segment.TextContent.Trim() == "Evenly")
-            .HasAttribute("disabled"));
     }
 
     [Fact]
@@ -775,13 +782,15 @@ public class CreateTransactionDialogTest : ComponentTest
         var provider = await OpenAsync(GroupId);
 
         // The search lives in the chip's picker, which does not exist until it is opened.
-        await Chips(provider)
+        _ = Chips(provider)
             .Single(chip => chip.GetAttribute("aria-label")!.Contains("where", StringComparison.Ordinal))
             .ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseDetailsChoiceDialog>()));
 
         var picker = provider.FindComponent<MerchantPicker>();
 
         await provider.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(lidl));
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Use selection").ClickAsync(new MouseEventArgs());
 
         var where = Chips(provider)
             .Single(chip => chip.GetAttribute("aria-label")!.Contains("where", StringComparison.Ordinal));
