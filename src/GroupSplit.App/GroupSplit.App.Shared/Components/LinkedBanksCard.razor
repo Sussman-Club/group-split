@@ -121,11 +121,11 @@
         </MudButton>
     }
 
-    <MudButton Variant="Variant.Text" Color="Color.Primary" Class="gs-account-action mt-4"
-               Href="/inbox" StartIcon="@Icons.Material.Rounded.ReceiptLong"
-               EndIcon="@Icons.Material.Rounded.ArrowForward">
-        Review bank transactions
-    </MudButton>
+    <a class="gs-bank-review" href="/inbox">
+        <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+        <span>Review bank transactions</span>
+        <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
+    </a>
 </div>
 
 </LoadView>

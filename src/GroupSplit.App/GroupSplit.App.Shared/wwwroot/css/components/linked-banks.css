@@ -40,3 +40,25 @@
 .gs-bank-row .mud-menu {
     align-self: center;
 }
+
+.gs-bank-review {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    margin-top: 20px;
+    padding: 12px 14px;
+    border-radius: var(--gs-radius);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+    font-size: .875rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-decoration: none;
+    transition: background-color var(--gs-fast) var(--gs-ease);
+}
+
+.gs-bank-review > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.gs-bank-review > .mud-icon-root { flex: 0 0 20px; width: 20px; height: 20px; }
+.gs-bank-review:hover { background: var(--gs-teal-glow); color: var(--gs-teal); text-decoration: none; }
+.gs-bank-review:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 3px; }
