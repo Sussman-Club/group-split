@@ -13,7 +13,7 @@ namespace GroupSplit.API.Test.Group;
 public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     [Fact]
-    public async Task Home_groups_translates_to_a_limited_PostgreSQL_query()
+    public async Task Group_pagination_translates_to_limit_and_offset_in_PostgreSQL()
     {
         await using var context = new PostgreSqlAppDbContext(
             new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
@@ -23,13 +23,15 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             GetService<IMemberSplitRules>(), GetService<IBillSplitRule>(),
             GetService<IEvenSplitRule>(), GetService<IJoinLinkService>(), TimeProvider.System);
 
-        var sql = service.Describe(await service.GetHomeGroups(TestContext.Current.CancellationToken)).ToQueryString();
+        var sql = service.Describe(await service.GetGroups(new PageRequest(2, 4), false,
+            TestContext.Current.CancellationToken)).ToQueryString();
         Assert.Contains("LIMIT", sql);
+        Assert.Contains("OFFSET", sql);
         Assert.Contains("ArchivedAt", sql);
     }
 
     [Fact]
-    public async Task Home_groups_limits_the_query_to_four_active_groups_for_the_reader()
+    public async Task Group_pages_filter_archived_memberships_before_limiting_and_do_not_overlap()
     {
         var ct = TestContext.Current.CancellationToken;
         var service = GetService<IGroupService>();
@@ -45,7 +47,7 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await otherScope.ServiceProvider.GetRequiredService<IGroupService>()
             .CreateGroup(new CreateGroupRequest { Name = "A somebody else's group" }, ct);
 
-        var query = await service.GetHomeGroups(ct);
+        var query = await service.GetGroups(new PageRequest(1, 4), false, ct);
         // The limit belongs to the provider query, before materialization/serialization.
         Assert.Contains("Take(4)", query.Expression.ToString());
         var preview = await service.Describe(query).ToListAsync(ct);
@@ -54,6 +56,16 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(new[] { "B trip", "C flat", "D team", "Personal" }, preview.Select(g => g.Name).Order());
         Assert.All(preview, g => Assert.False(g.IsArchive));
         Assert.Equal(7, await all.CountAsync(ct));
+
+        var secondPage = await service.Describe(await service.GetGroups(new PageRequest(2, 4), false, ct)).ToListAsync(ct);
+        Assert.Equal(new[] { "E lunch", "F holiday" }, secondPage.Select(g => g.Name));
+        Assert.Empty(preview.Select(g => g.Id).Intersect(secondPage.Select(g => g.Id)));
+
+        var archivedPage = await service.Describe(await service.GetGroups(new PageRequest(1, 4), true, ct)).ToListAsync(ct);
+        Assert.Equal("A archived", Assert.Single(archivedPage).Name);
+
+        // Existing consumers that omit paging still receive the complete list.
+        Assert.Equal(7, await (await service.GetGroups(cancellationToken: ct)).CountAsync(ct));
     }
 
     /// <summary>

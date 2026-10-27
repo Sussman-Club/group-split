@@ -279,7 +279,7 @@
                 position = await UsersClient.GetCurrentUserPositionAsync(),
             "Could not load your balances.");
         var groupsLoaded = await Errors.TryAsync(async () =>
-                homeGroups = await GroupsClient.GetHomeGroupsAsync(),
+                homeGroups = await GroupsClient.GetGroupsAsync(page: 1, pageSize: 4, archived: false),
             "Could not load your groups.");
 
         var activityLoaded = await Errors.TryAsync(async () =>

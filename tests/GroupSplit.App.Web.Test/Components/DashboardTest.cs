@@ -51,7 +51,7 @@ public class DashboardTest : ComponentTest
     {
         _clock = ReaderAt(TimeSpan.Zero);
 
-        _groups.Setup(client => client.GetHomeGroupsAsync(It.IsAny<CancellationToken>()))
+        _groups.Setup(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => (ICollection<GroupResponse>)_groupList.Where(g => !g.IsArchive).Take(4).ToList());
         _users.Setup(client => client.GetCurrentUserPositionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _position!);
@@ -106,9 +106,9 @@ public class DashboardTest : ComponentTest
 
         var groupsCard = page.FindAll(".gs-card").Single(card => card.QuerySelector(".gs-card-title h2")?.TextContent == "Your groups");
         Assert.Equal(4, groupsCard.QuerySelectorAll("a.gs-row[role=button]").Length);
-        _groups.Verify(client => client.GetHomeGroupsAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _groups.Verify(client => client.GetGroupsAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _groups.Verify(client => client.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()), Times.Never);
+        _groups.Verify(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()), Times.Once);
+        _groups.Verify(client => client.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
+        _groups.Verify(client => client.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
         Assert.Single(page.FindAll("a[href='/groups']"));
     }
 

@@ -34,11 +34,11 @@ public class UpdateTransactionDialogTest : ComponentTest
         _login.SetupGet(l => l.User).Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2)]);
 
         _groups
-            .Setup(g => g.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()))
             .Returns(() => new[] { new GroupResponse(GroupId, "Trip", 2) }.ToAsyncEnumerable());
 
         _groups
@@ -427,7 +427,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2), flat, trip]);
         _groups
             .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))

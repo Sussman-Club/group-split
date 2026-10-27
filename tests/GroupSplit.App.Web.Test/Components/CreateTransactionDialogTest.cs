@@ -204,7 +204,7 @@ public class CreateTransactionDialogTest : ComponentTest
     public CreateTransactionDialogTest()
     {
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2)]);
 
         _groups
@@ -326,7 +326,7 @@ public class CreateTransactionDialogTest : ComponentTest
     public async Task A_personal_expense_is_offered_the_personal_groups_categories()
     {
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new GroupResponse(MeId, "Personal", 1) { IsPersonal = true },
                 new GroupResponse(GroupId, "Trip", 2)
@@ -727,7 +727,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
 
-        _groups.Verify(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _groups.Verify(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -879,7 +879,7 @@ public class CreateTransactionDialogTest : ComponentTest
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([flat, trip]);
         _groups
             .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))

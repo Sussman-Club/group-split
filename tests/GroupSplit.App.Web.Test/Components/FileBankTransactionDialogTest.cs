@@ -44,7 +44,7 @@ public class FileBankTransactionDialogTest : ComponentTest
     public FileBankTransactionDialogTest()
     {
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([Flat, Trip]);
         _groups
             .Setup(g => g.GetGroupMembersAsync(Trip.Id, It.IsAny<CancellationToken>()))
