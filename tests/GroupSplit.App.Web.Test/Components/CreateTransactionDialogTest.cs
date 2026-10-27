@@ -156,7 +156,7 @@ public class CreateTransactionDialogTest : ComponentTest
             button.GetAttribute("aria-label")!.StartsWith("where:")).TextContent);
         merchants.Verify(service => service.CreateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         var suggestion = provider.FindAll("button").Single(button => button.TextContent.Contains("Use suggested"));
-        Assert.Contains(fixedGroup ? "Groceries" : "Trip", suggestion.TextContent);
+        Assert.Contains("Trip", suggestion.TextContent);
         await suggestion.ClickAsync(new MouseEventArgs());
         await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Add expense").ClickAsync(new MouseEventArgs());
         var answer = await reference!.GetReturnValueAsync<CreateTransactionDialog.Answer>();
@@ -296,23 +296,25 @@ public class CreateTransactionDialogTest : ComponentTest
 
     }
 
-    /// <summary>
-    /// Opened from inside a group, the group is a fact and not a question.
-    /// </summary>
-    /// <remarks>
-    /// It used to be both: the heading said Home and a select underneath offered to change
-    /// it. That is the same fact twice, with a decision attached that nobody standing in a
-    /// group came to make.
-    /// </remarks>
     [Fact]
-    public async Task Opened_from_a_group_it_does_not_ask_which_group()
+    public async Task Opened_from_a_group_it_prefills_the_group_and_allows_changing_it()
     {
         var provider = await OpenAsync(GroupId);
-
-        Assert.DoesNotContain(Chips(provider),
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        Assert.True(decisions.Instance.ShowGroup);
+        Assert.Equal(GroupId, decisions.Instance.GroupId);
+        Assert.Equal("Trip", decisions.Instance.GroupName);
+        Assert.Contains(Chips(provider),
             chip => chip.GetAttribute("aria-label")!.Contains("group", StringComparison.Ordinal));
 
-        Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
+        await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(null));
+
+        provider.WaitForAssertion(() =>
+        {
+            Assert.Null(decisions.Instance.GroupId);
+            Assert.Equal("Personal", decisions.Instance.GroupName);
+            Assert.Empty(provider.FindComponents<SplitEditor>());
+        });
     }
 
     /// <summary>
@@ -704,18 +706,8 @@ public class CreateTransactionDialogTest : ComponentTest
         Assert.False(add.Instance.Disabled);
     }
 
-    /// <summary>
-    /// Opened from inside a group that named itself, the heading says which group without
-    /// reading the list of every group the person belongs to.
-    /// </summary>
-    /// <remarks>
-    /// The name used to be looked up in that list, so the one fact the dialog was certain
-    /// of before it opened depended on a read about other groups entirely: slow left the
-    /// heading blank, and failed left it blank for good, over a form whose group picker is
-    /// not even shown.
-    /// </remarks>
     [Fact]
-    public async Task Opened_from_a_group_that_names_itself_it_asks_for_no_other_group()
+    public async Task Opened_from_a_named_group_it_loads_the_other_group_choices()
     {
         _categories
             .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
@@ -735,7 +727,7 @@ public class CreateTransactionDialogTest : ComponentTest
 
         Assert.Contains("Trip", provider.Markup, StringComparison.Ordinal);
 
-        _groups.Verify(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _groups.Verify(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
