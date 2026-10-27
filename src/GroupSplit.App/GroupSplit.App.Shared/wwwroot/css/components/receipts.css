@@ -32,6 +32,7 @@
 
 .gs-receipts-heading {
     gap: 10px;
+    flex: 1 1 auto;
 }
 
 .gs-receipts-mark,
@@ -431,7 +432,6 @@
 
 /* Keep the summary and its navigation action on the same row, including phones. */
 .gs-receipts .gs-receipts-head { flex-wrap: nowrap; align-items: center; gap: 8px; }
-.gs-receipts-heading { flex: 1 1 auto; }
 .gs-receipts .gs-receipts-head-actions { flex: 0 0 auto; margin-top: 0; }
 .gs-receipts-head-actions .mud-button-root { white-space: nowrap; }
 
