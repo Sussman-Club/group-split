@@ -47,7 +47,7 @@ public class AccountPageTest : ComponentTest
     [InlineData("/settings")]
     [InlineData("/account")]
     [InlineData("/settings?source=menu#settings-data")]
-    public void Section_links_stay_on_the_current_page_when_resolved_against_the_app_base(string route)
+    public async Task Section_shortcuts_scroll_without_navigating_away_from_the_current_page(string route)
     {
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(route);
@@ -61,6 +61,11 @@ public class AccountPageTest : ComponentTest
             var destination = new Uri(new Uri(navigation.BaseUri), link.GetAttribute("href"));
             Assert.Equal(current.GetLeftPart(UriPartial.Query), destination.GetLeftPart(UriPartial.Query));
             Assert.Single(page.FindAll(destination.Fragment));
+            Assert.True(link.HasAttribute("blazor:onclick:preventDefault"));
+            await link.ClickAsync(new());
+            Assert.Equal(current.AbsoluteUri, navigation.Uri);
+            var call = JSInterop.Invocations["gs.scrollToSection"].Last();
+            Assert.Equal(destination.Fragment[1..], Assert.Single(call.Arguments));
         }
     }
 

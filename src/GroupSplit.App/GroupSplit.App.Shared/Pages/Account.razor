@@ -51,10 +51,10 @@ else
 
     <div class="gs-settings-layout">
         <nav class="gs-settings-nav" aria-label="Settings sections">
-            <a href="@SectionHref("settings-profile")"><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />Profile &amp; security</a>
-            <a href="@SectionHref("settings-preferences")"><MudIcon Icon="@Icons.Material.Rounded.Tune" />Preferences</a>
-            <a href="@SectionHref("settings-banks")"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />Connected banks</a>
-            <a href="@SectionHref("settings-data")"><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />Data &amp; privacy</a>
+            <a href="@SectionHref("settings-profile")" @onclick='() => ScrollToSectionAsync("settings-profile")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />Profile &amp; security</a>
+            <a href="@SectionHref("settings-preferences")" @onclick='() => ScrollToSectionAsync("settings-preferences")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.Tune" />Preferences</a>
+            <a href="@SectionHref("settings-banks")" @onclick='() => ScrollToSectionAsync("settings-banks")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />Connected banks</a>
+            <a href="@SectionHref("settings-data")" @onclick='() => ScrollToSectionAsync("settings-data")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />Data &amp; privacy</a>
         </nav>
         <div class="gs-settings-content">
         <section id="settings-profile" class="gs-settings-section" aria-labelledby="settings-profile-title">
@@ -203,6 +203,8 @@ else
     // Fragment-only links resolve against the app's <base href="/">, not this page.
     // Keep the current route (including /account) and replace only its fragment.
     private string SectionHref(string section) => $"{Nav.Uri.Split('#')[0]}#{section}";
+
+    private Task ScrollToSectionAsync(string section) => JS.InvokeVoidAsync("gs.scrollToSection", section).AsTask();
 
     private async Task ExportAsync()
     {
