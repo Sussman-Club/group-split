@@ -5,21 +5,25 @@
 
 @if (push is { Supported: true })
 {
-    <div class="gs-card gs-card-pad">
+    <div class="gs-card gs-card-pad gs-notifications" aria-busy="@(busy ? "true" : "false")">
         <div class="gs-card-title"><h2>Notifications</h2></div>
-        <p class="gs-muted">Choose which alerts this device receives.</p>
+        <p class="gs-muted gs-notifications-intro">Choose which alerts this Android device receives.</p>
+        <div class="gs-notification-options">
         @foreach (var kind in PushNotificationKinds.Settings)
         {
-            <div>
-                <MudSwitch T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
-                           Disabled="busy" Color="Color.Primary">
-                    @PushNotificationKinds.Label(kind)
-                </MudSwitch>
-            </div>
+            <MudSwitch @key="kind" T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
+                       Class="gs-notification-option" LabelPlacement="Placement.Start"
+                       AriaLabel="@PushNotificationKinds.Label(kind)" Disabled="busy" Color="Color.Primary">
+                <span class="gs-notification-copy">
+                    <span class="gs-notification-label">@PushNotificationKinds.Label(kind)</span>
+                    <span class="gs-notification-description">@Description(kind)</span>
+                </span>
+            </MudSwitch>
         }
+        </div>
         @if (error is not null)
         {
-            <MudAlert Severity="Severity.Warning">@error</MudAlert>
+            <MudAlert Severity="Severity.Warning" Class="mt-3" role="alert">@error</MudAlert>
         }
     </div>
 }
@@ -28,6 +32,14 @@
     private IPushNotifications? push;
     private bool busy;
     private string? error;
+    private static string Description(PushNotificationKind kind) => PushNotificationKinds.Category(kind) switch
+    {
+        PushNotificationCategory.Expenses => "New expenses and changes in your groups.",
+        PushNotificationCategory.Settlements => "Recorded payments and requests to settle up.",
+        PushNotificationCategory.GuestsJoining => "When a guest joins one of your groups.",
+        PushNotificationCategory.BankSyncIssues => "When a connected bank needs your attention.",
+        _ => ""
+    };
     protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();
     private async Task SetEnabled(PushNotificationKind kind, bool value)
     {

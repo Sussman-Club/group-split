@@ -31,6 +31,33 @@
 .gs-settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .gs-settings-appearance h3 { font-size: 1rem; margin: 0; }
 .gs-settings-appearance p { margin: 6px 0 0; font-size: .875rem; }
+
+.gs-notifications-intro { margin: 0 0 8px; font-size: .875rem; }
+.gs-notification-options { display: flex; flex-direction: column; }
+.gs-notifications .gs-notification-option { margin: 0; border-bottom: 1px solid var(--gs-line); }
+.gs-notifications .gs-notification-option .mud-switch {
+    width: 100%;
+    min-height: 76px;
+    margin: 0;
+    padding: 16px 0;
+    gap: 16px;
+    justify-content: space-between;
+}
+.gs-notifications .gs-notification-option:last-child { border-bottom: 0; }
+.gs-notification-option .mud-switch > .mud-typography { flex: 1; min-width: 0; margin: 0; }
+.gs-notification-copy { display: grid; gap: 4px; text-align: start; }
+.gs-notification-label { color: var(--gs-ink); font-size: .9375rem; font-weight: 600; }
+.gs-notification-description { color: var(--gs-muted); font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.gs-notification-option .mud-disabled .gs-notification-copy { opacity: .6; }
+/* Phone icon-button minimums must not enlarge the thumb's 38px positioning box.
+   The surrounding label supplies the touch target for the whole settings row. */
+.gs-notifications .gs-notification-option .mud-switch-base {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    border-radius: 50% !important;
+}
 @media (max-width: 900px) {
     .gs-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
     .gs-settings-nav { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; padding-bottom: 16px; border-bottom: 1px solid var(--gs-line); }
