@@ -68,8 +68,7 @@
                 "/" => "Home",
                 "/groups" => "Groups",
                 "/account" => "Account",
-                "/inbox" => "Activity",
-                _ when path.StartsWith("/transactions", StringComparison.OrdinalIgnoreCase) => "Activity",
+                "/inbox" or "/transactions/not-filed" => "Not filed",
                 _ => "Group Split"
             };
         }
