@@ -88,7 +88,7 @@
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
-                <ExpenseDecisions UseSelectionSheets="true" @ref="_decisions"
+                <ExpenseDecisions UseSelectionSheets="true" ShowGroup="true" @ref="_decisions"
                                   Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_model.GroupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
@@ -121,11 +121,6 @@
                               Variant="Variant.Outlined"
                               Lines="2"
                               Immediate="true"/>
-
-                @* The group is a chip here and not the heading, unlike the create dialog:
-                   this is the one screen where it can genuinely move. A personal expense is
-                   shared by giving it a group, a shared one taken back by choosing Personal,
-                   and the category, payer and shares all belong to whichever it says. *@
 
                     </div>
                 </details>

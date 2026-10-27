@@ -40,14 +40,6 @@
     <TitleContent>
         <div class="gs-dialog-head">
             <div style="min-width: 0">
-                @* The group says itself once. Opened from inside one it is a fact and lives
-                   here; opened from the expenses page it is a decision and is the first
-                   chip instead. *@
-                @if (GroupFixed)
-                {
-                    <div class="gs-eyebrow">@Where</div>
-                }
-
                 <h2 class="gs-dialog-title">@MudDialog.Title</h2>
             </div>
         </div>
@@ -83,7 +75,7 @@
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button"
                                OnClick="UseReceiptSuggestionAsync">
-                        Use suggested @(GroupFixed ? suggestion.CategoryName : suggestion.Destination)
+                        Use suggested @suggestion.Destination
                     </MudButton>
                 }
 
@@ -125,7 +117,7 @@
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
-                <ExpenseDecisions UseSelectionSheets="true" ShowGroup="@(!GroupFixed)"
+                <ExpenseDecisions UseSelectionSheets="true" ShowGroup="true"
                                   Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
                                   GroupId="@_groupId"
                                   GroupIdChanged="@OnGroupPickedAsync"
@@ -239,7 +231,7 @@
     /// </remarks>
     [Parameter] public string? SelectedGroupName { get; set; }
 
-    /// <summary>The currency of a fixed group, when the caller already has it.</summary>
+    /// <summary>The currency of the initial group, when the caller already has it.</summary>
     [Parameter] public string? SelectedGroupCurrency { get; set; }
 
     /// <summary>
@@ -450,7 +442,7 @@
                 var suggestion = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest
                 {
                     Receipt = receipt, Currency = currency,
-                    GroupId = _groupId ?? (GroupFixed ? Login.User?.Id : null)
+                    GroupId = _groupId
                 });
                 if (groupLoad == _groupLoad && currency == ReceiptCurrency && categoryId == _model.CategoryId)
                     _filingSuggestion = suggestion;
@@ -525,20 +517,12 @@
         if (_filingSuggestion is not { } suggestion)
             return;
         var groupId = suggestion.IsPersonal ? (Guid?)null : suggestion.GroupId;
-        if (GroupFixed && groupId != _groupId)
-            return;
-        if (!GroupFixed && groupId != _groupId)
+        if (groupId != _groupId)
             await OnGroupPickedAsync(groupId);
         if (_categories.Any(category => category.Id == suggestion.CategoryId))
             await OnCategoryPickedAsync(suggestion.CategoryId);
         _filingSuggestion = null;
     }
-
-    /// <summary>
-    /// Whether the group was settled by where this was opened from, in which case it is
-    /// stated in the heading and not offered as a choice.
-    /// </summary>
-    private bool GroupFixed => SelectedGroupId is not null;
 
     /// <summary>
     /// The currency a personal expense is in, which the person picks. Ignored once there is
@@ -549,9 +533,9 @@
     /// <summary>What the amount is in, as the field's symbol and the request say it.</summary>
     private string Currency => IsShared ? GroupCurrency : _currency;
 
-    private string GroupCurrency => GroupFixed
-        ? SelectedGroupCurrency ?? "USD"
-        : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
+    private string GroupCurrency =>
+        (_groupId == SelectedGroupId ? SelectedGroupCurrency : null)
+        ?? _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
 
     private string ReceiptCurrency => Currency;
 
@@ -598,7 +582,7 @@
             if (_groupId is null)
                 return "Personal";
 
-            if (GroupFixed && SelectedGroupName is { Length: > 0 } named)
+            if (_groupId == SelectedGroupId && SelectedGroupName is { Length: > 0 } named)
                 return named;
 
             return _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "";
@@ -651,19 +635,14 @@
     /// it -- first by closing the dialog onto nothing, then by replacing it with an apology
     /// -- when what was actually still possible was recording the expense.
     /// <para>
-    /// The group survives either way. It is the one fact the dialog was given rather than
-    /// fetched, and nothing that comes back from the API can unseat it.
+    /// The initial group survives a failed list read; the user can change it with the chip.
     /// </para>
     /// </remarks>
     private async Task OpenAsync()
     {
-        // Only where something offers a choice: opened from inside a group that named
-        // itself, the list of every other group is what the group picker shows, and the
-        // picker is not shown at all.
-        if (!GroupFixed || string.IsNullOrWhiteSpace(SelectedGroupName))
-            await Errors.TryAsync(
-                async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
-                "Could not load your groups.");
+        await Errors.TryAsync(
+            async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
+            "Could not load your groups.");
 
         // Somebody who picked another group while this was out has a load of their own
         // running, and it does the rest.

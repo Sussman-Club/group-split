@@ -114,17 +114,16 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await NavLink("Activity").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
+        await NavLink("Home").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
-        // The grid's own empty state, which it renders only once the API has answered it.
-        // Exact, or it also matches the page's h1 and the top bar's h2. The unfiltered
-        // wording, because a fresh account arrives here with no filter set.
+        // The dashboard feed's empty state appears only after its authenticated API
+        // request succeeds. A fresh account has no activity to show.
         await Expect(Page.GetByRole(
-                AriaRole.Heading, new PageGetByRoleOptions { Name = "Nothing here yet", Exact = true }))
+                AriaRole.Heading, new PageGetByRoleOptions { Name = "Nothing recorded yet", Exact = true }))
             .ToBeVisibleAsync(Visible);
 
         await Expect(Page).ToHaveURLAsync(
-            new Regex("/transactions$"),
+            new Regex("^" + Regex.Escape(Url("")) + "$"),
             new PageAssertionsToHaveURLOptions { Timeout = OperationTimeoutMs });
 
         // The assertion that means anything. A page that rendered proves little on its own,
