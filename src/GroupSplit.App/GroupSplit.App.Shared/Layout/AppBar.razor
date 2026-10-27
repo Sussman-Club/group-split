@@ -43,7 +43,7 @@
                     <div class="gs-muted" style="font-size: .75rem">@user.Email</div>
                 </div>
                 <MudDivider Class="my-1" />
-                <MudMenuItem Icon="@Icons.Material.Rounded.AccountCircle" Label="Account" Href="/account" />
+                <MudMenuItem Icon="@Icons.Material.Rounded.Settings" Label="Settings" Href="/settings" />
                 <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="Sign out" OnClick="TryLogout" />
             </ChildContent>
         </MudMenu>
@@ -67,7 +67,7 @@
             {
                 "/" => "Home",
                 "/groups" => "Groups",
-                "/account" => "Account",
+                "/account" or "/settings" => "Settings",
                 "/inbox" or "/transactions/not-filed" => "Not filed",
                 _ => "Group Split"
             };

@@ -1,0 +1,44 @@
+/* Settings uses one reading column, with quick section access on wide screens. */
+.gs-settings-identity {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px;
+    margin-bottom: 32px;
+    border: 1px solid var(--gs-line);
+    border-left: 4px solid var(--gs-teal);
+    border-radius: var(--gs-radius-lg);
+    background: var(--gs-surface);
+}
+.gs-settings-identity > .gs-inline { min-width: 0; }
+.gs-settings-identity > .gs-inline > div { min-width: 0; }
+.gs-settings-identity h2 { font-size: 1.3rem; overflow-wrap: anywhere; }
+.gs-settings-identity p { margin: 4px 0 0; color: var(--gs-muted); overflow-wrap: anywhere; }
+.gs-settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
+.gs-settings-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: calc(var(--gs-topbar-h) + 24px); }
+.gs-settings-nav a { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--gs-radius-sm); color: var(--gs-ink-2); font-weight: 600; font-size: .875rem; text-decoration: none; }
+.gs-settings-nav a:hover { background: var(--gs-teal-soft); color: var(--gs-teal); }
+.gs-settings-nav a:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+.gs-settings-nav .mud-icon-root { width: 20px; height: 20px; flex-shrink: 0; }
+.gs-settings-content { min-width: 0; display: grid; gap: 40px; }
+.gs-settings-section { display: grid; gap: 16px; min-width: 0; scroll-margin-top: calc(var(--gs-topbar-h) + 24px); }
+.gs-settings-heading h2 { font-size: 1.25rem; margin: 0; }
+.gs-settings-heading p { color: var(--gs-muted); font-size: .875rem; margin: 6px 0 0; }
+.gs-settings-section .gs-card { min-width: 0; }
+.gs-settings-section .gs-kv dd { overflow-wrap: anywhere; }
+.gs-settings-section .gs-danger-zone { border-color: var(--gs-danger); margin-top: 12px; }
+.gs-settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.gs-settings-appearance h3 { font-size: 1rem; margin: 0; }
+.gs-settings-appearance p { margin: 6px 0 0; font-size: .875rem; }
+@media (max-width: 900px) {
+    .gs-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .gs-settings-nav { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; padding-bottom: 16px; border-bottom: 1px solid var(--gs-line); }
+    .gs-settings-nav a { padding: 10px; background: var(--gs-surface); }
+}
+@media (max-width: 480px) {
+    .gs-settings-identity { align-items: flex-start; flex-direction: column; padding: 20px; margin-bottom: 24px; }
+    .gs-settings-nav { display: grid; grid-template-columns: 1fr 1fr; }
+    .gs-settings-nav a { font-size: .8rem; }
+    .gs-settings-content { gap: 32px; }
+}

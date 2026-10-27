@@ -1,4 +1,5 @@
 @page "/account"
+@page "/settings"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.App.Shared.Services.Errors
@@ -12,28 +13,34 @@
 @inject AppLinks AppLinks
 @inject IJSRuntime JS
 
-<PageTitle>Account - Group Split</PageTitle>
+<PageTitle>Settings - Group Split</PageTitle>
 
 @if (UserInfo is null)
 {
     <div class="gs-card gs-empty" style="padding: 64px 24px">
         <MudIcon Icon="@Icons.Material.Rounded.AccountCircle" />
         <h3>You are not signed in</h3>
-        <span>Sign in to see your account.</span>
+        <span>Sign in to manage your settings.</span>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" Href="/login">Sign in</MudButton>
     </div>
 }
 else
 {
     <div class="gs-page-head">
+        <div>
+            <h1>Settings</h1>
+            <p>Your profile, preferences, and connected accounts.</p>
+        </div>
+    </div>
+
+    <div class="gs-settings-identity">
         <div class="gs-inline" style="gap: 20px">
             <span class="gs-avatar-ring">
                 <Avatar Name="@UserInfo.FullName" Size="xl" />
             </span>
             <div>
-                <div class="gs-eyebrow">Account</div>
-                <h1 style="margin-top: 2px">@UserInfo.FullName</h1>
-                <p style="margin-top: 2px">@UserInfo.Email</p>
+                <h2>@UserInfo.FullName</h2>
+                <p>@UserInfo.Email</p>
             </div>
         </div>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="gs-btn-pill"
@@ -42,21 +49,30 @@ else
         </MudButton>
     </div>
 
-    <div class="gs-two-col">
-        <div class="gs-stack">
-            <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
+    <div class="gs-settings-layout">
+        <nav class="gs-settings-nav" aria-label="Settings sections">
+            <a href="#settings-profile"><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />Profile &amp; security</a>
+            <a href="#settings-preferences"><MudIcon Icon="@Icons.Material.Rounded.Tune" />Preferences</a>
+            <a href="#settings-banks"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />Connected banks</a>
+            <a href="#settings-data"><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />Data &amp; privacy</a>
+        </nav>
+        <div class="gs-settings-content">
+        <section id="settings-profile" class="gs-settings-section" aria-labelledby="settings-profile-title">
+            <div class="gs-settings-heading"><h2 id="settings-profile-title">Profile &amp; security</h2><p>Your personal details and sign-in options.</p></div>
+            <div class="gs-card gs-card-pad">
                 <div class="gs-card-title">
                     <h2>Profile</h2>
-                    <span class="gs-tag neutral">from identity provider</span>
+                    <span class="gs-tag neutral">Read only</span>
                 </div>
                 <dl class="gs-kv">
                     @Field("First name", UserInfo.FirstName)
                     @Field("Last name", UserInfo.LastName)
                     @Field("Email", UserInfo.Email)
                 </dl>
+                <p class="gs-muted">Update these details with Manage account below.</p>
             </div>
 
-            <div class="gs-card gs-card-pad gs-reveal" style="--i: 1">
+            <div class="gs-card gs-card-pad">
                 <div class="gs-card-title">
                     <h2>Security</h2>
                 </div>
@@ -73,13 +89,25 @@ else
                     Manage account
                 </MudButton>
             </div>
-        </div>
+        </section>
 
-        <div class="gs-stack">
-            <LinkedBanksCard Reveal="2" />
+        <section id="settings-preferences" class="gs-settings-section" aria-labelledby="settings-preferences-title">
+            <div class="gs-settings-heading"><h2 id="settings-preferences-title">Preferences</h2><p>Make Group Split feel right on this device.</p></div>
+            <div class="gs-card gs-card-pad gs-settings-appearance">
+                <div><h3>Appearance</h3><p class="gs-muted">Choose light, dark, or follow your device.</p></div>
+                <ThemeModeMenu />
+            </div>
             <PushNotificationsCard />
+        </section>
 
-            <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
+        <section id="settings-banks" class="gs-settings-section" aria-labelledby="settings-banks-title">
+            <div class="gs-settings-heading"><h2 id="settings-banks-title">Connected banks</h2><p>Manage the bank connections used to import your expenses.</p></div>
+            <LinkedBanksCard />
+        </section>
+
+        <section id="settings-data" class="gs-settings-section" aria-labelledby="settings-data-title">
+            <div class="gs-settings-heading"><h2 id="settings-data-title">Data &amp; privacy</h2><p>Keep a copy of your records or manage your account's future.</p></div>
+            <div class="gs-card gs-card-pad">
                 <div class="gs-card-title"><h2>Your records</h2></div>
                 <p class="gs-muted">Download a ZIP with your records in JSON, spreadsheet-ready
                     ledger tables, and original receipt files. Includes a format guide and checksums.</p>
@@ -104,7 +132,7 @@ else
                 }
             </div>
 
-            <div class="gs-card gs-card-pad gs-danger-zone gs-reveal" style="--i: 4">
+            <div class="gs-card gs-card-pad gs-danger-zone">
                 <div class="gs-card-title">
                     <h2>Delete account</h2>
                 </div>
@@ -152,6 +180,7 @@ else
                     Delete my account
                 </MudButton>
             </div>
+        </section>
         </div>
     </div>
 }

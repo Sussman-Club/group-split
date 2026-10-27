@@ -27,9 +27,19 @@ public class AccountPageTest : ComponentTest
     {
         Services.AddSingleton(_users.Object);
         Services.AddSingleton(_auth.Object);
+        Services.AddSingleton<ThemePreference>();
         Services.AddSingleton(Mock.Of<IInboxStateService>());
         Services.AddSingleton(Mock.Of<IBankCommands>());
         Services.AddSingleton(Mock.Of<IBankLinkLauncher>());
+    }
+
+    [Fact]
+    public void Appearance_choice_updates_the_shared_theme_preference()
+    {
+        var (page, _) = Open();
+        page.Find("button[data-mode='Dark']").Click();
+        Assert.Equal(ThemeMode.Dark, Services.GetRequiredService<ThemePreference>().Mode);
+        Assert.Equal("true", page.Find("button[data-mode='Dark']").GetAttribute("aria-checked"));
     }
 
     [Fact]
