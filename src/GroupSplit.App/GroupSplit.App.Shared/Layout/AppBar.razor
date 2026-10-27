@@ -2,15 +2,12 @@
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
-@inject NavigationManager Nav
 @inject AppLinks AppLinks
-@implements IDisposable
 
 <header class="gs-topbar">
     <a class="gs-brand gs-topbar-brand" href="/" aria-label="Home">
         <BrandMark Size="28" />
     </a>
-    <h2 class="gs-topbar-title">@Title</h2>
     <span class="gs-topbar-spacer"></span>
 
     @if (!AppLinks.IsNative)
@@ -57,31 +54,8 @@
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
-    private string Title
-    {
-        get
-        {
-            var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
-
-            return path switch
-            {
-                "/" => "Home",
-                "/groups" => "Groups",
-                "/account" or "/settings" => "Settings",
-                "/inbox" or "/transactions/not-filed" => "Not filed",
-                _ => "Group Split"
-            };
-        }
-    }
-
-    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
-
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(StateHasChanged);
-
     // Logout is a form POST to the BFF, a full page load, which ends the
     // Keycloak session and lands back on "/".
     private Task TryLogout() => AuthService.Logout();
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

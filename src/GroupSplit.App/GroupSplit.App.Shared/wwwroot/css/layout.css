@@ -131,18 +131,6 @@ html:not([data-gs-ready]) .gs-group-card {
     opacity: 0.6;
 }
 
-.gs-topbar-title {
-    font-family: var(--gs-font-display);
-    font-size: 1.0625rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    margin: 0;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .gs-topbar > .mud-button-root {
     flex-shrink: 0;
     white-space: nowrap;
@@ -150,12 +138,6 @@ html:not([data-gs-ready]) .gs-group-card {
 
 .gs-topbar-spacer {
     flex: 1;
-}
-
-@media (max-width: 480px) {
-    .gs-topbar-title {
-        display: none;
-    }
 }
 
 .gs-content {
