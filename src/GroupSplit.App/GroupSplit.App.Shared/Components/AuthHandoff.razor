@@ -21,7 +21,7 @@
             <BrandMark Class="gs-auth-mark" Size="64" />
 
             <div>
-                <div class="gs-eyebrow" style="color: var(--gs-teal)">Group Split</div>
+                <div class="gs-eyebrow" style="color: var(--gs-teal)">@Loc["Group Split"]</div>
                 <h1 style="margin: 8px 0 6px; font-size: 1.75rem; font-weight: 800">@Title</h1>
                 <p class="gs-muted" style="margin: 0; font-size: .9375rem">@Subtitle</p>
             </div>
@@ -32,7 +32,7 @@
             {
                 <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
                     <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
-                    <span>Taking you to the secure sign-in page…</span>
+                    <span>@Loc["Taking you to the secure sign-in page…"]</span>
                 </div>
             }
             else if (Error is not null)
@@ -55,9 +55,7 @@
                 @ActionLabel
             </MudButton>
 
-            <p class="gs-muted" style="margin: 4px 0 0; font-size: .75rem">
-                Sign-in is handled by our identity provider, so your password never touches this app.
-            </p>
+            <p class="gs-muted" style="margin: 4px 0 0; font-size: .75rem">@Loc["Sign-in is handled by our identity provider, so your password never touches this app."]</p>
         </div>
     </div>
 </div>
@@ -105,19 +103,19 @@
         catch (OperationCanceledException)
         {
             _redirecting = false;
-            Error = "Sign-in was cancelled. You can try again.";
+            Error = Loc["Sign-in was cancelled. You can try again."].Value;
             _notice = true;
         }
         catch (HttpRequestException)
         {
             _redirecting = false;
-            Error = "The sign-in server could not be reached. Check your connection and try again.";
+            Error = Loc["The sign-in server could not be reached. Check your connection and try again."].Value;
             _notice = false;
         }
         catch (InvalidOperationException)
         {
             _redirecting = false;
-            Error = "Sign-in could not be completed. Please try again.";
+            Error = Loc["Sign-in could not be completed. Please try again."].Value;
             _notice = false;
         }
     }

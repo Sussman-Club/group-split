@@ -15,17 +15,15 @@
     its own page now -- /groups/{id}, with tabs -- and this is the list they open from.
 *@
 
-<PageTitle>Groups - Group Split</PageTitle>
+<PageTitle>@Loc["Groups - Group Split"]</PageTitle>
 
 <div class="gs-page-head">
     <div>
-        <h1>Groups</h1>
-        <p>Everyone you share costs with, and where each of you stands.</p>
+        <h1>@Loc["Groups"]</h1>
+        <p>@Loc["Everyone you share costs with, and where each of you stands."]</p>
     </div>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-               StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">
-        New group
-    </MudButton>
+               StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["New group"]</MudButton>
 </div>
 
 <LoadView Skeleton="SkeletonLayout.Groups" Loading="@(!GroupsService.IsReadyTask.IsCompleted || _retrying)" Failed="@(GroupsService.Position is null)" Retry="RetryAsync">
@@ -50,10 +48,10 @@
     {
         <div class="gs-card gs-empty" style="padding: 64px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-            <h3>No shared group yet</h3>
-            <span>Create a group and name the people you share costs with.</span>
+            <h3>@Loc["No shared group yet"]</h3>
+            <span>@Loc["Create a group and name the people you share costs with."]</span>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">Create a group</MudButton>
+                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["Create a group"]</MudButton>
         </div>
     }
 
@@ -62,8 +60,8 @@
         var i = Active.Count + 1;
         <div class="gs-card gs-card-pad gs-reveal" style="--i: @(i + 1)">
             <div class="gs-card-title">
-                <h2>Archived</h2>
-                <span class="gs-tag neutral">only you see this</span>
+                <h2>@Loc["Archived"]</h2>
+                <span class="gs-tag neutral">@Loc["only you see this"]</span>
             </div>
             <div class="gs-group-grid">
                 @foreach (var group in Archived)
@@ -84,10 +82,10 @@
             <Avatar Name="@group.Name" />
             <div class="head">
                 <span class="name">@group.Name</span>
-                <span class="go">Open <MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
+                <span class="go">@Loc["Open"]<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Style="width:16px;height:16px" /></span>
             </div>
             <div class="people">
-                <span>@(group.IsPersonal ? "Just you" : $"{group.MemberCount} member{(group.MemberCount == 1 ? "" : "s")}")</span>
+                <span>@(group.IsPersonal ? Loc["Just you"].Value : Loc["{0} member{1}", group.MemberCount, (group.MemberCount == 1 ? "" : "s")].Value)</span>
             </div>
             @if (!group.IsPersonal)
             {
@@ -117,9 +115,9 @@
 
     private string Standing(GroupResponse group) => BalanceIn(group.Id) switch
     {
-        > 0 => "You are owed",
-        < 0 => "You owe",
-        _ => "Settled up"
+        > 0 => Loc["You are owed"].Value,
+        < 0 => Loc["You owe"].Value,
+        _ => Loc["Settled up"].Value
     };
 
     private void Open(GroupResponse group) => Nav.NavigateTo($"/groups/{group.Id}");
@@ -155,7 +153,7 @@
             CloseButton = true
         };
 
-        var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>("Create a group", options);
+        var dialogReference = await DialogService.ShowAsync<CreateGroupDialog>(Loc["Create a group"].Value, options);
 
         var request = await dialogReference.GetReturnValueAsync<CreateGroupRequest>();
 

@@ -10,8 +10,8 @@
     <TitleContent>
         <div class="gs-dialog-head">
             <div style="min-width: 0">
-                <div class="gs-eyebrow">Search your history</div>
-                <h2 class="gs-dialog-title">Find another expense</h2>
+                <div class="gs-eyebrow">@Loc["Search your history"]</div>
+                <h2 class="gs-dialog-title">@Loc["Find another expense"]</h2>
             </div>
         </div>
     </TitleContent>
@@ -19,8 +19,8 @@
     <DialogContent>
         <div class="gs-stack" style="gap: 12px">
             <MudTextField @bind-Value="_search"
-                          Label="Search expenses"
-                          Placeholder="Name, note or group"
+                          Label="@Loc["Search expenses"]"
+                          Placeholder="@Loc["Name, note or group"]"
                           Variant="Variant.Outlined"
                           Immediate="true"
                           Adornment="Adornment.End"
@@ -29,29 +29,29 @@
 
             <div class="gs-inline" style="justify-content: space-between">
                 <MudText Typo="Typo.caption" Class="gs-muted">
-                    @(_search.Length == 0 ? "Recent expenses" : "Matching expenses")
+                    @(_search.Length == 0 ? Loc["Recent expenses"].Value : Loc["Matching expenses"].Value)
                 </MudText>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                           Disabled="@_busy" OnClick="SearchAsync">Search</MudButton>
+                           Disabled="@_busy" OnClick="SearchAsync">@Loc["Search"]</MudButton>
             </div>
 
             @if (_busy)
             {
                 <div class="gs-empty" style="padding: 24px">
                     <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
-                    <span>Searching expenses…</span>
+                    <span>@Loc["Searching expenses…"]</span>
                 </div>
             }
             else if (_expenses.Count == 0)
             {
                 <div class="gs-empty" style="padding: 28px 16px">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <span>No expenses found. Try another search, or choose “None of these — it is new.”</span>
+                    <span>@Loc["No expenses found. Try another search, or choose “None of these — it is new.”"]</span>
                 </div>
             }
             else
             {
-                <div class="gs-list" role="radiogroup" aria-label="Expenses that can be attached">
+                <div class="gs-list" role="radiogroup" aria-label="@Loc["Expenses that can be attached"]">
                     @foreach (var expense in _expenses)
                     {
                         var attachable = CanAttach(expense);
@@ -61,7 +61,7 @@
                             <Avatar Name="@expense.Name" />
                             <span class="gs-match-choice-copy">
                                 <span class="title">@expense.Name</span>
-                                <span class="meta">@(expense.GroupName ?? "Personal") · @Clock.Day(expense.DateTime).ToString("d") · @expense.PaidByUserName paid</span>
+                                <span class="meta">@(expense.GroupName ?? Loc["Personal"].Value) · @Clock.Day(expense.DateTime).ToString("d") · @Loc["{0} paid", expense.PaidByUserName ?? ""]</span>
                                 @if (!attachable)
                                 {
                                     <span class="gs-tag neutral">@WhyNotAttachable(expense)</span>
@@ -77,7 +77,7 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Close">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Close">@Loc["Cancel"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -108,7 +108,7 @@
                     page: 1,
                     pageSize: 20);
                 _expenses = page.Items;
-            }, "Could not search expenses.");
+            }, Loc["Could not search expenses."].Value);
         }
         finally
         {
@@ -132,8 +132,8 @@
         !expense.HasBankTransaction
         && string.Equals(expense.Currency, Row.Currency, StringComparison.OrdinalIgnoreCase);
 
-    private static string WhyNotAttachable(TransactionResponse expense) =>
-        expense.HasBankTransaction ? "Already linked to a bank transaction" : "Different currency";
+    private string WhyNotAttachable(TransactionResponse expense) =>
+        expense.HasBankTransaction ? Loc["Already linked to a bank transaction"].Value : Loc["Different currency"].Value;
 
     private void Close() => MudDialog.Cancel();
 }

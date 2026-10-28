@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Errors;
 
 namespace GroupSplit.App.Shared.Services;
@@ -13,5 +14,5 @@ public sealed class LoadGuard(ApiErrorPresenter errors)
     /// <param name="what">What was being loaded, to name it in the message: "your groups".</param>
     /// <returns>Whether the load completed.</returns>
     public Task<bool> RunAsync(Func<Task> load, string what) =>
-        errors.TryAsync(load, $"Could not load {what}.");
+        errors.TryAsync(load, UiText.Format($"Could not load {what}."));
 }

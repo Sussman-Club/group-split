@@ -37,9 +37,9 @@ public record RecordRepaymentRequest
     /// <summary>Who received it.</summary>
     public Guid ToUserId { get; set; }
 
-    [Required(ErrorMessage = "Amount is required.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
-    [GreaterThan(0, ErrorMessage = "Amount must be greater than 0.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
+    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
+    [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
     public decimal Amount { get; set; }
 
     /// <summary>
@@ -55,6 +55,6 @@ public record RecordRepaymentRequest
     /// <summary>
     /// What to remember about it -- "cash", "end of September 2024".
     /// </summary>
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string? Description { get; set; }
 }

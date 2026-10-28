@@ -31,9 +31,9 @@ public record SettleWithPersonRequest
     /// <summary>The other end of the payment.</summary>
     public Guid UserId { get; set; }
 
-    [Required(ErrorMessage = "Amount is required.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
-    [GreaterThan(0, ErrorMessage = "Amount must be greater than 0.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
+    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
+    [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
     public decimal Amount { get; set; }
 
     /// <summary>
@@ -47,7 +47,7 @@ public record SettleWithPersonRequest
     public DateTimeOffset? Date { get; set; }
 
     /// <summary>What to remember about it -- "cash", "bank transfer, ref 4821".</summary>
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string? Description { get; set; }
 
     /// <summary>
@@ -63,7 +63,7 @@ public record SettleWithPersonRequest
     /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
     /// </summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
-        ErrorMessage = "The offset from UTC must be within 14 hours either way.")]
+        ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
     public int? UtcOffset { get; set; }
 }
 

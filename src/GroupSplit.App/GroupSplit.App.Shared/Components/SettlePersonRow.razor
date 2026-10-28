@@ -18,7 +18,7 @@
     </div>
     <Money Value="Person.Amount" Animate />
     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRecord">
-        @(YouPaid ? "I paid them" : "They paid me")
+        @(YouPaid ? Loc["I paid them"].Value : Loc["They paid me"].Value)
     </MudButton>
 </div>
 
@@ -48,6 +48,6 @@
         { IsGuest: true, Groups.Count: > 0 } => ParticipantCopy.GuestIn(Person.Groups[0].GroupName),
         { Groups.Count: 1 } => Person.Groups[0].GroupName,
         _ => string.Join(" · ", Person.Groups.Select(part =>
-            $"{part.Amount.ToMoney()} in {part.GroupName}"))
+            Loc["{0} in {1}", part.Amount.ToMoney(), part.GroupName].Value))
     };
 }

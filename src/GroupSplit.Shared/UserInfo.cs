@@ -24,7 +24,8 @@ public record UserInfo(
     string? LastName,
     string? Email,
     bool IsGuest = false,
-    bool IsPastMember = false)
+    bool IsPastMember = false,
+    string? PreferredLanguage = null)
 {
     /// <summary>The name <see cref="IsGuest"/> had while guests were called pending invitees.</summary>
     /// <remarks>

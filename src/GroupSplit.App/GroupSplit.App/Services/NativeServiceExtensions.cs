@@ -36,6 +36,7 @@ public static class NativeServiceExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IBankLinkLauncher, NativeBankLinkLauncher>();
         services.AddSharedServices();
+        services.AddScoped<GroupSplit.App.Shared.Localization.ILanguagePersistence, NativeLanguagePersistence>();
         return services;
     }
 }

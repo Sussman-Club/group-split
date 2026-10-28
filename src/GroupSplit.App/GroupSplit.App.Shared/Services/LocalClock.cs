@@ -107,8 +107,8 @@ public sealed class LocalClock
 
         return (today.DayNumber - day.DayNumber) switch
         {
-            0 => "Today",
-            1 => "Yesterday",
+            0 => GroupSplit.App.Shared.Localization.UiText.Get("Today"),
+            1 => GroupSplit.App.Shared.Localization.UiText.Get("Yesterday"),
             < 7 => day.ToString("dddd"),
             _ when day.Year == today.Year => day.ToString("d MMM"),
             _ => day.ToString("d MMM yyyy")

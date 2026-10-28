@@ -41,7 +41,7 @@ public static class NameExtensions
     public static string Listed(this IReadOnlyList<string> names, string conjunction = "and") =>
         names.Count < 2
             ? string.Join(", ", names)
-            : $"{string.Join(", ", names.Take(names.Count - 1))} {conjunction} {names[^1]}";
+            : $"{string.Join(", ", names.Take(names.Count - 1))} {GroupSplit.App.Shared.Localization.UiText.Get(conjunction)} {names[^1]}";
 
     /// <summary>Up to two initials from a display name, e.g. "Anabel Benítez" → "AB".</summary>
     public static string Initials(this string? name) =>

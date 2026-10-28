@@ -18,6 +18,6 @@ public class NotZeroAttribute : ValidationAttribute
         if (value is not decimal dec)
             return ValidationResult.Success;
 
-        return dec == 0m ? new ValidationResult(ErrorMessage) : ValidationResult.Success;
+        return dec == 0m ? new ValidationResult(FormatErrorMessage(context.DisplayName)) : ValidationResult.Success;
     }
 }

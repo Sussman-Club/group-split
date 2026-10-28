@@ -92,24 +92,24 @@ public record UpdateTransactionRequest
     /// </remarks>
     public IReadOnlyList<SplitInput>? Splits { get; set; }
 
-    [Required(ErrorMessage = "Name is required.")]
-    [StringLength(TransactionNames.MaxLength, ErrorMessage = "Name must be at most {1} characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequired))]
+    [StringLength(TransactionNames.MaxLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength))]
     public string Name { get; set; } = null!;
 
-    [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionShort))]
     public string? Description { get; set; }
 
     /// <summary>
     /// What it came to. Never zero, as on create; a settlement must also be more than zero,
     /// which is checked once the service knows it is editing one.
     /// </summary>
-    [Required(ErrorMessage = "Amount is required.")]
-    [NotZero(ErrorMessage = "Amount cannot be zero.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
+    [NotZero(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountNotZero))]
+    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     public decimal Amount { get; set; }
 
-    [Required(ErrorMessage = "Date is required.")]
-    [NotDefault(ErrorMessage = "Date is required.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
+    [NotDefault(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
     public DateTimeOffset DateTime { get; set; }
 
     /// <summary>

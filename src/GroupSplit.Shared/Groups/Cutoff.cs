@@ -64,7 +64,7 @@ public record CutoffQuery
 
     /// <summary>The caller's offset from UTC in minutes, which says when that day ends.</summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
-        ErrorMessage = "The offset from UTC must be within 14 hours either way.")]
+        ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
     public int? UtcOffset { get; init; }
 
     public Cutoff? ToCutoff() => Cutoff.Of(Through, UtcOffset);

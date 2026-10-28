@@ -19,6 +19,10 @@ public static class ServiceExtensions
     {
         public IServiceCollection AddSharedServices(ServiceLifetime sessionLifetime = ServiceLifetime.Scoped)
         {
+            services.AddLocalization();
+            services.TryAddScoped<GroupSplit.App.Shared.Localization.ILanguagePersistence, GroupSplit.App.Shared.Localization.BrowserLanguagePersistence>();
+            services.TryAddTransient<MudBlazor.MudLocalizer, GroupSplit.App.Shared.Localization.AppMudLocalizer>();
+            services.TryAddScoped<GroupSplit.App.Shared.Localization.LanguagePreference>();
             services.AddMudTheme();
             services.TryAddSingleton(new AppLinks());
             services.TryAdd<ThemePreference>(sessionLifetime);

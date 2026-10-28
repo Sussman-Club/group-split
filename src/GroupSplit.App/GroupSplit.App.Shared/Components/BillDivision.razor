@@ -25,13 +25,11 @@
 <div class="gs-divide">
     @if (_loading)
     {
-        <MudText Typo="Typo.caption" role="status">Reading the group's split rules…</MudText>
+        <MudText Typo="Typo.caption" role="status">@Loc["Reading the group's split rules…"]</MudText>
     }
     else if (!_ready)
     {
-        <MudAlert Severity="Severity.Warning" Dense="true">
-            Could not load the split rules to divide these lines by.
-            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Load">Try again</MudButton>
+        <MudAlert Severity="Severity.Warning" Dense="true">@Loc["Could not load the split rules to divide these lines by."]<MudButton Variant="Variant.Text" Size="Size.Small" OnClick="Load">@Loc["Try again"]</MudButton>
         </MudAlert>
     }
     else
@@ -51,23 +49,20 @@
             {
                 @* Each sentence on one source line: Razor prints a line break inside one. *@
                 <MudAlert Severity="Severity.Info" Dense="true">
-                    <span>Saving changes the bill's tip from <strong>@Receipt.Tip.ToMoney()</strong> to <strong>@((Receipt.Tip - moved).ToMoney())</strong>, so the bill comes to <strong>@Amount.ToMoney()</strong> and is divided again.</span>
+                    <span>@Loc["Saving changes the bill's tip from {0} to {1}, so the bill comes to {2} and is divided again.", Receipt.Tip.ToMoney(), (Receipt.Tip - moved).ToMoney(), Amount.ToMoney()]</span>
                 </MudAlert>
             }
             else
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">
-                    <span>The bill's tip is <strong>@Receipt.Tip.ToMoney()</strong>, so the amount cannot come down by <strong>@moved.ToMoney()</strong> on its own.</span>
-                    <span>Edit the receipt's items instead.</span>
+                    <span>@Loc["The bill's tip is {0}, so the amount cannot come down by {1} on its own.", Receipt.Tip.ToMoney(), moved.ToMoney()]</span>
+                    <span>@Loc["Edit the receipt's items instead."]</span>
                 </MudAlert>
             }
         }
         else if (Mismatch is { } gap)
         {
-            <MudAlert Severity="Severity.Warning" Dense="true">
-                The bill comes to <strong>@Receipt.Total.ToMoney()</strong> and the expense says
-                <strong>@Amount.ToMoney()</strong>. They have to match before it can be divided
-                this way &mdash; @(gap > 0 ? "the bill is over by " : "the bill is short by ")<strong>@Math.Abs(gap).ToMoney()</strong>.
+            <MudAlert Severity="Severity.Warning" Dense="true">@Loc["The bill comes to {0} and the expense says {1}. They have to match before it can be divided this way. The difference is {2}.", Receipt.Total.ToMoney(), Amount.ToMoney(), Math.Abs(gap).ToMoney()]
             </MudAlert>
         }
 
@@ -77,12 +72,11 @@
             <span>
                 @if (Wanting > 0)
                 {
-                    <strong>@Wanting of @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "line" : "lines")</strong>
-                    <text> still to answer for.</text>
+                    <strong>@Loc["{0} of {1} items need a split rule before this expense can be divided.", Wanting, Receipt.Items.Count]</strong>
                 }
                 else
                 {
-                    <strong>Every line has a rule.</strong>
+                    <strong>@Loc["Every line has a rule."]</strong>
                 }
             </span>
             <span class="gs-divide-progress-total gs-num ms-auto">@Receipt.Total.ToMoney()</span>
@@ -99,10 +93,10 @@
                     <MudTextField T="string" @bind-Value="_filter" @bind-Value:after="StateHasChanged"
                                   Immediate="true" DebounceInterval="150"
                                   Variant="Variant.Outlined" Margin="Margin.Dense"
-                                  Placeholder="Find a line" Clearable="true"
+                                  Placeholder="@Loc["Find a line"]" Clearable="true"
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Rounded.Search"
-                                  aria-label="Find a line on this bill" />
+                                  aria-label="@Loc["Find a line on this bill"]" />
                 }
 
                 @* aria-pressed as a string: Blazor drops an attribute whose value is false,
@@ -115,7 +109,7 @@
                                Size="Size.Small" Class="gs-btn-pill"
                                aria-pressed="@(_onlyWanting ? "true" : "false")"
                                OnClick="@(() => _onlyWanting = !_onlyWanting)">
-                        @Wanting without a rule
+                        @Loc["{0} without a rule", Wanting]
                     </MudButton>
                 }
             </div>
@@ -140,7 +134,7 @@
                        foot: two rates on one bill are two amounts riding two different rules. *@
                     @if (item.TaxAmount != 0)
                     {
-                        <span class="gs-divide-line-note">tax @item.TaxAmount.ToMoney()</span>
+                        <span class="gs-divide-line-note">@Loc["tax {0}", item.TaxAmount.ToMoney()].Value</span>
                     }
 
                     @* No label: the item name above is the label, and MudBlazor's would print
@@ -150,9 +144,9 @@
                        the raw version id it was holding. *@
                     <MudSelect T="Guid?" Value="item.SplitRuleVersionId"
                                Variant="Variant.Outlined" Margin="Margin.Dense"
-                               Placeholder="Choose a split rule"
+                               Placeholder="@Loc["Choose a split rule"]"
                                ToStringFunc="@NameOfRule"
-                               aria-label="@($"How {item.Name} is split")"
+                               aria-label="@(Loc["How {0} is split", item.Name].Value)"
                                ValueChanged="@(value => SetRule(item.Id, value))"
                                Disabled="_busy" Clearable="true">
                         @* The version this line is pinned to, where the rule has moved on
@@ -160,7 +154,7 @@
                            select shows a blank for a line that is in fact answered. *@
                         @if (item.SplitRuleVersionId is { } held && _rules.All(rule => rule.VersionId != held))
                         {
-                            <MudSelectItem T="Guid?" Value="@((Guid?)held)">@item.SplitRuleName (as saved)</MudSelectItem>
+                            <MudSelectItem T="Guid?" Value="@((Guid?)held)">@Loc["{0} (as saved)", item.SplitRuleName].Value</MudSelectItem>
                         }
 
                         @foreach (var rule in _rules)
@@ -174,7 +168,7 @@
                        stand out as the lines somebody pointed elsewhere. *@
                     @if (item.SplitRuleVersionId is { } on && on == CategoryVersionId)
                     {
-                        <span class="gs-divide-line-note">from @(CategoryName ?? "the category")</span>
+                        <span class="gs-divide-line-note">@Loc["from {0}", CategoryName ?? Loc["the category"].Value]</span>
                     }
                 </li>
             }
@@ -182,32 +176,30 @@
 
         @if (Showing.Count == 0)
         {
-            <MudText Typo="Typo.caption" Align="Align.Center">No line on this bill matches.</MudText>
+            <MudText Typo="Typo.caption" Align="Align.Center">@Loc["No line on this bill matches."]</MudText>
         }
 
         <dl class="gs-divide-recap">
-            <div><dt>Items</dt><dd class="gs-num">@Receipt.Subtotal.ToMoney()</dd></div>
+            <div><dt>@Loc["Copy.Sentence.Items"]</dt><dd class="gs-num">@Receipt.Subtotal.ToMoney()</dd></div>
             @if (Receipt.Tax != 0)
             {
-                <div><dt>Tax</dt><dd class="gs-num">@Receipt.Tax.ToMoney()</dd></div>
+                <div><dt>@Loc["Tax"]</dt><dd class="gs-num">@Receipt.Tax.ToMoney()</dd></div>
             }
             @if (Receipt.Tip != 0)
             {
-                <div><dt>Tip</dt><dd class="gs-num">@Receipt.Tip.ToMoney()</dd></div>
+                <div><dt>@Loc["Tip"]</dt><dd class="gs-num">@Receipt.Tip.ToMoney()</dd></div>
             }
-            <div class="is-total"><dt>Total</dt><dd class="gs-num">@Receipt.Total.ToMoney()</dd></div>
+            <div class="is-total"><dt>@Loc["Total"]</dt><dd class="gs-num">@Receipt.Total.ToMoney()</dd></div>
         </dl>
 
         <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                    StartIcon="@Icons.Material.Rounded.Add"
-                   OnClick="CreateRule" Disabled="_busy">
-            New split rule for this group
-        </MudButton>
+                   OnClick="CreateRule" Disabled="_busy">@Loc["New split rule for this group"]</MudButton>
 
         @* One sentence per element. Razor keeps the source's line breaks and indentation, so
            a sentence wrapped across two lines is printed with the wrap inside it. *@
-        <MudText Typo="Typo.caption">A rule divides its line's price, the tax on it, and its share of the tip.</MudText>
-        <MudText Typo="Typo.caption">Save the expense to divide it this way.</MudText>
+        <MudText Typo="Typo.caption">@Loc["A rule divides its line's price, the tax on it, and its share of the tip."]</MudText>
+        <MudText Typo="Typo.caption">@Loc["Save the expense to divide it this way."]</MudText>
     }
 </div>
 
@@ -358,10 +350,10 @@
     /// </summary>
     private string NameOfRule(Guid? versionId) =>
         versionId is not { } held
-            ? "Choose a split rule"
+            ? Loc["Choose a split rule"].Value
             : _rules.FirstOrDefault(rule => rule.VersionId == held)?.Name
               ?? Receipt.Items.FirstOrDefault(item => item.SplitRuleVersionId == held)?.SplitRuleName
-              ?? "A saved version of a rule";
+              ?? Loc["A saved version of a rule"].Value;
 
     /// <summary>
     /// Points one line at a rule, or stops pointing it anywhere.
@@ -412,7 +404,7 @@
     {
         if (!_ready || _busy || GroupId is not { } groupId) return;
 
-        var dialog = await Dialogs.ShowAsync<CreateRuleDialog>("New item split rule",
+        var dialog = await Dialogs.ShowAsync<CreateRuleDialog>(Loc["New item split rule"].Value,
             new DialogParameters<CreateRuleDialog> { { d => d.GroupId, groupId } });
 
         await dialog.Result;
@@ -424,7 +416,7 @@
     /// A count without its trailing zeros: a bill says "2", not "2.000", and says "0.25" when
     /// that is what was weighed.
     /// </summary>
-    private static string Trimmed(decimal quantity) =>
+    private string Trimmed(decimal quantity) =>
         quantity == decimal.Truncate(quantity)
             ? decimal.Truncate(quantity).ToString()
             : quantity.ToString("0.###");

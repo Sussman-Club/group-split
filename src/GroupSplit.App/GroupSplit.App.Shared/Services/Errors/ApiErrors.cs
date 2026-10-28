@@ -73,7 +73,9 @@ public static class ApiErrors
         if (problem is HttpValidationProblemDetails { Errors.Count: > 0 } invalid)
         {
             var fieldErrors = invalid.Errors.ToDictionary(
-                pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+                pair => pair.Key,
+                pair => pair.Value.Select(GroupSplit.Shared.Localization.ValidationMessages.Translate).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
 
             // The first field message is the most useful sentence available: the API wrote
             // it about the exact value that was wrong.

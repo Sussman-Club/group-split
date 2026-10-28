@@ -85,8 +85,8 @@ public class BillDivisionTest : ComponentTest
             Line("Bacalhau", 22, null, null),
             Line("Vinho verde", 18, Guid.NewGuid(), "Everyone evenly")));
 
-        page.WaitForAssertion(() => Assert.Contains("1 of 2 lines", page.Markup));
-        Assert.Contains("still to answer for", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("1 of 2 items need a split rule", page.Markup));
+        Assert.Contains("before this expense can be divided", page.Markup);
     }
 
     /// <summary>
@@ -115,7 +115,7 @@ public class BillDivisionTest : ComponentTest
     {
         var page = Open(Bill(Line("Bacalhau", 22, Guid.NewGuid(), "Everyone evenly")), amount: 30m);
 
-        page.WaitForAssertion(() => Assert.Contains("the bill is short by", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("The difference is", page.Markup));
         Assert.Contains("$8.00", page.Markup);
     }
 
@@ -163,7 +163,7 @@ public class BillDivisionTest : ComponentTest
         var page = Open(Bill(Line("Bacalhau", 22, Guid.NewGuid(), "Everyone evenly")));
 
         page.WaitForAssertion(() => Assert.Contains("Every line has a rule", page.Markup));
-        Assert.DoesNotContain("the bill is short by", page.Markup);
+        Assert.DoesNotContain("The difference is", page.Markup);
         Assert.DoesNotContain("the bill is over by", page.Markup);
     }
 
@@ -366,7 +366,7 @@ public class BillDivisionTest : ComponentTest
     {
         var page = OpenUnder(Bill(Line("Bacalhau", 22, _versionId, "Everyone evenly"), Line("Vinho", 8, null, null)), null);
 
-        page.WaitForAssertion(() => Assert.Contains("1 of 2 lines", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("1 of 2 items need a split rule", page.Markup));
         Assert.Empty(page.FindAll(".gs-divide-line-note"));
         _bills.Verify(b => b.SetRuleAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
     }

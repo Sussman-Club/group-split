@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
@@ -320,7 +321,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             Announce();
             _ = SuggestAsync();
-        }, "your bank inbox");
+        }, UiText.Get("your bank inbox"));
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
         // than the one after it.
         if (!loaded && _pages == page)
@@ -415,7 +416,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
                 Announce();
                 _ = SuggestAsync();
-            }, "your bank inbox");
+            }, UiText.Get("your bank inbox"));
         }
         finally
         {

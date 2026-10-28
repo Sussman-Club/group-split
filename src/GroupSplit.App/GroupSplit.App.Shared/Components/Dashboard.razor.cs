@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 namespace GroupSplit.App.Shared.Components;
 
 public partial class Dashboard
@@ -10,9 +11,9 @@ public partial class Dashboard
     /// </summary>
     private string Greeting => Clock.Now.Hour switch
     {
-        < 5 => "Still up",
-        < 12 => "Good morning",
-        < 18 => "Good afternoon",
-        _ => "Good evening"
+        < 5 => UiText.Get("Still up"),
+        < 12 => UiText.Get("Good morning"),
+        < 18 => UiText.Get("Good afternoon"),
+        _ => UiText.Get("Good evening")
     };
 }

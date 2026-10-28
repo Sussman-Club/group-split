@@ -22,6 +22,7 @@
              library. Do not upgrade without checking the nuspec for that reference. -->
         <PackageReference Include="Microsoft.AspNetCore.JsonPatch.SystemTextJson" Version="10.0.0-preview.7.25380.108" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
+        <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.12" />
         <PackageReference Include="MudBlazor" Version="9.9.0" />
         <PackageReference Include="NSwag.ApiDescription.Client" Version="14.7.1">
             <PrivateAssets>all</PrivateAssets>

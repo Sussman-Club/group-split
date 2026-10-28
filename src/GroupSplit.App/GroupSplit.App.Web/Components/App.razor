@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName">
 
 <head>
     <meta charset="utf-8"/>
@@ -32,4 +32,19 @@
 
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is null) return;
+        // Written before SSR starts the response. The browser and WASM bootstrap use
+        // exactly the culture chosen by request localization, including account overrides.
+        HttpContext.Response.Cookies.Append(
+            Microsoft.AspNetCore.Localization.CookieRequestCultureProvider.DefaultCookieName,
+            Microsoft.AspNetCore.Localization.CookieRequestCultureProvider.MakeCookieValue(
+                new Microsoft.AspNetCore.Localization.RequestCulture(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    System.Globalization.CultureInfo.CurrentUICulture)),
+            new CookieOptions { Path = "/", SameSite = SameSiteMode.Lax,
+                Secure = HttpContext.Request.IsHttps, MaxAge = TimeSpan.FromDays(365) });
+    }
 }

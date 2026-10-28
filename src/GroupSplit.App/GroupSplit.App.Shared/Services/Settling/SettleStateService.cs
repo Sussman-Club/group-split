@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
@@ -152,21 +153,21 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
             // confirmation is where that promise is either kept or left unverifiable.
             var where = recorded.Groups.Count switch
             {
-                > 1 => $" across {string.Join(" and ", recorded.Groups.Select(part => part.GroupName))}",
-                1 => $" in {recorded.Groups[0].GroupName}",
+                > 1 => UiText.Format($" across {string.Join(" and ", recorded.Groups.Select(part => part.GroupName))}"),
+                1 => UiText.Format($" in {recorded.Groups[0].GroupName}"),
                 _ => ""
             };
 
             _snackbar.Add(
                 request.Direction is SettlementDirection.YouPaidThem
-                    ? $"Recorded {recorded.Amount.ToMoney()} paid to {personName}{where}."
-                    : $"Recorded {recorded.Amount.ToMoney()} from {personName}{where}.",
+                    ? UiText.Format($"Recorded {recorded.Amount.ToMoney()} paid to {personName}{where}.")
+                    : UiText.Format($"Recorded {recorded.Amount.ToMoney()} from {personName}{where}."),
                 Severity.Success);
 
             // Balances everywhere have moved, so this goes out to every state that holds
             // one -- including this one, through the handler wired in the constructor.
             await _changes.NotifyTransactionsChangedAsync();
-        }, $"Could not record the payment with {personName}.");
+        }, UiText.Format($"Could not record the payment with {personName}."));
 
         return done ? recorded : null;
     }
@@ -184,7 +185,7 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
 
             var loaded = await _guard.RunAsync(async () =>
                     plan = await _users.GetSettlementPlanAsync(cancellationToken: cancellationToken),
-                "your settlement plan");
+                UiText.Get("your settlement plan"));
 
             if (loaded && version == _planVersion)
                 Plan = plan;
@@ -206,7 +207,7 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
         var loaded = await _guard.RunAsync(async () =>
                 history = await _users.GetSettlementsAsync(page: 1, pageSize: shown,
                     cancellationToken: cancellationToken),
-            "your settlements");
+            UiText.Get("your settlements"));
 
         if (loaded && version == _historyVersion)
             History = history;

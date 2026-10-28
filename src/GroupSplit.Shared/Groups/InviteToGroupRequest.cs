@@ -25,8 +25,8 @@ public record InviteToGroupRequest
     /// 500 rather than as a refusal naming the field.
     /// </summary>
     [Required]
-    [MinLength(1, ErrorMessage = "Name at least one person to invite.")]
-    [MaxItemLength(NameLength, ErrorMessage = "A name can be at most 64 characters.")]
+    [MinLength(1, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.InviteRequired))]
+    [MaxItemLength(NameLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.GuestNameLength))]
     public List<string> Names { get; set; } = [];
 
     /// <summary>

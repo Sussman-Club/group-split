@@ -17,8 +17,8 @@ public record AddGuestsRequest
     /// name is a refusal naming the field rather than a 500.
     /// </summary>
     [Required]
-    [MinLength(1, ErrorMessage = "Name at least one person to add.")]
-    [MaxItemLength(InviteToGroupRequest.NameLength, ErrorMessage = "A name can be at most 64 characters.")]
+    [MinLength(1, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.GuestRequired))]
+    [MaxItemLength(InviteToGroupRequest.NameLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.GuestNameLength))]
     public List<string> Names { get; set; } = [];
 
     /// <summary>

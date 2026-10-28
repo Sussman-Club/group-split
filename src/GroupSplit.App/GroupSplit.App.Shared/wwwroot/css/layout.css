@@ -474,6 +474,85 @@ html:not([data-gs-ready]) .gs-group-card {
 
 /* ------------------------------------------------------ theme switcher ---- */
 
+.gs-language-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.gs-language-copy {
+    min-width: 0;
+}
+
+.gs-language-picker h3 {
+    margin: 0;
+}
+
+.gs-language-picker p {
+    margin: 4px 0 0;
+}
+
+.gs-language-select {
+    position: relative;
+    width: min(100%, 320px);
+    flex: 0 1 320px;
+}
+
+@media (max-width: 600px) {
+    .gs-language-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .gs-language-select {
+        width: 100%;
+        flex: none;
+    }
+}
+
+.gs-language-select select {
+    appearance: none;
+    width: 100%;
+    min-height: 48px;
+    padding: 11px 48px 11px 16px;
+    border: 1px solid var(--gs-line-strong);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+    color: var(--gs-ink);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+.gs-language-select select:hover:not(:disabled) {
+    border-color: var(--gs-teal);
+}
+
+.gs-language-select select:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 2px;
+}
+
+.gs-language-select select:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.gs-language-select .mud-icon-root {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gs-muted);
+    pointer-events: none;
+}
+
+.gs-language-picker .mud-alert {
+    margin-top: 12px;
+}
+
 .gs-seg {
     position: relative;
     display: inline-flex;

@@ -11,7 +11,7 @@
                 <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Size="Size.Small" />
             </span>
             <div class="gs-receipts-heading-copy">
-                <h3 id="@_headingId">Receipts</h3>
+                <h3 id="@_headingId">@Loc["Receipts"]</h3>
                 <span class="gs-receipts-summary">@Summary</span>
             </div>
         </div>
@@ -22,9 +22,7 @@
                 <MudButton Variant="Variant.Text"
                            Size="Size.Small"
                            Class="gs-btn-quiet"
-                           OnClick="OpenWorkspaceAsync">
-                    Open receipts
-                </MudButton>
+                           OnClick="OpenWorkspaceAsync">@Loc["Open receipts"]</MudButton>
             }
             else
             {
@@ -32,9 +30,7 @@
                            Size="Size.Small"
                            Class="gs-btn-quiet"
                            StartIcon="@Icons.Material.Rounded.Add"
-                           OnClick="OpenUploader">
-                    Add receipt
-                </MudButton>
+                           OnClick="OpenUploader">@Loc["Add receipt"]</MudButton>
             }
         </div>
     </div>
@@ -53,13 +49,13 @@
                     </span>
 
                     <div class="gs-receipt-file-copy">
-                        <span class="gs-receipt-file-kind">Original receipt</span>
+                        <span class="gs-receipt-file-kind">@Loc["Original receipt"]</span>
                         <strong class="gs-receipt-file-name">@attachment.FileName</strong>
                         <span class="gs-receipt-file-meta">@AttachmentType(attachment) · @FormatFileSize(attachment.Length)</span>
                     </div>
 
                     <div class="gs-receipt-file-actions">
-                        <DisclosureToggle Label="Original preview" Expanded="@(_previewingAttachmentId == attachment.Id)"
+                        <DisclosureToggle Label="@Loc["Original preview"]" Expanded="@(_previewingAttachmentId == attachment.Id)"
                                           Controls="@($"receipt-preview-{attachment.Id}")"
                                           OnClick="@(() => TogglePreview(attachment.Id))" />
 
@@ -69,15 +65,13 @@
                                    Disabled="@(TranscribingAttachmentId is not null)"
                                    OnClick="@(() => TranscribeRequested.InvokeAsync(attachment))">
                             @(TranscribingAttachmentId == attachment.Id
-                                ? "Reading…"
-                                : HasItemizedReceipt ? "Read again" : "Read receipt")
+                                ? Loc["Reading…"].Value
+                                : HasItemizedReceipt ? Loc["Read again"].Value : Loc["Read receipt"].Value)
                         </MudButton>
 
                         <a class="gs-receipt-action gs-btn-quiet"
                            href="@DownloadUrl(attachment)"
-                           download="@attachment.FileName">
-                            Download
-                        </a>
+                           download="@attachment.FileName">@Loc["Download"]</a>
 
                         @if (DeleteRequested.HasDelegate)
                         {
@@ -117,14 +111,14 @@
                     </span>
 
                     <div class="gs-receipt-file-copy">
-                        <span class="gs-receipt-file-kind">Itemized receipt</span>
+                        <span class="gs-receipt-file-kind">@Loc["Itemized receipt"]</span>
                         <strong class="gs-receipt-file-name">
-                            @bill.Items.Count @(bill.Items.Count == 1 ? "item" : "items") · @bill.Total.ToMoney()
+                            @bill.Items.Count @(bill.Items.Count == 1 ? Loc["item"].Value : Loc["items"].Value) · @bill.Total.ToMoney()
                         </strong>
                         <span class="gs-receipt-file-meta">
                             @(bill.DividesItsExpense && bill.MissingRuleItemCount > 0
-                                ? $"{bill.MissingRuleItemCount} {(bill.MissingRuleItemCount == 1 ? "line" : "lines")} still need a split rule"
-                                : "Ready to use for splitting")
+                                ? Loc["{0} {1} still need a split rule", bill.MissingRuleItemCount, (bill.MissingRuleItemCount == 1 ? Loc["line"].Value : Loc["lines"].Value)].Value
+                                : Loc["Ready to use for splitting"].Value)
                             @if (!string.IsNullOrWhiteSpace(bill.MerchantName) || bill.PurchaseDate is not null)
                             {
                                 <text> · @string.Join(" · ", new[] { bill.MerchantName, bill.PurchaseDate?.ToString("d") }.Where(value => !string.IsNullOrWhiteSpace(value)))</text>
@@ -134,7 +128,7 @@
 
                     @if (bill.DividesItsExpense && bill.MissingRuleItemCount > 0)
                     {
-                        <span class="gs-tag clay gs-receipt-rule-warning">@bill.MissingRuleItemCount without a rule</span>
+                        <span class="gs-tag clay gs-receipt-rule-warning">@Loc["{0} without a rule", bill.MissingRuleItemCount].Value</span>
                     }
 
                     @if (bill.CanEdit && EditRequested.HasDelegate)
@@ -159,29 +153,25 @@
             {
                 <div class="gs-receipts-uploader">
                     <ReceiptFilePicker FileChanged="UploadRequested"
-                                       Title="Add an original receipt"
-                                       Description="Keep the photo or PDF with this expense. Reading it is optional."
+                                       Title="@Loc["Add an original receipt"]"
+                                       Description="@Loc["Keep the photo or PDF with this expense. Reading it is optional."]"
                                        IsBusy="@IsUploading"
-                                       BusyText="Attaching receipt…" />
+                                       BusyText="@Loc["Attaching receipt…"]" />
                     <MudButton Variant="Variant.Text"
                                Size="Size.Small"
                                Class="gs-btn-quiet gs-receipts-cancel"
-                               OnClick="CloseUploader">
-                        Cancel
-                    </MudButton>
+                               OnClick="CloseUploader">@Loc["Cancel"]</MudButton>
                 </div>
             }
             else
             {
                 <div class="gs-receipts-add">
-                    <span>@(Attachments.Count > 0 ? "Add another original file" : "Keep the original source with this expense")</span>
+                    <span>@(Attachments.Count > 0 ? Loc["Add another original file"].Value : Loc["Keep the original source with this expense"].Value)</span>
                     <MudButton Variant="Variant.Text"
                                Size="Size.Small"
                                Class="gs-btn-quiet"
                                StartIcon="@Icons.Material.Rounded.Add"
-                               OnClick="OpenUploader">
-                        Add receipt
-                    </MudButton>
+                               OnClick="OpenUploader">@Loc["Add receipt"]</MudButton>
                 </div>
             }
         </div>
@@ -235,10 +225,10 @@
 
     private string Summary => (Attachments.Count, HasItemizedReceipt) switch
     {
-        ( > 0, true) => $"{Attachments.Count} original {(Attachments.Count == 1 ? "file" : "files")} · itemized ready",
-        ( > 0, false) => $"{Attachments.Count} original {(Attachments.Count == 1 ? "file" : "files")} · not read yet",
-        (0, true) => "Itemized receipt ready",
-        _ => "No receipt added yet"
+        ( > 0, true) => Loc["{0} original {1} · itemized ready", Attachments.Count, (Attachments.Count == 1 ? Loc["file"].Value : Loc["files"].Value)].Value,
+        ( > 0, false) => Loc["{0} original {1} · not read yet", Attachments.Count, (Attachments.Count == 1 ? Loc["file"].Value : Loc["files"].Value)].Value,
+        (0, true) => Loc["Itemized receipt ready"].Value,
+        _ => Loc["No receipt added yet"].Value
     };
 
     protected override void OnParametersSet()
@@ -269,7 +259,7 @@
     {
         if (_workspaceOpen) return;
         _workspaceOpen = true;
-        var dialog = await Dialogs.ShowAsync<ReceiptWorkspaceDialog>("Receipts",
+        var dialog = await Dialogs.ShowAsync<ReceiptWorkspaceDialog>(Loc["Receipts"].Value,
             new DialogParameters<ReceiptWorkspaceDialog>
             {
                 { x => x.Content, ReceiptContent },
@@ -311,13 +301,13 @@
     private static bool IsPdf(ReceiptAttachmentResponse attachment) =>
         string.Equals(attachment.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase);
 
-    private static string AttachmentType(ReceiptAttachmentResponse attachment) =>
-        IsPdf(attachment) ? "PDF document" : "Original photo";
+    private string AttachmentType(ReceiptAttachmentResponse attachment) =>
+        IsPdf(attachment) ? Loc["PDF document"].Value : Loc["Original photo"].Value;
 
-    private static string FormatFileSize(long length) => length < 1024 * 1024
-        ? $"{Math.Max(1, length / 1024)} KB"
-        : $"{length / 1024d / 1024d:0.0} MB";
+    private string FormatFileSize(long length) => length < 1024 * 1024
+        ? Loc["{0} KB", Math.Max(1, length / 1024)].Value
+        : Loc["{0:0.0} MB", length / 1024d / 1024d].Value;
 
-    private static string AttachmentIcon(ReceiptAttachmentResponse attachment) =>
+    private string AttachmentIcon(ReceiptAttachmentResponse attachment) =>
         IsPdf(attachment) ? Icons.Material.Rounded.PictureAsPdf : Icons.Material.Rounded.Image;
 }

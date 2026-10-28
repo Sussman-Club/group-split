@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
@@ -114,7 +115,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         {
             await ReadPageAsync(query, cancellationToken);
             Announce();
-        }, "your expenses");
+        }, UiText.Get("your expenses"));
 
         // A failure is not an answer, so the same question has to be askable again --
         // otherwise the retry would be taken for the one already in flight.
@@ -133,7 +134,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
             await ReadPageAsync(Query);
             await ReadSummariesAsync();
             Announce();
-        }, "your expenses");
+        }, UiText.Get("your expenses"));
 
     // Every read below assigns a new object rather than editing the one held: a component
     // handed the previous page, the data grid among them, only looks again when the

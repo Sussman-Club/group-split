@@ -13,14 +13,14 @@
             <MudTextField
                 @bind-Value="model.Name"
                 For="@(() => model.Name)"
-                Label="Name"
+                Label="@Loc["Name"]"
                 Variant="Variant.Outlined"
                 Immediate="true"
             />
             <MudTextField @bind-Value="model.Description"
                           For="@(() => model.Description)"
-                          Label="Description"
-                          HelperText="What this group is for."
+                          Label="@Loc["Description"]"
+                          HelperText="@Loc["What this group is for."]"
                           Variant="Variant.Outlined"
                           Lines="2"
                           MaxLength="256"
@@ -29,10 +29,10 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
-            Submit
+            @Loc["Submit"]
         </MudButton>
     </DialogActions>
 </MudDialog>

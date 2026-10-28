@@ -382,6 +382,7 @@ public static class AuthenticationExtensions
 
     private static Task OnRedirectToIdentityProvider(RedirectContext context)
     {
+        context.ProtocolMessage.UiLocales = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         // The client-side app cannot follow a redirect to Keycloak.
         if (context.Request.Path.StartsWithSegments("/api"))
         {

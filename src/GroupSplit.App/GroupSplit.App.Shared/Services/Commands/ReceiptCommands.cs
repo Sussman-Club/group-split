@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.Shared;
 using GroupSplit.App.Shared.Services.Errors;
 using Microsoft.AspNetCore.Components.Forms;
@@ -21,8 +22,8 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         if (file.Size is <= 0 or > MaximumLength)
         {
             await errors.ShowAsync(new ApiError(ApiErrorKind.Validation,
-                "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB."),
-                "Could not read receipt file.");
+                UiText.Get("Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.")),
+                UiText.Get("Could not read receipt file."));
             return null;
         }
 
@@ -31,7 +32,7 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         var succeeded = await errors.TryAsync(async () =>
                 draft = await receipts.TranscribeReceiptDraftAsync(
                     new FileParameter(stream, file.Name, file.ContentType), ct),
-            "Could not read receipt file.");
+            UiText.Get("Could not read receipt file."));
 
         return succeeded ? draft : null;
     }
@@ -44,7 +45,7 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         catch (ApiException api) when (api.StatusCode == 404) { return null; }
         catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
         {
-            await errors.ShowAsync(ApiErrors.Read(exception), "Could not load the receipt.");
+            await errors.ShowAsync(ApiErrors.Read(exception), UiText.Get("Could not load the receipt."));
             return null;
         }
     }
@@ -55,7 +56,7 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         {
             result = await receipts.SaveReceiptAsync(transactionId, request, ct);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not save the receipt.");
+        }, UiText.Get("Could not save the receipt."));
         return result;
     }
 
@@ -67,26 +68,26 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
         {
             result = await receipts.PatchReceiptItemAsync(transactionId, itemId, patch, ct);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not save the receipt item.");
+        }, UiText.Get("Could not save the receipt item."));
         return result;
     }
     public async Task<ReceiptResponse?> SetRuleAsync(Guid transactionId, Guid itemId, Guid? versionId)
     {
         ReceiptResponse? result = null;
         await errors.TryAsync(async () => result = await receipts.SetReceiptItemRuleAsync(transactionId, itemId,
-            new SetReceiptItemRuleRequest { SplitRuleVersionId = versionId }), "Could not change the item's rule.");
+            new SetReceiptItemRuleRequest { SplitRuleVersionId = versionId }), UiText.Get("Could not change the item's rule."));
         return result;
     }
     public async Task<ReceiptDivisionResponse?> PreviewAsync(Guid transactionId)
     {
         ReceiptDivisionResponse? result = null;
         await errors.TryAsync(async () => result = await receipts.PreviewReceiptDivisionAsync(transactionId),
-            "Could not preview the item split.");
+            UiText.Get("Could not preview the item split."));
         return result;
     }
     public Task<bool> DivideAsync(Guid transactionId) => errors.TryAsync(async () =>
     {
         await receipts.DivideByReceiptAsync(transactionId);
         await changes.NotifyTransactionsChangedAsync();
-    }, "Could not divide the expense.");
+    }, UiText.Get("Could not divide the expense."));
 }

@@ -1,0 +1,22 @@
+@using System.Globalization
+@using GroupSplit.Shared
+@inject ILanguagePersistence Persistence
+@inject IJSRuntime JS
+
+@code {
+    [Parameter] public string? Language { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var current = AppLanguages.Resolve(CultureInfo.CurrentUICulture.Name);
+        if (AppLanguages.IsSupported(Language) && Language != current)
+        {
+            // A fresh account preference arrived after startup (for example, on native).
+            // Restart in that culture rather than changing the renderer's ambient context.
+            await Persistence.ApplyAsync(Language!);
+            return;
+        }
+        await JS.InvokeVoidAsync("gs.language.apply", current);
+    }
+}

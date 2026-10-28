@@ -2,7 +2,7 @@
 <MudDialog Class="gs-sheet gs-receipt-workspace">
     <TitleContent><h2 class="gs-dialog-title">@MudDialog.Title</h2></TitleContent>
     <DialogContent>@Content</DialogContent>
-    <DialogActions><MudButton OnClick="Close">Close</MudButton></DialogActions>
+    <DialogActions><MudButton OnClick="Close">@Loc["Close"]</MudButton></DialogActions>
 </MudDialog>
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;

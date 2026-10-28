@@ -56,9 +56,7 @@
                that -- the amount -- and the only difference is that nobody may type it. *@
             @if (Row.IsCredit)
             {
-                <MudAlert Severity="Severity.Info" Dense="true">
-                    Money received. Its shares reduce spending and adjust the group balances for the person who received it.
-                </MudAlert>
+                <MudAlert Severity="Severity.Info" Dense="true">@Loc["Money received. Its shares reduce spending and adjust the group balances for the person who received it."]</MudAlert>
             }
 
             <div class="gs-card gs-card-pad" style="padding: 14px 16px">
@@ -72,16 +70,14 @@
             </div>
 
             <div class="gs-card gs-card-pad" style="padding: 14px 16px">
-                <div class="gs-eyebrow">Have a receipt?</div>
-                <div class="gs-muted" style="font-size: .8125rem; margin-bottom: 12px">
-                    Attach the original now. Reading it is optional and can happen after it is safely kept with this payment.
-                </div>
+                <div class="gs-eyebrow">@Loc["Have a receipt?"]</div>
+                <div class="gs-muted" style="font-size: .8125rem; margin-bottom: 12px">@Loc["Attach the original now. Reading it is optional and can happen after it is safely kept with this payment."]</div>
                 <ReceiptFilePicker FileChanged="AttachReceiptAsync"
                                    ReadRequested="ReadReceiptAsync"
                                    FileName="@_receiptAttachment?.FileName"
                                    IsAttached="@(_receiptAttachment is not null)"
                                    IsBusy="@(_attachingReceipt || _readingReceipt)"
-                                   BusyText="@(_readingReceipt ? "Reading receipt…" : "Attaching receipt…")"
+                                   BusyText="@(_readingReceipt ? Loc["Reading receipt…"].Value : Loc["Attaching receipt…"].Value)"
                                    HasTranscript="@(_receipt is not null)"
                                    TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
                                    Error="@_receiptError" />
@@ -94,10 +90,8 @@
             @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
             {
                 <div class="gs-card gs-card-pad" style="padding: 14px 12px">
-                    <div class="gs-eyebrow">Closest matches</div>
-                    <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 6px 0 10px">
-                        Attaching the card row to an expense you already have keeps the money from being recorded twice.
-                    </MudText>
+                    <div class="gs-eyebrow">@Loc["Closest matches"]</div>
+                    <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 6px 0 10px">@Loc["Attaching the card row to an expense you already have keeps the money from being recorded twice."]</MudText>
 
                     <div class="gs-list">
                         @if (_searchedExpense is { } searchedExpense)
@@ -111,8 +105,8 @@
                                 <Avatar Name="@searchedExpense.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@searchedExpense.Name</span>
-                                    <span class="meta">@(searchedExpense.GroupName ?? "Personal") · @Clock.Day(searchedExpense.DateTime).ToString("d") · @searchedExpense.PaidByUserName paid</span>
-                                    <span class="gs-tag neutral">@(CanAttach(searchedExpense) ? "Selected from search" : WhyNotAttachable(searchedExpense))</span>
+                                    <span class="meta">@(searchedExpense.GroupName ?? Loc["Personal"].Value) · @Clock.Day(searchedExpense.DateTime).ToString("d") · @Loc["{0} paid", searchedExpense.PaidByUserName ?? ""]</span>
+                                    <span class="gs-tag neutral">@(CanAttach(searchedExpense) ? Loc["Selected from search"].Value : WhyNotAttachable(searchedExpense))</span>
                                 </span>
                                 <Money Value="@searchedExpense.Amount" Currency="@searchedExpense.Currency" />
                                 <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Primary" />
@@ -129,7 +123,7 @@
                                 <Avatar Name="@candidate.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@candidate.Name</span>
-                                    <span class="meta">@candidate.Where · @Clock.Day(candidate.DateTime).ToString("d") · @candidate.PaidByUserName paid</span>
+                                    <span class="meta">@candidate.Where · @Clock.Day(candidate.DateTime).ToString("d") · @Loc["{0} paid", candidate.PaidByUserName ?? ""]</span>
                                     <span class="gs-tag neutral">@MatchHint(candidate)</span>
                                 </span>
                                 <Money Value="@candidate.Amount" Currency="@candidate.Currency" />
@@ -141,13 +135,9 @@
 
                     <div class="gs-inline" style="border-top: 1px solid var(--gs-line); margin-top: 12px; padding-top: 12px; gap: 6px">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">
-                            Find another expense
-                        </MudButton>
+                                   StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">@Loc["Find another expense"]</MudButton>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Add" Disabled="@ReceiptBusy" OnClick="UseNewExpense">
-                            None of these — it is new
-                        </MudButton>
+                                   StartIcon="@Icons.Material.Rounded.Add" Disabled="@ReceiptBusy" OnClick="UseNewExpense">@Loc["None of these — it is new"]</MudButton>
                     </div>
                 </div>
             }
@@ -157,11 +147,9 @@
             @if (!HasMatches && !_newExpenseChosen)
             {
                 <div class="gs-inline" style="justify-content: space-between; align-items: center">
-                    <span class="gs-muted">Already recorded this expense?</span>
+                    <span class="gs-muted">@Loc["Already recorded this expense?"]</span>
                     <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                               StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">
-                        Search existing
-                    </MudButton>
+                               StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">@Loc["Search existing"]</MudButton>
                 </div>
             }
 
@@ -169,14 +157,14 @@
                which is what the fields are called in the request rather than what they are
                asking for, and the same two boxes on the other screen ask better. *@
             <MudTextField @bind-Value="_name"
-                          Label="What was it?"
+                          Label="@Loc["What was it?"]"
                           Variant="Variant.Outlined"
                           Immediate="true"/>
 
             <MudTextField @bind-Value="_description"
-                          Label="Note"
-                          Placeholder="Anything worth remembering about it"
-                          HelperText="Optional"
+                          Label="@Loc["Note"]"
+                          Placeholder="@Loc["Anything worth remembering about it"]"
+                          HelperText="@Loc["Optional"]"
                           Variant="Variant.Outlined"
                           Lines="2"
                           Immediate="true"/>
@@ -222,9 +210,7 @@
             }
             else
             {
-                <MudAlert Severity="Severity.Info" Dense="true">
-                    A personal expense is not shared with anybody, so there is nothing to divide.
-                </MudAlert>
+                <MudAlert Severity="Severity.Info" Dense="true">@Loc["A personal expense is not shared with anybody, so there is nothing to divide."]</MudAlert>
             }
             }
         </div>
@@ -232,19 +218,19 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Disabled="@ReceiptBusy" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@ReceiptBusy" OnClick="Cancel">@Loc["Cancel"]</MudButton>
 
         @if (SelectedExpenseId is { } transactionId && !_newExpenseChosen)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!SelectedExpenseCanAttach || ReceiptBusy)" OnClick="AttachSelected">Attach to @SelectedExpenseName</MudButton>
+                       Disabled="@(!SelectedExpenseCanAttach || ReceiptBusy)" OnClick="AttachSelected">@Loc["Attach to {0}", SelectedExpenseName].Value</MudButton>
         }
         else
         {
             @* Gated on having answered, not on the answer: null is "Personal", which is a
                destination like any other, so it cannot also stand for "not yet said". *@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">@(Row.IsCredit ? "Add credit" : "Add expense")</MudButton>
+                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">@(Row.IsCredit ? Loc["Add credit"].Value : Loc["Add expense"].Value)</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -342,11 +328,11 @@
     /// What the division is waiting on, where it is waiting on the person rather than the
     /// API. Nothing can be divided until there is a group to divide it among.
     /// </summary>
-    private string? _awaiting = "Pick a group to see how it divides.";
+    private string? _awaiting;
 
     /// <summary>Where the snackbar says it went.</summary>
     private string Destination =>
-        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? "your personal expenses";
+        _groups.FirstOrDefault(group => group.Id == _groupId)?.Name ?? Loc["your personal expenses"].Value;
 
     /// <summary>
     /// The ask in flight, so a later one wins.
@@ -382,7 +368,7 @@
     /// <summary>What the group chip says, including before anything has been said.</summary>
     private string GroupName =>
         _groups.FirstOrDefault(group => group.Id == _groupId)?.Name
-        ?? (_chosen ? "Personal" : "Pick a group");
+        ?? (_chosen ? Loc["Personal"].Value : Loc["Pick a group"].Value);
 
     private async Task OnGroupPickedAsync(Guid? id)
     {
@@ -404,17 +390,18 @@
     }
 
     private string CategoryHint => !_chosen
-        ? "Pick a group first."
+        ? Loc["Pick a group first."].Value
         : _suggestion is { } suggestion && _categoryId == suggestion.CategoryId && SuggestionFits(suggestion)
-            ? "Suggested for this payment. Change it if it is not right."
+            ? Loc["Suggested for this payment. Change it if it is not right."].Value
         : Row.CategoryLabel is { Length: > 0 } label
-            ? $"Your bank called this \"{label}\"."
+            ? Loc["Your bank called this \"{0}\".", label].Value
             : IsShared
-                ? "A category with a split rule divides the expense for you."
-                : "What it was for, in your own categories.";
+                ? Loc["A category with a split rule divides the expense for you."].Value
+                : Loc["What it was for, in your own categories."].Value;
 
     protected override async Task OnInitializedAsync()
     {
+        _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
         _newExpenseChosen = !HasMatches;
         if (Row.PossibleDuplicates.FirstOrDefault() is { } first)
@@ -423,7 +410,7 @@
         var loaded = await Errors.TryAsync(async () =>
         {
             _groups = [.. await GroupsClient.GetGroupsAsync()];
-        }, "Could not load your groups.");
+        }, Loc["Could not load your groups."].Value);
 
         if (!loaded)
         {
@@ -531,7 +518,7 @@
 
                 await Errors.TryAsync(
                     async () => own = [.. await CategoriesClient.GetCategoriesAsync(personal.Id)],
-                    "Could not load your categories.");
+                    Loc["Could not load your categories."].Value);
 
                 if (load != _groupLoad)
                     return;
@@ -561,7 +548,7 @@
 
             categories = [.. await categoriesRead];
             members = [.. await membersRead];
-        }, "Could not load the group.");
+        }, Loc["Could not load the group."].Value);
 
         var listed = await rules;
 
@@ -572,6 +559,12 @@
 
         _categories = categories;
         _members = members;
+        var names = _members.ToDictionary(member => member.Id, member => member.FullName);
+        _categories = _categories.Select(category => category with
+        {
+            DefaultSplitRuleName = listed?.FirstOrDefault(rule => rule.Id == category.DefaultSplitRuleId)?.DisplayName(names)
+                ?? category.DefaultSplitRuleName
+        }).ToList();
         _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
 
@@ -606,7 +599,7 @@
     {
         // Only while nothing has been said. Personal has an answer -- there is nobody to
         // divide it among -- and the panel says so in its own words instead.
-        _awaiting = _chosen ? null : "Pick a group to see how it divides.";
+        _awaiting = _chosen ? null : Loc["Pick a group to see how it divides."].Value;
 
         if (!_chosen || !IsShared)
         {
@@ -641,7 +634,7 @@
 
         _preview = preview;
         _previewError = preview is null
-            ? "No division to show yet."
+            ? Loc["No division to show yet."].Value
             : null;
 
         StateHasChanged();
@@ -689,17 +682,17 @@
     private string SelectedExpenseName =>
         Row.PossibleDuplicates.FirstOrDefault(match => match.TransactionId == _selectedExpenseId)?.Name
         ?? _searchedExpense?.Name
-        ?? "this expense";
+        ?? Loc["this expense"].Value;
 
     private string SelectedExpenseWhere =>
         Row.PossibleDuplicates.FirstOrDefault(match => match.TransactionId == _selectedExpenseId)?.Where
         ?? _searchedExpense?.GroupName
-        ?? "your personal expenses";
+        ?? Loc["your personal expenses"].Value;
 
-    private static string MatchHint(ExpenseMatchResponse match) =>
+    private string MatchHint(ExpenseMatchResponse match) =>
         match.IsConfident
-            ? "same day, same amount"
-            : $"{match.DaysApart} day{(match.DaysApart == 1 ? "" : "s")} apart · {match.AmountDifference:0.00} difference";
+            ? Loc["same day, same amount"].Value
+            : Loc["{0} day{1} apart · {2:0.00} difference", match.DaysApart, (match.DaysApart == 1 ? "" : "s"), match.AmountDifference].Value;
 
     private void Cancel()
     {
@@ -732,12 +725,12 @@
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { dialog => dialog.ContentText,
-                "None of the suggested expenses is this payment. Continue by recording a new expense?" },
-            { dialog => dialog.ButtonText, "Record new expense" }
+                Loc["None of the suggested expenses is this payment. Continue by recording a new expense?"].Value },
+            { dialog => dialog.ButtonText, Loc["Record new expense"].Value }
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
         var reference = await DialogService.ShowAsync<ConfirmationDialog>(
-            "Record a new expense", parameters, options);
+            Loc["Record a new expense"].Value, parameters, options);
         var result = await reference.Result;
         if (result is null || result.Canceled)
             return;
@@ -755,7 +748,7 @@
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         var reference = await DialogService.ShowAsync<FindExpenseDialog>(
-            "Find another expense", parameters, options);
+            Loc["Find another expense"].Value, parameters, options);
         var expense = await reference.GetReturnValueAsync<TransactionResponse>();
 
         if (expense is null)
@@ -790,7 +783,7 @@
             var attachment = await ReceiptAttachments.UploadForBankAsync(Row.Id, args.File);
             if (attachment is null)
             {
-                _receiptError = "The receipt could not be saved for this payment.";
+                _receiptError = Loc["The receipt could not be saved for this payment."].Value;
                 return;
             }
 
@@ -815,11 +808,11 @@
             var transcription = await ReceiptAttachments.TranscribeForBankAsync(Row.Id, attachment.Id);
             if (transcription is null)
             {
-                _receiptError = "We couldn’t read that receipt. Try again, or file the payment without scanning.";
+                _receiptError = Loc["We couldn’t read that receipt. Try again, or file the payment without scanning."].Value;
                 return;
             }
 
-            var reference = await DialogService.ShowAsync<ReceiptDraftDialog>("Check receipt",
+            var reference = await DialogService.ShowAsync<ReceiptDraftDialog>(Loc["Check receipt"].Value,
                 new DialogParameters<ReceiptDraftDialog>
                 {
                     { dialog => dialog.ExpenseAmount, Row.Amount },
@@ -876,6 +869,6 @@
         !expense.HasBankTransaction
         && string.Equals(expense.Currency, Row.Currency, StringComparison.OrdinalIgnoreCase);
 
-    private static string WhyNotAttachable(TransactionResponse expense) =>
-        expense.HasBankTransaction ? "Already linked to a bank transaction" : "Different currency";
+    private string WhyNotAttachable(TransactionResponse expense) =>
+        expense.HasBankTransaction ? Loc["Already linked to a bank transaction"].Value : Loc["Different currency"].Value;
 }

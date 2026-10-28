@@ -16,10 +16,8 @@
                  Color="Color.Primary"
                  Dense="true"
                  Disabled="Disabled"
-                 Label="Keep me signed in" />
-    <p class="gs-muted" style="margin: 0 0 0 32px; font-size: .75rem">
-        Stay signed in for up to @Days days. Uncheck for a temporary session.
-    </p>
+                 Label="@Loc["Keep me signed in"]" />
+    <p class="gs-muted" style="margin: 0 0 0 32px; font-size: .75rem">@Loc["Stay signed in for up to {0} days. Uncheck for a temporary session.", Days].Value</p>
 </div>
 
 @code {

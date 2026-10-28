@@ -21,7 +21,7 @@
     still means this month tomorrow.
 *@
 
-<div class="gs-inline gs-range" role="group" aria-label="Filter by date">
+<div class="gs-inline gs-range" role="group" aria-label="@Loc["Filter by date"]">
     <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
              Dense="true" PopoverClass="gs-menu">
         @* The context, and the click that uses it, are the whole contract of a custom
@@ -31,7 +31,7 @@
             <button type="button" class="gs-chip gs-chip-menu @(Value.IsAllTime ? "" : "active")"
                     aria-haspopup="listbox"
                     @onclick="@(args => menu.ToggleAsync(args))"
-                    aria-label="@($"Date range: {Value.Label}")">
+                    aria-label="@(Loc["Date range: {0}", Value.Label].Value)">
                 <MudIcon Icon="@Icons.Material.Rounded.DateRange" Size="Size.Small" />
                 <span class="label">@Value.Label</span>
                 <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
@@ -49,7 +49,7 @@
             @* Named for what it does rather than for its state: choosing it opens the
                picker, and the label the chip then shows is the range itself. *@
             <MudMenuItem OnClick="@PickAsync">
-                <span class="gs-menu-item @(IsCustom ? "is-on" : "")">Custom range…</span>
+                <span class="gs-menu-item @(IsCustom ? "is-on" : "")">@Loc["Custom range…"]</span>
             </MudMenuItem>
         </ChildContent>
     </MudMenu>
@@ -76,7 +76,7 @@
                             AdornmentIcon="@Icons.Material.Rounded.DateRange"
                             AdornmentColor="Color.Primary"
                             Class="gs-range-picker"
-                            aria-label="Custom date range" />
+                            aria-label="@Loc["Custom date range"]" />
     }
 </div>
 
@@ -102,13 +102,13 @@
 
     private bool IsCustom => Value.Preset == DateFilterPreset.Custom && !Value.IsAllTime;
 
-    private static string Label(DateFilterPreset preset) => preset switch
+    private string Label(DateFilterPreset preset) => preset switch
     {
-        DateFilterPreset.ThisMonth => "This month",
-        DateFilterPreset.LastMonth => "Last month",
-        DateFilterPreset.LastThreeMonths => "Last 3 months",
-        DateFilterPreset.ThisYear => "This year",
-        _ => "All time"
+        DateFilterPreset.ThisMonth => Loc["This month"].Value,
+        DateFilterPreset.LastMonth => Loc["Last month"].Value,
+        DateFilterPreset.LastThreeMonths => Loc["Last 3 months"].Value,
+        DateFilterPreset.ThisYear => Loc["This year"].Value,
+        _ => Loc["All time"].Value
     };
 
     /// <summary>

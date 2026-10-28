@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Forms;
@@ -13,7 +14,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         List<ReceiptAttachmentResponse> attachments = [];
         var loaded = await errors.TryAsync(async () =>
             attachments = (await receipts.GetReceiptAttachmentsAsync(transactionId, ct)).ToList(),
-            "Could not load receipt files.");
+            UiText.Get("Could not load receipt files."));
 
         return loaded ? attachments : [];
     }
@@ -24,7 +25,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         if (file.Size is <= 0 or > MaximumLength)
         {
             await errors.ShowAsync(new ApiError(ApiErrorKind.Validation,
-                "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB."), "Could not upload receipt file.");
+                UiText.Get("Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.")), UiText.Get("Could not upload receipt file."));
             return null;
         }
 
@@ -33,7 +34,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         var succeeded = await errors.TryAsync(async () =>
                 uploaded = await receipts.UploadReceiptAttachmentAsync(transactionId,
                     new FileParameter(stream, file.Name, file.ContentType), ct),
-            "Could not upload receipt file.");
+            UiText.Get("Could not upload receipt file."));
 
         return succeeded ? uploaded : null;
     }
@@ -42,7 +43,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         errors.TryAsync(async () =>
         {
             await receipts.DeleteReceiptAttachmentAsync(transactionId, attachmentId, ct);
-        }, "Could not remove receipt file.");
+        }, UiText.Get("Could not remove receipt file."));
 
     public async Task<IReadOnlyList<ReceiptAttachmentResponse>> GetForBankAsync(Guid bankTransactionId,
         CancellationToken ct = default)
@@ -50,7 +51,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         List<ReceiptAttachmentResponse> attachments = [];
         var loaded = await errors.TryAsync(async () =>
                 attachments = (await inbox.GetBankReceiptAttachmentsAsync(bankTransactionId, ct)).ToList(),
-            "Could not load receipt files.");
+            UiText.Get("Could not load receipt files."));
         return loaded ? attachments : [];
     }
 
@@ -61,7 +62,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         if (file.Size is <= 0 or > MaximumLength)
         {
             await errors.ShowAsync(new ApiError(ApiErrorKind.Validation,
-                "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB."), "Could not upload receipt file.");
+                UiText.Get("Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.")), UiText.Get("Could not upload receipt file."));
             return null;
         }
 
@@ -70,7 +71,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         var succeeded = await errors.TryAsync(async () =>
                 uploaded = await inbox.UploadBankReceiptAttachmentAsync(bankTransactionId,
                     new FileParameter(stream, file.Name, file.ContentType), ct),
-            "Could not upload receipt file.");
+            UiText.Get("Could not upload receipt file."));
         return succeeded ? uploaded : null;
     }
 
@@ -80,7 +81,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         ReceiptTranscriptionResponse? transcription = null;
         var succeeded = await errors.TryAsync(async () =>
                 transcription = await inbox.TranscribeBankReceiptAttachmentAsync(bankTransactionId, attachmentId, ct),
-            "Could not read receipt file.");
+            UiText.Get("Could not read receipt file."));
 
         return succeeded ? transcription : null;
     }
@@ -91,7 +92,7 @@ public sealed class ReceiptAttachmentCommands(IReceiptsClient receipts, IInboxCl
         ReceiptTranscriptionResponse? transcription = null;
         var succeeded = await errors.TryAsync(async () =>
                 transcription = await receipts.TranscribeReceiptAttachmentAsync(transactionId, attachmentId, ct),
-            "Could not transcribe receipt file.");
+            UiText.Get("Could not transcribe receipt file."));
 
         return succeeded ? transcription : null;
     }

@@ -23,9 +23,9 @@ public record SettleRequest
 {
     public Guid UserId { get; set; }
 
-    [Required(ErrorMessage = "Amount is required.")]
-    [MaxDecimalPlaces(2, ErrorMessage = "Amount must be a number with no more than 2 decimal places.")]
-    [GreaterThan(0, ErrorMessage = "Amount must be greater than 0.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
+    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
+    [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
     public decimal Amount { get; set; }
 
     /// <summary>
@@ -53,7 +53,7 @@ public record SettleRequest
     /// Optional, and deliberately so. A settling-up has to stay one tap, and a note nobody
     /// can skip is the thing that would stop it being one.
     /// </remarks>
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string? Description { get; set; }
 
     /// <summary>

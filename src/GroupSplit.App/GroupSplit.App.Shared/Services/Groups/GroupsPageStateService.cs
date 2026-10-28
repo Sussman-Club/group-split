@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.App.Shared.Services.Transactions;
@@ -94,7 +95,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         set
         {
             if (value is not null && Groups.All(g => g.Id != value.Id))
-                throw new ArgumentException("The selected group must be part of the user's groups.", nameof(value));
+                throw new ArgumentException(UiText.Get("The selected group must be part of the user's groups."), nameof(value));
 
             var changed = value?.Id != _tracker.SelectedGroup?.Id;
 
@@ -169,7 +170,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         {
             await LoadGroupsAsync();
             await LoadPositionAsync();
-        }, "your groups");
+        }, UiText.Get("Copy.Lower.your_groups"));
 
         await _selectedLoad;
     }
@@ -185,7 +186,7 @@ public class GroupsPageStateService : IGroupsPageStateService
         _selectedLoad = RefreshFiguresAsync(SelectedGroup, _selectionVersion);
 
         await _selectedLoad;
-        await _guard.RunAsync(() => LoadPositionAsync(), "this group");
+        await _guard.RunAsync(() => LoadPositionAsync(), UiText.Get("this group"));
     }
 
     public Task EnsureSelectedLoadedAsync()
@@ -276,7 +277,7 @@ public class GroupsPageStateService : IGroupsPageStateService
                 pageSize: RecentPageSize);
 
             balance = await _groupsClient.GetGroupUserBalanceAsync(group.Id);
-        }, "this group");
+        }, UiText.Get("this group"));
 
         if (version != _selectionVersion || !loaded)
             return loaded;
@@ -363,7 +364,7 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         await _errors.TryAsync(async () =>
                 pastMembers = [.. await _groupsClient.GetGroupPastMembersAsync(groupId, cancellationToken)],
-            "Could not load past members.");
+            UiText.Get("Could not load past members."));
 
         return pastMembers;
     }
@@ -385,7 +386,7 @@ public class GroupsPageStateService : IGroupsPageStateService
 
         await _errors.TryAsync(async () =>
                 guests = [.. await _groupsClient.GetGroupGuestsAsync(groupId, cancellationToken)],
-            "Could not load the guests.");
+            UiText.Get("Could not load the guests."));
 
         return guests;
     }
@@ -412,7 +413,7 @@ public class GroupsPageStateService : IGroupsPageStateService
                 link = (await _groupsClient.GetGroupJoinLinksAsync(groupId, cancellationToken))
                     .OrderByDescending(candidate => candidate.CreatedAt)
                     .FirstOrDefault(),
-            "Could not load the join link.");
+            UiText.Get("Could not load the join link."));
 
         return link;
     }
@@ -460,14 +461,14 @@ public class GroupsPageStateService : IGroupsPageStateService
     /// two frames deeper would say much less about why.
     /// </summary>
     private GroupResponse Selected() =>
-        SelectedGroup ?? throw new InvalidOperationException("No group is selected.");
+        SelectedGroup ?? throw new InvalidOperationException(UiText.Get("No group is selected."));
 
     /// <summary>
     /// What a group is called, for the message after a write that names it by id. Only ever
     /// words: the id is what the write acts on.
     /// </summary>
     private string NameOf(Guid groupId) =>
-        Groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? "the group";
+        Groups.FirstOrDefault(group => group.Id == groupId)?.Name ?? UiText.Get("the group");
 
     public Task<bool> ArchiveGroupAsync(CancellationToken cancellationToken = default) =>
         SetArchivedAsync(archived: true, cancellationToken);

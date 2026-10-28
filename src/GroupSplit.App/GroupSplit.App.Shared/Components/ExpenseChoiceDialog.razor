@@ -2,7 +2,7 @@
 <MudDialog Class="gs-selection-sheet">
     <TitleContent><h2 class="gs-dialog-title">@MudDialog.Title</h2></TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_search" Label="Search options" Immediate="true" Variant="Variant.Outlined" />
+        <MudTextField @bind-Value="_search" Label="@Loc["Search options"]" Immediate="true" Variant="Variant.Outlined" />
         <div class="gs-selection-list" role="group" aria-label="Options">
             @foreach (var option in Items.Where(x => x.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || (x.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)))
             {
@@ -15,13 +15,13 @@
             }
             @if (!Items.Any(x => x.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || (x.Description?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)))
             {
-                <p class="gs-muted">No matching options. Try another name.</p>
+                <p class="gs-muted">@Loc["No matching options. Try another name."]</p>
             }
         </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Items.Any(x => x.Id == _selected && !x.Disabled))" OnClick="Confirm">Use selection</MudButton>
+        <MudButton OnClick="Cancel">@Loc["Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Items.Any(x => x.Id == _selected && !x.Disabled))" OnClick="Confirm">@Loc["Use selection"]</MudButton>
     </DialogActions>
 </MudDialog>
 @code {

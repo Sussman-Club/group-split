@@ -1,3 +1,5 @@
+@using GroupSplit.App.Shared.Localization
+@using Microsoft.Extensions.Localization
 @* Do not instantiate children until their data is ready. Empty states belong to the
    children and therefore cannot be mistaken for an unfinished or failed request. *@
 @if (Loading)
@@ -14,8 +16,8 @@
                 <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="gs-load-spinner" />
             </div>
             <div class="gs-load-copy">
-                <h2>@LoadingTitle</h2>
-                <p>@LoadingMessage</p>
+                <h2>@(LoadingTitle ?? Loc["Loading…"])</h2>
+                <p>@(LoadingMessage ?? Loc["Your latest details will appear here shortly."])</p>
             </div>
         </div>
     }
@@ -27,12 +29,12 @@ else if (Failed)
             <MudIcon Icon="@Icons.Material.Rounded.CloudOff" />
         </div>
         <div class="gs-load-copy">
-            <h2>Could not load this view</h2>
-            <p>Check your connection and try again.</p>
+            <h2>@Loc["Could not load this view"]</h2>
+            <p>@Loc["Check your connection and try again."]</p>
         </div>
         @if (Retry.HasDelegate)
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Retry">Try again</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Retry">@Loc["Try again"]</MudButton>
         }
     </div>
 }
@@ -45,8 +47,8 @@ else
     [Parameter] public bool Loading { get; set; }
     [Parameter] public bool Failed { get; set; }
     [Parameter] public SkeletonLayout? Skeleton { get; set; }
-    [Parameter] public string LoadingTitle { get; set; } = "Loading…";
-    [Parameter] public string LoadingMessage { get; set; } = "Your latest details will appear here shortly.";
+    [Parameter] public string? LoadingTitle { get; set; }
+    [Parameter] public string? LoadingMessage { get; set; }
     [Parameter] public EventCallback Retry { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

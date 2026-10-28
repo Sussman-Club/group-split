@@ -44,5 +44,7 @@ public sealed class MaxItemLengthAttribute : ValidationAttribute
     }
 
     public override string FormatErrorMessage(string name) =>
-        $"Each entry in {name} must be {_length} characters or fewer.";
+        ErrorMessage is not null || ErrorMessageResourceType is not null
+            ? base.FormatErrorMessage(name)
+            : $"Each entry in {name} must be {_length} characters or fewer.";
 }

@@ -46,7 +46,7 @@
         <ReceiptReadLock IsLocked="@(_transcribingAttachmentId is not null)">
         @if (_initializing)
         {
-            <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
+            <div class="gs-dialog-loading" role="status" aria-label="@Loc["Loading transaction"]">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }
@@ -54,8 +54,8 @@
         {
             <div class="gs-empty" style="padding: 24px">
                 <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
-                <h3>Could not open this</h3>
-                <span>This expense and its group did not load, so there is nothing here to edit yet.</span>
+                <h3>@Loc["Could not open this"]</h3>
+                <span>@Loc["This expense and its group did not load, so there is nothing here to edit yet."]</span>
             </div>
         }
         else
@@ -72,19 +72,19 @@
                 <DecimalField @bind-Value="_model.Amount"
                               @bind-Value:after="OnMoneyChangedAsync"
                               For="@(() => _model.Amount)"
-                              Label="How much?"
+                              Label="@Loc["How much?"]"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
                               AdornmentText="@MoneyExtensions.CurrencySymbol(Original.Currency)"
                               HideSpinButtons="true"
                               ReadOnly="@PayerHasLeft"
-                              HelperText="@(PayerHasLeft ? $"{Original.PaidByUserName} paid this and has left the group, so the amount stays." : null)"
+                              HelperText="@(PayerHasLeft ? Loc["{0} paid this and has left the group, so the amount stays.", Original.PaidByUserName].Value : null)"
                               Class="gs-amount"/>
 
                 <MudTextField @bind-Value="_model.Name"
                               @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
-                              Label="What was it?"
+                              Label="@Loc["What was it?"]"
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
@@ -111,13 +111,13 @@
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
                 <details class="gs-expense-disclosure" open="@_showDetailErrors">
-                    <summary>Note <span>Optional</span></summary>
+                    <summary>@Loc["Note"]<span>@Loc["Optional"]</span></summary>
                     <div class="gs-expense-disclosure-body">
                 <MudTextField @bind-Value="_model.Description"
                               For="@(() => _model.Description)"
-                              Label="Note"
-                              Placeholder="Anything worth remembering about it"
-                              HelperText="Optional"
+                              Label="@Loc["Note"]"
+                              Placeholder="@Loc["Anything worth remembering about it"]"
+                              HelperText="@Loc["Optional"]"
                               Variant="Variant.Outlined"
                               Lines="2"
                               Immediate="true"/>
@@ -138,27 +138,23 @@
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         @(_model.GroupId is null
-                            ? "This will become your own expense, in your personal group: nothing owed by anybody."
-                            : "This will be divided among the members of the group you picked.")
+                            ? Loc["This will become your own expense, in your personal group: nothing owed by anybody."].Value
+                            : Loc["This will be divided among the members of the group you picked."].Value)
                     </MudAlert>
                 }
 
                 @if (!IsShared)
                 {
-                    <MudAlert Severity="Severity.Info" Dense="true">
-                        A personal expense is not shared with anybody, so there is nothing to divide.
-                    </MudAlert>
+                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["A personal expense is not shared with anybody, so there is nothing to divide."]</MudAlert>
                 }
                 else if (CurrencyRefusal is null)
                 {
                     <details class="gs-expense-disclosure" open>
-                        <summary>People &amp; shares <span>Review how this expense is divided</span></summary>
+                        <summary>@Loc["People & shares"]<span>@Loc["Review how this expense is divided"]</span></summary>
                         <div class="gs-expense-disclosure-body">
                         @if (SplitRuleNeedsManualOverride)
                         {
-                            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                                This expense uses the built-in rule for a member who has left the group.
-                                To change it, choose <strong>By hand</strong>; the current shares will be filled in for you.
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">@Loc["This expense uses the built-in rule for a member who has left the group. To change it, choose By hand; the current shares will be filled in for you."]
                             </MudAlert>
                         }
 
@@ -212,13 +208,11 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                    Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _reviewing || _transcribingAttachmentId is not null)"
-                   OnClick="Submit">
-            Review changes
-        </MudButton>
+                   OnClick="Submit">@Loc["Review changes"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -322,9 +316,7 @@
             if (group is null || string.Equals(group.Currency, Original.Currency, StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            return $"This expense is in {Original.Currency} and {group.Name} keeps its balances in " +
-                   $"{group.Currency}. Amounts are not converted, so it can stay personal or move " +
-                   $"to a group that uses {Original.Currency}.";
+            return Loc["This expense is in {0} and {1} keeps its balances in {2}. Amounts are not converted, so it can stay personal or move to a group that uses {0}.", Original.Currency, group.Name, group.Currency];
         }
     }
 
@@ -406,7 +398,7 @@
     /// </summary>
     private Guid? _openedSplitRuleId;
     private readonly Dictionary<Guid, string> _splitRuleNames = [];
-    private string RuleLabel(Guid? id) => id is { } value ? _splitRuleNames.GetValueOrDefault(value, "Selected rule") : "Category default";
+    private string RuleLabel(Guid? id) => id is { } value ? _splitRuleNames.GetValueOrDefault(value, Loc["Selected rule"].Value) : Loc["Category default"].Value;
 
     private Guid? _openedCategoryId;
 
@@ -458,7 +450,7 @@
     private IReadOnlyList<SplitInput>? _openedWith;
 
     private string Where => _model.GroupId is null
-        ? "Personal"
+        ? Loc["Personal"].Value
         : _groups.FirstOrDefault(group => group.Id == _model.GroupId)?.Name ?? "";
 
     /// <summary>
@@ -541,8 +533,8 @@
 
             return (Clock.Today - day.Date).Days switch
             {
-                0 => "today",
-                1 => "yesterday",
+                0 => Loc["Copy.Lower.today"].Value,
+                1 => Loc["Copy.Lower.yesterday"].Value,
                 _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
                 _ => day.ToString("d MMM yyyy")
             };
@@ -643,7 +635,7 @@
                 _model.Splits = _storedSplits;
 
             _openedWith = _model.Splits;
-        }, "Could not load the group.");
+        }, Loc["Could not load the group."].Value);
 
         if (!loaded)
         {
@@ -708,7 +700,7 @@
                 return;
 
             var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(
-                "Review receipt", new DialogParameters<ReceiptDraftDialog>
+                Loc["Review receipt"].Value, new DialogParameters<ReceiptDraftDialog>
                 {
                     { x => x.TransactionId, Original.Id },
                     // The receipt endpoint compares against the persisted expense. The
@@ -740,7 +732,7 @@
             return;
 
         var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(
-            "Edit itemized receipt", new DialogParameters<ReceiptDraftDialog>
+            Loc["Edit itemized receipt"].Value, new DialogParameters<ReceiptDraftDialog>
             {
                 { x => x.TransactionId, Original.Id },
                 // Receipt edits are saved against the persisted transaction amount. A dirty
@@ -765,12 +757,12 @@
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Remove \"{attachment.FileName}\" from this expense? The itemized receipt will stay available if it has already been saved." },
-            { x => x.ButtonText, "Remove" },
+            { x => x.ContentText, Loc["Remove \"{0}\" from this expense? The itemized receipt will stay available if it has already been saved.", attachment.FileName].Value },
+            { x => x.ButtonText, Loc["Remove"].Value },
             { x => x.Color, Color.Error }
         };
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
-            "Remove receipt", parameters,
+            Loc["Remove receipt"].Value, parameters,
             new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
 
         if (!await dialog.ConfirmedAsync())
@@ -825,7 +817,12 @@
             _members = [.. await members];
 
             var listed = await rules;
-            foreach (var rule in listed ?? []) _splitRuleNames[rule.Id] = rule.Name;
+            var names = _members.ToDictionary(member => member.Id, member => member.FullName);
+            foreach (var rule in listed ?? []) _splitRuleNames[rule.Id] = rule.DisplayName(names);
+            _categories = _categories.Select(category => category with
+            {
+                Rule = listed?.FirstOrDefault(rule => rule.Id == category.RuleId)?.DisplayName(names) ?? category.Rule
+            }).ToList();
 
             _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
             var currentMemberIds = _members.Select(member => member.Id).ToHashSet();
@@ -877,7 +874,7 @@
     {
         var current = true;
         var loaded = await Errors.TryAsync(
-            async () => current = await LoadGroupAsync(_model.GroupId), "Could not load the group.");
+            async () => current = await LoadGroupAsync(_model.GroupId), Loc["Could not load the group."].Value);
 
         // A failure has been shown, and a later move is loading its own group and will do
         // everything below for it.
@@ -1047,10 +1044,10 @@
     private string? Missing()
     {
         if (_model.Amount == 0m)
-            return "Enter an amount to see how it divides.";
+            return Loc["Enter an amount to see how it divides."].Value;
 
         if (string.IsNullOrWhiteSpace(_model.Name))
-            return "Name it to see how it divides.";
+            return Loc["Name it to see how it divides."].Value;
 
         return null;
     }
@@ -1110,7 +1107,7 @@
         // over the top of them told people their numbers were wrong while the numbers on
         // screen visibly summed correctly.
         _previewError = preview is null
-            ? "No division to show yet."
+            ? Loc["No division to show yet."].Value
             : null;
 
         if (!_initializing)
@@ -1179,20 +1176,20 @@
             after.FirstOrDefault(x => x.UserId == id)?.Amount ?? 0)).ToList();
         var changes = new List<ExpenseReviewDialog.Change>
         {
-            new("Name", Original.Name, _model.Name, Original.Name != _model.Name),
+            new(Loc["Name"].Value, Original.Name, _model.Name, Original.Name != _model.Name),
             new("Amount", Original.Amount.ToMoney(Original.Currency), _model.Amount.ToMoney(Original.Currency), Original.Amount != _model.Amount),
-            new("Note", Original.Description ?? "No note", _model.Description ?? "No note", Original.Description != _model.Description),
+            new(Loc["Note"].Value, Original.Description ?? Loc["No note"].Value, _model.Description ?? Loc["No note"].Value, Original.Description != _model.Description),
             new("When", Clock.Stamp(Original.DateTime, "d MMM yyyy", "HH:mm"), Clock.Stamp(_model.DateTime, "d MMM yyyy", "HH:mm"), Original.DateTime != _model.DateTime),
-            new("Group", Original.GroupName ?? "Personal", Where, OriginalGroupId != _model.GroupId),
-            new("Paid by", Original.PaidByUserName, PayerChoices.FirstOrDefault(x => x.Id == _model.PaidByUserId).Label(), Original.PaidByUserId != _model.PaidByUserId),
-            new("Category", Original.Category ?? "No category", _categories.FirstOrDefault(x => x.CategoryId == _model.CategoryId)?.Name ?? "No category", _openedCategoryId != _model.CategoryId),
-            new("Merchant", Original.MerchantName ?? "No merchant", _merchantName ?? "No merchant", _openedMerchantId != _model.MerchantId)
+            new(Loc["Group"].Value, Original.GroupName ?? Loc["Personal"].Value, Where, OriginalGroupId != _model.GroupId),
+            new(Loc["Copy.Sentence.Paid_by"].Value, Original.PaidByUserName, PayerChoices.FirstOrDefault(x => x.Id == _model.PaidByUserId).Label(), Original.PaidByUserId != _model.PaidByUserId),
+            new(Loc["Category"].Value, Original.Category ?? Loc["No category"].Value, _categories.FirstOrDefault(x => x.CategoryId == _model.CategoryId)?.Name ?? Loc["No category"].Value, _openedCategoryId != _model.CategoryId),
+            new(Loc["Merchant"].Value, Original.MerchantName ?? Loc["No merchant"].Value, _merchantName ?? Loc["No merchant"].Value, _openedMerchantId != _model.MerchantId)
         };
         if (_model.SplitRuleId != _openedSplitRuleId)
-            changes.Add(new("Split rule", RuleLabel(_openedSplitRuleId), RuleLabel(_model.SplitRuleId), true));
+            changes.Add(new(Loc["Split rule"].Value, RuleLabel(_openedSplitRuleId), RuleLabel(_model.SplitRuleId), true));
         else if (_redivide)
-            changes.Add(new("Split", "Saved division", "Recalculate using the selected split"));
-        var review = await DialogService.ShowAsync<ExpenseReviewDialog>("Review changes",
+            changes.Add(new(Loc["Split"].Value, Loc["Saved division"].Value, Loc["Recalculate using the selected split"].Value));
+        var review = await DialogService.ShowAsync<ExpenseReviewDialog>(Loc["Review changes"].Value,
             new DialogParameters<ExpenseReviewDialog>
             {
                 { x => x.Changes, changes }, { x => x.Shares, shares }, { x => x.Currency, Original.Currency }
@@ -1224,11 +1221,11 @@
         if (_transcribingAttachmentId is not null) return;
         if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
         {
-            var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Discard changes?"].Value,
                 new DialogParameters<ConfirmationDialog>
                 {
-                    { x => x.ContentText, "Discard your unsaved expense changes? Receipt changes saved separately are kept." },
-                    { x => x.ButtonText, "Discard changes" }
+                    { x => x.ContentText, Loc["Discard your unsaved expense changes? Receipt changes saved separately are kept."].Value },
+                    { x => x.ButtonText, Loc["Discard changes"].Value }
                 }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
             if (await dialog.Result is not { Canceled: false }) return;
         }
@@ -1312,6 +1309,6 @@
     internal record CategoryInfo(Guid CategoryId, string Name, string? Rule, Guid? RuleId = null)
     {
         /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
-        public string Splits => Rule is { Length: > 0 } named ? named : "even split";
+        public string Splits => Rule is { Length: > 0 } named ? named : UiText.Get("Copy.Lower.even_split");
     }
 }

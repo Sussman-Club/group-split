@@ -3,7 +3,7 @@
 
 <MudDialog>
     <DialogContent>
-        <p class="gs-muted" style="margin-top: 0">@Period · Select a category to filter the ledger.</p>
+        <p class="gs-muted" style="margin-top: 0">@Loc["{0} · Select a category to filter the ledger.", Period].Value</p>
         <div class="gs-category-breakdown">
             @foreach (var category in Spending.Categories)
             {
@@ -19,7 +19,7 @@
                         <Money Value="category.Total" Currency="@Spending.Currency" />
                         @if (!Personal)
                         {
-                            <span class="gs-muted gs-category-share">your share @category.Share.ToMoney(Spending.Currency)</span>
+                            <span class="gs-muted gs-category-share">@Loc["Copy.Lower.your_share_{0}", category.Share.ToMoney(Spending.Currency)].Value</span>
                         }
                     </span>
                 </button>
@@ -27,7 +27,7 @@
         </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">@Loc["Close"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -43,6 +43,6 @@
     {
         var total = Spending.Categories.Sum(category => category.Total);
         var percent = total == 0 ? 0 : Math.Clamp(amount * 100m / total, 0m, 100m);
-        return percent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+        return percent.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture) + "%";
     }
 }
