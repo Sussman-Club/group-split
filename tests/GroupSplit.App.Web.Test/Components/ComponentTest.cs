@@ -35,6 +35,9 @@ public abstract class ComponentTest : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         Services.AddMudServices();
+        Services.AddLocalization();
+        Services.AddScoped<GroupSplit.App.Shared.Localization.ILanguagePersistence, GroupSplit.App.Shared.Localization.BrowserLanguagePersistence>();
+        Services.AddScoped<GroupSplit.App.Shared.Localization.LanguagePreference>();
 
         Services.AddSingleton(Snackbar.Object);
         Services.AddSingleton<ApiErrorPresenter>();

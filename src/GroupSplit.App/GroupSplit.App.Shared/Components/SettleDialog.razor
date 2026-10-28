@@ -21,9 +21,7 @@
    nuisance whichever dialog it is in. *@
 <MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5">
-            Settle with @Username
-        </MudText>
+        <MudText Typo="Typo.h5">@Loc["Settle with {0}", Username].Value</MudText>
     </TitleContent>
 
     <DialogContent>
@@ -35,7 +33,7 @@
                 <DecimalField
                     @bind-Value="_model.Amount"
                     For="@(() => _model.Amount)"
-                    Label="@(YouPaid ? "Amount you paid" : "Amount they paid")"
+                    Label="@(YouPaid ? Loc["Amount you paid"].Value : Loc["Amount they paid"].Value)"
                     Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
@@ -52,7 +50,7 @@
                 @if (_choosingPeriod)
                 {
                     <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
-                                   Label="Only activity up to"
+                                   Label="@Loc["Only activity up to"]"
                                    Variant="Variant.Outlined"
                                    Clearable="true"
                                    MaxDate="@Clock.Today"
@@ -76,24 +74,22 @@
                                Label="When"
                                Variant="Variant.Outlined"
                                Clearable="true"
-                               HelperText="Defaults to now."/>
+                               HelperText="@Loc["Defaults to now."]"/>
 
                 <MudTextField @bind-Value="_model.Description"
                               For="@(() => _model.Description)"
-                              Label="Note"
+                              Label="@Loc["Note"]"
                               Variant="Variant.Outlined"
-                              Placeholder="Cash, bank transfer, a reference…"/>
+                              Placeholder="@Loc["Cash, bank transfer, a reference…"]"/>
 
             </MudStack>
         </MudForm>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@Submit"
-                   Disabled="@_readingPeriod">
-            Confirm
-        </MudButton>
+                   Disabled="@_readingPeriod">@Loc["Confirm"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -138,15 +134,15 @@
 
     private string Standing => (_through, YouPaid) switch
     {
-        ({ } day, true) => $"For activity up to {day:d MMM}, you owe {Username} {Owed.ToMoney()}",
-        ({ } day, false) => $"For activity up to {day:d MMM}, {Username} owes you {Owed.ToMoney()}",
-        (null, true) => $"You owe {Username} {TotalDebt.ToMoney()}",
-        (null, false) => $"{Username} owes you {TotalDebt.ToMoney()}"
+        ({ } day, true) => Loc["For activity up to {0:d MMM}, you owe {1} {2}", day, Username, Owed.ToMoney()].Value,
+        ({ } day, false) => Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, Username, Owed.ToMoney()].Value,
+        (null, true) => Loc["You owe {0} {1}", Username, TotalDebt.ToMoney()].Value,
+        (null, false) => Loc["{0} owes you {1}", Username, TotalDebt.ToMoney()].Value
     };
 
     private string PeriodHelp => _through is { } day && Owed <= 0
-        ? $"Nothing is outstanding between you for activity up to {day:d MMM}."
-        : "Repayments for later count only as far as they pay it down. Clear it to settle everything.";
+        ? Loc["Nothing is outstanding between you for activity up to {0:d MMM}.", day].Value
+        : Loc["Repayments for later count only as far as they pay it down. Clear it to settle everything."].Value;
 
     protected override void OnInitialized()
     {
@@ -204,7 +200,7 @@
             var read = await Errors.TryAsync(async () =>
                     balance = await GroupsClient.GetGroupUserBalanceAsync(
                         GroupId, cutoff, Clock.CutoffOffsetMinutes),
-                "Could not read the balances for that period.");
+                Loc["Could not read the balances for that period."].Value);
 
             if (!read || balance is null)
             {
@@ -234,14 +230,18 @@
     /// </remarks>
     private string Remaining => (Owed - _model.Amount) switch
     {
-        >= 0 and var left => $"Remaining {(_through is null ? "balance" : "for that period")}: {left.ToMoney()}",
-        var over => $"{(-over).ToMoney()} more than {(_through is null ? "is owed" : "that period left owing")}. It stays in the balance between you."
+        >= 0 and var left => _through is null
+            ? Loc["Remaining balance: {0}", left.ToMoney()]
+            : Loc["Remaining for that period: {0}", left.ToMoney()],
+        var over => _through is null
+            ? Loc["{0} more than is owed. It stays in the balance between you.", (-over).ToMoney()]
+            : Loc["{0} more than that period left owing. It stays in the balance between you.", (-over).ToMoney()]
     };
 
     IEnumerable<string> ValidateAmount(decimal amount)
     {
         if (amount <= 0)
-            yield return "Amount must be greater than 0.";
+            yield return Loc["Amount must be greater than 0."].Value;
     }
 
     private async Task Submit()

@@ -36,11 +36,11 @@
 
     <div class="gs-page-head" style="margin-bottom: 0">
         <div>
-            <div class="gs-eyebrow">@(Group.IsPersonal ? "Categories" : "Rules and categories")</div>
+            <div class="gs-eyebrow">@(Group.IsPersonal ? Loc["Categories"].Value : Loc["Rules and categories"].Value)</div>
             <p style="margin-top: 4px">
                 @(Group.IsPersonal
-                    ? "What your own spending is filed under."
-                    : "The divisions this group keeps, and the labels that point at them.")
+                    ? Loc["What your own spending is filed under."].Value
+                    : Loc["The divisions this group keeps, and the labels that point at them."].Value)
             </p>
         </div>
     </div>
@@ -50,14 +50,11 @@
         <div class="gs-notice is-warn" role="alert">
             <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
             <div class="gs-notice-body">
-                <strong>This did not all load</strong>
-                <span>What is below may be out of date, and deleting a rule is held back
-                    until it can be checked against the categories again.</span>
+                <strong>@Loc["This did not all load"]</strong>
+                <span>@Loc["What is below may be out of date, and deleting a rule is held back until it can be checked against the categories again."]</span>
             </div>
             <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
-                       OnClick="@LoadAsync">
-                Try again
-            </MudButton>
+                       OnClick="@LoadAsync">@Loc["Try again"]</MudButton>
         </div>
     }
 
@@ -65,7 +62,7 @@
 
         <div class="gs-card gs-card-pad">
             <div class="gs-card-title">
-                <h3>Categories</h3>
+                <h3>@Loc["Categories"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Add"
                            OnClick="@(() => EditCategoryAsync(null))">
@@ -87,11 +84,9 @@
                    button above it. *@
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.Sell"/>
-                    <h3>Nothing to file expenses under yet</h3>
+                    <h3>@Loc["Nothing to file expenses under yet"]</h3>
                     <span>
-                        Categories are labels &mdash; Groceries, Rent, Nights out &mdash; and each
-                        one remembers how it divides. Until there is one, every expense divides
-                        evenly.
+                        @Loc["Categories are labels — Groceries, Rent, Nights out — and each one remembers how it divides. Until there is one, every expense divides evenly."]
                     </span>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                                OnClick="@(() => EditCategoryAsync(null))">
@@ -112,7 +107,7 @@
                                     <span>@category.Name</span>
                                     @if (category.IsArchive)
                                     {
-                                        <span class="gs-tag neutral">Archived</span>
+                                        <span class="gs-tag neutral">@Loc["Archived"]</span>
                                     }
                                 </span>
                                 @* From the id, not the name beside it. Both are nullable on
@@ -130,7 +125,7 @@
 
                             <span class="gs-row-actions gs-inline" style="gap: 2px">
                                 <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
-                                               aria-label="@($"Edit {category.Name}")"
+                                               aria-label="@(Loc["Edit {0}", category.Name].Value)"
                                                OnClick="@(() => EditCategoryAsync(category))"/>
 
                                 @* Archiving before deleting, and in that order, because it
@@ -139,19 +134,19 @@
                                    under it, so for most categories older than a week this
                                    is the only door that opens. *@
                                 <MudTooltip ShowOnFocus="false" Text="@(category.IsArchive
-                                                      ? "Offer this category again"
-                                                      : "Stop offering this category")">
+                                                      ? Loc["Offer this category again"].Value
+                                                      : Loc["Stop offering this category"].Value)">
                                     <MudIconButton Size="Size.Small"
                                                    Icon="@(category.IsArchive
                                                              ? Icons.Material.Outlined.Unarchive
                                                              : Icons.Material.Outlined.Archive)"
-                                                   aria-label="@($"{(category.IsArchive ? "Restore" : "Archive")} {category.Name}")"
+                                                   aria-label="@(category.IsArchive ? Loc["Restore {0}", category.Name].Value : Loc["Archive {0}", category.Name].Value)"
                                                    OnClick="@(() => SetArchivedAsync(category))"/>
                                 </MudTooltip>
 
                                 <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                Color="Color.Error"
-                                               aria-label="@($"Delete {category.Name}")"
+                                               aria-label="@(Loc["Delete {0}", category.Name].Value)"
                                                OnClick="@(() => DeleteCategoryAsync(category))"/>
                             </span>
                         </div>
@@ -165,12 +160,10 @@
         {
         <div class="gs-card gs-card-pad">
             <div class="gs-card-title">
-                <h3>Split rules</h3>
+                <h3>@Loc["Split rules"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Add"
-                           OnClick="@CreateRuleAsync">
-                    New rule
-                </MudButton>
+                           OnClick="@CreateRuleAsync">@Loc["New rule"]</MudButton>
             </div>
 
             @if (!_loaded)
@@ -181,15 +174,10 @@
             {
                 <div class="gs-empty">
                     <MudIcon Icon="@Icons.Material.Outlined.AccountTree"/>
-                    <h3>No saved divisions yet</h3>
-                    <span>
-                        Everything divides evenly for now. Save a division &mdash; 60/40, or all
-                        on whoever paid &mdash; and any category can use it.
-                    </span>
+                    <h3>@Loc["No saved divisions yet"]</h3>
+                    <span>@Loc["Everything divides evenly for now. Save a division — 60/40, or all on whoever paid — and any category can use it."]</span>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                               OnClick="@CreateRuleAsync">
-                        Save a division
-                    </MudButton>
+                               OnClick="@CreateRuleAsync">@Loc["Save a division"]</MudButton>
                 </div>
             }
             else
@@ -209,20 +197,20 @@
                                            at a refusal: the two buttons beside it are gone,
                                            and a row with fewer actions than its neighbours
                                            and no reason given reads as a bug. *@
-                                        <span class="gs-tag neutral">Built in</span>
+                                        <span class="gs-tag neutral">@Loc["Built in"]</span>
                                     }
                                     @if (rule.Id == Group.DefaultSplitRuleId)
                                     {
                                         @* The fact the card above states as a setting, said
                                            again on the row it names, so the list answers
                                            "which one is the default" without scrolling up. *@
-                                        <span class="gs-tag">Default</span>
+                                        <span class="gs-tag">@Loc["Default"]</span>
                                     }
                                 </span>
 
                                 <span class="gs-inline" style="gap: 2px">
                                     <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small"
-                                                   aria-label="@($"History of the {NameOf(rule)} rule")"
+                                                   aria-label="@(Loc["History of the {0} rule", NameOf(rule)].Value)"
                                                    OnClick="@(() => ShowHistoryAsync(rule))"/>
                                     @* Neither is offered on a rule the group was given
                                        rather than wrote. It says one thing -- all of it is
@@ -237,7 +225,7 @@
                                            row apart both announcing "Edit Household" is two
                                            different actions under one spoken label. *@
                                         <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
-                                                       aria-label="@($"Edit the {rule.Name} rule")"
+                                                       aria-label="@(Loc["Edit the {0} rule", rule.Name].Value)"
                                                        OnClick="@(() => EditRuleAsync(rule, used))"/>
 
                                         @* Not offered while a category still points at it:
@@ -245,14 +233,14 @@
                                            action that can only fail is worse than none.
                                            Re-point the categories and it comes back. *@
                                         <MudTooltip ShowOnFocus="false" Text="@(_stale
-                                                              ? "Held back until the categories can be read again"
+                                                              ? Loc["Held back until the categories can be read again"].Value
                                                               : used.Count > 0
-                                                                  ? "In use by a category"
-                                                                  : "Delete this rule")">
+                                                                  ? Loc["In use by a category"].Value
+                                                                  : Loc["Delete this rule"].Value)">
                                             <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
                                                            Color="Color.Error"
                                                            Disabled="@(_stale || used.Count > 0)"
-                                                           aria-label="@($"Delete the {rule.Name} rule")"
+                                                           aria-label="@(Loc["Delete the {0} rule", rule.Name].Value)"
                                                            OnClick="@(() => DeleteRuleAsync(rule))"/>
                                         </MudTooltip>
                                     }
@@ -269,15 +257,15 @@
                             <div class="gs-inline" style="gap: 6px">
                                 @if (_stale)
                                 {
-                                    <span class="gs-tag neutral">Not checked</span>
+                                    <span class="gs-tag neutral">@Loc["Not checked"]</span>
                                 }
                                 else if (used.Count == 0)
                                 {
-                                    <span class="gs-tag neutral">No category uses it</span>
+                                    <span class="gs-tag neutral">@Loc["No category uses it"]</span>
                                 }
                                 else
                                 {
-                                    <span class="gs-provenance-when">Used by</span>
+                                    <span class="gs-provenance-when">@Loc["Used by"]</span>
                                     @foreach (var name in used)
                                     {
                                         <span class="gs-tag" @key="name">@name</span>
@@ -503,7 +491,7 @@
         if (!_definitions.TryGetValue(ruleId, out var details))
             return "";
 
-        return $"{details.Definition.Summary(_names)} · since {Clock.Local(details.ChangedAt):d MMM yyyy}";
+        return Loc["{0} · since {1:d MMM yyyy}", details.Definition.Summary(_names), Clock.Local(details.ChangedAt)].Value;
     }
 
     /// <summary>
@@ -521,25 +509,25 @@
     private string DividesBy(CategoryResponse category)
     {
         if (category.DefaultSplitRuleId is not { } ruleId)
-            return "no rule · evenly between whoever is in the group";
+            return Loc["no rule · evenly between whoever is in the group"].Value;
 
         if (_unavailableRuleIds.Contains(ruleId))
-            return "divides by a split rule that is no longer available";
+            return Loc["divides by a split rule that is no longer available"].Value;
 
-        var named = _rules.FirstOrDefault(rule => rule.Id == ruleId)?.Name
+        var named = _rules.FirstOrDefault(rule => rule.Id == ruleId)?.DisplayName(_names)
                     ?? category.DefaultSplitRuleName;
 
         // Pointed at a rule this screen could not name -- the rules list failed, or it was
         // deleted between the two reads. Saying so beats printing "no rule", which is a
         // different state with a different division behind it.
         return named is { Length: > 0 }
-            ? $"divides by {named}"
-            : "divides by a rule that is not in this list";
+            ? Loc["divides by {0}", named].Value
+            : Loc["divides by a rule that is not in this list"].Value;
     }
 
     private string NameOf(SplitRuleResponse rule) => rule.DisplayName(_names);
 
-    private static string Initials(string name) => name.Initials();
+    private string Initials(string name) => name.Initials();
 
     private async Task EditCategoryAsync(CategoryResponse? category)
     {
@@ -554,7 +542,7 @@
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
 
         var dialog = await DialogService.ShowAsync<CategoryDialog>(
-            category is null ? "New category" : "Edit category", parameters, options);
+            category is null ? Loc["New category"].Value : Loc["Edit category"].Value, parameters, options);
 
         // Read again on the way out. The tab reloads on the change notification these
         // commands raise, which is enough when it arrives -- and it does not always: a
@@ -574,13 +562,13 @@
                taking a group's spending history with it, so what this can promise is only
                what it leaves alone. *@
             { dialog => dialog.ContentText,
-                $"Delete the category '{category.Name}'? One with expenses filed under it "
-                + "cannot be deleted. The rule it divides by is left alone either way." },
-            { dialog => dialog.ButtonText, "Delete" },
+                Loc["Delete the category '{0}'? One with expenses filed under it ", category.Name].Value
+                + Loc["cannot be deleted. The rule it divides by is left alone either way."].Value },
+            { dialog => dialog.ButtonText, Loc["Delete"].Value },
             { dialog => dialog.Color, Color.Error }
         };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete category", parameters);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Delete category"].Value, parameters);
 
         if (!await dialog.ConfirmedAsync())
             return;
@@ -594,7 +582,7 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialog = await DialogService.ShowAsync<CreateRuleDialog>("New split rule", parameters, options);
+        var dialog = await DialogService.ShowAsync<CreateRuleDialog>(Loc["New split rule"].Value, parameters, options);
 
         // Read again on the way out. The tab reloads on the change notification these
         // commands raise, which is enough when it arrives -- and it does not always: a
@@ -621,7 +609,7 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>(Loc["Edit split rule"].Value, parameters, options);
 
         // Read again on the way out. The tab reloads on the change notification these
         // commands raise, which is enough when it arrives -- and it does not always: a
@@ -655,14 +643,14 @@
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { dialog => dialog.ContentText,
-                $"Delete the split rule '{rule.Name}'? If anything was ever divided by it, "
-                + "this is refused rather than leaving those expenses without an account of "
-                + "what produced their shares." },
-            { dialog => dialog.ButtonText, "Delete" },
+                Loc["Delete the split rule '{0}'? If anything was ever divided by it, ", rule.Name].Value
+                + Loc["this is refused rather than leaving those expenses without an account of "].Value
+                + Loc["what produced their shares."].Value },
+            { dialog => dialog.ButtonText, Loc["Delete"].Value },
             { dialog => dialog.Color, Color.Error }
         };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete split rule", parameters);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Delete split rule"].Value, parameters);
 
         if (!await dialog.ConfirmedAsync())
             return;
@@ -684,7 +672,7 @@
         // into service, and both of those announce, which is what brings this screen up to
         // date -- including when the dialog is dismissed with the corner button, which
         // carries no answer to read.
-        await DialogService.ShowAsync<RuleHistoryDialog>("Split rule", parameters, options);
+        await DialogService.ShowAsync<RuleHistoryDialog>(Loc["Split rule"].Value, parameters, options);
     }
 
 }

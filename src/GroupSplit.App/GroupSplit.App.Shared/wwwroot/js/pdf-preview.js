@@ -2,7 +2,7 @@ import { getDocument, GlobalWorkerOptions } from "../vendor/pdfjs/pdf.min.mjs";
 GlobalWorkerOptions.workerSrc = new URL("../vendor/pdfjs/pdf.worker.min.mjs", import.meta.url).href;
 const viewers = new WeakMap();
 
-export async function mount(host, url) {
+export async function mount(host, url, labels) {
     await dispose(host);
     const state = { page: 1, zoom: 1, revision: 0, disposed: false, queue: Promise.resolve() };
     viewers.set(host, state);
@@ -18,16 +18,16 @@ export async function mount(host, url) {
                 (action === "next" && state.page >= state.pdf.numPages) ||
                 (action === "out" && state.zoom <= .75) || (action === "in" && state.zoom >= 2.5);
         }
-        if (state.pdf) pageLabel.textContent = `Page ${state.page} of ${state.pdf.numPages}`;
+        if (state.pdf) pageLabel.textContent = labels.page.replace("{0}", state.page).replace("{1}", state.pdf.numPages);
     }
     function showError(error) {
         if (state.disposed || error?.name === "RenderingCancelledException") return;
         status.hidden = false;
         status.textContent = error?.name === "PasswordException"
-            ? "This PDF is password-protected. Download the original to open it."
-            : "The PDF preview couldn't load. Download the original to view it.";
+            ? labels.password
+            : labels.failed;
         canvas.hidden = true;
-        pageLabel.textContent = "Preview unavailable";
+        pageLabel.textContent = labels.unavailable;
     }
     function render() {
         const revision = ++state.revision;
@@ -48,9 +48,9 @@ export async function mount(host, url) {
             canvas.style.width = `${Math.floor(viewport.width)}px`;
             canvas.style.height = `${Math.floor(viewport.height)}px`;
             canvas.hidden = false;
-            canvas.setAttribute("aria-label", `PDF page ${state.page} of ${state.pdf.numPages}`);
+            canvas.setAttribute("aria-label", labels.pdfPage.replace("{0}", state.page).replace("{1}", state.pdf.numPages));
             status.hidden = false;
-            status.textContent = "Rendering PDF page...";
+            status.textContent = labels.rendering;
             state.renderTask = page.render({ canvasContext: canvas.getContext("2d"), viewport,
                 transform: [ratio, 0, 0, ratio, 0, 0] });
             await state.renderTask.promise;

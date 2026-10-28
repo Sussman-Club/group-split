@@ -16,7 +16,7 @@ public sealed record SuggestFilingsRequest
 
     /// <summary>The rows to suggest for.</summary>
     [Required]
-    [Length(1, MaxRows, ErrorMessage = "Ask for between {1} and {2} rows.")]
+    [Length(1, MaxRows, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.RowsLength))]
     public IReadOnlyList<SuggestFilingRow> Rows { get; init; } = [];
 }
 
@@ -45,7 +45,7 @@ public sealed record FilingReceipt
     public string? MerchantName { get; init; }
 
     /// <summary>The line items' names, as the receipt printed them.</summary>
-    [Length(0, MaxItems, ErrorMessage = "A receipt can name at most {2} items.")]
+    [Length(0, MaxItems, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.ReceiptItemsLength))]
     public IReadOnlyList<string> Items { get; init; } = [];
 
     public const int MaxItems = 100;

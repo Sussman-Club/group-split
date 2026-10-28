@@ -3,6 +3,32 @@
 (function () {
     const storageKey = "groupsplit.theme";
     const root = document.documentElement;
+    const supportedLanguages = ["en", "es", "pt"];
+    function resolveLanguage(value) {
+        const neutral = (value || "").split(/[-_]/)[0].toLowerCase();
+        return supportedLanguages.includes(neutral) ? neutral : "en";
+    }
+    const language = {
+        read() {
+            const cookie = document.cookie.split("; ").find(c => c.startsWith(".AspNetCore.Culture="));
+            try {
+                const match = cookie && decodeURIComponent(cookie.substring(cookie.indexOf("=") + 1)).match(/(?:^|\|)uic=([^|]+)/);
+                return resolveLanguage(match ? match[1] : navigator.language);
+            } catch {
+                // A malformed old cookie must not prevent WASM from starting.
+                return resolveLanguage(navigator.language);
+            }
+        },
+        apply(value) {
+            root.lang = resolveLanguage(value);
+            this.save(value);
+        },
+        save(value) {
+            const code = resolveLanguage(value);
+            document.cookie = ".AspNetCore.Culture=" + encodeURIComponent("c=" + code + "|uic=" + code)
+                + ";path=/;max-age=31536000;samesite=lax" + (location.protocol === "https:" ? ";secure" : "");
+        }
+    };
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     // Device detection is deliberately independent of viewport size: tablets
     // and narrow desktop windows should not be mistaken for Android phones.
@@ -165,7 +191,7 @@
             }
 
             const eased = 1 - Math.pow(1 - t, 4);
-            const text = head + (target * eased).toLocaleString("en-US", {
+            const text = head + (target * eased).toLocaleString(root.lang, {
                 minimumFractionDigits: decimals,
                 maximumFractionDigits: decimals,
                 useGrouping: grouped
@@ -280,6 +306,7 @@
     if (document.body) applyRail(); else document.addEventListener("DOMContentLoaded", applyRail);
 
     window.gs = {
+        language,
         scrollToSection(id) {
             const section = document.getElementById(id);
             if (!section) return;
@@ -334,6 +361,7 @@
         // chips muted under it.
         reapply() {
             stampAndroid();
+            root.lang = language.read();
             if (root.dataset.theme !== theme) root.dataset.theme = theme;
             if (ready && !root.hasAttribute("data-gs-ready")) root.setAttribute("data-gs-ready", "");
         },

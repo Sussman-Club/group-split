@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Extensions;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
@@ -27,9 +28,9 @@ public sealed class GroupCommands(
         var done = await errors.TryAsync(async () =>
         {
             created = await groups.CreateGroupAsync(request, ct);
-            snackbar.Add($"{created.Name} created.", Severity.Success);
+            snackbar.Add(UiText.Format($"{created.Name} created."), Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not create the group.");
+        }, UiText.Get("Could not create the group."));
 
         return done ? created : null;
     }
@@ -48,9 +49,9 @@ public sealed class GroupCommands(
         return errors.TryAsync(async () =>
         {
             var group = await groups.UpdateGroupAsync(groupId, patch, ct);
-            snackbar.Add(renames ? $"Group renamed to {group.Name}." : $"{group.Name} updated.", Severity.Success);
+            snackbar.Add(renames ? UiText.Format($"Group renamed to {group.Name}.") : UiText.Format($"{group.Name} updated."), Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not update the group.");
+        }, UiText.Get("Could not update the group."));
     }
 
     public Task<bool> AddGuestsAsync(Guid groupId, string groupName, AddGuestsRequest request,
@@ -68,14 +69,14 @@ public sealed class GroupCommands(
             // separate act on the People tab, for the few guests who will ever want one.
             snackbar.Add(
                 names.Count == 1
-                    ? $"{names[0]} added to {groupName} as a guest."
-                    : $"{names.Count} guests added to {groupName}.",
+                    ? UiText.Format($"{names[0]} added to {groupName} as a guest.")
+                    : UiText.Format($"{names.Count} guests added to {groupName}."),
                 Severity.Success);
 
             // The membership has not moved, but every screen that chooses a person has a
             // new one to offer -- and those read off the same announcement.
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not add them.");
+        }, UiText.Get("Could not add them."));
 
     public async Task<GroupGuestResponse?> IssueGuestLinkAsync(Guid groupId, Guid guestUserId, bool replace,
         CancellationToken ct = default)
@@ -91,7 +92,7 @@ public sealed class GroupCommands(
             // tab reads "link sent" off the guests listing, and a first link has to land
             // there. A re-read that finds nothing new costs one request.
             await changes.NotifyGroupsChangedAsync();
-        }, replace ? "Could not make a new link." : "Could not make a link.");
+        }, replace ? UiText.Get("Could not make a new link.") : UiText.Get("Could not make a link."));
 
         return done ? guest : null;
     }
@@ -104,10 +105,10 @@ public sealed class GroupCommands(
 
             // Both halves, because "stop link" next to "remove" could be read as the gentler
             // of two ways to take somebody out. It is not that: they are still a guest.
-            snackbar.Add($"{name}'s link no longer works. {name} is still a guest.", Severity.Success);
+            snackbar.Add(UiText.Format($"{name}'s link no longer works. {name} is still a guest."), Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not stop the link.");
+        }, UiText.Get("Could not stop the link."));
 
     public async Task<GroupJoinLinkResponse?> CreateJoinLinkAsync(Guid groupId, string groupName,
         CancellationToken ct = default)
@@ -120,11 +121,11 @@ public sealed class GroupCommands(
 
             // The old link, if there was one, stopped working the moment this one was made,
             // so the message says the part somebody could otherwise be caught out by.
-            snackbar.Add($"New join link for {groupName}. Any link you shared before has stopped working.",
+            snackbar.Add(UiText.Format($"New join link for {groupName}. Any link you shared before has stopped working."),
                 Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not make a join link.");
+        }, UiText.Get("Could not make a join link."));
 
         return done ? link : null;
     }
@@ -133,9 +134,9 @@ public sealed class GroupCommands(
         errors.TryAsync(async () =>
         {
             await groups.RevokeGroupJoinLinksAsync(groupId, ct);
-            snackbar.Add($"The join link to {groupName} no longer works.", Severity.Success);
+            snackbar.Add(UiText.Format($"The join link to {groupName} no longer works."), Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not withdraw the join link.");
+        }, UiText.Get("Could not withdraw the join link."));
 
     public async Task<JoinedGroupResponse?> JoinByLinkAsync(string token, CancellationToken ct = default)
     {
@@ -149,12 +150,12 @@ public sealed class GroupCommands(
             // followed a link to a group they are in, and the app takes them there.
             snackbar.Add(
                 joined.AlreadyAMember
-                    ? $"You are already in {joined.GroupName}."
-                    : $"You have joined {joined.GroupName}.",
+                    ? UiText.Format($"You are already in {joined.GroupName}.")
+                    : UiText.Format($"You have joined {joined.GroupName}."),
                 joined.AlreadyAMember ? Severity.Info : Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not join the group.");
+        }, UiText.Get("Could not join the group."));
 
         return done ? joined : null;
     }
@@ -171,7 +172,7 @@ public sealed class GroupCommands(
         var error = await errors.CaptureAsync(async () =>
         {
             await groups.RemoveGroupMemberAsync(groupId, memberUserId, ct);
-            snackbar.Add($"{memberName} removed from the group.", Severity.Success);
+            snackbar.Add(UiText.Format($"{memberName} removed from the group."), Severity.Success);
             await changes.NotifyGroupsChangedAsync();
         });
 
@@ -183,12 +184,12 @@ public sealed class GroupCommands(
         {
             // Stays until dismissed, like every other refusal: it is the answer to what
             // somebody just pressed, and it carries a figure they may want to go and check.
-            snackbar.Add($"Could not remove {memberName}. {ErrorMessages.NotSquare(memberName, balance)}",
+            snackbar.Add(UiText.Format($"Could not remove {memberName}. {ErrorMessages.NotSquare(memberName, balance)}"),
                 Severity.Error);
             return false;
         }
 
-        await errors.ShowAsync(error, $"Could not remove {memberName}.");
+        await errors.ShowAsync(error, UiText.Format($"Could not remove {memberName}."));
         return false;
     }
 
@@ -196,9 +197,9 @@ public sealed class GroupCommands(
         errors.TryAsync(async () =>
         {
             await groups.LeaveGroupAsync(groupId, ct);
-            snackbar.Add($"You have left {groupName}.", Severity.Success);
+            snackbar.Add(UiText.Format($"You have left {groupName}."), Severity.Success);
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not leave the group.");
+        }, UiText.Get("Could not leave the group."));
 
     public Task<bool> SetArchivedAsync(Guid groupId, string groupName, bool archived,
         CancellationToken ct = default) =>
@@ -211,12 +212,12 @@ public sealed class GroupCommands(
 
             snackbar.Add(
                 archived
-                    ? $"{groupName} archived. Only you stop seeing it in your list."
-                    : $"{groupName} is back in your list.",
+                    ? UiText.Format($"{groupName} archived. Only you stop seeing it in your list.")
+                    : UiText.Format($"{groupName} is back in your list."),
                 Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, archived ? "Could not archive the group." : "Could not unarchive the group.");
+        }, archived ? UiText.Get("Could not archive the group.") : UiText.Get("Could not unarchive the group."));
 
     public Task<bool> SettleAsync(Guid groupId, SettleRequest request, string otherName,
         CancellationToken ct = default) =>
@@ -226,14 +227,14 @@ public sealed class GroupCommands(
 
             snackbar.Add(
                 request.Direction is SettlementDirection.YouPaidThem
-                    ? $"Recorded: you paid {otherName} {request.Amount.ToMoney()}."
-                    : $"Recorded: {otherName} paid you {request.Amount.ToMoney()}.",
+                    ? UiText.Format($"Recorded: you paid {otherName} {request.Amount.ToMoney()}.")
+                    : UiText.Format($"Recorded: {otherName} paid you {request.Amount.ToMoney()}."),
                 Severity.Success);
 
             // A transfer moves both balances, and it is a transaction, so it is the
             // transaction announcement the group page listens to for its figures.
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not record the settlement.");
+        }, UiText.Get("Could not record the settlement."));
 
     public Task<bool> RecordRepaymentAsync(Guid groupId, RecordRepaymentRequest request, string fromName,
         string toName, CancellationToken ct = default) =>
@@ -243,11 +244,11 @@ public sealed class GroupCommands(
 
             // Both names, because the caller is on neither end: "you paid" would be wrong,
             // and a receipt that left out who is the one somebody could not check.
-            snackbar.Add($"Recorded: {fromName} paid {toName} {request.Amount.ToMoney()}.", Severity.Success);
+            snackbar.Add(UiText.Format($"Recorded: {fromName} paid {toName} {request.Amount.ToMoney()}."), Severity.Success);
 
             // A transfer like any other, so the same announcement settling makes.
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not record the repayment.");
+        }, UiText.Get("Could not record the repayment."));
 
     public async Task<SettleUpResponse?> SettleUpAsync(Guid groupId, SettleUpRequest request,
         CancellationToken ct = default)
@@ -259,15 +260,15 @@ public sealed class GroupCommands(
             settled = await groups.SettleUpAsync(groupId, request, ct);
 
             snackbar.Add(
-                $"Settled up: {settled.Payments.Count} "
+                UiText.Format($"Settled up: {settled.Payments.Count} ")
                 + $"{(settled.Payments.Count is 1 ? "repayment" : "repayments")}, "
-                + $"{settled.Total.ToMoney()} in all.",
+                + UiText.Format($"{settled.Total.ToMoney()} in all."),
                 Severity.Success);
 
             // Transfers are transactions, so this is the announcement the group page's
             // figures listen to -- the same one recording a single repayment makes.
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not settle up.");
+        }, UiText.Get("Could not settle up."));
 
         return done ? settled : null;
     }
@@ -296,8 +297,7 @@ public sealed class GroupCommands(
             if (claimed.SharesTaken > 0 || claimed.PaymentsTaken > 0)
             {
                 snackbar.Add(
-                    $"{claimed.SharesTaken} share(s) recorded for {claimed.Name} are yours now. " +
-                    "No amounts changed.",
+                    UiText.Format($"{claimed.SharesTaken} share(s) recorded for {claimed.Name} are yours now. No amounts changed."),
                     Severity.Info);
             }
 
@@ -309,15 +309,13 @@ public sealed class GroupCommands(
             {
                 snackbar.Add(
                     claimed.RulesTaken == 1
-                        ? $"One split rule in {claimed.GroupName} names you now, so it will give "
-                          + "you a share of what gets filed under it."
-                        : $"{claimed.RulesTaken} split rules in {claimed.GroupName} name you now, "
-                          + "so they will give you a share of what gets filed under them.",
+                        ? UiText.Format($"One split rule in {claimed.GroupName} names you now, so it will give you a share of what gets filed under it.")
+                        : UiText.Format($"{claimed.RulesTaken} split rules in {claimed.GroupName} name you now, so they will give you a share of what gets filed under them."),
                     Severity.Info);
             }
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not join the group.");
+        }, UiText.Get("Could not join the group."));
 
         return done ? claimed : null;
     }
@@ -334,13 +332,13 @@ public sealed class GroupCommands(
     /// </remarks>
     private static string Joined(InvitationClaimedResponse claimed)
     {
-        var joined = $"You have joined {claimed.GroupName} as {claimed.Name}.";
+        var joined = UiText.Format($"You have joined {claimed.GroupName} as {claimed.Name}.");
 
         return claimed.SettlementsCancelled switch
         {
             0 => joined,
-            1 => $"{joined} 1 repayment between you and {claimed.Name} cancelled out.",
-            var count => $"{joined} {count} repayments between you and {claimed.Name} cancelled out."
+            1 => UiText.Format($"{joined} 1 repayment between you and {claimed.Name} cancelled out."),
+            var count => UiText.Format($"{joined} {count} repayments between you and {claimed.Name} cancelled out.")
         };
     }
 
@@ -366,9 +364,9 @@ public sealed class GroupCommands(
 
             var group = string.IsNullOrWhiteSpace(closed.GroupName) ? groupName : closed.GroupName;
 
-            snackbar.Add($"{group} still has {closed.Name} as a guest. The link no longer works.",
+            snackbar.Add(UiText.Format($"{group} still has {closed.Name} as a guest. The link no longer works."),
                 Severity.Success);
 
             await changes.NotifyGroupsChangedAsync();
-        }, "Could not turn the link down.");
+        }, UiText.Get("Could not turn the link down."));
 }

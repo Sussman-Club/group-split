@@ -25,7 +25,7 @@ public class BillSheetTest : ComponentTest
 
         Assert.Contains("Together", page.Markup);
         Assert.Contains("no split rule yet", page.Markup);
-        Assert.Contains("1 of 2 lines has no split rule", page.Markup);
+        Assert.Contains("1 of 2 items need a split rule before this expense can be divided.", page.Markup);
         Assert.Contains("30.00", page.Markup);
     }
 

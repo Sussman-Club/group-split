@@ -33,7 +33,7 @@
                  CoerceText="true"
                  MinCharacters="@MinimumSearchLength"
                  DebounceInterval="300"
-                 Placeholder="Anywhere in particular?">
+                 Placeholder="@Loc["Anywhere in particular?"]">
     <ItemTemplate Context="merchant">
         <div class="gs-inline" style="gap: 10px">
             @if (MerchantLogos.Usable(merchant.LogoUrl) is { } logo)
@@ -57,7 +57,7 @@
         }
         else
         {
-            <MudText Typo="Typo.caption" Class="pa-2">Type a name to find a place, or to add one.</MudText>
+            <MudText Typo="Typo.caption" Class="pa-2">@Loc["Type a name to find a place, or to add one."]</MudText>
         }
     </NoItemsTemplate>
 </MudAutocomplete>

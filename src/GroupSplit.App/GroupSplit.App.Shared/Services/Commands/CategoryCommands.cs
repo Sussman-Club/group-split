@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
@@ -31,7 +32,7 @@ public sealed class CategoryCommands(
         var done = await errors.TryAsync(async () =>
         {
             loaded = [.. await categories.GetCategoriesAsync(groupId, includeArchived, ct)];
-        }, "Could not load the categories.");
+        }, UiText.Get("Could not load the categories."));
 
         return done ? loaded : null;
     }
@@ -43,9 +44,9 @@ public sealed class CategoryCommands(
         var done = await errors.TryAsync(async () =>
         {
             created = await categories.CreateCategoryAsync(request, ct);
-            snackbar.Add($"{created.Name} created.", Severity.Success);
+            snackbar.Add(UiText.Format($"{created.Name} created."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not create the category.");
+        }, UiText.Get("Could not create the category."));
 
         return done ? created : null;
     }
@@ -61,11 +62,11 @@ public sealed class CategoryCommands(
 
             // Says the part somebody would otherwise have to try in order to find out,
             // since changing how a category divides looks like it could reach backwards.
-            snackbar.Add($"{updated.Name} updated. Expenses already recorded keep their split.",
+            snackbar.Add(UiText.Format($"{updated.Name} updated. Expenses already recorded keep their split."),
                 Severity.Success);
 
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not update the category.");
+        }, UiText.Get("Could not update the category."));
 
         return done ? updated : null;
     }
@@ -86,12 +87,12 @@ public sealed class CategoryCommands(
             // the button -- and then keep a category they have stopped using for ever.
             snackbar.Add(
                 archived
-                    ? $"{saved.Name} archived. Expenses filed under it keep it."
-                    : $"{saved.Name} is back.",
+                    ? UiText.Format($"{saved.Name} archived. Expenses filed under it keep it.")
+                    : UiText.Format($"{saved.Name} is back."),
                 Severity.Success);
 
             await changes.NotifyTransactionsChangedAsync();
-        }, archived ? "Could not archive the category." : "Could not bring the category back.");
+        }, archived ? UiText.Get("Could not archive the category.") : UiText.Get("Could not bring the category back."));
 
         return done ? saved : null;
     }
@@ -100,7 +101,7 @@ public sealed class CategoryCommands(
         errors.TryAsync(async () =>
         {
             await categories.DeleteCategoryAsync(categoryId, ct);
-            snackbar.Add($"{name} deleted.", Severity.Success);
+            snackbar.Add(UiText.Format($"{name} deleted."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not delete the category.");
+        }, UiText.Get("Could not delete the category."));
 }

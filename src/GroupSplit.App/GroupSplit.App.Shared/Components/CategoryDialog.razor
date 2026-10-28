@@ -15,7 +15,7 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">@(Category is null ? "New category" : "Edit category")</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@(Category is null ? Loc["New category"].Value : Loc["Edit category"].Value)</MudText>
     </TitleContent>
 
     <DialogContent>
@@ -23,14 +23,14 @@
             <MudStack Spacing="3">
                 <MudTextField @bind-Value="_model.Name"
                               For="@(() => _model.Name)"
-                              Label="Category"
+                              Label="@Loc["Category"]"
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
                 <MudTextField @bind-Value="_model.Description"
                               For="@(() => _model.Description)"
-                              Label="Description"
-                              HelperText="What this category is for."
+                              Label="@Loc["Description"]"
+                              HelperText="@Loc["What this category is for."]"
                               Variant="Variant.Outlined"
                               Lines="2"
                               MaxLength="256"
@@ -45,7 +45,7 @@
                 @if (!Personal)
                 {
                 <MudSelect T="Guid?"
-                           Label="Divides by"
+                           Label="@Loc["Divides by"]"
                            Variant="Variant.Outlined"
                            @bind-Value="_model.SplitRuleId"
                            Clearable="true"
@@ -61,8 +61,8 @@
                    could record nothing at all. *@
                 <MudText Typo="Typo.caption" Class="gs-muted">
                     @(_model.SplitRuleId is null
-                        ? "With no rule, an expense here is divided evenly between whoever is in the group."
-                        : "Expenses filed here are pre-filled with this division. Ones already recorded keep theirs.")
+                        ? Loc["With no rule, an expense here is divided evenly between whoever is in the group."].Value
+                        : Loc["Expenses filed here are pre-filled with this division. Ones already recorded keep theirs."].Value)
                 </MudText>
                 }
             </MudStack>
@@ -70,10 +70,10 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                    Disabled="@_saving" OnClick="@Submit">
-            @(Category is null ? "Create" : "Save")
+            @(Category is null ? Loc["Create"].Value : Loc["Save"].Value)
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -153,11 +153,11 @@
 
     public sealed record CategoryModel
     {
-        [Required(ErrorMessage = "Name is required")]
-        [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+        [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+        [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
         public string Name { get; set; } = string.Empty;
 
-        [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+        [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
         public string Description { get; set; } = string.Empty;
 
         /// <summary>Which rule it divides by, or null to divide evenly.</summary>

@@ -19,16 +19,15 @@
             <MudAlert Severity="Severity.Info" Dense="true">
                 @if (IsEditing)
                 {
-                    <text>Correct the itemized receipt. Changes are saved to this expense.</text>
+                    <text>@Loc["Correct the itemized receipt. Changes are saved to this expense."]</text>
                 }
                 else if (IsDraftReview)
                 {
-                    <text>Check the extracted values before adding the expense. OCR can misread a price or miss a line;
-                        after this, choose the group and how the expense is split.</text>
+                    <text>@Loc["Check the extracted values before adding the expense. OCR can misread a price or miss a line; after this, choose the group and how the expense is split."]</text>
                 }
                 else
                 {
-                    <text>Check the extracted values before saving them to this expense. OCR can misread a price or miss a line.</text>
+                    <text>@Loc["Check the extracted values before saving them to this expense. OCR can misread a price or miss a line."]</text>
                 }
             </MudAlert>
 
@@ -38,36 +37,33 @@
             }
 
             <div class="gs-receipt-fields">
-                <MudTextField @bind-Value="_merchantName" Label="Merchant" Variant="Variant.Outlined" />
-                <MudDatePicker @bind-Date="_purchaseDate" Label="Purchase date" Variant="Variant.Outlined" />
-                <DecimalField @bind-Value="_subtotal" Label="Items subtotal" Variant="Variant.Outlined"
+                <MudTextField @bind-Value="_merchantName" Label="@Loc["Merchant"]" Variant="Variant.Outlined" />
+                <MudDatePicker @bind-Date="_purchaseDate" Label="@Loc["Purchase date"]" Variant="Variant.Outlined" />
+                <DecimalField @bind-Value="_subtotal" Label="@Loc["Items subtotal"]" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
-                <DecimalField @bind-Value="_tax" Label="Tax" Variant="Variant.Outlined"
+                <DecimalField @bind-Value="_tax" Label="@Loc["Tax"]" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
-                <DecimalField @bind-Value="_tip" Label="Tip" Variant="Variant.Outlined"
+                <DecimalField @bind-Value="_tip" Label="@Loc["Tip"]" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
-                <DecimalField @bind-Value="_total" Label="Total paid" Variant="Variant.Outlined"
+                <DecimalField @bind-Value="_total" Label="@Loc["Total paid"]" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
             </div>
 
             <div class="gs-muted" style="font-size: .85rem">
                 @if (ExpenseAmount is { } expenseAmount)
                 {
-                    <span>Recorded expense amount: <strong>@expenseAmount.ToMoney(Currency)</strong></span>
+                    <span>@Loc["Recorded expense amount:"]<strong>@expenseAmount.ToMoney(Currency)</strong></span>
                 }
                 else
                 {
-                    <span>This receipt will fill the expense details in the previous sheet.</span>
+                    <span>@Loc["This receipt will fill the expense details in the previous sheet."]</span>
                 }
             </div>
 
             @if (ExpenseAmount is { } expectedAmount && _total != expectedAmount)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true">
-                    The receipt total is @(_total < expectedAmount ? "short" : "over") by
-                    @Math.Abs(expectedAmount - _total).ToMoney(Currency). It must match the expense amount.
-                    Adjust the receipt figures before @PrimaryActionHint.
-                    @PrimaryActionText is disabled until the totals match.
+                    @Loc["The receipt and expense totals differ by {0}. Adjust the receipt figures to match the expense amount. {1} is disabled until the totals match.", Math.Abs(expectedAmount - _total).ToMoney(Currency), PrimaryActionText]
                 </MudAlert>
             }
 
@@ -77,28 +73,24 @@
             }
             @if (CalculatedTaxes.Sum() < _tax && _items.Any(item => item.TaxRate is null && item.IsTaxable != false && item.TotalPrice > 0))
             {
-                <MudText Typo="Typo.caption">Mark any tax-exempt items below first, then spread the unassigned tax across the remaining items by price.</MudText>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button" OnClick="DistributeTax">
-                    Distribute tax
-                </MudButton>
+                <MudText Typo="Typo.caption">@Loc["Mark any tax-exempt items below first, then spread the unassigned tax across the remaining items by price."]</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button" OnClick="DistributeTax">@Loc["Distribute tax"]</MudButton>
             }
 
             @if (FinancialValuesChanged)
             {
                 <MudButton OnClick="SpreadTax" Disabled="@(!CanSpreadTax || _saving)"
-                           Variant="Variant.Outlined" Color="Color.Primary">
-                    Spread tax across items
-                </MudButton>
-                <p class="gs-muted">Recalculate tax by price for taxable items. Exempt and unidentified items stay unchanged.</p>
+                           Variant="Variant.Outlined" Color="Color.Primary">@Loc["Spread tax across items"]</MudButton>
+                <p class="gs-muted">@Loc["Recalculate tax by price for taxable items. Exempt and unidentified items stay unchanged."]</p>
             }
 
             <div class="gs-inline" style="justify-content: space-between; align-items: center">
                 <div>
-                    <h3 style="margin: 0; font-size: 1rem">Items</h3>
-                    <span class="gs-muted" style="font-size: .8rem">Include coupons as negative lines and free items as zero lines.</span>
+                    <h3 style="margin: 0; font-size: 1rem">@Loc["Copy.Sentence.Items"]</h3>
+                    <span class="gs-muted" style="font-size: .8rem">@Loc["Include coupons as negative lines and free items as zero lines."]</span>
                 </div>
                 <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
-                           OnClick="AddItem">Add item</MudButton>
+                           OnClick="AddItem">@Loc["Add item"]</MudButton>
             </div>
 
             @for (var index = 0; index < _items.Count; index++)
@@ -113,14 +105,14 @@
                                       Error="@(itemNameError is not null)" ErrorText="@itemNameError"
                                       style="flex: 1" />
                         <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline" Color="Color.Default"
-                                       aria-label="Remove item" OnClick="@(() => RemoveItem(item))" />
+                                       aria-label="@Loc["Remove item"]" OnClick="@(() => RemoveItem(item))" />
                     </div>
                     <div class="gs-receipt-fields">
                         <DecimalField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
                                       Places="3" HideSpinButtons="true" />
-                        <DecimalField @bind-Value="item.UnitPrice" Label="Unit price" Variant="Variant.Outlined"
+                        <DecimalField @bind-Value="item.UnitPrice" Label="@Loc["Unit price"]" Variant="Variant.Outlined"
                                       Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
-                        <DecimalField @bind-Value="item.TotalPrice" Label="Line total" Variant="Variant.Outlined"
+                        <DecimalField @bind-Value="item.TotalPrice" Label="@Loc["Line total"]" Variant="Variant.Outlined"
                                       Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                         <div class="gs-stack" style="gap: 4px">
                             <DecimalField @key="(item.Key, item.TaxRate is not null || item.IsTaxable == false ? CalculatedTaxes[_items.IndexOf(item)] : (decimal?)null)"
@@ -128,22 +120,22 @@
                                           TextUpdateSuppression="false"
                                           ValueChanged="@((decimal value) => item.TaxAmount = value)"
                                           ReadOnly="@(item.TaxRate is not null || item.IsTaxable == false)"
-                                          Label="Line tax" Variant="Variant.Outlined"
+                                          Label="@Loc["Line tax"]" Variant="Variant.Outlined"
                                           Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                             @if (CalculatedTaxes[_items.IndexOf(item)] != item.TaxAmount)
                             {
-                                <MudText Typo="Typo.caption">Calculated from the rate and receipt total, including rounding.</MudText>
+                                <MudText Typo="Typo.caption">@Loc["Calculated from the rate and receipt total, including rounding."]</MudText>
                             }
                         </div>
                         @if (item.IsTaxable != false)
                         {
-                            <DecimalField @bind-Value="item.TaxRate" Label="Tax rate" Variant="Variant.Outlined"
+                            <DecimalField @bind-Value="item.TaxRate" Label="@Loc["Tax rate"]" Variant="Variant.Outlined"
                                           Adornment="Adornment.End" AdornmentText="%" Places="4" HideSpinButtons="true" />
                         }
-                        <MudSelect T="bool?" @bind-Value="item.IsTaxable" Label="Tax status" Variant="Variant.Outlined">
-                            <MudSelectItem T="bool?" Value="@((bool?)null)">Not identified</MudSelectItem>
-                            <MudSelectItem T="bool?" Value="@((bool?)true)">Taxable</MudSelectItem>
-                            <MudSelectItem T="bool?" Value="@((bool?)false)">Tax-exempt</MudSelectItem>
+                        <MudSelect T="bool?" @bind-Value="item.IsTaxable" Label="@Loc["Tax status"]" Variant="Variant.Outlined">
+                            <MudSelectItem T="bool?" Value="@((bool?)null)">@Loc["Not identified"]</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)true)">@Loc["Taxable"]</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)false)">@Loc["Tax-exempt"]</MudSelectItem>
                         </MudSelect>
                     </div>
                 </div>
@@ -153,11 +145,11 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Disabled="@_saving" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@_saving" OnClick="Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
                    Disabled="@(_saving || HasInvalidItemName || FigureError is not null || (ExpenseAmount is { } expectedAmount && _total != expectedAmount))"
                    OnClick="SaveAsync">
-            @(_saving ? "Saving…" : PrimaryActionText)
+            @(_saving ? Loc["Savingâ€¦"].Value : PrimaryActionText)
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -229,31 +221,31 @@
         get
         {
             if (new[] { _subtotal, _tax, _tip, _total }.Any(value => value < 0 || decimal.Round(value, 2) != value))
-                return "Receipt subtotal, tax, tip, and total must be non-negative amounts with at most two decimal places.";
+                return Loc["Receipt subtotal, tax, tip, and total must be non-negative amounts with at most two decimal places."].Value;
             if (_items.Any(item => item.Quantity <= 0 || decimal.Round(item.Quantity, 3) != item.Quantity))
-                return "Quantities must be positive with at most three decimal places.";
+                return Loc["Quantities must be positive with at most three decimal places."].Value;
             if (_items.Any(item => item.TaxRate is < 0 or > 100
                 || item.TaxRate is { } rate && decimal.Round(rate, 4) != rate))
-                return "Tax rates must be between 0 and 100 with at most four decimal places.";
+                return Loc["Tax rates must be between 0 and 100 with at most four decimal places."].Value;
             if (_items.Any(item => new[] { item.UnitPrice, item.TotalPrice, item.TaxAmount }
                     .Any(value => decimal.Round(value, 2) != value)))
-                return "Line prices and taxes must have at most two decimal places.";
+                return Loc["Line prices and taxes must have at most two decimal places."].Value;
             if (_items.Any(item => item.IsTaxable == false && item.TaxRate is > 0))
-                return "A tax-exempt item cannot have a positive tax rate.";
+                return Loc["A tax-exempt item cannot have a positive tax rate."].Value;
             if (_subtotal + _tax + _tip != _total)
-                return "Subtotal, tax, and tip must add up to the total.";
+                return Loc["Subtotal, tax, and tip must add up to the total."].Value;
             if (_items.Sum(item => item.TotalPrice) != _subtotal)
-                return "Line totals must add up to the subtotal.";
+                return Loc["Line totals must add up to the subtotal."].Value;
             if (CalculatedTaxes.Sum() != _tax)
-                return "Line tax must add up to the receipt tax.";
+                return Loc["Line tax must add up to the receipt tax."].Value;
             return null;
         }
     }
     private bool IsEditing => Receipt is not null;
     private bool IsDraftReview => TransactionId is null;
-    private string DialogTitle => IsEditing ? "Edit itemized receipt" : IsDraftReview ? "Check receipt" : "Review receipt";
-    private string PrimaryActionText => IsDraftReview ? "Use this receipt" : "Save receipt";
-    private string PrimaryActionHint => IsDraftReview ? "using this receipt" : "saving";
+    private string DialogTitle => IsEditing ? Loc["Edit itemized receipt"].Value : IsDraftReview ? Loc["Check receipt"].Value : Loc["Review receipt"].Value;
+    private string PrimaryActionText => IsDraftReview ? Loc["Use this receipt"].Value : Loc["Save receipt"].Value;
+    private string PrimaryActionHint => IsDraftReview ? Loc["using this receipt"].Value : "saving";
 
     protected override void OnParametersSet()
     {
@@ -267,7 +259,7 @@
                     Tax: draft.Receipt.Tax, Tip: draft.Receipt.Tip, Total: draft.Receipt.Total,
                     MerchantName: draft.Receipt.MerchantName, PurchaseDate: draft.Receipt.PurchaseDate,
                     Items: draft.Receipt.Items.Select(item => new EditableLine(item)).ToList())
-                : throw new InvalidOperationException("A receipt draft or saved receipt is required.");
+                : throw new InvalidOperationException(Loc["A receipt draft or saved receipt is required."].Value);
 
         if (_loadedSource == source.Key)
             return;
@@ -296,18 +288,18 @@
         await _form.ValidateAsync();
         if (!_form.IsValid)
         {
-            _validationError = "Correct the highlighted receipt fields before saving.";
+            _validationError = Loc["Correct the highlighted receipt fields before saving."].Value;
             return;
         }
         if (_items.Count == 0)
         {
-            _validationError = "Add at least one named item before saving.";
+            _validationError = Loc["Add at least one named item before saving."].Value;
             return;
         }
 
         if (HasInvalidItemName)
         {
-            _validationError = "Correct the highlighted item names before saving.";
+            _validationError = Loc["Correct the highlighted item names before saving."].Value;
             return;
         }
 
@@ -446,7 +438,7 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private static string? GetItemNameError(EditableLine item) =>
+    private string? GetItemNameError(EditableLine item) =>
         ValidateItemName(item.Name).FirstOrDefault();
 
     private static IEnumerable<string> ValidateItemName(string name)
@@ -534,7 +526,7 @@
         }
         public Guid? SplitRuleVersionId { get; set; }
 
-        private static string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
+        private string NormalizeName(string? name) => name?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
 }

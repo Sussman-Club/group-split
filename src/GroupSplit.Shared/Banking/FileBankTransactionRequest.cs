@@ -43,10 +43,10 @@ public record FileBankTransactionRequest
     /// <summary>
     /// What to call the expense. Defaults to the merchant the bank named.
     /// </summary>
-    [StringLength(TransactionNames.MaxLength, ErrorMessage = "Name must be at most {1} characters.")]
+    [StringLength(TransactionNames.MaxLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength))]
     public string? Name { get; set; }
 
-    [StringLength(256, ErrorMessage = "Description must be less than 256 characters.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionShort))]
     public string? Description { get; set; }
 
     /// <summary>

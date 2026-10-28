@@ -9,6 +9,7 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        NativeLanguagePersistence.Initialize(Microsoft.Maui.Storage.Preferences.Default);
         var builder = MauiApp.CreateBuilder().UseMauiApp<App>();
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddMudServices();

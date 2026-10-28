@@ -20,15 +20,15 @@
             <BrandMark Class="gs-auth-mark" Size="64" />
 
             <div>
-                <div class="gs-eyebrow" style="color: var(--gs-teal)">Group Split</div>
-                <h1 style="margin: 8px 0 6px; font-size: 1.75rem; font-weight: 800">We could not open your account</h1>
+                <div class="gs-eyebrow" style="color: var(--gs-teal)">@Loc["Group Split"]</div>
+                <h1 style="margin: 8px 0 6px; font-size: 1.75rem; font-weight: 800">@Loc["We could not open your account"]</h1>
                 <p class="gs-muted" style="margin: 0; font-size: .9375rem">@ErrorMessages.For(Refusal.Code)</p>
             </div>
 
             @if (!string.IsNullOrEmpty(Refusal.TraceId))
             {
                 <div style="width: 100%">
-                    <div class="gs-eyebrow">Reference to quote to support</div>
+                    <div class="gs-eyebrow">@Loc["Reference to quote to support"]</div>
                     <code style="display: block; margin-top: 6px; font-size: .75rem; word-break: break-all">@Refusal.TraceId</code>
                 </div>
             }
@@ -39,13 +39,9 @@
                        Size="Size.Large"
                        Class="gs-btn-pill"
                        StartIcon="@Icons.Material.Rounded.Logout"
-                       OnClick="SignOutAsync">
-                Sign out
-            </MudButton>
+                       OnClick="SignOutAsync">@Loc["Sign out"]</MudButton>
 
-            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="TryAgain">
-                Try again
-            </MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="TryAgain">@Loc["Try again"]</MudButton>
         </div>
     </div>
 </div>

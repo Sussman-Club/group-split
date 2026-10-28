@@ -57,13 +57,13 @@
                 <div class="gs-card gs-card-pad" style="padding: 14px 16px">
                     <ReceiptFilePicker FileChanged="SelectReceiptAsync"
                                        ReadRequested="ReadReceiptAsync"
-                                       Title="Create an expense from a receipt"
-                                       Description="Read a photo or PDF to fill in the amount and itemized bill."
+                                       Title="@Loc["Create an expense from a receipt"]"
+                                       Description="@Loc["Read a photo or PDF to fill in the amount and itemized bill."]"
                                        FileName="@_receiptFile?.Name"
                                        IsAttached="@(_receiptFile is not null)"
-                                       AttachedDescription="Ready to attach when you add this expense"
+                                       AttachedDescription="@Loc["Ready to attach when you add this expense"]"
                                        IsBusy="@_readingReceipt"
-                                       BusyText="Reading receipt…"
+                                       BusyText="@Loc["Reading receipt…"]"
                                        HasTranscript="@(_receipt is not null)"
                                        TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
                                        Error="@_receiptError" />
@@ -74,16 +74,14 @@
                 @if (_filingSuggestion is { } suggestion)
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button"
-                               OnClick="UseReceiptSuggestionAsync">
-                        Use suggested @suggestion.Destination
-                    </MudButton>
+                               OnClick="UseReceiptSuggestionAsync">@Loc["Use suggested {0}", suggestion.Destination].Value</MudButton>
                 }
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
                 <DecimalField @bind-Value="_model.Amount"
                               @bind-Value:after="OnMoneyChangedAsync"
                               For="@(() => _model.Amount)"
-                              Label="How much?"
+                              Label="@Loc["How much?"]"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
                               AdornmentText="@MoneyExtensions.CurrencySymbol(Currency)"
@@ -99,7 +97,7 @@
                     <MudSelect T="string"
                                Value="@_currency"
                                ValueChanged="@OnCurrencyPicked"
-                               Label="Currency"
+                               Label="@Loc["Currency"]"
                                Variant="Variant.Outlined"
                                Dense="true"
                                data-testid="expense-currency">
@@ -113,7 +111,7 @@
                 <MudTextField @bind-Value="_model.Name"
                               @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
-                              Label="What was it?"
+                              Label="@Loc["What was it?"]"
                               Variant="Variant.Outlined"
                               Immediate="true"/>
 
@@ -140,13 +138,13 @@
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
                 <details class="gs-expense-disclosure" open="@_showDetailErrors">
-                    <summary>Note <span>Optional</span></summary>
+                    <summary>@Loc["Note"]<span>@Loc["Optional"]</span></summary>
                     <div class="gs-expense-disclosure-body">
                 <MudTextField @bind-Value="_model.Description"
                               For="@(() => _model.Description)"
-                              Label="Note"
-                              Placeholder="Anything worth remembering about it"
-                              HelperText="Optional"
+                              Label="@Loc["Note"]"
+                              Placeholder="@Loc["Anything worth remembering about it"]"
+                              HelperText="@Loc["Optional"]"
                               Variant="Variant.Outlined"
                               Lines="2"
                               Immediate="true"/>
@@ -158,7 +156,7 @@
                 @if (IsShared)
                 {
                     <details class="gs-expense-disclosure" open>
-                        <summary>People &amp; shares <span>Review how this expense is divided</span></summary>
+                        <summary>@Loc["People & shares"]<span>@Loc["Review how this expense is divided"]</span></summary>
                         <div class="gs-expense-disclosure-body">
                         @* One component and one list of people: editable when the person is
                            stating the division, read-only when the API worked it out. *@
@@ -188,9 +186,7 @@
                 }
                 else
                 {
-                    <MudAlert Severity="Severity.Info" Dense="true">
-                        A personal expense is not shared with anybody, so there is nothing to divide.
-                    </MudAlert>
+                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["A personal expense is not shared with anybody, so there is nothing to divide."]</MudAlert>
                 }
 
             </div>
@@ -199,12 +195,10 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_readingReceipt || ReceiptNeedsRules)" OnClick="@Submit">
-            Add expense
-        </MudButton>
+                   Disabled="@(_readingReceipt || ReceiptNeedsRules)" OnClick="@Submit">@Loc["Add expense"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -339,16 +333,16 @@
     {
         // Zero, not "not positive": a negative amount is a refund, and it divides.
         if (_model.Amount == 0m)
-            return "Enter an amount to see how it divides.";
+            return Loc["Enter an amount to see how it divides."].Value;
 
         if (string.IsNullOrWhiteSpace(_model.Name))
-            return "Name it to see how it divides.";
+            return Loc["Name it to see how it divides."].Value;
 
         if (_receipt is { } receipt && receipt.Total != _model.Amount)
-            return "Match the expense amount to the receipt total before splitting.";
+            return Loc["Match the expense amount to the receipt total before splitting."].Value;
 
         if (ReceiptNeedsRules)
-            return "Choose a split rule for every receipt item.";
+            return Loc["Choose a split rule for every receipt item."].Value;
 
         return null;
     }
@@ -398,11 +392,11 @@
             var draft = await Receipts.TranscribeAsync(file);
             if (draft is null)
             {
-                _receiptError = "We couldn’t read that receipt. Try again, or add the expense without scanning.";
+                _receiptError = Loc["We couldn’t read that receipt. Try again, or add the expense without scanning."].Value;
                 return;
             }
 
-            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Check receipt",
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(Loc["Check receipt"].Value,
                 new DialogParameters<ReceiptDraftDialog>
                 {
                     { dialog => dialog.Currency, ReceiptCurrency },
@@ -450,7 +444,7 @@
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
-            _receiptError = "Could not read that receipt. Choose the file again and retry.";
+            _receiptError = Loc["Could not read that receipt. Choose the file again and retry."].Value;
         }
         finally
         {
@@ -471,7 +465,7 @@
             .Take(2)
             .ToArray();
 
-        var suggestion = names.Length == 0 ? "Receipt" : string.Join(", ", names);
+        var suggestion = names.Length == 0 ? UiText.Get("Receipt") : string.Join(", ", names);
         return suggestion.Length <= TransactionNames.MaxLength ? suggestion : suggestion[..TransactionNames.MaxLength].TrimEnd();
     }
 
@@ -563,8 +557,8 @@
             rule.AllForUserId is { } userId && members.Any(member => member.Id == userId))];
 
     /// <summary>How an expense filed here divides, in the few words a dropdown has room for.</summary>
-    private static string Divides(CategoryResponse category) =>
-        category.DefaultSplitRuleName is { Length: > 0 } rule ? rule : "even split";
+    private string Divides(CategoryResponse category) =>
+        category.DefaultSplitRuleName is { Length: > 0 } rule ? rule : Loc["Copy.Lower.even_split"].Value;
 
     /// <summary>
     /// The group this is being recorded in, said the way the person would say it.
@@ -580,7 +574,7 @@
         get
         {
             if (_groupId is null)
-                return "Personal";
+                return Loc["Personal"].Value;
 
             if (_groupId == SelectedGroupId && SelectedGroupName is { Length: > 0 } named)
                 return named;
@@ -603,8 +597,8 @@
 
             return since switch
             {
-                0 => "today",
-                1 => "yesterday",
+                0 => Loc["Copy.Lower.today"].Value,
+                1 => Loc["Copy.Lower.yesterday"].Value,
                 _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
                 _ => day.ToString("d MMM yyyy")
             };
@@ -642,7 +636,7 @@
     {
         await Errors.TryAsync(
             async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
-            "Could not load your groups.");
+            Loc["Could not load your groups."].Value);
 
         // Somebody who picked another group while this was out has a load of their own
         // running, and it does the rest.
@@ -659,7 +653,7 @@
     private async Task OnGroupChangedAsync()
     {
         var current = true;
-        await Errors.TryAsync(async () => current = await LoadGroupDetailsAsync(), "Could not load the group.");
+        await Errors.TryAsync(async () => current = await LoadGroupDetailsAsync(), Loc["Could not load the group."].Value);
 
         // A later pick has taken over, and its own load will render and preview.
         if (!current)
@@ -719,7 +713,7 @@
             if (Login.User is { } owner)
                 await Errors.TryAsync(
                     async () => personal = [.. await CategoriesClient.GetCategoriesAsync(owner.Id)],
-                    "Could not load your categories.");
+                    Loc["Could not load your categories."].Value);
 
             if (load != _groupLoad)
                 return false;
@@ -745,11 +739,11 @@
 
         var categoriesRead = Errors.TryAsync(
             async () => categories = [.. await CategoriesClient.GetCategoriesAsync(groupId)],
-            "Could not load this group's categories.");
+            Loc["Could not load this group's categories."].Value);
 
         var membersRead = Errors.TryAsync(
             async () => members = [.. await GroupsClient.GetGroupMembersAsync(groupId)],
-            "Could not load who is in this group.");
+            Loc["Could not load who is in this group."].Value);
 
         // Silent on failure, unlike those two: what it costs is one of the three ways to
         // divide, and the command has already said so if it went wrong.
@@ -764,6 +758,12 @@
         _members = members;
 
         var listed = await rules;
+        var names = _members.ToDictionary(member => member.Id, member => member.FullName);
+        _categories = _categories.Select(category => category with
+        {
+            DefaultSplitRuleName = listed?.FirstOrDefault(rule => rule.Id == category.DefaultSplitRuleId)?.DisplayName(names)
+                ?? category.DefaultSplitRuleName
+        }).ToList();
         _memberRules = MemberRulesOf(listed, _members);
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
         _billRuleId = listed?.FirstOrDefault(rule => rule.DividesByBill)?.Id;
@@ -884,7 +884,7 @@
         // over the top of them told people their numbers were wrong while the numbers on
         // screen visibly summed correctly.
         _previewError = preview is null
-            ? "No division to show yet."
+            ? Loc["No division to show yet."].Value
             : null;
 
         StateHasChanged();
@@ -948,7 +948,7 @@
 
         if (_receipt is not null && _receiptFile is not null && _receipt.Total != _model.Amount)
         {
-            _receiptError = "The receipt total must match the expense amount before saving.";
+            _receiptError = Loc["The receipt total must match the expense amount before saving."].Value;
             return;
         }
 
@@ -970,7 +970,7 @@
             }
             catch (Exception exception) when (exception is IOException or InvalidOperationException)
             {
-                _receiptError = "The receipt file could not be prepared for saving. Choose it again and retry.";
+                _receiptError = Loc["The receipt file could not be prepared for saving. Choose it again and retry."].Value;
                 await InvokeAsync(StateHasChanged);
                 return;
             }
@@ -995,11 +995,11 @@
         if (_readingReceipt) return;
         if (_model.Amount != 0 || !string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrWhiteSpace(_model.Description) || _receiptFile is not null)
         {
-            var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Discard changes?",
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Discard changes?"].Value,
                 new DialogParameters<ConfirmationDialog>
                 {
-                    { x => x.ContentText, "Discard your unsaved expense changes? Receipt changes saved separately are kept." },
-                    { x => x.ButtonText, "Discard changes" }
+                    { x => x.ContentText, Loc["Discard your unsaved expense changes? Receipt changes saved separately are kept."].Value },
+                    { x => x.ButtonText, Loc["Discard changes"].Value }
                 }, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
             if (await dialog.Result is not { Canceled: false }) return;
         }

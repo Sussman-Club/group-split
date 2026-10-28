@@ -23,7 +23,7 @@
     tab is in the URL, so a group's members page is a place you can be sent to.
 *@
 
-<PageTitle>@(Group?.Name ?? "Group") - Group Split</PageTitle>
+<PageTitle>@(Group?.Name ?? Loc["Group"].Value) - Group Split</PageTitle>
 
 <LoadView Loading="_initializing" Failed="@(Group is not null && (GroupsService.Balance is null || GroupsService.Transactions is null))" Retry="ReloadAsync">
 @if (Group is { } group)
@@ -37,24 +37,24 @@
            Nowrap here and min-width:0 on the text means the name wraps *inside* its own
            block instead of pushing itself onto the next line. *@
         <div class="gs-inline gs-identity">
-            <MudTooltip Text="All groups" ShowOnFocus="false">
-                <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" aria-label="All groups" Href="/groups" />
+            <MudTooltip Text="@Loc["All groups"]" ShowOnFocus="false">
+                <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" aria-label="@Loc["All groups"]" Href="/groups" />
             </MudTooltip>
             <Avatar Name="@group.Name" Size="lg" />
             <div class="gs-identity-who">
-                <div class="gs-eyebrow">@(group.IsPersonal ? "Just you" : group.IsArchive ? "Archived group" : "Group")</div>
+                <div class="gs-eyebrow">@(group.IsPersonal ? Loc["Just you"].Value : group.IsArchive ? Loc["Archived group"].Value : Loc["Group"].Value)</div>
                 <h1 style="margin-top: 2px">@group.Name</h1>
                 @* An expense count told nobody whether the group is still live. When
                    something last happened does. *@
                 <p style="margin-top: 2px">
-                    @(group.IsPersonal ? "Your own spending" : $"{group.MemberCount} member{(group.MemberCount == 1 ? "" : "s")}")@LastActivity
+                    @(group.IsPersonal ? Loc["Your own spending"].Value : Loc["{0} member{1}", group.MemberCount, (group.MemberCount == 1 ? "" : "s")].Value)@LastActivity
                 </p>
             </div>
         </div>
 
     </div>
 
-    <nav class="gs-tabs" aria-label="Group sections">
+    <nav class="gs-tabs" aria-label="@Loc["Group sections"]">
         @foreach (var (key, label) in group.IsPersonal ? PersonalSections : Sections)
         {
             <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
@@ -62,10 +62,10 @@
 
         @* A cog at the far end rather than a fifth word: settings is not one of the
            questions somebody asks about a group day to day, and every app puts it here. *@
-        <MudTooltip Text="Settings" ShowOnFocus="false">
+        <MudTooltip Text="@Loc["Settings"]" ShowOnFocus="false">
             <a class="gs-tab gs-tab-icon @(Current == "settings" ? "is-current" : "")"
                href="@Href("settings")"
-               aria-label="Settings"
+               aria-label="@Loc["Settings"]"
                aria-current="@(Current == "settings" ? "page" : null)">
                 <MudIcon Icon="@Icons.Material.Rounded.Settings" />
             </a>
@@ -100,16 +100,16 @@
 
     @if (!group.IsArchive)
     {
-        <ExtendedFab Label="Add expense" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
+        <ExtendedFab Label="@Loc["Add expense"]" AlwaysExtended="true" OnClick="@AddExpenseAsync" />
     }
 }
 else if (NotFound)
 {
     <div class="gs-card gs-empty" style="padding: 64px 24px">
         <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-        <h3>That group is not yours</h3>
-        <span>It may have been deleted, or you may have left it.</span>
-        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4" Href="/groups">Back to your groups</MudButton>
+        <h3>@Loc["That group is not yours"]</h3>
+        <span>@Loc["It may have been deleted, or you may have left it."]</span>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4" Href="/groups">@Loc["Back to your groups"]</MudButton>
     </div>
 }
 
@@ -133,20 +133,20 @@ else if (NotFound)
     // The group questions, named for the decision somebody is about to make. Settings is
     // not among them -- it is the cog after them. The old paths still resolve below, so
     // renaming a section does not break a saved link.
-    private static readonly (string Key, string Label)[] Sections =
+    private (string Key, string Label)[] Sections =>
     [
-        ("balances", "Balances"),
-        ("activity", "Activity"),
-        ("people", "People")
+        ("balances", Loc["Balances"].Value),
+        ("activity", Loc["Activity"].Value),
+        ("people", Loc["People"].Value)
     ];
 
     /// <summary>
     /// A personal group's sections. No balances and no people: it has nobody in it to owe,
     /// be owed or invite, so what is left is what was spent and what it was filed under.
     /// </summary>
-    private static readonly (string Key, string Label)[] PersonalSections =
+    private (string Key, string Label)[] PersonalSections =>
     [
-        ("activity", "Activity")
+        ("activity", Loc["Activity"].Value)
     ];
 
     /// <summary>
@@ -215,7 +215,7 @@ else if (NotFound)
     /// two years ago.
     /// </remarks>
     private string LastActivity => GroupsService.Transactions?.Items.Count > 0
-        ? " · last activity " + Relative(GroupsService.Transactions.Items.Max(item => Clock.Day(item.DateTime)))
+        ? Loc[" · last activity "].Value + Relative(GroupsService.Transactions.Items.Max(item => Clock.Day(item.DateTime)))
         : "";
 
     // The row's day the way every transaction date is read (#252): a bank row's is the bank's.
@@ -225,10 +225,10 @@ else if (NotFound)
 
         return days switch
         {
-            0 => "today",
-            1 => "yesterday",
-            < 7 => $"{days} days ago",
-            < 31 => $"{days / 7} week{(days / 7 == 1 ? "" : "s")} ago",
+            0 => Loc["Copy.Lower.today"].Value,
+            1 => Loc["Copy.Lower.yesterday"].Value,
+            < 7 => Loc["{0} days ago", days].Value,
+            < 31 => Loc["{0} week{1} ago", days / 7, (days / 7 == 1 ? "" : "s")].Value,
             _ when day.Year == Clock.Today.Year => day.ToString("d MMM"),
             _ => day.ToString("d MMM yyyy")
         };
@@ -249,7 +249,7 @@ else if (NotFound)
             { x => x.GroupId, GroupId }, { x => x.RecipientUserId, debt.UserId },
             { x => x.RecipientName, debt.UserName }, { x => x.CurrentDebt, debt.Amount }
         };
-        await DialogService.ShowAsync<RequestPaymentDialog>("Request payment", parameters,
+        await DialogService.ShowAsync<RequestPaymentDialog>(Loc["Request payment"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
     }
 
@@ -325,7 +325,7 @@ else if (NotFound)
             { x => x.Direction, direction }
         };
 
-        var dialog = await DialogService.ShowAsync<SettleDialog>($"Settle with {debt.UserName}", parameters, options);
+        var dialog = await DialogService.ShowAsync<SettleDialog>(Loc["Settle with {0}", debt.UserName].Value, parameters, options);
 
         var request = await dialog.GetReturnValueAsync<SettleRequest>();
 
@@ -344,7 +344,7 @@ else if (NotFound)
             { x => x.SelectedGroupCurrency, Group?.Currency }
         };
 
-        var dialog = await DialogService.ShowAsync<CreateTransactionDialog>("Add an expense", parameters, options);
+        var dialog = await DialogService.ShowAsync<CreateTransactionDialog>(Loc["Add an expense"].Value, parameters, options);
 
         var result = await dialog.Result;
         if (result is null || result.Canceled)

@@ -29,6 +29,7 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
             {
                 ["client_id"] = NativeOptions.ClientId, ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
                 ["response_type"] = "code", ["scope"] = "openid profile email",
+                ["ui_locales"] = GroupSplit.Shared.AppLanguages.Resolve(System.Globalization.CultureInfo.CurrentUICulture.Name),
                 ["code_challenge_method"] = "S256", ["code_challenge"] = challenge, ["state"] = state
             });
             var result = await browser.AuthenticateAsync(url, NativeOptions.Callback, ct);

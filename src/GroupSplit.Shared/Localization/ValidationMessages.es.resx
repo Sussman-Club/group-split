@@ -1,0 +1,74 @@
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="NameRequired" xml:space="preserve">
+    <value>El nombre es obligatorio.</value>
+  </data>
+  <data name="NameRequiredShort" xml:space="preserve">
+    <value>El nombre es obligatorio</value>
+  </data>
+  <data name="NameLength64" xml:space="preserve">
+    <value>El nombre debe tener menos de 64 caracteres.</value>
+  </data>
+  <data name="NameLength128" xml:space="preserve">
+    <value>El nombre debe tener menos de 128 caracteres.</value>
+  </data>
+  <data name="NameLength" xml:space="preserve">
+    <value>El nombre debe tener como máximo {1} caracteres.</value>
+  </data>
+  <data name="DescriptionLength" xml:space="preserve">
+    <value>La descripción debe tener 256 caracteres o menos.</value>
+  </data>
+  <data name="DescriptionShort" xml:space="preserve">
+    <value>La descripción debe tener menos de 256 caracteres.</value>
+  </data>
+  <data name="LogoLength" xml:space="preserve">
+    <value>La URL del logotipo debe tener menos de 512 caracteres.</value>
+  </data>
+  <data name="RowsLength" xml:space="preserve">
+    <value>Solicita entre {1} y {2} filas.</value>
+  </data>
+  <data name="ReceiptItemsLength" xml:space="preserve">
+    <value>Un recibo puede incluir como máximo {2} artículos.</value>
+  </data>
+  <data name="GuestRequired" xml:space="preserve">
+    <value>Indica al menos una persona para añadir.</value>
+  </data>
+  <data name="InviteRequired" xml:space="preserve">
+    <value>Indica al menos una persona para invitar.</value>
+  </data>
+  <data name="GuestNameLength" xml:space="preserve">
+    <value>Un nombre puede tener como máximo 64 caracteres.</value>
+  </data>
+  <data name="UtcOffset" xml:space="preserve">
+    <value>La diferencia con UTC debe estar entre −14 y +14 horas.</value>
+  </data>
+  <data name="DefaultPeriod" xml:space="preserve">
+    <value>El período predeterminado no es uno de los períodos disponibles.</value>
+  </data>
+  <data name="AmountRequired" xml:space="preserve">
+    <value>El importe es obligatorio.</value>
+  </data>
+  <data name="AmountPrecision" xml:space="preserve">
+    <value>El importe debe ser un número con un máximo de 2 decimales.</value>
+  </data>
+  <data name="AmountPositive" xml:space="preserve">
+    <value>El importe debe ser mayor que 0.</value>
+  </data>
+  <data name="AmountNotZero" xml:space="preserve">
+    <value>El importe no puede ser cero.</value>
+  </data>
+  <data name="DateRequired" xml:space="preserve">
+    <value>La fecha es obligatoria.</value>
+  </data>
+  <data name="CurrencyCode" xml:space="preserve">
+    <value>La moneda debe ser un código ISO 4217 de tres letras, como EUR.</value>
+  </data>
+  <data name="SharePrecision" xml:space="preserve">
+    <value>Una parte debe ser un número con un máximo de 2 decimales.</value>
+  </data>
+</root>

@@ -24,20 +24,20 @@
     looking like two different products was doing nobody any favours.
 *@
 
-<PageTitle>Join a group - Group Split</PageTitle>
+<PageTitle>@Loc["Join a group - Group Split"]</PageTitle>
 
 @if (UserInfo is null)
 {
-    <AuthHandoff Title="You have been invited to a group"
-                 Subtitle="Sign in, or create an account, and we will bring you straight back here to join."
-                 ActionLabel="Continue" ReturnUrl="@($"/join/{Token}")" />
+    <AuthHandoff Title="@Loc["You have been invited to a group"]"
+                 Subtitle="@Loc["Sign in, or create an account, and we will bring you straight back here to join."]"
+                 ActionLabel="@Loc["Continue"]" ReturnUrl="@($"/join/{Token}")" />
 }
 else if (_loading)
 {
-    <LinkLanding Title="You have been invited to a group">
+    <LinkLanding Title="@Loc["You have been invited to a group"]">
         <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
             <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
-            <span>Looking up the group…</span>
+            <span>@Loc["Looking up the group…"]</span>
         </div>
     </LinkLanding>
 }
@@ -46,9 +46,9 @@ else if (_error is not null)
     @* A link that has run out and one the group withdrew are different things to have
        happened, and the message says which -- that is the whole reason the API keeps them
        apart instead of answering "not found" to both. *@
-    <LinkLanding Title="This link will not let you in" Subtitle="@_error">
+    <LinkLanding Title="@Loc["This link will not let you in"]" Subtitle="@_error">
         <MudButton Variant="Variant.Text" Href="/"
-                   StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
+                   StartIcon="@Icons.Material.Rounded.ArrowBack">@Loc["Back home"]</MudButton>
     </LinkLanding>
 }
 else if (_link is { } link)
@@ -59,7 +59,7 @@ else if (_link is { } link)
                    EndIcon="@Icons.Material.Rounded.ArrowForward"
                    Disabled="@_joining"
                    OnClick="@JoinAsync">
-            @(link.AlreadyAMember ? $"Open {link.GroupName}" : $"Join {link.GroupName}")
+            @(link.AlreadyAMember ? Loc["Open {0}", link.GroupName].Value : Loc["Join {0}", link.GroupName].Value)
         </MudButton>
     </LinkLanding>
 }
@@ -105,12 +105,12 @@ else if (_link is { } link)
         _loading = false;
     }
 
-    private static string Shared(JoinLinkResponse link) =>
+    private string Shared(JoinLinkResponse link) =>
         link.AlreadyAMember
-            ? "You are already in this group."
+            ? Loc["You are already in this group."].Value
             : string.IsNullOrWhiteSpace(link.CreatedByUserName)
-                ? $"{Members(link.MemberCount)} already. Join to start sharing expenses with them."
-                : $"{link.CreatedByUserName} shared this group with you. {Members(link.MemberCount)} already.";
+                ? Loc["{0} already. Join to start sharing expenses with them.", Members(link.MemberCount)].Value
+                : Loc["{0} shared this group with you. {1} already.", link.CreatedByUserName, Members(link.MemberCount)].Value;
 
     private async Task JoinAsync()
     {
@@ -128,6 +128,6 @@ else if (_link is { } link)
             Nav.NavigateTo($"/groups/{joined.GroupId}");
     }
 
-    private static string Members(int count) =>
-        count == 1 ? "One person is in it" : $"{count} people are in it";
+    private string Members(int count) =>
+        count == 1 ? Loc["One person is in it"].Value : Loc["{0} people are in it", count].Value;
 }

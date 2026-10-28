@@ -6,13 +6,13 @@
 @* One sliding pill marks the active item; each link only changes colour.
    The pill's slot is driven by the active index so the same markup lays out
    vertically in the sidebar and horizontally in the mobile tab bar. *@
-<nav class="gs-nav" aria-label="Primary" style="--gs-pill-top: @(ActiveIndex * ItemPitch)px; --gs-pill-index: @ActiveIndex; --gs-pill-count: @Items.Count">
+<nav class="gs-nav" aria-label="@Loc["Primary"]" style="--gs-pill-top: @(ActiveIndex * ItemPitch)px; --gs-pill-index: @ActiveIndex; --gs-pill-count: @Items.Count">
     <span class="gs-nav-pill @(ActiveIndex < 0 ? "is-hidden" : "")"></span>
     @foreach (var item in Items)
     {
-        <NavLink class="gs-nav-item" href="@item.Href" Match="@item.Match" title="@item.Text">
+        <NavLink class="gs-nav-item" href="@item.Href" Match="@item.Match" title="@Loc[item.Text].Value">
             <MudIcon Icon="@item.Icon" />
-            <span class="gs-nav-text">@item.Text</span>
+            <span class="gs-nav-text">@Loc[item.Text].Value</span>
         </NavLink>
     }
 </nav>

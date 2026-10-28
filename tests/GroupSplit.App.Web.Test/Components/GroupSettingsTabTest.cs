@@ -511,7 +511,7 @@ public class GroupSettingsTabTest : ComponentTest
         var warning = provider.FindAll(".gs-notice.is-warn")
             .Single(notice => notice.QuerySelector("strong") is not null);
 
-        Assert.Equal("Groceries and Utilities both divide by this rule",
+        Assert.Equal("Groceries and Utilities divide by this rule",
             warning.QuerySelector("strong")!.TextContent.Trim());
 
         // It is said while there is still a way out, which is the only time saying it helps.

@@ -87,7 +87,7 @@ public class AttachBankRowDialogTest : ComponentTest
     {
         var (provider, _) = await OpenAsync();
 
-        Assert.Equal("Dinner", provider.Find(".mud-dialog-content strong").TextContent);
+        Assert.Contains("transactions that could be Dinner", provider.Find(".mud-dialog-content").TextContent);
         Assert.Equal(["Trattoria Roma", "Pizzeria Napoli"], Titles(provider));
         Assert.Equal("$64.20", RowOf(provider, "Trattoria Roma").QuerySelector(".gs-money")!.TextContent);
         Assert.Equal("$61.80", RowOf(provider, "Pizzeria Napoli").QuerySelector(".gs-money")!.TextContent);

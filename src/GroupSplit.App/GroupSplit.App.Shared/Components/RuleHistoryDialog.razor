@@ -23,17 +23,15 @@
     <TitleContent>
         <div class="gs-dialog-head">
             <div style="min-width: 0">
-                <div class="gs-eyebrow">Split rule</div>
-                <h2 class="gs-dialog-title">@(_history?.Name ?? "Split rule")</h2>
+                <div class="gs-eyebrow">@Loc["Split rule"]</div>
+                <h2 class="gs-dialog-title">@(_history?.Name ?? Loc["Split rule"].Value)</h2>
             </div>
 
             @if (_history is not null && !BuiltIn)
             {
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Edit"
-                           OnClick="@EditAsync">
-                    Edit the split
-                </MudButton>
+                           OnClick="@EditAsync">@Loc["Edit the split"]</MudButton>
             }
         </div>
     </TitleContent>
@@ -57,11 +55,8 @@
                     <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
-                            <strong>Could not check which categories divide by this rule</strong>
-                            <span>
-                                More than one may, and editing it would change what every one
-                                of them pre-fills.
-                            </span>
+                            <strong>@Loc["Could not check which categories divide by this rule"]</strong>
+                            <span>@Loc["More than one may, and editing it would change what every one of them pre-fills."]</span>
                         </div>
                     </div>
                 }
@@ -70,12 +65,8 @@
                     <div class="gs-notice is-warn" role="alert">
                         <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                         <div class="gs-notice-body">
-                            <strong>@_usedBy.Listed() @((_usedBy.Count == 2) ? "both" : "all") divide by this rule</strong>
-                            <span>
-                                Editing it changes what every one of them pre-fills, from now
-                                on. Expenses already recorded keep the split they were saved
-                                with.
-                            </span>
+                            <strong>@Loc["{0} divide by this rule", _usedBy.Listed()]</strong>
+                            <span>@Loc["Editing it changes what every one of them pre-fills, from now on. Expenses already recorded keep the split they were saved with."]</span>
                         </div>
                     </div>
                 }
@@ -103,7 +94,7 @@
                                         <span class="gs-version-when">@Window(version)</span>
                                         @if (current)
                                         {
-                                            <span class="gs-tag">Current</span>
+                                            <span class="gs-tag">@Loc["Current"]</span>
                                         }
                                     </span>
                                     <span class="gs-version-count">@version.Definition.Ratio()</span>
@@ -146,7 +137,7 @@
                                 {
                                     <div class="gs-version-foot">
                                         <span class="gs-inline" style="gap: 6px">
-                                            <span class="gs-version-count">What changed</span>
+                                            <span class="gs-version-count">@Loc["What changed"]</span>
                                             @foreach (var delta in deltas)
                                             {
                                                 @* Two spans, so the chip may wrap between
@@ -171,8 +162,8 @@
                                     <div class="gs-version-foot">
                                         <span class="gs-version-count">
                                             @(departed
-                                                ? "Names somebody no longer in the group"
-                                                : last ? "The oldest division recorded here" : "Superseded")
+                                                ? Loc["Names somebody no longer in the group"].Value
+                                                : last ? Loc["The oldest division recorded here"].Value : Loc["Superseded"].Value)
                                         </span>
 
                                         @* Not offered where it can only be refused. The
@@ -181,8 +172,8 @@
                                            that name them -- and every one of those names
                                            somebody the API will not accept in a rule now. *@
                                         <MudTooltip ShowOnFocus="false" Text="@(departed
-                                                              ? "This division names somebody who is no longer in the group"
-                                                              : "Make this what the rule says again")">
+                                                              ? Loc["This division names somebody who is no longer in the group"].Value
+                                                              : Loc["Make this what the rule says again"].Value)">
                                             <MudButton Variant="Variant.Outlined" Size="Size.Small"
                                                        Class="gs-btn-pill"
                                                        Disabled="@(_saving || departed)"
@@ -201,7 +192,7 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Close">Close</MudButton>
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Close">@Loc["Close"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -308,16 +299,16 @@
         var from = Clock.Local(version.StartedAt);
 
         if (version.SupersededAt is not { } until)
-            return $"Since {Day(from)}";
+            return Loc["Since {0}", Day(from)].Value;
 
         var to = Clock.Local(until);
 
         return from.Year == to.Year
-            ? $"{from:d MMM} – {Day(to)}"
+            ? Loc["{0:d MMM} – {1}", from, Day(to)].Value
             : $"{Day(from)} – {Day(to)}";
     }
 
-    private static string Day(DateTimeOffset when) => when.ToString("d MMM yyyy");
+    private string Day(DateTimeOffset when) => when.ToString("d MMM yyyy");
 
     /// <summary>
     /// What one edit moved, per person, against the version it replaced.
@@ -376,12 +367,12 @@
         // Somebody the older version named and this one does not: their share went to zero,
         // which is the largest move of the lot and the one most worth saying.
         foreach (var gone in before.Where(weight => now.All(held => held.UserId != weight.UserId)))
-            moved.Add((gone.Name, $"{Percent(gone.Share)} → none", "is-down"));
+            moved.Add((gone.Name, Loc["{0} → none", Percent(gone.Share)].Value, "is-down"));
 
         return moved;
     }
 
-    private static string Percent(decimal? share) => share is { } value ? $"{value:0.#}%" : "none";
+    private string Percent(decimal? share) => share is { } value ? $"{value:0.#}%" : Loc["Copy.Lower.none"];
 
     /// <summary>
     /// Whether a version names somebody the group no longer has, which is what makes it
@@ -410,13 +401,13 @@
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { dialog => dialog.ContentText,
-                $"{history.Name} will divide by this again from now on. Expenses already "
-                + "recorded keep the split they were saved with." },
-            { dialog => dialog.ButtonText, "Use this division" },
+                Loc["{0} will divide by this again from now on. Expenses already ", history.Name].Value
+                + Loc["recorded keep the split they were saved with."].Value },
+            { dialog => dialog.ButtonText, Loc["Use this division"].Value },
             { dialog => dialog.Color, Color.Primary }
         };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Divide this way again", parameters);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Divide this way again"].Value, parameters);
 
         if (!await dialog.ConfirmedAsync())
             return;
@@ -461,7 +452,7 @@
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        var dialog = await DialogService.ShowAsync<EditRuleDialog>("Edit split rule", parameters, options);
+        var dialog = await DialogService.ShowAsync<EditRuleDialog>(Loc["Edit split rule"].Value, parameters, options);
 
         if (await dialog.GetReturnValueAsync<SplitRuleDetailsResponse>() is not null)
             await LoadAsync();

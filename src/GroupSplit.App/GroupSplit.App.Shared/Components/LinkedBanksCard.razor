@@ -1,3 +1,5 @@
+@using GroupSplit.App.Shared.Localization
+@using Microsoft.Extensions.Localization
 @using GroupSplit.App.Shared.Services.Banking
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.Shared
@@ -17,31 +19,26 @@
 <LoadView Skeleton="SkeletonLayout.Rows" Loading="_initializing" Failed="@(Inbox.Connections is null)" Retry="ReloadAsync">
 <div class="gs-card gs-card-pad gs-reveal" style="--i: @Reveal">
     <div class="gs-card-title">
-        <h2>Linked banks</h2>
+        <h2>@Loc["Linked banks"]</h2>
         @if (Connections.Count > 0)
         {
-            <span class="gs-tag neutral">@Connections.Count linked</span>
+            <span class="gs-tag neutral">@(Connections.Count == 1 ? Loc["1 linked"] : Loc["{0} linked", Connections.Count])</span>
         }
     </div>
 
     @if (Link.RequiresExternalBrowser)
     {
-        <p class="meta">To link or reconnect a bank, open Group Split in your browser.</p>
+        <p class="meta">@Loc["To link or reconnect a bank, open Group Split in your browser."]</p>
     }
     else if (Inbox.Connections is { Enabled: false })
     {
-        <p class="meta">
-            Bank sync is not switched on for this app, so there is nothing to link yet.
-        </p>
+        <p class="meta">@Loc["Bank sync is not switched on for this app, so there is nothing to link yet."]</p>
     }
     else
     {
         @if (Connections.Count == 0)
         {
-            <p class="meta">
-                Link a bank and its transactions arrive in your inbox, where you can add them
-                to a group or keep them to yourself.
-            </p>
+            <p class="meta">@Loc["Link a bank and its transactions arrive in your inbox, where you can add them to a group or keep them to yourself."]</p>
         }
         else
         {
@@ -58,7 +55,7 @@
                             <div class="meta gs-bank-status">
                                 @if (connection.NeedsAttention || connection.NeedsAttentionSoon)
                                 {
-                                    <span class="gs-tag">Needs attention</span>
+                                    <span class="gs-tag">@Loc["Needs attention"]</span>
                                 }
                                 <span class="gs-bank-status-detail">@Describe(connection)</span>
                             </div>
@@ -70,7 +67,7 @@
                         *@
                         <MudMenu Icon="@Icons.Material.Rounded.MoreVert" Size="Size.Small" Dense="true"
                                  AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
-                                 Disabled="@_busy" aria-label="@($"Actions for {connection.InstitutionName}")">
+                                 Disabled="@_busy" aria-label="@Loc["Actions for {0}", connection.InstitutionName]">
                             @*
                                 Signing in again is offered whatever the connection's state,
                                 not only when it has been flagged. A bank that is misbehaving
@@ -81,7 +78,7 @@
                             @if (connection.NeedsAttention)
                             {
                                 <MudMenuItem Icon="@Icons.Material.Rounded.Login"
-                                             OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
+                                             OnClick="@(() => RepairAsync(connection))">@Loc["Sign in again"]</MudMenuItem>
                             }
                             else
                             {
@@ -93,21 +90,21 @@
                                     it would make a warning look like a breakage.
                                 *@
                                 <MudMenuItem Icon="@Icons.Material.Rounded.Sync"
-                                             OnClick="@(() => SyncAsync(connection))">Sync now</MudMenuItem>
+                                             OnClick="@(() => SyncAsync(connection))">@Loc["Sync now"]</MudMenuItem>
 
                                 @if (connection.NeedsAttentionSoon)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Rounded.Login"
-                                                 OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
+                                                 OnClick="@(() => RepairAsync(connection))">@Loc["Sign in again"]</MudMenuItem>
                                 }
                                 else
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Rounded.Login"
-                                                 OnClick="@(() => RepairAsync(connection))">Sign in again</MudMenuItem>
+                                                 OnClick="@(() => RepairAsync(connection))">@Loc["Sign in again"]</MudMenuItem>
                                 }
                             }
                             <MudMenuItem Icon="@Icons.Material.Rounded.LinkOff" IconColor="Color.Error"
-                                         OnClick="@(() => UnlinkAsync(connection))">Unlink</MudMenuItem>
+                                         OnClick="@(() => UnlinkAsync(connection))">@Loc["Unlink"]</MudMenuItem>
                         </MudMenu>
                     </div>
                 }
@@ -116,14 +113,12 @@
 
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="gs-account-action mt-4"
                    StartIcon="@Icons.Material.Rounded.AddLink" Disabled="@_busy"
-                   OnClick="LinkAsync">
-            Link a bank
-        </MudButton>
+                   OnClick="LinkAsync">@Loc["Link a bank"]</MudButton>
     }
 
     <a class="gs-bank-review" href="/inbox">
         <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
-        <span>Review bank transactions</span>
+        <span>@Loc["Review bank transactions"]</span>
         <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
     </a>
 </div>
@@ -173,37 +168,37 @@
     {
         var accounts = connection.Accounts.Count == 1
             ? connection.Accounts[0].Name
-            : $"{connection.Accounts.Count} accounts";
+            : Loc["{0} accounts", connection.Accounts.Count].Value;
 
         return connection.Status switch
         {
-            BankConnectionState.Revoked => $"{accounts} · access withdrawn",
+            BankConnectionState.Revoked => Loc["{0} · access withdrawn", accounts].Value,
             // Not only a changed password: a locked account, an agreement waiting on the
             // bank's own site, an account nobody shared. Each ends in signing in again, so
             // the compact line says so and leaves the bank to say what it wants first.
-            BankConnectionState.LoginRequired => $"{accounts} · sign in required",
+            BankConnectionState.LoginRequired => Loc["{0} · sign in required", accounts].Value,
 
             // Nothing is broken in either of these, so they read as something to do rather
             // than something that has gone wrong -- and each says why it needs attention,
             // before the actions menu offers the repair.
-            _ when connection.AccountsNotShared => $"{accounts} · account needs sharing",
-            _ when connection.SignInExpiring => $"{accounts} · sign in expires soon",
+            _ when connection.AccountsNotShared => Loc["{0} · account needs sharing", accounts].Value,
+            _ when connection.SignInExpiring => Loc["{0} · sign in expires soon", accounts].Value,
 
             _ when connection.Accounts.Any(account => account.AccessRevoked) =>
-                $"{accounts} · {Withdrawn(connection)} access withdrawn",
+                Loc["{0} · {1} access withdrawn", accounts, Withdrawn(connection)].Value,
 
             _ => connection.LastSyncedAt is { } synced
-                ? $"{accounts} · last checked {Clock.Local(synced):d}"
-                : $"{accounts} · not checked yet"
+                ? Loc["{0} · last checked {1:d}", accounts, Clock.Local(synced)].Value
+                : Loc["{0} · not checked yet", accounts].Value
         };
     }
 
     /// <summary>The accounts of a connection whose access was withdrawn one at a time.</summary>
-    private static string Withdrawn(BankConnectionResponse connection)
+    private string Withdrawn(BankConnectionResponse connection)
     {
         var revoked = connection.Accounts.Where(account => account.AccessRevoked).ToList();
 
-        return revoked.Count == 1 ? revoked[0].Name : $"{revoked.Count} of its accounts";
+        return revoked.Count == 1 ? revoked[0].Name : Loc["{0} of its accounts", revoked.Count].Value;
     }
 
     /// <summary>
@@ -247,7 +242,7 @@
             {
                 // Update mode returns no usable public token; the repair is the sign-in
                 // itself, so refresh accounts and ask for the sync it was blocking.
-                await Bank.RefreshAsync(connectionId.Value, "your bank");
+                await Bank.RefreshAsync(connectionId.Value, Loc["your bank"]);
             }
         }
         finally
@@ -275,14 +270,13 @@
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { dialog => dialog.ContentText,
-                $"Unlink {connection.InstitutionName}? Transactions still waiting in your inbox go with it. "
-                + "Expenses you already added stay exactly as they are." },
-            { dialog => dialog.ButtonText, "Unlink" },
+                Loc["Unlink {0}? Transactions still waiting in your inbox go with it. Expenses you already added stay exactly as they are.", connection.InstitutionName].Value },
+            { dialog => dialog.ButtonText, Loc["Unlink"].Value },
             { dialog => dialog.Color, Color.Error }
         };
 
         var reference = await DialogService.ShowAsync<ConfirmationDialog>(
-            "Unlink bank", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            Loc["Unlink bank"].Value, parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
 
         if (await reference.GetReturnValueAsync<bool>() is not true)
             return;

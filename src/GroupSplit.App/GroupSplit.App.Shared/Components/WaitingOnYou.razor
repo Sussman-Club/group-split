@@ -29,7 +29,7 @@
 {
     <section class="gs-card gs-card-pad gs-waiting gs-reveal" style="--i: @Reveal">
         <div class="gs-card-title">
-            <h2>Waiting on you</h2>
+            <h2>@Loc["Waiting on you"]</h2>
             <span class="gs-tag">@Items</span>
         </div>
 
@@ -43,7 +43,7 @@
                         <div class="meta">@SettleDetail(plan)</div>
                     </div>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                               Class="gs-btn-pill" Href="/settle">Settle up</MudButton>
+                               Class="gs-btn-pill" Href="/settle">@Loc["Settle up"]</MudButton>
                 </div>
             }
 
@@ -53,14 +53,14 @@
                     <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Inbox" /></span>
                     <div style="min-width: 0">
                         <div class="title">
-                            <span>@Inbox.NewCount bank transaction@(Inbox.NewCount == 1 ? "" : "s") waiting</span>
+                            <span>@(Inbox.NewCount == 1 ? Loc["{0} bank transaction waiting", Inbox.NewCount] : Loc["{0} bank transactions waiting", Inbox.NewCount])</span>
                         </div>
                         <div class="meta">@InboxDetail</div>
                     </div>
                     @* Not gs-btn-glass: every rule of that class is scoped to .gs-hero,
                        so out here it styled nothing and "Review" rendered as bare text. *@
                     <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
-                               Href="/transactions/not-filed">Review</MudButton>
+                               Href="/transactions/not-filed">@Loc["Review"]</MudButton>
                 </div>
             }
 
@@ -84,15 +84,15 @@
                         <div class="title">
                             <span>
                                 @(string.IsNullOrWhiteSpace(pending.InvitedByUserName)
-                                    ? $"A link to join {pending.GroupName} as {pending.Name}"
-                                    : $"{pending.InvitedByUserName} sent you a link to join {pending.GroupName} as {pending.Name}")
+                                    ? Loc["A link to join {0} as {1}", pending.GroupName, pending.Name].Value
+                                    : Loc["{0} sent you a link to join {1} as {2}", pending.InvitedByUserName, pending.GroupName, pending.Name].Value)
                             </span>
                         </div>
-                        <div class="meta">@pending.Name is a guest there · link sent @Clock.Local(pending.InvitedAt).ToString("d MMM")</div>
+                        <div class="meta">@Loc["{0} is a guest there · link sent {1:d MMM}", pending.Name, Clock.Local(pending.InvitedAt)]</div>
                     </div>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                Class="gs-btn-pill"
-                               Href="@($"/claim/{pending.Token}")">Open</MudButton>
+                               Href="@($"/claim/{pending.Token}")">@Loc["Open"]</MudButton>
                 </div>
             }
         </div>
@@ -120,29 +120,29 @@
     /// Leads with the payments rather than the debts, because that is the smaller number
     /// and the one somebody can act on: four debts across two groups can be two payments.
     /// </summary>
-    private static string SettleHeadline(SettlementPlanResponse plan) => plan.YouPay.Count switch
+    private string SettleHeadline(SettlementPlanResponse plan) => plan.YouPay.Count switch
     {
-        0 => $"{People(plan.OwedToYou.Count)} owe you",
-        1 => "One payment would clear what you owe",
-        var count => $"{count} payments would clear everything you owe"
+        0 => Loc["{0} owe you", People(plan.OwedToYou.Count)].Value,
+        1 => Loc["One payment would clear what you owe"].Value,
+        var count => Loc["{0} payments would clear everything you owe", count].Value
     };
 
-    private static string SettleDetail(SettlementPlanResponse plan)
+    private string SettleDetail(SettlementPlanResponse plan)
     {
         var owing = plan.YouPay.Count == 0
             ? null
             : plan.YouPay.Count == 1
-                ? $"{plan.YouOweTotal.ToMoney()} to {plan.YouPay[0].UserName.Split(' ')[0]}"
-                : $"{plan.YouOweTotal.ToMoney()} to {People(plan.YouPay.Count)}";
+                ? Loc["{0} to {1}", plan.YouOweTotal.ToMoney(), plan.YouPay[0].UserName.Split(' ')[0]].Value
+                : Loc["{0} to {1}", plan.YouOweTotal.ToMoney(), People(plan.YouPay.Count)].Value;
 
         var owed = plan.OwedToYou.Count == 0
             ? null
-            : $"{People(plan.OwedToYou.Count)} owe you {plan.OwedToYouTotal.ToMoney()}";
+            : Loc["{0} owe you {1}", People(plan.OwedToYou.Count), plan.OwedToYouTotal.ToMoney()].Value;
 
-        return string.Join(", and ", new[] { owing, owed }.Where(part => part is not null));
+        return string.Join(Loc[", and "].Value, new[] { owing, owed }.Where(part => part is not null));
     }
 
-    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
+    private string People(int count) => count == 1 ? Loc["1 person"].Value : Loc["{0} people", count].Value;
 
     /// <summary>
     /// The duplicate warning is the highest-value thing the inbox says, and the easiest to
@@ -151,8 +151,8 @@
     private string InboxDetail => Inbox.PossibleDuplicates switch
     {
         > 0 and var count =>
-            $"{count} of them may already be recorded as an expense",
-        _ => "Nothing counts as money until you say so"
+            Loc["{0} of them may already be recorded as an expense", count].Value,
+        _ => Loc["Nothing counts as money until you say so"].Value
     };
 
     protected override void OnInitialized()
@@ -180,7 +180,7 @@
 
         await Errors.TryAsync(async () =>
                 loaded = [.. await InvitationsClient.GetMyInvitationsAsync()],
-            "Could not load the links you have opened.");
+            Loc["Could not load the links you have opened."].Value);
 
         _invitations = loaded;
         await InvokeAsync(StateHasChanged);

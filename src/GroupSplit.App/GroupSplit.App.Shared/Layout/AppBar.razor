@@ -5,7 +5,7 @@
 @inject AppLinks AppLinks
 
 <header class="gs-topbar">
-    <a class="gs-brand gs-topbar-brand" href="/" aria-label="Home">
+    <a class="gs-brand gs-topbar-brand" href="/" aria-label="@Loc["Home"]">
         <BrandMark Size="28" />
     </a>
     <span class="gs-topbar-spacer"></span>
@@ -13,7 +13,7 @@
     @if (!AppLinks.IsNative)
     {
         <MudIconButton Class="gs-android-only" Icon="@Icons.Material.Rounded.Download" Href="/android"
-                       title="Get the Android app" aria-label="Get the Android app" />
+                       title="@Loc["Get the Android app"]" aria-label="@Loc["Get the Android app"]" />
     }
 
     <ThemeModeMenu />
@@ -28,7 +28,7 @@
             <ActivatorContent>
                 <button type="button"
                         class="gs-user-btn"
-                        aria-label="Account menu"
+                        aria-label="@Loc["Account menu"]"
                         @onclick="@context.ToggleAsync">
                     <span class="name">@user.FirstName</span>
                     <Avatar Name="@user.FullName" Size="sm" />
@@ -40,14 +40,14 @@
                     <div class="gs-muted" style="font-size: .75rem">@user.Email</div>
                 </div>
                 <MudDivider Class="my-1" />
-                <MudMenuItem Icon="@Icons.Material.Rounded.Settings" Label="Settings" Href="/settings" />
-                <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="Sign out" OnClick="TryLogout" />
+                <MudMenuItem Icon="@Icons.Material.Rounded.Settings" Label="@Loc["Settings"]" Href="/settings" />
+                <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="@Loc["Sign out"]" OnClick="TryLogout" />
             </ChildContent>
         </MudMenu>
     }
     else
     {
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill" Href="/login">Sign in</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill" Href="/login">@Loc["Sign in"]</MudButton>
     }
 </header>
 

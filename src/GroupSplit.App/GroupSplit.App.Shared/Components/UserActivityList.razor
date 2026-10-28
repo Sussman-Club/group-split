@@ -18,8 +18,8 @@
     {
         <div class="gs-empty">
             <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
-            <h3>Nothing recorded yet</h3>
-            <span>Add the first expense and it will show up here.</span>
+            <h3>@Loc["Nothing recorded yet"]</h3>
+            <span>@Loc["Add the first expense and it will show up here."]</span>
         </div>
     }
     else
@@ -51,7 +51,7 @@
                         <span>@Headline(item)</span>
                         @if (!expense)
                         {
-                            <span class="gs-tag clay">Settlement</span>
+                            <span class="gs-tag clay">@Loc["Settlement"]</span>
                         }
                         else if (!string.IsNullOrWhiteSpace(item.Category))
                         {
@@ -72,9 +72,9 @@
 @code {
     [Parameter] public IReadOnlyList<UserActivityResponse> Entries { get; set; } = [];
 
-    private static string Headline(UserActivityResponse entry) =>
+    private string Headline(UserActivityResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            ? Loc["{0} paid {1}", entry.PaidByUserName, entry.PaidToUserName].Value
             : entry.Name;
 
     /// <summary>
@@ -82,19 +82,19 @@
     /// this list spans groups: the same dinner in two different groups is two different
     /// rows, and the middle fact is what tells them apart.
     /// </summary>
-    private static string Detail(UserActivityResponse entry)
+    private string Detail(UserActivityResponse entry)
     {
         // No group is not a missing group: it is an expense of your own.
         var parts = new List<string>(3)
         {
             entry.Kind is ActivityKind.Transfer
-                ? (entry.Description is { Length: > 0 } note ? note : "Settling up") + entry.CoversThrough.ThroughSuffix()
-                : $"{entry.PaidByUserName} paid",
-            entry.GroupName ?? "Personal"
+                ? (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix()
+                : Loc["{0} paid", entry.PaidByUserName].Value,
+            entry.GroupName ?? Loc["Personal"].Value
         };
 
         if (entry.Share is { } share)
-            parts.Add($"your share {share.ToMoney()}");
+            parts.Add(Loc["Copy.Lower.your_share_{0}", share.ToMoney()].Value);
 
         return string.Join(" · ", parts);
     }
@@ -111,6 +111,6 @@
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        await DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value, parameters, options);
     }
 }

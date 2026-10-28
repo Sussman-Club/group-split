@@ -17,8 +17,8 @@
     {
         <div class="gs-empty">
             <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
-            <h3>Nothing recorded yet</h3>
-            <span>Add the first expense and it will show up here.</span>
+            <h3>@Loc["Nothing recorded yet"]</h3>
+            <span>@Loc["Add the first expense and it will show up here."]</span>
         </div>
     }
     else
@@ -50,7 +50,7 @@
                         <span>@Headline(item)</span>
                         @if (!expense)
                         {
-                            <span class="gs-tag clay">Settlement</span>
+                            <span class="gs-tag clay">@Loc["Settlement"]</span>
                         }
                         else if (!string.IsNullOrWhiteSpace(item.Category))
                         {
@@ -71,23 +71,23 @@
 @code {
     [Parameter] public IReadOnlyList<GroupLedgerEntryResponse> Entries { get; set; } = [];
 
-    private static string Headline(GroupLedgerEntryResponse entry) =>
+    private string Headline(GroupLedgerEntryResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            ? Loc["{0} paid {1}", entry.PaidByUserName, entry.PaidToUserName].Value
             : entry.Name;
 
     /// <summary>
     /// Who paid and what it cost the reader, on an expense; the note on a settlement. The
     /// share is the number somebody owes on the row, and no listing in the app carried it.
     /// </summary>
-    private static string Detail(GroupLedgerEntryResponse entry)
+    private string Detail(GroupLedgerEntryResponse entry)
     {
         if (entry.Kind is ActivityKind.Transfer)
-            return (entry.Description is { Length: > 0 } note ? note : "Settling up") + entry.CoversThrough.ThroughSuffix();
+            return (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix();
 
-        var said = $"{entry.PaidByUserName} paid";
+        var said = Loc["{0} paid", entry.PaidByUserName].Value;
 
-        return entry.Share is { } share ? $"{said} · your share {share.ToMoney()}" : said;
+        return entry.Share is { } share ? Loc["{0} · your share {1}", said, share.ToMoney()].Value : said;
     }
 
     /// <summary>
@@ -102,6 +102,6 @@
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+        await DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value, parameters, options);
     }
 }

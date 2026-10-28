@@ -1,0 +1,35 @@
+@using GroupSplit.App.Shared.Localization
+@using GroupSplit.Shared
+@using Microsoft.Extensions.Localization
+@inject LanguagePreference Preference
+
+<div class="gs-card gs-card-pad">
+    <label for="settings-language"><h3>@Loc["Language"]</h3></label>
+    <p class="gs-muted">@Loc["Your language follows you across devices."]</p>
+    <select id="settings-language" value="@Selected" @onchange="ChangeAsync" disabled="@_saving">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="pt">Português</option>
+    </select>
+    @if (_error)
+    {
+        <MudAlert Severity="Severity.Error" role="alert">@Loc["Your language could not be saved. Please retry."]</MudAlert>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Language { get; set; }
+    private string Selected => Language ?? AppLanguages.Resolve(System.Globalization.CultureInfo.CurrentUICulture.Name);
+    private bool _saving;
+    private bool _error;
+
+    private async Task ChangeAsync(ChangeEventArgs args)
+    {
+        _saving = true;
+        _error = false;
+        try { await Preference.SaveAsync(args.Value?.ToString() ?? "en"); }
+        catch (Exception ex) when (ex is HttpRequestException or ApiException or JSException or OperationCanceledException)
+        { _error = true; }
+        finally { _saving = false; }
+    }
+}

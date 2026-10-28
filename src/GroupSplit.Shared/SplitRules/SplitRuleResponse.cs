@@ -96,8 +96,8 @@ public record CreateSplitRuleRequest
 {
     public Guid GroupId { get; init; }
 
-    [Required(ErrorMessage = "Name is required")]
-    [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+    [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; init; } = null!;
 
     public SplitRuleDto Definition { get; init; } = null!;
@@ -114,8 +114,8 @@ public record CreateSplitRuleRequest
 /// </remarks>
 public record UpdateSplitRuleRequest
 {
-    [Required(ErrorMessage = "Name is required")]
-    [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+    [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; set; } = null!;
 
     public SplitRuleDto Definition { get; set; } = null!;

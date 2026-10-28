@@ -22,9 +22,7 @@
     <DialogContent>
         <MudStack Spacing="3">
             <MudText Typo="Typo.body2">
-                Your bank sent @(_rows.Count == 1 ? "a transaction" : "transactions") that could be
-                <strong>@Expense.Name</strong>. Attaching one keeps a single expense and marks the
-                bank's row as dealt with.
+                @Loc["Your bank sent transactions that could be {0}. Attaching one keeps a single expense and marks the bank's row as dealt with.", Expense.Name]
             </MudText>
 
             <div class="gs-list">
@@ -43,10 +41,10 @@
                             <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                            Class="gs-btn-pill" Disabled="@(_busy is not null)"
-                                           OnClick="@(() => AttachAsync(row))">Attach</MudButton>
+                                           OnClick="@(() => AttachAsync(row))">@Loc["Attach"]</MudButton>
                                 <MudButton Variant="Variant.Text" Size="Size.Small"
                                            Disabled="@(_busy is not null)"
-                                           OnClick="@(() => DismissAsync(row))">Not the same</MudButton>
+                                           OnClick="@(() => DismissAsync(row))">@Loc["Not the same"]</MudButton>
                             </div>
                         </div>
                     </div>
@@ -58,7 +56,7 @@
     <DialogActions>
         @* Deciding later is a decision too: the suggestion is on the row in the inbox until
            somebody answers it, so closing this settles nothing and loses nothing. *@
-        <MudButton Variant="Variant.Text" OnClick="Close">Decide later</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Close">@Loc["Decide later"]</MudButton>
     </DialogActions>
 </MudDialog>
 

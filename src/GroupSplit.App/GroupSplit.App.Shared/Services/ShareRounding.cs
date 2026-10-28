@@ -1,5 +1,6 @@
 using GroupSplit.App.Shared.Extensions;
 using GroupSplit.Shared;
+using GroupSplit.App.Shared.Localization;
 
 namespace GroupSplit.App.Shared.Services;
 
@@ -52,13 +53,13 @@ public static class ShareRounding
         var remaining = Remaining(amount, shares);
 
         if (remaining > 0m)
-            return $"{remaining.ToMoney()} still to assign.";
+            return UiText.Format($"{remaining.ToMoney()} still to assign.");
 
         if (remaining < 0m)
-            return $"{(-remaining).ToMoney()} more than the expense comes to.";
+            return UiText.Format($"{(-remaining).ToMoney()} more than the expense comes to.");
 
         return shares.All(share => IsWholeCents(share.Amount))
             ? null
-            : "A share can only be whole cents.";
+            : UiText.Get("A share can only be whole cents.");
     }
 }

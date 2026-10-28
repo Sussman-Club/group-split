@@ -29,6 +29,7 @@ else if (_refusal is not null)
 }
 else
 {
+    <GroupSplit.App.Shared.Localization.LanguageSync Language="@User?.PreferredLanguage" />
     <CascadingValue Value="@User" TValue="UserInfo" @key="User?.Id">
         @ChildContent
     </CascadingValue>

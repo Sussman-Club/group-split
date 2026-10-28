@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 namespace GroupSplit.App.Shared.Extensions;
 
 /// <summary>
@@ -17,6 +18,6 @@ public static class SettlementPeriodCopy
         /// claims no period.
         /// </summary>
         public string ThroughSuffix() =>
-            coversThrough is { } day ? $" · through {day:d MMM}" : string.Empty;
+            coversThrough is { } day ? UiText.Format($" · through {day:d MMM}") : string.Empty;
     }
 }

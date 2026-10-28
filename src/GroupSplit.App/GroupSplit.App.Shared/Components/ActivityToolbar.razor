@@ -5,12 +5,12 @@
         @Segments
         @DateFilter
         <button type="button" class="gs-mobile-filter-toggle gs-ledger-payer"
-                aria-label="Search and filters" aria-expanded="@_expanded"
+                aria-label="@Loc["Search and filters"]" aria-expanded="@_expanded"
                 @onclick="@(() => _expanded = !_expanded)">
             <MudIcon Icon="@Icons.Material.Rounded.Tune" Size="Size.Small" />
             @if (FiltersActive)
             {
-                <span class="gs-filter-dot" aria-label="Filters active"></span>
+                <span class="gs-filter-dot" aria-label="@Loc["Filters active"]"></span>
             }
         </button>
         @Filters
