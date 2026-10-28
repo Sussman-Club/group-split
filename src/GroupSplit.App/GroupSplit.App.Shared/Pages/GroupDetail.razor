@@ -6,11 +6,13 @@
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
+@using Microsoft.JSInterop
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject LocalClock Clock
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 @*
@@ -50,6 +52,14 @@
                     @(group.IsPersonal ? Loc["Your own spending"].Value : Loc["{0} member{1}", group.MemberCount, (group.MemberCount == 1 ? "" : "s")].Value)@LastActivity
                 </p>
             </div>
+            @if (!group.IsPersonal && Current is "settings" or "people")
+            {
+                <MudButton Class="gs-group-header-archive" Variant="Variant.Outlined" Size="Size.Medium"
+                           Disabled="@_archiveBusy" StartIcon="@(group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
+                           OnClick="@ToggleArchiveAsync">
+                    @(group.IsArchive ? Loc["Restore"].Value : Loc["Archive"].Value)
+                </MudButton>
+            }
         </div>
 
     </div>
@@ -63,40 +73,68 @@
         @* A cog at the far end rather than a fifth word: settings is not one of the
            questions somebody asks about a group day to day, and every app puts it here. *@
         <MudTooltip Text="@Loc["Settings"]" ShowOnFocus="false">
-            <a class="gs-tab gs-tab-icon @(Current == "settings" ? "is-current" : "")"
+            <a class="gs-tab gs-tab-icon @(Current is "settings" or "people" ? "is-current" : "")"
                href="@Href("settings")"
                aria-label="@Loc["Settings"]"
-               aria-current="@(Current == "settings" ? "page" : null)">
+               aria-current="@(Current is "settings" or "people" ? "page" : null)">
                 <MudIcon Icon="@Icons.Material.Rounded.Settings" />
             </a>
         </MudTooltip>
     </nav>
 
-    <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
-        @switch (Current)
-        {
-            case "activity":
+    @if (Current is "settings" or "people")
+    {
+        <div class="gs-settings-content @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Tab}")">
+            @if (Current == "settings" && SettingsSection == "overview")
+            {
+                <section class="gs-group-settings-overview" aria-labelledby="group-settings-title">
+                    <div class="gs-settings-heading"><h2 id="group-settings-title">@Loc["Group settings"]</h2></div>
+                    <nav class="gs-group-settings-choices" aria-label="@Loc["Settings sections"]">
+                        <a href="@Href("details")"><MudIcon Icon="@Icons.Material.Rounded.Home" /><span><strong>@Loc["Group details"]</strong><small>@Loc["Name, description and defaults"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        @if (!group.IsPersonal)
+                        {
+                            <a href="@Href("people")"><MudIcon Icon="@Icons.Material.Rounded.People" /><span><strong>@Loc["People"]</strong><small>@Loc["Members, guests and invitations"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        }
+                        <a href="@Href("categories")"><MudIcon Icon="@Icons.Material.Rounded.LocalOffer" /><span><strong>@Loc["Categories"]</strong><small>@Loc["Organise expenses"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        @if (!group.IsPersonal)
+                        {
+                            <a href="@Href("rules")"><MudIcon Icon="@Icons.Material.Rounded.PieChart" /><span><strong>@Loc["Split rules"]</strong><small>@Loc["Choose how expenses are shared"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        }
+                    </nav>
+                </section>
+            }
+            else
+            {
+                <div><a class="gs-settings-back" href="@Href("settings")"><MudIcon Icon="@Icons.Material.Rounded.ArrowBack" />@Loc["Back to group settings"]</a></div>
+                @if (Current == "people")
+                {
+                    <section class="gs-settings-section" aria-labelledby="group-people-title">
+                        <div class="gs-settings-heading"><h2 id="group-people-title">@Loc["People"]</h2></div>
+                        <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
+                    </section>
+                }
+                else
+                {
+                    <GroupSettingsTab Group="@group" Section="@SettingsSection" />
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
+            @if (Current == "activity")
+            {
                 <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" DefaultPeriod="@group.DefaultPeriod"
                                 Kind="@LedgerKind" QueryChanged="OnLedgerQueryChanged" />
-                break;
-
-            case "people":
-                <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
-                break;
-
-            case "settings":
-                <GroupSettingsTab Group="@group" />
-                break;
-
-            default:
-                <GroupOverviewTab GroupId="@group.Id"
-                                  GroupName="@group.Name"
-                                  UserId="@UserInfo?.Id"
-                                  OnSettle="OnSettleAsync"
-                                  OnRequestPayment="RequestPaymentAsync" />
-                break;
-        }
-    </div>
+            }
+            else
+            {
+                <GroupOverviewTab GroupId="@group.Id" GroupName="@group.Name" UserId="@UserInfo?.Id"
+                                  OnSettle="OnSettleAsync" OnRequestPayment="RequestPaymentAsync" />
+            }
+        </div>
+    }
 
     @if (!group.IsArchive)
     {
@@ -116,6 +154,20 @@ else if (NotFound)
 </LoadView>
 
 @code {
+    private bool _archiveBusy;
+
+    private async Task ToggleArchiveAsync()
+    {
+        if (_archiveBusy || Group is not { IsPersonal: false } group) return;
+        _archiveBusy = true;
+        try
+        {
+            if (group.IsArchive) await GroupsService.UnarchiveGroupAsync();
+            else await GroupsService.ArchiveGroupAsync();
+        }
+        finally { _archiveBusy = false; }
+    }
+
     [Parameter] public Guid GroupId { get; set; }
 
     /// <summary>Which section is open, from the URL, so a tab is a place rather than a mode.</summary>
@@ -136,8 +188,7 @@ else if (NotFound)
     private (string Key, string Label)[] Sections =>
     [
         ("balances", Loc["Balances"].Value),
-        ("activity", Loc["Activity"].Value),
-        ("people", Loc["People"].Value)
+        ("activity", Loc["Activity"].Value)
     ];
 
     /// <summary>
@@ -162,7 +213,7 @@ else if (NotFound)
     /// Which section the URL asks for. The retired names remain aliases: a bookmark to a
     /// group's expenses, members, categories or overview still lands in the same place.
     /// </summary>
-    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "rules" or "splits" or "categories")
+    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "details" or "rules" or "splits" or "categories")
         ? "activity"
         : Tab?.ToLowerInvariant() switch
     {
@@ -171,7 +222,7 @@ else if (NotFound)
         // The older URLs remain useful links. Rules and categories are part of the group's
         // Settings now, under the group's own name and default, rather than a peer of its
         // day-to-day views.
-        "rules" or "splits" or "categories" or "settings" => "settings",
+        "rules" or "splits" or "categories" or "details" or "settings" => "settings",
         _ => "balances"
     };
 
@@ -197,6 +248,14 @@ else if (NotFound)
     private void OnLedgerQueryChanged(IReadOnlyDictionary<string, object?> query) =>
         Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(Href("activity")).ToString(), query),
             replace: true);
+
+    private string SettingsSection => Tab?.ToLowerInvariant() switch
+    {
+        "categories" => "categories",
+        "rules" or "splits" when Group is not { IsPersonal: true } => "rules",
+        "details" => "details",
+        _ => "overview"
+    };
 
     private string Href(string key) => key == "balances" || (key == "activity" && Group is { IsPersonal: true })
         ? $"/groups/{GroupId}"

@@ -8,46 +8,58 @@
     font-size: .75rem;
 }
 
-@media (max-width: 640px) {
-    .gs-mobile-ledger { display: block; }
-    .gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
-    /* Keep the grid's empty state and pager so both layouts use the same server page. */
-    .gs-ledger-listing { padding-bottom: 100px; }
-    .gs-feed-day { margin-bottom: 20px; }
-    .gs-feed-day h3 {
-        margin: 0;
-        padding: 12px 0 10px;
-        border-bottom: 1px solid var(--gs-line);
-        font-size: .9375rem;
-        font-weight: 700;
-    }
-    .gs-feed-row {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        border-bottom: 1px solid var(--gs-line);
-    }
-    .gs-feed-entry {
-        display: grid;
-        grid-template-columns: 40px minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: center;
-        flex: 1;
-        min-width: 0;
-        padding: 14px 0;
-        border: 0;
-        background: transparent;
-        color: var(--gs-ink);
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-    }
-    .gs-feed-entry:disabled { color: var(--gs-ink); cursor: default; }
-    .gs-feed-entry:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
-    .gs-feed-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .gs-feed-copy strong { font-size: .875rem; overflow-wrap: anywhere; line-height: 1.3; }
-    .gs-feed-copy > .gs-muted { font-size: .75rem; line-height: 1.4; }
-    .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
-    .gs-feed-row > .mud-menu { flex-shrink: 0; }
-    .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
+
+.gs-ledger-listing > .gs-mobile-ledger { display: block; }
+.gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
+/* The grid keeps the existing query state; Virtualize renders the feed. */
+
+.gs-ledger-listing .gs-mobile-ledger .gs-empty { padding: 36px 12px 12px; }
+.gs-ledger-listing .gs-mobile-ledger .gs-empty > .mud-icon-root { color: var(--gs-teal); }
+.gs-ledger-listing .gs-mobile-ledger .gs-empty > span { max-width: 32ch; }
+.gs-ledger-listing .gs-mobile-ledger .gs-empty .mud-button-root { min-height: 44px; }
+.gs-ledger-listing .gs-feed-day { margin-bottom: 20px; }
+.gs-ledger-listing .gs-feed-day h3 {
+    margin: 0;
+    padding: 12px 0 10px;
+    border-bottom: 1px solid var(--gs-line);
+    font-size: .9375rem;
+    font-weight: 700;
 }
+.gs-ledger-listing .gs-feed-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-bottom: 1px solid var(--gs-line);
+}
+.gs-ledger-listing .gs-feed-entry {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: 14px 0;
+    border: 0;
+    background: transparent;
+    color: var(--gs-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.gs-ledger-listing .gs-feed-entry:disabled { color: var(--gs-ink); cursor: default; }
+.gs-ledger-listing .gs-feed-entry:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+.gs-ledger-listing .gs-feed-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gs-ledger-listing .gs-feed-copy strong { font-size: .875rem; overflow-wrap: anywhere; line-height: 1.3; }
+.gs-ledger-listing .gs-feed-copy > .gs-muted { font-size: .75rem; line-height: 1.4; }
+.gs-ledger-listing .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
+.gs-ledger-listing .gs-feed-row > .mud-menu { flex-shrink: 0; }
+.gs-ledger-listing .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
+.gs-virtual-row, .gs-virtual-placeholder { height: 120px; min-height: 120px; max-height: 120px; box-sizing: border-box; }
+.gs-virtual-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--gs-line); padding-top: 8px; }
+.gs-virtual-date { color: var(--gs-muted); font-size: .75rem; line-height: 20px; flex: 0 0 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-ledger-listing .gs-virtual-row .gs-feed-row { min-height: 0; flex: 1; border: 0; }
+.gs-ledger-listing .gs-virtual-row .gs-feed-entry { min-height: 0; padding: 6px 0; }
+.gs-ledger-listing .gs-virtual-row .gs-feed-copy strong,
+.gs-ledger-listing .gs-virtual-row .gs-feed-copy > .gs-muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The page already reserves space for the floating action and bottom navigation. */

@@ -126,7 +126,7 @@
                         <ExpenseChip ReadOnly="true" Set="true" Label="category" Lead="for"
                                      Value="@(string.IsNullOrWhiteSpace(details.Category) ? Loc["Copy.Lower.uncategorized"].Value : details.Category)" />
                         <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
-                                     Value="@($"{(PaidByMe ? "You" : details.PaidByUserName)}{(details.PaidByIsGuest ? " (guest)" : "")}")" />
+                                     Value="@($"{(PaidByMe ? Loc["You"].Value : details.PaidByUserName)}{(details.PaidByIsGuest ? $" {ParticipantCopy.GuestMark}" : "")}")" />
                     </div>
                 }
                 else
@@ -405,7 +405,11 @@
     /// every settlement is called "Settlement", which names nothing.
     /// </summary>
     private string Title(TransactionDetailsResponse loaded) => loaded.Kind is ActivityKind.Transfer
-        ? Loc["{0} paid {1}", (loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName), (loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)].Value
+        ? loaded.PaidByUserId == Me
+            ? Loc["You paid {0}", loaded.PaidToUserName].Value
+            : loaded.PaidToUserId == Me
+                ? Loc["{0} paid you", loaded.PaidByUserName].Value
+                : Loc["{0} paid {1}", loaded.PaidByUserName, loaded.PaidToUserName].Value
         : loaded.Name;
 
     /// <summary>How many of a period's expenses show before "Show all".</summary>

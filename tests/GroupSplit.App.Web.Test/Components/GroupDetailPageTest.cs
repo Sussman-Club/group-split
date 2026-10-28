@@ -80,7 +80,7 @@ public class GroupDetailPageTest : ComponentTest
         page.HasComponent<Stub<GroupOverviewTab>>() ? "balances"
         : page.HasComponent<Stub<GroupLedgerTab>>() ? "activity"
         : page.HasComponent<Stub<GroupMembersTab>>() ? "people"
-        : page.HasComponent<Stub<GroupSettingsTab>>() ? "settings"
+        : page.HasComponent<Stub<GroupSettingsTab>>() || page.FindAll(".gs-group-settings-overview").Count > 0 ? "settings"
         : null;
 
     /// <summary>A dialog that has already been answered, the state a component is handed after a click.</summary>
@@ -148,10 +148,29 @@ public class GroupDetailPageTest : ComponentTest
         Assert.Equal(expected, Section(page));
 
         var current = page.Find("nav.gs-tabs a.is-current");
-        var href = expected == "balances" ? $"/groups/{Lisbon.Id}" : $"/groups/{Lisbon.Id}/{expected}";
+        var href = expected == "balances" ? $"/groups/{Lisbon.Id}" : $"/groups/{Lisbon.Id}/{(expected == "people" ? "settings" : expected)}";
 
         Assert.Equal(href, current.GetAttribute("href"));
         Assert.Equal("page", current.GetAttribute("aria-current"));
+    }
+
+    [Fact]
+    public void Settings_overview_links_to_each_section()
+    {
+        var page = Open(Lisbon.Id, "settings");
+        var links = page.FindAll(".gs-group-settings-choices a").Select(link => link.GetAttribute("href")).ToArray();
+        Assert.Equal(new[] { $"/groups/{Lisbon.Id}/details", $"/groups/{Lisbon.Id}/people", $"/groups/{Lisbon.Id}/categories", $"/groups/{Lisbon.Id}/rules" }, links);
+    }
+
+    [Theory]
+    [InlineData("details")]
+    [InlineData("people")]
+    [InlineData("categories")]
+    [InlineData("rules")]
+    public void Settings_sections_offer_a_link_back(string tab)
+    {
+        var page = Open(Lisbon.Id, tab);
+        Assert.Equal($"/groups/{Lisbon.Id}/settings", page.Find("a.gs-settings-back").GetAttribute("href"));
     }
 
     /// <summary>

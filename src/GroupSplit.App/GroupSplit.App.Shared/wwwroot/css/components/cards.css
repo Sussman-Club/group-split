@@ -88,6 +88,7 @@
     flex-wrap: nowrap;
     gap: 16px;
     min-width: 0;
+    width: 100%;
 }
 
 /* The one thing allowed to shrink. Without it the block claims its min-content width and
@@ -100,4 +101,15 @@
    2.25rem is wider than a phone. */
 .gs-identity-who h1 {
     overflow-wrap: anywhere;
+}
+
+.gs-identity .gs-group-header-archive { flex: 0 0 auto; min-height: 44px; margin-left: auto; }
+.gs-identity-who { flex: 1 1 auto; }
+@media (max-width: 480px) {
+    .gs-identity .gs-group-header-archive { padding-inline: 10px; font-size: .75rem; }
+}
+
+@media (max-width: 380px) {
+    .gs-inline.gs-identity { flex-wrap: wrap; }
+    .gs-identity .gs-group-header-archive { flex-basis: 100%; }
 }

@@ -1711,7 +1711,7 @@
     <value>Saldo</value>
   </data>
   <data name="Balances" xml:space="preserve">
-    <value>Saldos</value>
+    <value>Balances</value>
   </data>
   <data name="Balances appear once there is an expense." xml:space="preserve">
     <value>Los saldos aparecerán cuando haya un gasto.</value>
@@ -1909,7 +1909,7 @@
     <value>Eliminar pago de saldo</value>
   </data>
   <data name="Delete Transaction" xml:space="preserve">
-    <value>Eliminar movimiento</value>
+    <value>Eliminar transacción</value>
   </data>
   <data name="Delete category" xml:space="preserve">
     <value>Eliminar categoría</value>
@@ -2005,7 +2005,7 @@
     <value>Editar pago de saldo</value>
   </data>
   <data name="Edit Transaction" xml:space="preserve">
-    <value>Editar movimiento</value>
+    <value>Editar transacción</value>
   </data>
   <data name="Edit category" xml:space="preserve">
     <value>Editar categoría</value>
@@ -3007,7 +3007,7 @@
     <value>Mantén la sesión hasta {0} días. Desmarca para una sesión temporal.</value>
   </data>
   <data name="Still up" xml:space="preserve">
-    <value>Aún despierto</value>
+    <value>Sigues por aquí</value>
   </data>
   <data name="Stop offering this category" xml:space="preserve">
     <value>Dejar de ofrecer esta categoría</value>
@@ -4557,4 +4557,103 @@
   <data name="Clear this group with one payment" xml:space="preserve"><value>Liquida este grupo con un pago</value></data>
   <data name="Clear this group with {0} payments" xml:space="preserve"><value>Liquida este grupo con {0} pagos</value></data>
   <data name="Everything" xml:space="preserve"><value>Todo</value></data>
+  <data name="I paid" xml:space="preserve">
+    <value>Ya pagué</value>
+  </data>
+  <data name="by {0} in {1}" xml:space="preserve">
+    <value>de {0} en {1}</value>
+  </data>
+  <data name="to {0} in {1}" xml:space="preserve">
+    <value>a {0} en {1}</value>
+  </data>
+  <data name="(you)" xml:space="preserve">
+    <value>(tú)</value>
+  </data>
+  <data name="· history stays in the group" xml:space="preserve">
+    <value>· el historial permanece en el grupo</value>
+  </data>
+  <data name="Copy the join link" xml:space="preserve">
+    <value>Copiar el enlace de acceso</value>
+  </data>
+  <data name="Entry" xml:space="preserve">
+    <value>Registro</value>
+  </data>
+  <data name="Copy.Sentence.Amount" xml:space="preserve">
+    <value>Importe</value>
+  </data>
+  <data name="Actions" xml:space="preserve">
+    <value>Acciones</value>
+  </data>
+  <data name="Copy.Sentence.Item" xml:space="preserve">
+    <value>Artículo</value>
+  </data>
+  <data name="Quantity" xml:space="preserve">
+    <value>Cantidad</value>
+  </data>
+  <data name="Options" xml:space="preserve">
+    <value>Opciones</value>
+  </data>
+  <data name="expires {0:d MMM}" xml:space="preserve">
+    <value>caduca el {0:d MMM}</value>
+  </data>
+  <data name="Confirm {0} in {1}" xml:space="preserve">
+    <value>Confirmar {0} en {1}</value>
+  </data>
+  <data name="Copy.Lower.expense" xml:space="preserve">
+    <value>gasto</value>
+  </data>
+  <data name="Add your first category" xml:space="preserve">
+    <value>Añade tu primera categoría</value>
+  </data>
+  <data name="Show this group in your active groups again." xml:space="preserve">
+    <value>Vuelve a mostrar este grupo entre tus grupos activos.</value>
+  </data>
+  <data name="Hide this group from your active list. You can restore it anytime." xml:space="preserve">
+    <value>Oculta este grupo de tu lista activa. Puedes restaurarlo cuando quieras.</value>
+  </data>
+  <data name="Name, description and defaults" xml:space="preserve">
+    <value>Cambia el nombre, la descripción y las opciones predeterminadas.</value>
+  </data>
+  <data name="Members, guests and invitations" xml:space="preserve">
+    <value>Añade miembros o invitados y administra sus enlaces de acceso.</value>
+  </data>
+  <data name="Organise expenses" xml:space="preserve">
+    <value>Organiza los gastos con etiquetas como compra o alquiler.</value>
+  </data>
+  <data name="Choose how expenses are shared" xml:space="preserve">
+    <value>Guarda cómo se divide un gasto entre las personas del grupo.</value>
+  </data>
+  <data name="Back to group settings" xml:space="preserve">
+    <value>Volver a configuración del grupo</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Restaurar</value>
+  </data>
+  <data name="Your spending group and its activity preferences." xml:space="preserve">
+    <value>Tu grupo de gastos y sus preferencias de actividad.</value>
+  </data>
+  <data name="Your group's identity and shared expense preferences." xml:space="preserve">
+    <value>La identidad del grupo y las preferencias de los gastos compartidos.</value>
+  </data>
+  <data name="Filters" xml:space="preserve">
+    <value>Filtros</value>
+  </data>
+  <data name="View all time" xml:space="preserve">
+    <value>Ver todo el período</value>
+  </data>
+  <data name="Nothing recorded {0}" xml:space="preserve">
+    <value>Sin registros {0}</value>
+  </data>
+  <data name="Entry type: {0}" xml:space="preserve">
+    <value>Tipo de registro: {0}</value>
+  </data>
+  <data name="{0} expense" xml:space="preserve">
+    <value>{0} gasto</value>
+  </data>
+  <data name="{0} expenses" xml:space="preserve">
+    <value>{0} gastos</value>
+  </data>
+  <data name="Load more" xml:space="preserve">
+    <value>Cargar más</value>
+  </data>
 </root>

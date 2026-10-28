@@ -63,3 +63,9 @@
     width: 22px;
     height: 22px;
 }
+
+/* The current group settings page shares the global settings navigation. */
+.gs-settings-nav a[aria-current="page"] {
+    color: var(--gs-teal-deep);
+    background: var(--gs-teal-soft);
+}

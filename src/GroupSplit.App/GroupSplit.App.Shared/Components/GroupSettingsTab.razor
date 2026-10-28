@@ -27,13 +27,20 @@
     would have renamed the division under both.
 *@
 
-<div class="gs-stack" style="gap: 24px">
+<div class="gs-settings-content">
 
     @* Handed the rules this screen has already read, so the default is chosen from the
        same list the card beside it manages -- and a rule saved below is offered above
        without a second read. *@
-    <GroupDetailsCard Group="@Group" Rules="@_rules" Names="@_names" Loaded="@_loaded" />
+    @if (Section is null or "details")
+    {
+    <section class="gs-settings-section" aria-label="@Loc["Group details"]">
+        <GroupDetailsCard Group="@Group" Rules="@_rules" Names="@_names" Loaded="@_loaded" />
+    </section>
+    }
 
+    @if (Section is null)
+    {
     <div class="gs-page-head" style="margin-bottom: 0">
         <div>
             <div class="gs-eyebrow">@(Group.IsPersonal ? Loc["Categories"].Value : Loc["Rules and categories"].Value)</div>
@@ -45,7 +52,9 @@
         </div>
     </div>
 
-    @if (_stale)
+    }
+
+    @if (_stale && Section != "details")
     {
         <div class="gs-notice is-warn" role="alert">
             <MudIcon Icon="@Icons.Material.Outlined.CloudOff"/>
@@ -60,13 +69,15 @@
 
     <div class="gs-splits-grid">
 
-        <div class="gs-card gs-card-pad">
+        @if (Section is null or "categories")
+        {
+        <div id="group-categories" class="gs-card gs-card-pad gs-settings-section">
             <div class="gs-card-title">
                 <h3>@Loc["Categories"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Add"
                            OnClick="@(() => EditCategoryAsync(null))">
-                    New category
+                    @Loc["New category"]
                 </MudButton>
             </div>
 
@@ -90,7 +101,7 @@
                     </span>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                                OnClick="@(() => EditCategoryAsync(null))">
-                        Add your first category
+                        @Loc["Add your first category"]
                     </MudButton>
                 </div>
             }
@@ -155,10 +166,12 @@
             }
         </div>
 
+        }
+
         @* A personal group has nobody to divide with, so it keeps no rules. *@
-        @if (!Group.IsPersonal)
+        @if (!Group.IsPersonal && Section is null or "rules")
         {
-        <div class="gs-card gs-card-pad">
+        <div id="group-rules" class="gs-card gs-card-pad gs-settings-section">
             <div class="gs-card-title">
                 <h3>@Loc["Split rules"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
@@ -283,6 +296,8 @@
 
 @code {
     [Parameter, EditorRequired] public GroupResponse Group { get; set; } = null!;
+
+    [Parameter] public string? Section { get; set; }
 
     private Guid GroupId => Group.Id;
 

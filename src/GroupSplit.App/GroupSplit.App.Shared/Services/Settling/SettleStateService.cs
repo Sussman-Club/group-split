@@ -153,7 +153,7 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
             // confirmation is where that promise is either kept or left unverifiable.
             var where = recorded.Groups.Count switch
             {
-                > 1 => UiText.Format($" across {string.Join(" and ", recorded.Groups.Select(part => part.GroupName))}"),
+                > 1 => UiText.Format($" across {string.Join(UiText.Get(" and "), recorded.Groups.Select(part => part.GroupName))}"),
                 1 => UiText.Format($" in {recorded.Groups[0].GroupName}"),
                 _ => ""
             };

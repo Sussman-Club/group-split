@@ -200,7 +200,7 @@
                                 }
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                                            Disabled="@(_busy is not null || _bulkBusy)"
-                                           OnClick="@(() => ConfirmBundleAsync(bundle))">Confirm @bundle.Rows.Count in @bundle.Suggestion.Destination</MudButton>
+                                           OnClick="@(() => ConfirmBundleAsync(bundle))">@Loc["Confirm {0} in {1}", bundle.Rows.Count, bundle.Suggestion.Destination]</MudButton>
                             </details>
                         }
                         continue;
