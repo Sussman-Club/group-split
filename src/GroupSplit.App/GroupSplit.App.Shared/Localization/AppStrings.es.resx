@@ -4551,4 +4551,10 @@
   <data name="1 linked" xml:space="preserve">
     <value>1 vinculado</value>
   </data>
+  <data name="Expires {0:d MMM yyyy}" xml:space="preserve"><value>Caduca el {0:d MMM yyyy}</value></data>
+  <data name="Paid by {0}" xml:space="preserve"><value>Pagado por {0}</value></data>
+  <data name="Copy.Lower.everyone" xml:space="preserve"><value>todos</value></data>
+  <data name="Copy.Lower.uncategorized" xml:space="preserve"><value>sin categoría</value></data>
+  <data name="{0} expense · {1} spent" xml:space="preserve"><value>{0} gasto · {1} gastados</value></data>
+  <data name="{0} expenses · {1} spent" xml:space="preserve"><value>{0} gastos · {1} gastados</value></data>
 </root>

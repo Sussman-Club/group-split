@@ -124,7 +124,7 @@
                             </Mark>
                         </ExpenseChip>
                         <ExpenseChip ReadOnly="true" Set="true" Label="category" Lead="for"
-                                     Value="@(string.IsNullOrWhiteSpace(details.Category) ? "uncategorized" : details.Category)" />
+                                     Value="@(string.IsNullOrWhiteSpace(details.Category) ? Loc["Copy.Lower.uncategorized"].Value : details.Category)" />
                         <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
                                      Value="@($"{(PaidByMe ? "You" : details.PaidByUserName)}{(details.PaidByIsGuest ? " (guest)" : "")}")" />
                     </div>

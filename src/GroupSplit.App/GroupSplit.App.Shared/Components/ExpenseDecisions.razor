@@ -333,7 +333,7 @@
         id is null ? "" : Members.FirstOrDefault(member => member.Id == id).Label();
 
     private string CategoryName =>
-        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "uncategorized";
+        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? Loc["Copy.Lower.uncategorized"];
 
     private string PayerName =>
         Members.FirstOrDefault(member => member.Id == PayerId).Label();

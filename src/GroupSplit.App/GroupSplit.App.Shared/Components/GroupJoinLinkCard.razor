@@ -59,7 +59,7 @@
                       OnAdornmentClick="@CopyAsync" />
 
         <div class="meta" style="padding-top: 8px">
-            Expires @Clock.Local(_link.ExpiresAt).ToString("d MMM yyyy")@(string.IsNullOrWhiteSpace(_link.CreatedByUserName) ? "" : Loc[" · made by {0}", _link.CreatedByUserName].Value)
+            @Loc["Expires {0:d MMM yyyy}", Clock.Local(_link.ExpiresAt)]@(string.IsNullOrWhiteSpace(_link.CreatedByUserName) ? "" : Loc[" · made by {0}", _link.CreatedByUserName].Value)
         </div>
 
         @* The two you would reach for, then a hairline, then the one that cannot be

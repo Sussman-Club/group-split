@@ -67,7 +67,7 @@
                     <ActivatorContent Context="menu">
                         <button type="button" class="gs-ledger-payer" aria-haspopup="menu"
                                 @onclick="@(args => menu.ToggleAsync(args))">
-                            <span>Paid by @(_paidBy is null ? "everyone" : _payers.FirstOrDefault(payer => payer.Id == _paidBy)?.FullName ?? Loc["selected person"].Value)</span>
+                            <span>@Loc["Paid by {0}", _paidBy is null ? Loc["Copy.Lower.everyone"].Value : _payers.FirstOrDefault(payer => payer.Id == _paidBy)?.FullName ?? Loc["selected person"].Value]</span>
                             <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
                         </button>
                     </ActivatorContent>
@@ -102,7 +102,7 @@
 
     <LoadView Skeleton="SkeletonLayout.Summary" Loading="@(_initializing || (_spending is null && _inFlight is not null))" Failed="@(_spending is null || _byCategory is null)" Retry="ReadSummaryAsync">
     <div class="gs-mobile-spending" aria-live="polite">
-        <span>@ExpenseCount expense@(ExpenseCount == 1 ? "" : "s") · @Spent.ToMoney() spent</span>
+        <span>@(ExpenseCount == 1 ? Loc["{0} expense · {1} spent", ExpenseCount, Spent.ToMoney()] : Loc["{0} expenses · {1} spent", ExpenseCount, Spent.ToMoney()])</span>
         <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">@Loc["Details"]</button>
     </div>
 
