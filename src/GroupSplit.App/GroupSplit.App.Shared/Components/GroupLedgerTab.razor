@@ -415,7 +415,7 @@
 
     private (string Label, ActivityKind? Value)[] Kinds =>
     [
-        ("Everything", null),
+        (Loc["Everything"].Value, null),
         (Loc["Expenses"].Value, ActivityKind.Expense),
         (Loc["Settlements"].Value, ActivityKind.Transfer)
     ];

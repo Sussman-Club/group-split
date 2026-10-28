@@ -4559,4 +4559,5 @@
   <data name="{0} expenses · {1} spent" xml:space="preserve"><value>{0} gastos · {1} gastados</value></data>
   <data name="Clear this group with one payment" xml:space="preserve"><value>Liquida este grupo con un pago</value></data>
   <data name="Clear this group with {0} payments" xml:space="preserve"><value>Liquida este grupo con {0} pagos</value></data>
+  <data name="Everything" xml:space="preserve"><value>Todo</value></data>
 </root>
