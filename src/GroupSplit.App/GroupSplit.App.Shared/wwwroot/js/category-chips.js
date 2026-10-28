@@ -9,7 +9,7 @@ function layout(row) {
     chips.forEach(chip => { chip.hidden = false; });
     // Reserve the widest overflow label before fitting, so the last chip never
     // displaces the button that makes the remaining categories reachable.
-    label.textContent = "+" + chips.length + " more";
+    label.textContent = row.dataset.moreLabel.replace("{0}", chips.length);
     const reserve = more.getBoundingClientRect().width + gap;
     const widths = chips.map(chip => chip.getBoundingClientRect().width);
     const available = row.clientWidth;
@@ -28,7 +28,7 @@ function layout(row) {
     chips.forEach((chip, index) => { chip.hidden = index >= visible; });
     const hidden = chips.length - visible;
     more.hidden = hidden === 0;
-    label.textContent = "+" + hidden + " more";
+    label.textContent = row.dataset.moreLabel.replace("{0}", hidden);
 }
 
 export function fit(row) {

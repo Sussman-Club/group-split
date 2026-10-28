@@ -48,7 +48,9 @@ builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
 // Add shared services
 builder.Services.AddSharedServices();
+builder.Services.AddWebLocalization();
 builder.Services.AddReceiptClientPolicies();
+builder.Services.ConfigureReceiptHttpClient();
 
 // Initialize render mode configuration
 var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
@@ -124,6 +126,7 @@ app.UseWhen(
 app.UseDefaultHttpsRedirection([WebAppExtensions.WebhookPrefix]);
 
 app.UseAuthentication();
+app.UseRequestLocalization();
 app.UseAuthorization();
 
 app.UseAntiforgery();

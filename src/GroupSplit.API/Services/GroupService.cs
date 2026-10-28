@@ -41,6 +41,10 @@ public interface IGroupService
     /// </summary>
     Task<IQueryable<Group>> GetAllGroups(CancellationToken cancellationToken = default);
 
+    /// <summary>Filters and optionally pages the reader's groups before materialization.</summary>
+    Task<IQueryable<Group>> GetGroups(PageRequest? page = null, bool? archived = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets a group by ID for the current user.
     /// </summary>
@@ -54,8 +58,8 @@ public interface IGroupService
     /// IsArchive is true only when that person archived it. Reading it off the group would
     /// tell every member what one of them had tidied away.
     /// <para>
-    /// The reader's personal group comes first, which is the only order the list has: it
-    /// is the one group everybody has, and the one they reach for most.
+    /// The reader's personal group comes first, followed by name and id so pages have a
+    /// stable order even when multiple groups share a name.
     /// </para>
     /// </remarks>
     IQueryable<GroupResponse> Describe(IQueryable<Group> groups);
@@ -301,6 +305,27 @@ public class GroupService(
         context.Set<Group>()
             .Where(g => g.Users.Any(u => u.Id == userId));
 
+    public Task<IQueryable<Group>> GetGroups(PageRequest? page = null, bool? archived = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = userContext.User.Id;
+        IQueryable<Group> groups = from g in GroupsOf(userId)
+                     join membership in context.Set<GroupMembership>()
+                         on new { GroupId = g.Id, UserId = userId }
+                         equals new { membership.GroupId, membership.UserId }
+                     where archived == null || (membership.ArchivedAt != null) == archived
+                     orderby g.Id == userId descending, g.Name, g.Id
+                     select g;
+
+        if (page is not null)
+        {
+            var paging = page.Normalized();
+            groups = groups.Skip((paging.Page - 1) * paging.PageSize).Take(paging.PageSize);
+        }
+
+        return Task.FromResult(groups);
+    }
+
     public async Task<IQueryable<Group>> GetGroupById(Guid groupId, CancellationToken cancellationToken = default)
     {
         return from g in await GetAllGroups(cancellationToken)
@@ -316,7 +341,7 @@ public class GroupService(
             join membership in context.Set<GroupMembership>()
                 on new { GroupId = @group.Id, UserId = userId }
                 equals new { membership.GroupId, membership.UserId }
-            orderby @group.Id == userId descending
+            orderby @group.Id == userId descending, @group.Name, @group.Id
             select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                 membership.ArchivedAt != null)
             {

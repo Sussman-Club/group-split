@@ -294,7 +294,7 @@ public class EditRuleDialogTest : ComponentTest
 
         var warning = provider.Find(".gs-notice.is-warn strong");
 
-        Assert.Equal("Groceries, Utilities and Cleaning all divide by this rule", warning.TextContent.Trim());
+        Assert.Equal("Groceries, Utilities and Cleaning divide by this rule", warning.TextContent.Trim());
     }
 
     /// <summary>One category using the rule is a local decision, and gets no warning.</summary>

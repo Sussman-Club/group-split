@@ -25,10 +25,10 @@
         <MudTextField T="string" @bind-Value="_filter" @bind-Value:after="StateHasChanged"
                       Immediate="true" DebounceInterval="150"
                       Variant="Variant.Outlined" Margin="Margin.Dense"
-                      Placeholder="Find a line" Clearable="true"
+                      Placeholder="@Loc["Find a line"]" Clearable="true"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Rounded.Search"
-                      aria-label="Find a line on this bill" />
+                      aria-label="@Loc["Find a line on this bill"]" />
     </div>
 }
 
@@ -55,7 +55,7 @@
                 @* What a till prints at the bottom, moved to the top because on screen it is
                    what says how much paper there is before you start scrolling. *@
                 <p class="gs-slip-where">
-                    @Receipt.Items.Count @(Receipt.Items.Count == 1 ? "item" : "items")
+                    @Receipt.Items.Count @(Receipt.Items.Count == 1 ? Loc["item"].Value : Loc["items"].Value)
                 </p>
             </header>
 
@@ -110,11 +110,11 @@
                             }
                             @if (row.Tax != 0)
                             {
-                                @($"tax {row.Tax.ToMoney()}")
+                                @(Loc["tax {0}", row.Tax.ToMoney()].Value)
                             }
                             @if (row.IsTaxable != false && row.TaxRate is { } rate)
                             {
-                                <text> @($"({rate:0.####}% rate)")</text>
+                                <text> @(Loc["({0:0.####}% rate)", rate].Value)</text>
                             }
                         </span>
                     }
@@ -129,7 +129,7 @@
 
         @if (Showing.Count == 0)
         {
-            <p class="gs-slip-none">Nothing on this bill matches.</p>
+            <p class="gs-slip-none">@Loc["Nothing on this bill matches."]</p>
         }
 
         <div class="gs-slip-rule" aria-hidden="true"></div>
@@ -138,7 +138,7 @@
            be a receipt adding up to something the card was never charged. *@
         <dl class="gs-slip-totals">
             <div>
-                <dt>Items</dt>
+                <dt>@Loc["Copy.Sentence.Items"]</dt>
                 <dd>@Receipt.Subtotal.ToMoney()</dd>
             </div>
 
@@ -147,7 +147,7 @@
             @if (Receipt.Tax != 0)
             {
                 <div>
-                    <dt>Tax</dt>
+                    <dt>@Loc["Tax"]</dt>
                     <dd>@Receipt.Tax.ToMoney()</dd>
                 </div>
             }
@@ -155,13 +155,13 @@
             @if (Receipt.Tip != 0)
             {
                 <div>
-                    <dt>Tip</dt>
+                    <dt>@Loc["Tip"]</dt>
                     <dd>@Receipt.Tip.ToMoney()</dd>
                 </div>
             }
 
             <div class="is-total">
-                <dt>Total</dt>
+                <dt>@Loc["Total"]</dt>
                 <dd>@Receipt.Total.ToMoney()</dd>
             </div>
         </dl>
@@ -170,9 +170,7 @@
            so a warehouse bill with a folded line of twelve cannot read "Showing 15 of 6". *@
         @if (Filtered)
         {
-            <p class="gs-slip-foot">
-                Showing @Narrowed().Count() of @Receipt.Items.Count. The totals are the whole bill.
-            </p>
+            <p class="gs-slip-foot">@Loc["Showing {0} of {1}. The totals are the whole bill.", Narrowed().Count(), Receipt.Items.Count].Value</p>
         }
 
         @* The legend describes a mark, so it is gated on a mark being on screen rather than
@@ -180,7 +178,7 @@
            nothing. *@
         @if (Receipt.Tax != 0 && Narrowed().Any(line => line.TotalPrice > 0 && line.TaxAmount == 0))
         {
-            <p class="gs-slip-foot">N — no tax charged on this line</p>
+            <p class="gs-slip-foot">@Loc["N — no tax charged on this line"]</p>
         }
 
         @* Only where the answer is wanted. A bill's rules are read for exactly one reason --
@@ -229,9 +227,7 @@
     /// source lines is printed with the indentation of all four in the middle of it.
     /// </remarks>
     private string Outstanding =>
-        $"{Wanting} of {Receipt.Items.Count} {(Receipt.Items.Count == 1 ? "line" : "lines")} "
-        + $"{(Wanting == 1 ? "has" : "have")} no split rule. This expense cannot be divided by "
-        + $"its bill until {(Wanting == 1 ? "it does" : "they do")}.";
+        Loc["{0} of {1} items need a split rule before this expense can be divided.", Wanting, Receipt.Items.Count];
 
     /// <summary>The lines being looked at: the paper, narrowed to what is being searched for.</summary>
     /// <remarks>
@@ -301,7 +297,7 @@
     private string Divides(Row row) => row switch
     {
         { Rule: { Length: > 0 } named } => named,
-        _ when Receipt.DividesItsExpense => "no split rule yet",
+        _ when Receipt.DividesItsExpense => Loc["no split rule yet"].Value,
         _ => string.Empty
     };
 
@@ -309,7 +305,7 @@
     /// A count without its trailing zeros: a bill says "2", not "2.000", and says "0.25"
     /// when that is what was weighed.
     /// </summary>
-    private static string Trimmed(decimal quantity) =>
+    private string Trimmed(decimal quantity) =>
         quantity == decimal.Truncate(quantity)
             ? decimal.Truncate(quantity).ToString()
             : quantity.ToString("0.###");

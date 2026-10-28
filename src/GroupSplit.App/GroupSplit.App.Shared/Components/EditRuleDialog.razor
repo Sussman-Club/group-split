@@ -5,7 +5,7 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">Edit split rule</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@Loc["Edit split rule"]</MudText>
     </TitleContent>
 
     <DialogContent>
@@ -25,11 +25,8 @@
             <div class="gs-notice mt-4">
                 <MudIcon Icon="@Icons.Material.Outlined.History"/>
                 <div class="gs-notice-body">
-                    <strong>Changing the division starts a new version of it</strong>
-                    <span>
-                        Expenses already recorded keep the split they were saved with, and go
-                        on naming the version that produced it.
-                    </span>
+                    <strong>@Loc["Changing the division starts a new version of it"]</strong>
+                    <span>@Loc["Expenses already recorded keep the split they were saved with, and go on naming the version that produced it."]</span>
                 </div>
             </div>
 
@@ -42,8 +39,8 @@
                 <div class="gs-notice is-warn mt-3" role="alert">
                     <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                     <div class="gs-notice-body">
-                        <strong>Could not check which categories divide by this rule</strong>
-                        <span>More than one may, and this changes what every one of them pre-fills.</span>
+                        <strong>@Loc["Could not check which categories divide by this rule"]</strong>
+                        <span>@Loc["More than one may, and this changes what every one of them pre-fills."]</span>
                     </div>
                 </div>
             }
@@ -52,8 +49,8 @@
                 <div class="gs-notice is-warn mt-3" role="alert">
                     <MudIcon Icon="@Icons.Material.Outlined.Warning"/>
                     <div class="gs-notice-body">
-                        <strong>@UsedBy.Listed() @((UsedBy.Count == 2) ? "both" : "all") divide by this rule</strong>
-                        <span>Editing it changes what every one of them pre-fills, from now on.</span>
+                        <strong>@Loc["{0} divide by this rule", UsedBy.Listed()]</strong>
+                        <span>@Loc["Editing it changes what every one of them pre-fills, from now on."]</span>
                     </div>
                 </div>
             }
@@ -61,11 +58,9 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_model is null || _saving)" OnClick="@Submit">
-            Save
-        </MudButton>
+                   Disabled="@(_model is null || _saving)" OnClick="@Submit">@Loc["Save"]</MudButton>
     </DialogActions>
 </MudDialog>
 

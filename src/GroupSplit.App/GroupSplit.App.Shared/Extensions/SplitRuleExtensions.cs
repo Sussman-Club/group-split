@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.Shared;
 
 namespace GroupSplit.App.Shared.Extensions;
@@ -62,7 +63,9 @@ public static class SplitRuleExtensions
     public static string DisplayName(this SplitRuleResponse rule, IReadOnlyDictionary<Guid, string>? names) =>
         rule.BuiltIn && rule.AllForUserId is { } userId &&
         names?.GetValueOrDefault(userId) is { Length: > 0 } named
-            ? $"All for {named}"
+            ? UiText.Format($"All for {named}")
+            : rule.BuiltIn && rule.DividesByBill ? UiText.Get("Copy.Sentence.By_the_bill")
+            : rule.BuiltIn && rule.DividesEvenly ? UiText.Get("Everyone evenly")
             : rule.Name;
 
     extension(SplitRuleDto? definition)
@@ -71,36 +74,36 @@ public static class SplitRuleExtensions
         public string Summary(IReadOnlyDictionary<Guid, string>? names = null) => definition switch
         {
             SoleSplitRuleDto sole => names is null
-                ? "All on one person"
-                : $"All on {Named(names, sole.UserId)}",
+                ? UiText.Get("All on one person")
+                : UiText.Format($"All on {Named(names, sole.UserId)}"),
 
             // Names nobody, and cannot: who owes what is on each expense's own bill rather
             // than on the rule. Without this it fell through to the "divides evenly" default
             // below, which is the one thing an itemised rule does not do.
-            ItemizedSplitRuleDto => "By the bill on each expense",
+            ItemizedSplitRuleDto => UiText.Get("By the bill on each expense"),
 
-            EvenSplitRuleDto { Among.Count: 0 } => "Evenly, between everyone in the group",
+            EvenSplitRuleDto { Among.Count: 0 } => UiText.Get("Evenly, between everyone in the group"),
 
             EvenSplitRuleDto even => names is null
-                ? $"Evenly, between {even.Among.Count}"
-                : $"Evenly, between {Listed(even.Among.Select(id => Named(names, id)))}",
+                ? UiText.Format($"Evenly, between {even.Among.Count}")
+                : UiText.Format($"Evenly, between {Listed(even.Among.Select(id => Named(names, id)))}"),
 
             PercentSplitRuleDto percent => names is null
-                ? $"By percentage, between {percent.Percentages.Count}"
-                : "By percentage — " + Listed(
+                ? UiText.Format($"By percentage, between {percent.Percentages.Count}")
+                : UiText.Get("By percentage — ") + Listed(
                     Ordered(percent.Percentages).Select(held =>
                         $"{Named(names, held.Key)} {Trimmed(held.Value)}%"),
                     ", "),
 
             SharesSplitRuleDto shares => names is null
-                ? $"By shares, between {shares.Shares.Count}"
-                : "By shares — " + Listed(
+                ? UiText.Format($"By shares, between {shares.Shares.Count}")
+                : UiText.Get("By shares — ") + Listed(
                     Ordered(shares.Shares).Select(held => $"{Named(names, held.Key)} {held.Value}"),
                     ", "),
 
             // A category that names no rule divides evenly, and so does a rule whose type
             // nobody has chosen yet. Neither is broken and both divide the same way.
-            _ => "Evenly, between everyone in the group"
+            _ => UiText.Get("Evenly, between everyone in the group")
         };
 
         /// <summary>
@@ -115,12 +118,12 @@ public static class SplitRuleExtensions
             SharesSplitRuleDto shares when shares.Shares.Count > 0 =>
                 string.Join(" : ", Ordered(shares.Shares).Select(held => held.Value.ToString())),
 
-            SoleSplitRuleDto => "all on one",
+            SoleSplitRuleDto => UiText.Get("all on one"),
 
             // There is no ratio to show: it is a different one on every expense.
-            ItemizedSplitRuleDto => "by the bill",
+            ItemizedSplitRuleDto => UiText.Get("by the bill"),
 
-            _ => "evenly"
+            _ => UiText.Get("evenly")
         };
 
         /// <summary>
@@ -148,7 +151,7 @@ public static class SplitRuleExtensions
                         .. Ordered(shares.Shares).Select(held => new SplitRuleWeight(
                             held.Key,
                             Named(names, held.Key),
-                            $"{held.Value} {(held.Value == 1 ? "share" : "shares")}",
+                            held.Value == 1 ? UiText.Format($"{held.Value} share") : UiText.Format($"{held.Value} shares"),
                             // A rule whose shares are all zero divides nothing and the API
                             // refuses to save one, but a half-typed form can hold it.
                             total == 0 ? null : Math.Round(held.Value * 100m / total, 1)))
@@ -162,7 +165,7 @@ public static class SplitRuleExtensions
                     return
                     [
                         .. even.Among.Select(id =>
-                            new SplitRuleWeight(id, Named(names, id), "1 share", each))
+                            new SplitRuleWeight(id, Named(names, id), UiText.Get("1 share"), each))
                     ];
                 }
 
@@ -170,7 +173,7 @@ public static class SplitRuleExtensions
                 // something being shared out, and nothing here is: 100% is what it comes
                 // to, not what it says.
                 case SoleSplitRuleDto sole:
-                    return [new SplitRuleWeight(sole.UserId, Named(names, sole.UserId), "all of it", 100m)];
+                    return [new SplitRuleWeight(sole.UserId, Named(names, sole.UserId), UiText.Get("all of it"), 100m)];
 
                 default:
                     return [];
@@ -196,7 +199,7 @@ public static class SplitRuleExtensions
     /// the rule as a departure, on the one screen whose purpose is saying who was on what.
     /// </remarks>
     private static string Named(IReadOnlyDictionary<Guid, string>? names, Guid id) =>
-        names is not null && names.TryGetValue(id, out var name) ? name : "someone not in the group";
+        names is not null && names.TryGetValue(id, out var name) ? name : UiText.Get("someone not in the group");
 
     /// <summary>33.30 is 33.3, and 50.00 is 50 -- trailing zeroes are not precision.</summary>
     private static string Trimmed(decimal value) => value.ToString("0.##");

@@ -30,7 +30,7 @@ public record SettleUpRequest
     /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
     /// </summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
-        ErrorMessage = "The offset from UTC must be within 14 hours either way.")]
+        ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
     public int? UtcOffset { get; set; }
 
     /// <summary>
@@ -52,6 +52,6 @@ public record SettleUpRequest
     /// Optional, and deliberately so. This has to stay one tap, and a note nobody can skip is
     /// the thing that would stop it being one.
     /// </remarks>
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string? Description { get; set; }
 }

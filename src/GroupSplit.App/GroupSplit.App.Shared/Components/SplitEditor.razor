@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
+@inject IDialogService ChoiceDialogs
 
 @*
     How one expense is divided, for the two dialogs that write one.
@@ -41,86 +42,16 @@
 
 <MudStack Spacing="2">
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Split</MudText>
+        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">@Loc["Split"]</MudText>
 
         @* The app's own segmented control, not MudBlazor's toggle group: the theme
            switcher established this shape and a second, differently-drawn two-option
            selector in the same product reads as a component from somewhere else. Short,
            outcome-focused labels make the five choices scannable; the sentence below tells
            the fuller story of the selected choice. *@
-        <div class="gs-seg gs-seg-labels @(Options > 3 ? "is-wide" : "")"
-             role="radiogroup"
-             aria-label="How to divide it"
-             style="--gs-seg-n: @Options; --gs-seg-i: @Position">
-            <span class="gs-seg-thumb" aria-hidden="true"></span>
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.Automatic ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.Automatic ? "true" : "false")"
-                    aria-label="Default: use the category or group default"
-                    title="Use the category or group default"
-                    disabled="@(!Members.Any())"
-                    @onclick="@(() => OnModeChanged(Mode.Automatic))">
-                Default
-            </button>
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.Even ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.Even ? "true" : "false")"
-                    aria-label="Evenly: divide the total evenly"
-                    title="Divide the total evenly"
-                    disabled="@(!Members.Any() || EvenRuleId is null)"
-                    @onclick="@(() => OnModeChanged(Mode.Even))">
-                Evenly
-            </button>
-
-            @* Always drawn, and disabled until the group's rules are in hand -- which is a
-               round trip, and one the dialog makes while this is already on screen. Drawn
-               only once they arrived, the control went from two options to three as they
-               landed and resized itself under the pointer: the thumb is positioned from
-               --gs-seg-n, so an option appearing moves every option. A disabled button that
-               becomes enabled moves nothing. *@
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.AllForOne ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.AllForOne ? "true" : "false")"
-                    aria-label="One pays: choose one person to cover the full expense"
-                    title="Choose one person to cover the full expense"
-                    disabled="@(!Members.Any() || MemberRules.Count == 0)"
-                    @onclick="@(() => OnModeChanged(Mode.AllForOne))">
-                One pays
-            </button>
-
-            @* Draw the option before the receipt is ready so the split control does not
-               resize when scanning completes. Creation uses local item assignments;
-               editing uses the saved bill. *@
-            @if (ShowByBill)
-            {
-                <button type="button"
-                        class="gs-seg-btn @(Chosen is Mode.ByBill ? "active" : "")"
-                        role="radio"
-                        aria-checked="@(Chosen is Mode.ByBill ? "true" : "false")"
-                        aria-label="Receipt: split from receipt items"
-                        title="Split from receipt items"
-                        disabled="@(!Members.Any() || Bill is null || BillRuleId is null)"
-                        @onclick="@(() => OnModeChanged(Mode.ByBill))">
-                    Receipt
-                </button>
-            }
-
-            <button type="button"
-                    class="gs-seg-btn @(Chosen is Mode.ByHand ? "active" : "")"
-                    role="radio"
-                    aria-checked="@(Chosen is Mode.ByHand ? "true" : "false")"
-                    aria-label="Custom: enter each person's amount"
-                    title="Enter each person's amount"
-                    disabled="@(!Members.Any())"
-                    @onclick="@(() => OnModeChanged(Mode.ByHand))">
-                Custom
-            </button>
-        </div>
+        <MudButton Variant="Variant.Outlined" OnClick="ChooseSplitAsync" EndIcon="@Icons.Material.Outlined.ChevronRight">
+            @ChosenLabel
+        </MudButton>
     </MudStack>
 
     <div class="gs-split-mode-hint" aria-live="polite">
@@ -130,28 +61,16 @@
 
     @if (!Members.Any())
     {
-        <MudAlert Severity="Severity.Info" Dense="true">
-            Pick a group first, and its members can be given a share.
-        </MudAlert>
+        <MudAlert Severity="Severity.Info" Dense="true">@Loc["Pick a group first, and its members can be given a share."]</MudAlert>
     }
     else if (Chosen is Mode.AllForOne)
     {
         @* One control, and then the same read-only list every automatic division shows:
            what this chooses is a rule, so the API divides by it and answers with the
            figures, exactly as it does for the category's own rule. *@
-        <MudSelect T="Guid?"
-                   Label="Who should cover it?"
-                   Value="@AllFor"
-                   ValueChanged="@OnAllForChanged"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense">
-            @foreach (var rule in MemberRules)
-            {
-                <MudSelectItem T="Guid?" Value="@rule.Id" @key="rule.Id">
-                    @NameOf(rule)
-                </MudSelectItem>
-            }
-        </MudSelect>
+        <MudButton Variant="Variant.Outlined" OnClick="ChoosePersonAsync" EndIcon="@Icons.Material.Outlined.ChevronRight">
+            @(MemberRules.FirstOrDefault(rule => rule.Id == AllFor) is { } selectedRule ? NameOf(selectedRule) : Loc["Who should cover it?"].Value)
+        </MudButton>
 
         @Divided
     }
@@ -222,7 +141,7 @@
                   Class="gs-split-remaining">
             @if (Assigned)
             {
-                <text>Every cent of @Amount.ToMoney() is assigned.</text>
+                <text>@Loc["Every cent of {0} is assigned.", Amount.ToMoney()].Value</text>
             }
             else
             {
@@ -230,7 +149,7 @@
                 {
                     @* The space as code: Razor drops a literal one that only sits between
                        two tags, and the sentences ran together. *@
-                    <strong>Not saved: the shares have to add up to @Amount.ToMoney().</strong>@(" ")
+                    <strong>@Loc["Not saved: the shares have to add up to {0}.", Amount.ToMoney()].Value</strong>@(" ")
                 }
 
                 <text>@ShareRounding.Unbalanced(Amount, _shares)</text>
@@ -253,6 +172,38 @@
 </MudStack>
 
 @code {
+    private async Task ChoosePersonAsync()
+    {
+        var options = MemberRules.Select(rule => new ExpenseChoiceDialog.Option(rule.Id.ToString(), NameOf(rule))).ToList();
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>(Loc["Who covers this expense?"].Value,
+            new DialogParameters<ExpenseChoiceDialog> { { x => x.Items, options }, { x => x.Selected, AllFor?.ToString() ?? "" } },
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false, Data: string selected } && Guid.TryParse(selected, out var id))
+            await OnAllForChanged(id);
+    }
+
+    private string ChosenLabel => Chosen switch
+    {
+        Mode.Automatic => Loc["Category default"].Value, Mode.Even => Loc["Copy.Sentence.Evenly"].Value, Mode.AllForOne => Loc["One person"].Value,
+        Mode.ByBill => Loc["Receipt items"].Value, _ => Loc["Custom amounts"].Value
+    };
+    private async Task ChooseSplitAsync()
+    {
+        var items = new List<ExpenseChoiceDialog.Option>
+        {
+            new(nameof(Mode.Automatic), Loc["Category default"].Value, Loc["Follow the category or group rule"].Value, !Members.Any()),
+            new(nameof(Mode.Even), Loc["Copy.Sentence.Evenly"].Value, Loc["Equal shares, rounded to the cent"].Value, !Members.Any() || EvenRuleId is null),
+            new(nameof(Mode.AllForOne), Loc["One person"].Value, Loc["One person covers the full expense"].Value, !Members.Any() || MemberRules.Count == 0),
+            new(nameof(Mode.ByHand), Loc["Custom amounts"].Value, Loc["Enter each person's exact amount"].Value, !Members.Any())
+        };
+        if (ShowByBill) items.Insert(3, new(nameof(Mode.ByBill), Loc["Receipt items"].Value, Loc["Assign items from the bill"].Value, !Members.Any() || Bill is null || BillRuleId is null));
+        var parameters = new DialogParameters<ExpenseChoiceDialog> { { x => x.Items, items }, { x => x.Selected, Chosen.ToString() } };
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>(Loc["How should it split?"].Value, parameters,
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is { Canceled: false, Data: string picked } && Enum.TryParse<Mode>(picked, out var mode))
+            await OnModeChanged(mode);
+    }
+
     /// <summary>
     /// The division as the API worked it out, which is what both automatic answers
     /// show: the category's rule, and the rule the expense names for itself. One
@@ -277,12 +228,7 @@
                belongs to the rule its category names, so re-picking the same category
                reaches the same version it already has. *@
             <MudAlert Severity="Severity.Info" Dense="true">
-                The rule has changed since this was recorded. It stays divided the way it
-                was on @changed.ToLocalTime().ToString("d MMM yyyy"), and
-                <strong>Automatically</strong> divides it again by that same version rather
-                than by the rule as it stands now &mdash; nobody correcting an expense is
-                re-billed under a division agreed afterwards. To set the shares yourself,
-                choose <strong>By hand</strong>.
+                @Loc["The rule has changed since this was recorded. It stays divided the way it was on {0:d MMM yyyy}, and Automatically divides it again by that same version rather than by the rule as it stands now — nobody correcting an expense is re-billed under a division agreed afterwards. To set the shares yourself, choose By hand.", changed.ToLocalTime()]
             </MudAlert>
         }
 
@@ -296,7 +242,7 @@
         }
         else if (Preview is null)
         {
-            <MudText Typo="Typo.caption">Working it out…</MudText>
+            <MudText Typo="Typo.caption">@Loc["Working it out…"]</MudText>
         }
         else
         {
@@ -310,13 +256,13 @@
                                 <span>@share.UserName</span>
                                 @if (share.IsGuest)
                                 {
-                                    <span class="gs-tag">guest</span>
+                                    <span class="gs-tag">@Loc["Copy.Lower.guest"]</span>
                                 }
                                 else if (Leavers.Any(leaver => leaver.UserId == share.UserId))
                                 {
                                     @* As in the custom view, so the division reads the same
                                        whichever side of the toggle it is on. *@
-                                    <span class="gs-tag neutral">left the group</span>
+                                    <span class="gs-tag neutral">@Loc["left the group"]</span>
                                 }
                             </div>
                         </div>
@@ -608,11 +554,11 @@
 
     private string ModeHint => Chosen switch
     {
-        Mode.Automatic => "Use the category's split, or the group default when it is uncategorized.",
-        Mode.Even => "Divide the total evenly across everyone in the group.",
-        Mode.AllForOne => "Choose one person to cover the whole expense.",
-        Mode.ByBill => "Assign receipt items, then split from those assignments.",
-        Mode.ByHand => "Enter the exact amount each person owes.",
+        Mode.Automatic => Loc["Use the category's split, or the group default when it is uncategorized."].Value,
+        Mode.Even => Loc["Divide the total evenly across everyone in the group."].Value,
+        Mode.AllForOne => Loc["Choose one person to cover the whole expense."].Value,
+        Mode.ByBill => Loc["Assign receipt items, then split from those assignments."].Value,
+        Mode.ByHand => Loc["Enter the exact amount each person owes."].Value,
         _ => string.Empty
     };
 
@@ -635,8 +581,8 @@
     /// fallback, and reads better than leaving the caption out.
     /// </summary>
     private string Explanation => Preview?.RuleName is { Length: > 0 } rule
-        ? $"Divided by the \"{rule}\" rule."
-        : "Divided evenly between everyone in the group.";
+        ? Loc["Divided by the \"{0}\" rule.", rule].Value
+        : Loc["Divided evenly between everyone in the group."].Value;
 
     private decimal ShareOf(Guid userId) =>
         _shares?.FirstOrDefault(split => split.UserId == userId)?.Amount ?? 0m;

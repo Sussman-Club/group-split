@@ -1,5 +1,6 @@
 using GroupSplit.App.Shared.Extensions;
 using GroupSplit.Shared.Errors;
+using GroupSplit.App.Shared.Localization;
 
 namespace GroupSplit.App.Shared.Services.Errors;
 
@@ -11,18 +12,18 @@ namespace GroupSplit.App.Shared.Services.Errors;
 /// </summary>
 public static class ErrorMessages
 {
-    public const string Network = "We could not reach the server. Check your connection and try again.";
+    public static string Network => UiText.Get("We could not reach the server. Check your connection and try again.");
 
-    public const string SessionExpired = "Your session has expired. Please sign in again.";
+    public static string SessionExpired => UiText.Get("Your session has expired. Please sign in again.");
 
     /// <summary>Where deleting an account lands: signed out, with nothing left to sign in to.</summary>
-    public const string AccountDeletedSignedOut =
-        "Your account and your sign-in have been deleted, and you have been signed out.";
+    public static string AccountDeletedSignedOut =>
+        UiText.Get("Your account and your sign-in have been deleted, and you have been signed out.");
 
     /// <summary>A sign-in with a login whose account was deleted, before the login itself was.</summary>
-    public const string AccountDeleted = "This account has been deleted. Its sign-in is being removed too.";
+    public static string AccountDeleted => UiText.Get("This account has been deleted. Its sign-in is being removed too.");
 
-    public const string Generic = "Something went wrong. Please try again.";
+    public static string Generic => UiText.Get("Something went wrong. Please try again.");
 
     private const string ServerPrefix = "Something went wrong on our side. Please try again in a moment.";
 
@@ -35,16 +36,16 @@ public static class ErrorMessages
     public static string RateLimited(int? retryAfterSeconds)
     {
         if (retryAfterSeconds is not { } seconds || seconds <= 0)
-            return ByCode[ErrorCodes.RateLimited];
+            return For(ErrorCodes.RateLimited);
 
         if (seconds < 60)
-            return $"{RateLimitedPrefix} Please try again in {seconds} seconds.";
+            return UiText.Format($"You have done that a lot in a short time. Please try again in {seconds} seconds.");
 
         var minutes = (seconds + 59) / 60;
 
         return minutes == 1
-            ? $"{RateLimitedPrefix} Please try again in a minute."
-            : $"{RateLimitedPrefix} Please try again in {minutes} minutes.";
+            ? UiText.Get("You have done that a lot in a short time. Please try again in a minute.")
+            : UiText.Format($"You have done that a lot in a short time. Please try again in {minutes} minutes.");
     }
 
     /// <summary>
@@ -52,13 +53,13 @@ public static class ErrorMessages
     /// bug report find the log line, and the person seeing it has nothing else to quote.
     /// </summary>
     public static string Server(string? traceId) =>
-        string.IsNullOrEmpty(traceId) ? ServerPrefix : $"{ServerPrefix} (Reference {traceId})";
+        string.IsNullOrEmpty(traceId) ? UiText.Get(ServerPrefix) : UiText.Format($"{UiText.Get(ServerPrefix)} (Reference {traceId})");
 
     private static readonly Dictionary<string, string> ByCode = new(StringComparer.Ordinal)
     {
         [ErrorCodes.BadRequest] = "The request could not be understood. Please try again.",
         [ErrorCodes.ValidationFailed] = "Some of what you entered is not valid.",
-        [ErrorCodes.Unauthenticated] = SessionExpired,
+        [ErrorCodes.Unauthenticated] = "Your session has expired. Please sign in again.",
         [ErrorCodes.Forbidden] = "You are not allowed to do that.",
         [ErrorCodes.NotFound] = "We could not find what you were looking for.",
         [ErrorCodes.Conflict] = "That is not possible right now.",
@@ -89,7 +90,7 @@ public static class ErrorMessages
                                              + "Choose a rule for each item before dividing it.",
 
         [ErrorCodes.GroupCannotRemoveSelf] = "You cannot remove yourself from a group. Leave it instead.",
-        [ErrorCodes.AccountDeleted] = AccountDeleted,
+        [ErrorCodes.AccountDeleted] = "This account has been deleted. Its sign-in is being removed too.",
         // A guest's link is what reaches this now, and it most often means somebody already
         // used it or a member stopped it -- not that the URL was mistyped.
         [ErrorCodes.GroupInvitationNotFound] = "That link no longer works: it has been used or replaced, or it has expired. Ask someone in the group for a new one.",
@@ -226,9 +227,8 @@ public static class ErrorMessages
     /// <c>GROUP_REJOIN_NEEDS_NEW_INVITATION</c> for somebody another member removed. The
     /// refusal carries the reason, and "before you left" is the wrong thing to tell them.
     /// </summary>
-    public const string RejoinAfterRemoval =
-        "You were removed from this group, and this link was shared before that. " +
-        "Ask someone in the group for a new one.";
+    public static string RejoinAfterRemoval =>
+        UiText.Get("You were removed from this group, and this link was shared before that. Ask someone in the group for a new one.");
 
     /// <summary>
     /// <c>GROUP_MEMBER_NOT_SETTLED</c> for one named person, from the balance the refusal
@@ -245,8 +245,8 @@ public static class ErrorMessages
     /// </remarks>
     public static string NotSquare(string name, decimal balance) =>
         balance > 0
-            ? $"{name} is still owed {balance.ToMoney()} in this group. Record what they were paid back, then remove them."
-            : $"{name} still owes {Math.Abs(balance).ToMoney()} in this group. Record what they paid back, then remove them.";
+            ? UiText.Format($"{name} is still owed {balance.ToMoney()} in this group. Record what they were paid back, then remove them.")
+            : UiText.Format($"{name} still owes {Math.Abs(balance).ToMoney()} in this group. Record what they paid back, then remove them.");
 
     /// <summary>Whether the code has a message of its own; tests use it to keep the table complete.</summary>
     public static bool Knows(string code) => ByCode.ContainsKey(code);
@@ -255,17 +255,19 @@ public static class ErrorMessages
     /// The message for a code, or for the status when the code is unknown or absent.
     /// </summary>
     public static string For(string? code, int? status = null) =>
-        code is not null && ByCode.TryGetValue(code, out var message) ? message : ForStatus(status);
+        code is not null && ByCode.TryGetValue(code, out var message)
+            ? UiText.Get(message)
+            : ForStatus(status);
 
     public static string ForStatus(int? status) => status switch
     {
-        400 => ByCode[ErrorCodes.BadRequest],
+        400 => For(ErrorCodes.BadRequest),
         401 => SessionExpired,
-        403 => ByCode[ErrorCodes.Forbidden],
-        404 => ByCode[ErrorCodes.NotFound],
-        409 => ByCode[ErrorCodes.Conflict],
-        429 => ByCode[ErrorCodes.RateLimited],
-        >= 500 => ServerPrefix,
+        403 => For(ErrorCodes.Forbidden),
+        404 => For(ErrorCodes.NotFound),
+        409 => For(ErrorCodes.Conflict),
+        429 => For(ErrorCodes.RateLimited),
+        >= 500 => UiText.Get(ServerPrefix),
         _ => Generic
     };
 }

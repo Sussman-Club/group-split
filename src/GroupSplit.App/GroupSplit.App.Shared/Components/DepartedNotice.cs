@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Extensions;
 using MudBlazor;
 
@@ -21,6 +22,6 @@ public static class DepartedNotice
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
-        return dialogs.ShowAsync<ConfirmationDialog>($"This {noun} stays", parameters, options);
+        return dialogs.ShowAsync<ConfirmationDialog>(UiText.Format($"This {noun} stays"), parameters, options);
     }
 }

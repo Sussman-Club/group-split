@@ -1,9 +1,11 @@
+@using GroupSplit.App.Shared.Localization
+@using Microsoft.Extensions.Localization
 @using GroupSplit.App.Shared.Services
 @implements IDisposable
 @inject ThemePreference Preference
 
 @* Segmented control with a thumb that slides to the chosen mode. *@
-<div class="gs-seg" role="radiogroup" aria-label="Theme" style="--gs-seg-i: @Array.IndexOf(Modes, Preference.Mode)">
+<div class="gs-seg" role="radiogroup" aria-label="@Loc["Theme"]" style="--gs-seg-i: @Array.IndexOf(Modes, Preference.Mode)">
     <span class="gs-seg-thumb" aria-hidden="true"></span>
     @foreach (var mode in Modes)
     {
@@ -30,14 +32,14 @@
 
     private void OnChanged(ThemeChangeOrigin origin) => InvokeAsync(StateHasChanged);
 
-    private static string Label(ThemeMode mode) => mode switch
+    private string Label(ThemeMode mode) => mode switch
     {
-        ThemeMode.Light => "Light",
-        ThemeMode.Dark => "Dark",
-        _ => "Match system"
+        ThemeMode.Light => Loc["Light"].Value,
+        ThemeMode.Dark => Loc["Dark"].Value,
+        _ => Loc["Match system"].Value
     };
 
-    private static string Icon(ThemeMode mode) => mode switch
+    private string Icon(ThemeMode mode) => mode switch
     {
         ThemeMode.Light => Icons.Material.Rounded.LightMode,
         ThemeMode.Dark => Icons.Material.Rounded.DarkMode,

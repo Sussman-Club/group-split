@@ -1,0 +1,21 @@
+#components-reconnect-modal { width: min(400px, calc(100vw - 32px)); padding: 20px; margin: auto; border: 1px solid var(--gs-line-strong); border-radius: var(--gs-radius-xl); background: var(--gs-surface); color: var(--gs-ink); font-family: var(--gs-font-body); box-shadow: var(--gs-shadow-lg); }
+#components-reconnect-modal::backdrop { background: rgb(0 0 0 / 45%); backdrop-filter: blur(4px); }
+#components-reconnect-modal:not([open]) { display: none; }
+.gs-reconnect-brand { display: flex; align-items: center; gap: 8px; color: var(--gs-muted); font-size: .8125rem; font-weight: 700; }
+.gs-reconnect-brand img { width: 24px; height: 24px; }
+#components-reconnect-modal h2 { margin: 12px 0 4px; font: 700 1.375rem/1.2 var(--gs-font-display); }
+#components-reconnect-modal p { margin: 0; color: var(--gs-muted); font-size: .875rem; line-height: 1.6; }
+.gs-reconnect-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+/* MudBlazor gives reconnect buttons 40px margins with !important. */
+#components-reconnect-modal .gs-reconnect-actions button { margin: 0 !important; position: static; text-transform: none; box-shadow: none; min-height: 36px; padding: 6px 12px; border: 1px solid var(--gs-line-strong); border-radius: var(--gs-radius-pill); background: var(--gs-surface-2); color: var(--gs-ink); font: 700 .8125rem var(--gs-font-body); cursor: pointer; }
+#components-reconnect-modal .gs-reconnect-actions .gs-reconnect-primary { border-color: var(--gs-primary); background: var(--gs-primary); color: var(--gs-on-primary); }
+.gs-reconnect-actions button:focus-visible { outline: 2px solid var(--gs-primary); outline-offset: 3px; }
+.gs-reconnect-spinner { width: 24px; height: 24px; margin: 12px auto 0; border: 3px solid var(--gs-line); border-top-color: var(--gs-primary); border-radius: 50%; animation: gs-reconnect-spin 1s linear infinite; }
+#components-reconnect-modal :is(.gs-reconnect-failed, .gs-reconnect-paused, .gs-reconnect-resume-failed, .gs-reconnect-rejected) { display: none; }
+#components-reconnect-modal.components-reconnect-failed .gs-reconnect-failed,
+#components-reconnect-modal.components-reconnect-paused .gs-reconnect-paused,
+#components-reconnect-modal.components-reconnect-resume-failed .gs-reconnect-resume-failed,
+#components-reconnect-modal.components-reconnect-rejected .gs-reconnect-rejected { display: block; }
+#components-reconnect-modal:is(.components-reconnect-failed, .components-reconnect-paused, .components-reconnect-resume-failed, .components-reconnect-rejected) :is(.gs-reconnect-waiting, .gs-reconnect-spinner) { display: none; }
+@keyframes gs-reconnect-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gs-reconnect-spinner { animation: none; } }

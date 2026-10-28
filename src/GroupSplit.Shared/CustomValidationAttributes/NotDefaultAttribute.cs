@@ -24,7 +24,7 @@ public class NotDefaultAttribute : ValidationAttribute
         if (!type.IsValueType || !value.Equals(Activator.CreateInstance(type)))
             return ValidationResult.Success;
 
-        return new ValidationResult(ErrorMessage,
+        return new ValidationResult(FormatErrorMessage(context.DisplayName),
             context.MemberName is { } member ? [member] : null);
     }
 }

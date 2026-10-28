@@ -40,8 +40,6 @@ public sealed record TranscribedReceipt(
 {
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
-    /// <summary>The provider's source fields, serialized only for receipt review.</summary>
-    public string? SourceValues { get; init; }
 }
 
 public sealed record TranscribedReceiptItem(
@@ -121,7 +119,6 @@ public sealed class ReceiptTranscriptionService(
             Total = transcription.Total,
             MerchantName = transcription.MerchantName,
             PurchaseDate = transcription.PurchaseDate,
-            SourceValues = transcription.SourceValues,
             Items = transcription.Items.Select((item, index) => new ReceiptItemInput
             {
                 Name = item.Name,

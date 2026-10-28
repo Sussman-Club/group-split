@@ -10,6 +10,10 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../src/GroupSplit.App/GroupSplit.App.Shared/Localization/*.resx"
+             Link="Localization/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../src/GroupSplit.Shared/Localization/*.resx"
+             Link="Localization/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The realm the app has to agree with about how long a remembered session lasts.
          Copied in rather than read out of the checkout so the assertion runs the same
          way from a test binary as it does from here. See RememberMeTest. -->
@@ -22,6 +26,7 @@
     <Using Include="Xunit" />
     <!-- Exercise the platform-independent native session without an Android runtime. -->
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeSession.cs" Link="Native/NativeSession.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeLanguagePersistence.cs" Link="Native/NativeLanguagePersistence.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeOptions.cs" Link="Native/NativeOptions.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeLinkRouter.cs" Link="Native/NativeLinkRouter.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/INativeBrowser.cs" Link="Native/INativeBrowser.cs" />

@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
@@ -29,7 +30,7 @@ public sealed class SplitRuleCommands(
         var done = await errors.TryAsync(async () =>
         {
             loaded = [.. await rules.GetSplitRulesAsync(groupId, ct)];
-        }, "Could not load the group's splits.");
+        }, UiText.Get("Could not load the group's splits."));
 
         return done ? loaded : null;
     }
@@ -39,7 +40,7 @@ public sealed class SplitRuleCommands(
         SplitRuleDetailsResponse? rule = null;
 
         var done = await errors.TryAsync(async () => rule = await rules.GetSplitRuleAsync(ruleId, ct),
-            "Could not load the split.");
+            UiText.Get("Could not load the split."));
 
         return done ? rule : null;
     }
@@ -50,7 +51,7 @@ public sealed class SplitRuleCommands(
 
         var done = await errors.TryAsync(
             async () => history = await rules.GetSplitRuleVersionsAsync(ruleId, ct),
-            "Could not load what this split used to be.");
+            UiText.Get("Could not load what this split used to be."));
 
         return done ? history : null;
     }
@@ -63,9 +64,9 @@ public sealed class SplitRuleCommands(
         var done = await errors.TryAsync(async () =>
         {
             created = await rules.CreateSplitRuleAsync(request, ct);
-            snackbar.Add($"{created.Name} created. Point a category at it to use it.", Severity.Success);
+            snackbar.Add(UiText.Format($"{created.Name} created. Point a category at it to use it."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not save the split.");
+        }, UiText.Get("Could not save the split."));
 
         return done ? created : null;
     }
@@ -82,11 +83,11 @@ public sealed class SplitRuleCommands(
             // Says the part somebody would otherwise have to test to find out. Editing a
             // division looks like it could reach backwards, and it cannot: the version that
             // was current is closed and a new one opens beside it.
-            snackbar.Add($"{updated.Name} updated. Expenses already recorded keep their split.",
+            snackbar.Add(UiText.Format($"{updated.Name} updated. Expenses already recorded keep their split."),
                 Severity.Success);
 
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not save the split.");
+        }, UiText.Get("Could not save the split."));
 
         return done ? updated : null;
     }
@@ -95,7 +96,7 @@ public sealed class SplitRuleCommands(
         errors.TryAsync(async () =>
         {
             await rules.DeleteSplitRuleAsync(ruleId, ct);
-            snackbar.Add($"{name} deleted.", Severity.Success);
+            snackbar.Add(UiText.Format($"{name} deleted."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not delete the split.");
+        }, UiText.Get("Could not delete the split."));
 }

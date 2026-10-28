@@ -145,6 +145,7 @@ public sealed class AccountService(
 
         user.FirstName = null;
         user.LastName = null;
+        user.PreferredLanguage = null;
         user.Email = null;
         user.Kind = UserKind.Deleted;
         context.RemoveRange(await context.Set<PushDevice>()

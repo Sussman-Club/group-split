@@ -2,7 +2,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject LocalClock Clock
 
-<div class="gs-mobile-ledger" aria-label="Transactions">
+<div class="gs-mobile-ledger" aria-label="@Loc["Transactions"]">
     @if (!Loaded && Items.Count == 0)
     {
         <LoadingSkeleton Layout="SkeletonLayout.Rows" />

@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.Shared;
+using MudBlazor;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -19,6 +20,7 @@ public class ReceiptSectionTest : ComponentTest
     [Fact]
     public void An_empty_section_stays_compact_until_the_person_adds_a_receipt()
     {
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p.Add(c => c.TransactionId, _expense));
 
         Assert.Contains("Receipts", page.Markup);
@@ -28,60 +30,69 @@ public class ReceiptSectionTest : ComponentTest
 
         page.FindAll("button").Single(button => button.TextContent.Contains("Add receipt")).Click();
 
-        page.WaitForAssertion(() => Assert.Contains("Add an original receipt", page.Markup));
-        Assert.Contains("Reading it is optional", page.Markup);
+        dialogs.WaitForAssertion(() => Assert.Contains("Add an original receipt", dialogs.Markup));
+        Assert.Contains("Reading it is optional", dialogs.Markup);
     }
 
     [Fact]
     public void It_keeps_the_original_and_itemized_receipt_as_separate_rows()
     {
         var attachment = Attachment();
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.Receipt, Bill(_expense))
             .Add(c => c.Attachments, [attachment]));
 
-        Assert.Contains("Original receipt", page.Markup);
-        Assert.Contains("dinner.jpg", page.Markup);
-        Assert.Contains("Itemized receipt", page.Markup);
-        Assert.Contains("View itemized receipt", page.Markup);
-        Assert.DoesNotContain("Chicken burrito", page.Markup);
+        Assert.DoesNotContain("Original receipt", page.Markup);
+        page.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialogs.WaitForAssertion(() => Assert.Contains("Original receipt", dialogs.Markup));
+        Assert.Contains("Original receipt", dialogs.Markup);
+        Assert.Contains("dinner.jpg", dialogs.Markup);
+        Assert.Contains("Itemized receipt", dialogs.Markup);
 
-        page.FindAll("button").Single(button => button.TextContent.Contains("View itemized receipt")).Click();
+        Assert.Contains("Chicken burrito", dialogs.Markup);
 
-        page.WaitForAssertion(() => Assert.Contains("Chicken burrito", page.Markup));
-        Assert.Contains("Hide itemized receipt", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("Chicken burrito", dialogs.Markup));
+        Assert.DoesNotContain("Hide itemized receipt", dialogs.Markup);
     }
 
     [Fact]
     public void View_original_uses_the_inline_file_url()
     {
         var attachment = Attachment();
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.Attachments, [attachment]));
 
-        page.FindAll("button").Single(button => button.TextContent.Contains("View original")).Click();
+        page.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialogs.WaitForAssertion(() => Assert.Contains("Original preview", dialogs.Markup));
+        dialogs.FindAll("button").Single(button => button.TextContent.Contains("Original preview")).Click();
 
-        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("img")));
-        Assert.Contains("receipt-attachments", page.Find("img").GetAttribute("src"));
-        Assert.Contains("inline=true", page.Find("img").GetAttribute("src"));
+        dialogs.WaitForAssertion(() => Assert.NotEmpty(dialogs.FindAll("img")));
+        Assert.Contains("receipt-attachments", dialogs.Find("img").GetAttribute("src"));
+        Assert.Contains("inline=true", dialogs.Find("img").GetAttribute("src"));
     }
 
     [Fact]
-    public void View_original_shows_a_clear_fallback_for_pdf_files()
+    public void View_original_renders_the_pdf_preview_with_download_available()
     {
         var attachment = Attachment("dinner.pdf") with { ContentType = "application/pdf" };
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.Attachments, [attachment]));
 
-        page.FindAll("button").Single(button => button.TextContent.Contains("View original")).Click();
+        page.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialogs.WaitForAssertion(() => Assert.Contains("Original preview", dialogs.Markup));
+        dialogs.FindAll("button").Single(button => button.TextContent.Contains("Original preview")).Click();
 
-        page.WaitForAssertion(() => Assert.Contains("PDF preview", page.Markup));
-        Assert.Empty(page.FindAll("iframe"));
-        Assert.Contains("This browser can’t show PDF pages inline", page.Markup);
-        Assert.Contains("Download PDF", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("PDF preview", dialogs.Markup));
+        Assert.Empty(dialogs.FindAll("iframe"));
+        Assert.Contains("Download PDF", dialogs.Markup);
+        Assert.Single(dialogs.FindComponents<PdfReceiptPreview>());
+        Assert.Single(dialogs.FindAll("canvas"));
     }
 
     [Fact]
@@ -90,18 +101,21 @@ public class ReceiptSectionTest : ComponentTest
         var attachment = Attachment("dinner.pdf") with { ContentType = "application/pdf" };
         ReceiptAttachmentResponse? read = null;
         ReceiptAttachmentResponse? removed = null;
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.Attachments, [attachment])
             .Add(c => c.TranscribeRequested, value => read = value)
             .Add(c => c.DeleteRequested, value => removed = value));
 
-        page.FindAll("button").Single(button => button.TextContent.Contains("Read receipt")).Click();
-        page.FindAll("button").Single(button => button.TextContent.Contains("Remove")).Click();
+        page.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialogs.WaitForAssertion(() => Assert.Contains("Read receipt", dialogs.Markup));
+        dialogs.FindAll("button").Single(button => button.TextContent.Contains("Read receipt")).Click();
+        dialogs.FindAll("button").Single(button => button.TextContent.Contains("Remove")).Click();
 
         Assert.Equal(attachment, read);
         Assert.Equal(attachment, removed);
-        Assert.Contains("dinner.pdf", page.Markup);
+        Assert.Contains("dinner.pdf", dialogs.Markup);
     }
 
     [Fact]
@@ -109,12 +123,15 @@ public class ReceiptSectionTest : ComponentTest
     {
         var bill = Bill(_expense) with { CanEdit = true };
         ReceiptResponse? edited = null;
+        var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
             .Add(c => c.Receipt, bill)
             .Add(c => c.EditRequested, value => edited = value));
 
-        page.FindAll("button").Single(button => button.TextContent.Contains("Edit itemized receipt")).Click();
+        page.FindAll("button").Single(button => button.TextContent.Contains("Open receipts")).Click();
+        dialogs.WaitForAssertion(() => Assert.Contains("Edit itemized receipt", dialogs.Markup));
+        dialogs.FindAll("button").Single(button => button.TextContent.Contains("Edit itemized receipt")).Click();
 
         Assert.Same(bill, edited);
     }

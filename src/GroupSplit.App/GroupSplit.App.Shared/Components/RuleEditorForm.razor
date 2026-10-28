@@ -11,8 +11,8 @@
     <MudStack Spacing="3">
         <MudTextField @bind-Value="Model.Name"
                       For="@(() => Model.Name)"
-                      Label="@NameLabel"
-                      HelperText="@NameHelp"
+                      Label="@(NameLabel ?? Loc["Rule name"])"
+                      HelperText="@(NameHelp ?? Loc["What the group calls this division, e.g. \"Household 3-way\"."])"
                       Variant="Variant.Outlined"
                       Immediate="true"/>
 
@@ -25,38 +25,30 @@
            The API refuses the change (SPLIT_RULE_KIND_FIXED); the form does not offer it. *@
         <MudSelect
             T="RuleType?"
-            Label="How does it divide?"
+            Label="@Loc["How does it divide?"]"
             @bind-Value="_ruleType"
             @bind-Value:after="@OnRuleTypeChanged"
             Variant="Variant.Outlined"
             Required="true"
-            RequiredError="Choose how this divides."
+            RequiredError="@Loc["Choose how this divides."]"
             Disabled="@KindFixed"
-            HelperText="@(KindFixed ? "A rule keeps the shape it was written with." : "Even and one-person splits are already built into every group.")"
+            HelperText="@(KindFixed ? Loc["A rule keeps the shape it was written with."].Value : Loc["Even and one-person splits are already built into every group."].Value)"
         >
-            <MudSelectItem T="RuleType?" Value="RuleType.Percent">
-                Percent split
-            </MudSelectItem>
+            <MudSelectItem T="RuleType?" Value="RuleType.Percent">@Loc["Percent split"]</MudSelectItem>
 
-            <MudSelectItem T="RuleType?" Value="RuleType.Shares">
-                Shares split
-            </MudSelectItem>
+            <MudSelectItem T="RuleType?" Value="RuleType.Shares">@Loc["Shares split"]</MudSelectItem>
 
             @* A legacy user-authored rule can still be read and keeps its shape when it is
                edited. The two kinds are absent while creating: the group already provides
                them, so making another would only add an indistinguishable duplicate. *@
             @if (Existing && _ruleType is RuleType.AllOnOnePerson)
             {
-                <MudSelectItem T="RuleType?" Value="RuleType.AllOnOnePerson" Disabled="true">
-                    All on one person
-                </MudSelectItem>
+                <MudSelectItem T="RuleType?" Value="RuleType.AllOnOnePerson" Disabled="true">@Loc["All on one person"]</MudSelectItem>
             }
 
             @if (Existing && _ruleType is RuleType.Even)
             {
-                <MudSelectItem T="RuleType?" Value="RuleType.Even" Disabled="true">
-                    Evenly, between everyone in the group
-                </MudSelectItem>
+                <MudSelectItem T="RuleType?" Value="RuleType.Even" Disabled="true">@Loc["Evenly, between everyone in the group"]</MudSelectItem>
             }
 
             @* No "by the bill" here. Every group is given exactly one of those and the
@@ -71,12 +63,12 @@
         @if (_ruleType is RuleType.AllOnOnePerson)
         {
             <MudSelect T="Guid?"
-                       Label="Who owes it?"
+                       Label="@Loc["Who owes it?"]"
                        Value="@_allFor"
                        ValueChanged="@OnAllForChanged"
                        Variant="Variant.Outlined"
                        Required="true"
-                       RequiredError="Choose who owes it.">
+                       RequiredError="@Loc["Choose who owes it."]">
                 @foreach (var member in _members)
                 {
                     <MudSelectItem T="Guid?" Value="@member.Id">@member.Label()</MudSelectItem>
@@ -89,12 +81,7 @@
            table: without it the form reads as though something failed to load. *@
         @if (_ruleType == RuleType.Itemized)
         {
-            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
-                Each expense is divided by the bill attached to it -- every line by the rule
-                chosen for it, so everybody owes what they had plus its tax and its share of
-                the tip. An expense filed here with no bill, or with a line that has no rule,
-                cannot be divided.
-            </MudAlert>
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">@Loc["Each expense is divided by the bill attached to it -- every line by the rule chosen for it, so everybody owes what they had plus its tax and its share of the tip. An expense filed here with no bill, or with a line that has no rule, cannot be divided."]</MudAlert>
         }
 
         @if (Model.Version is PercentSplitRuleDto percent)
@@ -117,18 +104,12 @@
                     }
                 </MudGrid>
 
-                <MudText Typo="Typo.caption" Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">
-                    Total: @PercentTotal%
-                </MudText>
+                <MudText Typo="Typo.caption" Color="@(PercentTotal == 100 ? Color.Success : Color.Error)">@Loc["Total: {0}%", PercentTotal].Value</MudText>
 
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
-                    <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">
-                        Split Evenly
-                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="@SplitPercentEvenly">@Loc["Split Evenly"]</MudButton>
 
-                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
-                        Clear All Percentages
-                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">@Loc["Clear All Percentages"]</MudButton>
                 </MudStack>
             </MudPaper>
         }
@@ -151,13 +132,11 @@
                 </MudGrid>
 
                 <MudText Color="@(SharesTotal > 0 ? Color.Success : Color.Error)" Typo="Typo.caption">
-                    @(SharesTotal > 0 ? $"Total shares: {SharesTotal}" : "At least one member must have shares")
+                    @(SharesTotal > 0 ? Loc["Total shares: {0}", SharesTotal].Value : Loc["At least one member must have shares"].Value)
                 </MudText>
 
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
-                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">
-                        Clear All Shares
-                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="@ClearValues">@Loc["Clear All Shares"]</MudButton>
                 </MudStack>
             </MudPaper>
         }
@@ -174,9 +153,9 @@
     /// category's, because several categories may divide by one rule and renaming one of
     /// them must not rename the division behind the others.
     /// </summary>
-    [Parameter] public string NameLabel { get; set; } = "Rule name";
+    [Parameter] public string? NameLabel { get; set; }
 
-    [Parameter] public string? NameHelp { get; set; } = "What the group calls this division, e.g. \"Household 3-way\".";
+    [Parameter] public string? NameHelp { get; set; }
 
     /// <summary>
     /// Whether this is an existing rule, whose shape is settled: the numbers in a division
@@ -206,7 +185,7 @@
     {
         var members = await Errors.TryAsync(
             async () => _members = await GroupsClient.GetGroupMembersAsync(GroupId),
-            "Could not load the group.");
+            Loc["Could not load the group."].Value);
 
         if (!members)
         {
@@ -378,7 +357,7 @@
                 break;
 
             default:
-                throw new InvalidOperationException("ClearAllValues is only supported for Percent or Shares rules.");
+                throw new InvalidOperationException(Loc["ClearAllValues is only supported for Percent or Shares rules."].Value);
         }
 
         StateHasChanged();
@@ -490,8 +469,8 @@
     /// </remarks>
     public record RuleEditorModel
     {
-        [Required(ErrorMessage = "Name is required")]
-        [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+        [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+        [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
         public string Name { get; set; } = string.Empty;
 
         [Required] public SplitRuleDto Version { get; set; } = null!;

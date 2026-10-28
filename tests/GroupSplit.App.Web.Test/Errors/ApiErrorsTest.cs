@@ -177,15 +177,16 @@ public class ApiErrorsTest
     /// wrong thing to tell somebody another member took out.
     /// </summary>
     [Theory]
-    [InlineData("Removed", ErrorMessages.RejoinAfterRemoval)]
-    [InlineData("Left", null)]
-    public void A_stale_link_says_how_the_person_went(string reason, string? expected)
+    [InlineData("Removed")]
+    [InlineData("Left")]
+    public void A_stale_link_says_how_the_person_went(string reason)
     {
         var problem = Problem(409, ErrorCodes.GroupRejoinNeedsNewInvitation, TraceId, ("leftReason", reason));
 
         var error = ApiErrors.Read(Typed(409, problem));
 
-        Assert.Equal(expected ?? ErrorMessages.For(ErrorCodes.GroupRejoinNeedsNewInvitation), error.Message);
+        Assert.Equal(reason == "Removed" ? ErrorMessages.RejoinAfterRemoval
+            : ErrorMessages.For(ErrorCodes.GroupRejoinNeedsNewInvitation), error.Message);
     }
 
     // ---- Validation --------------------------------------------------------------------------

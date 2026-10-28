@@ -1,3 +1,5 @@
+@using GroupSplit.App.Shared.Localization
+@using Microsoft.Extensions.Localization
 <MudDialog>
     <DialogContent>
         <MudText>@ContentText</MudText>
@@ -5,7 +7,7 @@
     <DialogActions>
         @if (ShowCancel)
         {
-            <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         }
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="@Color" OnClick="@Submit">@ButtonText</MudButton>
     </DialogActions>

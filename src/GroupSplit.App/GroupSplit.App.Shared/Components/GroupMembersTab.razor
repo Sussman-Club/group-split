@@ -37,7 +37,7 @@
     <div class="gs-stack">
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 0">
         <div class="gs-card-title">
-            <h2>Members</h2>
+            <h2>@Loc["Members"]</h2>
             <span class="gs-tag neutral">@_joined.Count</span>
         </div>
 
@@ -49,9 +49,7 @@
         {
             @* A read, not a write: nothing anybody did here failed, so it is said in the card
                it is about rather than as an error after an action. *@
-            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2 gs-members-load-failed">
-                Could not load who is in this group, so this may be out of date.
-                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@ReloadAsync">Try again</MudButton>
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2 gs-members-load-failed">@Loc["Could not load who is in this group, so this may be out of date."]<MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@ReloadAsync">@Loc["Try again"]</MudButton>
             </MudAlert>
         }
 
@@ -66,18 +64,18 @@
                             <span>@person.FullName</span>
                             @if (person.Id == UserInfo?.Id)
                             {
-                                <span class="gs-tag neutral">you</span>
+                                <span class="gs-tag neutral">@Loc["Copy.Lower.you"]</span>
                             }
                         </div>
                         <div class="meta">@person.Email</div>
                     </div>
                     @if (person.Id != UserInfo?.Id)
                     {
-                        <MudTooltip Text="Remove from the group" ShowOnFocus="false">
+                        <MudTooltip Text="@Loc["Remove from the group"]" ShowOnFocus="false">
                             <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
                                            Size="Size.Small"
                                            Color="Color.Error"
-                                           aria-label="@($"Remove {person.FullName}")"
+                                           aria-label="@(Loc["Remove {0}", person.FullName].Value)"
                                            OnClick="@(() => RemoveAsync(person))" />
                         </MudTooltip>
                     }
@@ -87,17 +85,17 @@
 
         <div style="padding-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@AddPeopleAsync">Add people</MudButton>
+                       StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="@AddPeopleAsync">@Loc["Add people"]</MudButton>
             @* Leaving needs a settled balance, and the API says so -- the button is not
                hidden on a hunch about what the balance is. *@
             <MudButton Variant="Variant.Text" Class="gs-btn-danger"
-                       StartIcon="@Icons.Material.Rounded.Logout" OnClick="@LeaveAsync">Leave group</MudButton>
+                       StartIcon="@Icons.Material.Rounded.Logout" OnClick="@LeaveAsync">@Loc["Leave group"]</MudButton>
         </div>
         </div>
 
         <div class="gs-card gs-card-pad gs-reveal gs-guests" style="--i: 1">
             <div class="gs-card-title">
-                <h2>Guests</h2>
+                <h2>@Loc["Guests"]</h2>
                 <span class="gs-tag neutral">@_guests.Count</span>
             </div>
 
@@ -113,7 +111,7 @@
             {
                 <div class="gs-empty" style="padding: 24px">
                     <MudIcon Icon="@Icons.Material.Rounded.PersonAddAlt" />
-                    <span>No guests. Add whoever is sharing the costs, and you can start splitting with them straight away.</span>
+                    <span>@Loc["No guests. Add whoever is sharing the costs, and you can start splitting with them straight away."]</span>
                 </div>
             }
             else
@@ -144,8 +142,8 @@
                                     <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet"
                                                StartIcon="@Icons.Material.Rounded.Link"
                                                Disabled="@(_busy == row.UserId)"
-                                               aria-label="@($"Send {row.Name} a link")"
-                                               OnClick="@(() => SendLinkAsync(row))">Send link</MudButton>
+                                               aria-label="@(Loc["Send {0} a link", row.Name].Value)"
+                                               OnClick="@(() => SendLinkAsync(row))">@Loc["Send link"]</MudButton>
                                 }
                                 else
                                 {
@@ -153,8 +151,8 @@
                                                StartIcon="@(_copied == row.UserId ? Icons.Material.Rounded.Check : Icons.Material.Rounded.ContentCopy)"
                                                Color="@(_copied == row.UserId ? Color.Success : Color.Default)"
                                                Disabled="@(_busy == row.UserId)"
-                                               aria-label="@($"Copy the link for {row.Name}")"
-                                               OnClick="@(() => CopyLinkAsync(row))">Copy link</MudButton>
+                                               aria-label="@(Loc["Copy the link for {0}", row.Name].Value)"
+                                               OnClick="@(() => CopyLinkAsync(row))">@Loc["Copy link"]</MudButton>
 
                                     @* The two things to do with a link that is already out,
                                        tucked behind a menu because neither is the common
@@ -162,22 +160,22 @@
                                        stop working. *@
                                     <MudMenu Icon="@Icons.Material.Rounded.MoreVert" Size="Size.Small" Dense
                                              AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
-                                             aria-label="@($"More about {row.Name}'s link")">
+                                             aria-label="@(Loc["More about {0}'s link", row.Name].Value)">
                                         <MudMenuItem Icon="@Icons.Material.Rounded.Autorenew"
-                                                     OnClick="@(() => NewLinkAsync(row))">New link</MudMenuItem>
+                                                     OnClick="@(() => NewLinkAsync(row))">@Loc["New link"]</MudMenuItem>
                                         <MudMenuItem Icon="@Icons.Material.Rounded.LinkOff"
-                                                     OnClick="@(() => StopLinkAsync(row))">Stop link</MudMenuItem>
+                                                     OnClick="@(() => StopLinkAsync(row))">@Loc["Stop link"]</MudMenuItem>
                                     </MudMenu>
                                 }
 
                                 @* The same icon and colour as removing a member, one card up,
                                    because it is the same act with the same rule: square
                                    first, and the history stays. *@
-                                <MudTooltip Text="Remove from the group" ShowOnFocus="false">
+                                <MudTooltip Text="@Loc["Remove from the group"]" ShowOnFocus="false">
                                     <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove"
                                                    Size="Size.Small"
                                                    Color="Color.Error"
-                                                   aria-label="@($"Remove {row.Name}")"
+                                                   aria-label="@(Loc["Remove {0}", row.Name].Value)"
                                                    OnClick="@(() => RemoveGuestAsync(row))" />
                                 </MudTooltip>
                             </div>
@@ -191,12 +189,10 @@
         {
             <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
                 <div class="gs-card-title">
-                    <h2>Past members and guests</h2>
+                    <h2>@Loc["Past members and guests"]</h2>
                     <span class="gs-tag neutral">@_past.Count</span>
                 </div>
-                <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">
-                    They are kept here so older activity still makes sense. They are not part of new expenses or rules.
-                </MudText>
+                <MudText Typo="Typo.caption" Class="gs-muted" Style="display: block; padding-bottom: 8px">@Loc["They are kept here so older activity still makes sense. They are not part of new expenses or rules."]</MudText>
                 <div class="gs-list">
                     @foreach (var person in _past)
                     {
@@ -207,7 +203,7 @@
                             <Avatar Name="@person.FullName" />
                             <div style="min-width: 0">
                                 <div class="title">@person.FullName</div>
-                                <div class="meta">@(person.IsGuest ? "Past guest" : "Past member") · history stays in the group</div>
+                                <div class="meta">@(person.IsGuest ? Loc["Past guest"].Value : Loc["Past member"].Value) · history stays in the group</div>
                             </div>
                         </div>
                     }
@@ -314,7 +310,7 @@
 
         var loaded = await Guard.RunAsync(
             async () => members = await GroupsService.GetGroupMembersAsync().ToListAsync(),
-            "who is in this group");
+            Loc["who is in this group"].Value);
 
         var guests = await GroupsService.GetGroupGuestsAsync();
         var past = await GroupsService.GetGroupPastMembersAsync();
@@ -353,20 +349,20 @@
     /// </remarks>
     private string GuestMeta(GroupGuestResponse guest)
     {
-        var added = $"Guest · added {Clock.Local(guest.AddedAt).ToString("d MMM yyyy")}";
+        var added = Loc["Guest · added {0}", Clock.Local(guest.AddedAt).ToString("d MMM yyyy")].Value;
 
         if (!string.IsNullOrWhiteSpace(guest.AddedByUserName))
-            added += $" by {guest.AddedByUserName}";
+            added += Loc[" by {0}", guest.AddedByUserName].Value;
 
         var link = guest switch
         {
             { LinkExpired: true, LinkExpiresAt: { } expired } =>
-                $" · link expired {Clock.Local(expired).ToString("d MMM yyyy")}",
-            { HasLink: false } => " · no link",
+                Loc[" · link expired {0}", Clock.Local(expired).ToString("d MMM yyyy")].Value,
+            { HasLink: false } => Loc[" · no link"].Value,
             { LinkIssuedAt: { } issued, LinkExpiresAt: { } expires } =>
-                $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}, expires {Clock.Local(expires).ToString("d MMM yyyy")}",
-            { LinkIssuedAt: { } issued } => $" · link sent {Clock.Local(issued).ToString("d MMM yyyy")}",
-            _ => " · link sent"
+                Loc[" · link sent {0}, expires {1}", Clock.Local(issued).ToString("d MMM yyyy"), Clock.Local(expires).ToString("d MMM yyyy")].Value,
+            { LinkIssuedAt: { } issued } => Loc[" · link sent {0}", Clock.Local(issued).ToString("d MMM yyyy")].Value,
+            _ => Loc[" · link sent"].Value
         };
 
         return added + link;
@@ -382,7 +378,7 @@
 
         var parameters = new DialogParameters<AddGuestsDialog> { { x => x.CurrentUsers, _members.ToArray() } };
 
-        var dialog = await DialogService.ShowAsync<AddGuestsDialog>("Add people", parameters, options);
+        var dialog = await DialogService.ShowAsync<AddGuestsDialog>(Loc["Add people"].Value, parameters, options);
 
         var request = await dialog.GetReturnValueAsync<AddGuestsRequest>();
 
@@ -396,14 +392,14 @@
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Remove {member.FullName} from this group? They have to be settled up first. The group's join link stops working, and they will need a new link to come back." },
-            { x => x.ButtonText, "Remove" },
+            { x => x.ContentText, Loc["Remove {0} from this group? They have to be settled up first. The group's join link stops working, and they will need a new link to come back.", member.FullName].Value },
+            { x => x.ButtonText, Loc["Remove"].Value },
             { x => x.Color, Color.Error }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove member", parameters, options);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Remove member"].Value, parameters, options);
 
         if (await dialog.ConfirmedAsync())
             await GroupsService.RemoveGroupMemberAsync(groupId, member.Id, member.FullName);
@@ -426,13 +422,13 @@
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, ParticipantCopy.RemoveGuestQuestion(guest.Name) },
-            { x => x.ButtonText, "Remove" },
+            { x => x.ButtonText, Loc["Remove"].Value },
             { x => x.Color, Color.Error }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Remove guest", parameters, options);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Remove guest"].Value, parameters, options);
 
         if (await dialog.ConfirmedAsync())
             await GroupsService.RemoveGroupMemberAsync(groupId, guest.UserId, guest.Name);
@@ -482,13 +478,13 @@
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Make a new link for {guest.Name}? The one you sent before stops working." },
-            { x => x.ButtonText, "New link" }
+            { x => x.ContentText, Loc["Make a new link for {0}? The one you sent before stops working.", guest.Name].Value },
+            { x => x.ButtonText, Loc["New link"].Value }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("New link", parameters, options);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["New link"].Value, parameters, options);
 
         if (!await dialog.ConfirmedAsync())
             return;
@@ -501,7 +497,7 @@
 
         if (issued?.Token is { } token)
             await CopyAsync(guest.UserId, issued.Name, token,
-                $"New link for {issued.Name} copied. The old one no longer works.");
+                Loc["New link for {0} copied. The old one no longer works.", issued.Name].Value);
     }
 
     /// <summary>
@@ -540,7 +536,7 @@
         }
 
         Snackbar.Add(
-            copied ? copiedMessage : $"Could not copy the link for {name}. It is {url}",
+            copied ? copiedMessage : Loc["Could not copy the link for {0}. It is {1}", name, url].Value,
             copied ? Severity.Success : Severity.Warning);
     }
 
@@ -550,14 +546,14 @@
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, "Leave this group? What you paid stays in your own records, but you will no longer see the group or be able to change anything in it." },
-            { x => x.ButtonText, "Leave" },
+            { x => x.ContentText, Loc["Leave this group? What you paid stays in your own records, but you will no longer see the group or be able to change anything in it."].Value },
+            { x => x.ButtonText, Loc["Leave"].Value },
             { x => x.Color, Color.Error }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Leave group", parameters, options);
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Leave group"].Value, parameters, options);
 
         if (!await dialog.ConfirmedAsync())
             return;

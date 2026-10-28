@@ -13,7 +13,7 @@
     <aside class="gs-sidebar">
         <a class="gs-brand" href="/">
             <BrandMark />
-            <span class="gs-brand-name">Group Split<small>Shared expenses</small></span>
+            <span class="gs-brand-name">@Loc["Group Split"]<small>@Loc["Shared expenses"]</small></span>
         </a>
 
         <NavMenu />
@@ -21,7 +21,7 @@
         <div class="gs-sidebar-foot">
             @if (UserInfo is not null)
             {
-                <a class="gs-nav-item gs-sidebar-user" href="/account" title="@UserInfo.FullName">
+                <a class="gs-nav-item gs-sidebar-user" href="/settings" title="@UserInfo.FullName">
                     <Avatar Name="@UserInfo.FullName" Size="sm" />
                     <span class="gs-nav-text gs-sidebar-user-text" style="min-width: 0; line-height: 1.2">
                         <span style="display:block; font-size: .875rem; overflow: hidden; text-overflow: ellipsis">@UserInfo.FullName</span>
@@ -29,9 +29,9 @@
                     </span>
                 </a>
             }
-            <button type="button" class="gs-sidebar-toggle" @onclick="ToggleRail" aria-label="@(_rail ? "Expand sidebar" : "Collapse sidebar")">
+            <button type="button" class="gs-sidebar-toggle" @onclick="ToggleRail" aria-label="@(_rail ? Loc["Expand sidebar"].Value : Loc["Collapse sidebar"].Value)">
                 <MudIcon Icon="@Icons.Material.Rounded.KeyboardDoubleArrowLeft" />
-                <span>Collapse</span>
+                <span>@Loc["Collapse"]</span>
             </button>
         </div>
     </aside>
@@ -58,9 +58,9 @@
                     <ErrorContent>
                         <div class="gs-card gs-empty" style="padding: 64px 24px">
                             <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" />
-                            <h3>Something went wrong</h3>
-                            <span>This page hit a problem it could not recover from. The details have been logged.</span>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Recover">Try again</MudButton>
+                            <h3>@Loc["Something went wrong"]</h3>
+                            <span>@Loc["This page hit a problem it could not recover from. The details have been logged."]</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4" OnClick="Recover">@Loc["Try again"]</MudButton>
                         </div>
                     </ErrorContent>
                 </ErrorBoundary>

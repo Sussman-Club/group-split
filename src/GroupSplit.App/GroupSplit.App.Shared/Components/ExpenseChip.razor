@@ -20,12 +20,32 @@
    advertised no expandable state at all. The comment sits here rather than among the
    attributes, where Razor reads it as an attribute name and the render throws. *@
 
+@if (ReadOnly)
+{
+    <span class="gs-expense-chip is-readonly" aria-label="@($"{DisplayLabel}: {Value}")">@ChipContent</span>
+}
+else
+{
 <button type="button"
         class="gs-expense-chip @(Set ? "" : "is-empty") @(Open ? "is-open" : "")"
         aria-expanded="@(Open ? "true" : "false")"
-        aria-label="@(Set ? $"{Label}: {Value}. Change it" : $"Add {Label}")"
+        aria-label="@(Set ? Loc["{0}: {1}. Change it", DisplayLabel, Value ?? ""].Value : Loc["Add {0}", DisplayLabel].Value)"
         @onclick="OnClick">
 
+    @ChipContent
+</button>
+}
+
+
+@code {
+    private string DisplayLabel => Label switch
+    {
+        "group" => Loc["Copy.Lower.group"], "payer" => Loc["Copy.Lower.payer"],
+        "category" => Loc["Copy.Lower.category"], "when" => Loc["Copy.Lower.when"],
+        "where" => Loc["Copy.Lower.where"], _ => Label
+    };
+    [Parameter] public bool ReadOnly { get; set; }
+    private RenderFragment ChipContent => @<text>
     @if (!Set)
     {
         <MudIcon Icon="@Icons.Material.Outlined.Add"/>
@@ -35,21 +55,25 @@
 
     @if (Set)
     {
-        @if (Lead is { Length: > 0 })
+        @if (AsRow)
         {
-            <span class="k">@Lead</span>
+            <span class="k">@(Label switch { "group" => Loc["Group"].Value, "payer" => Loc["Copy.Sentence.Paid_by"].Value, "category" => Loc["Category"].Value, "when" => Loc["When"].Value, "where" => Loc["Merchant"].Value, _ => Label })</span>
+        }
+        else if (Lead is { Length: > 0 })
+        {
+            <span class="k">@(Lead == "paid by" ? Loc["Copy.Lower.paid_by"] : Loc[Lead])</span>
         }
 
         <span class="v">@Value</span>
     }
     else
     {
-        <span class="v">@Label</span>
+        <span class="v">@DisplayLabel</span>
     }
 
-</button>
+    </text>;
 
-@code {
+    [Parameter] public bool AsRow { get; set; }
     /// <summary>What this decides, in a word: "category", "paid by", "when", "where".</summary>
     [Parameter] public string Label { get; set; } = "";
 

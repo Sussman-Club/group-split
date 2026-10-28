@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
@@ -33,14 +34,14 @@ public sealed class TransactionCommands(
         // one thing in the details view.
         if (request.Receipt is null && receipt is not null && await receipts.SaveAsync(created.Id, receipt, ct) is null)
         {
-            snackbar.Add("The expense was added, but its receipt details could not be saved.",
+            snackbar.Add(UiText.Get("The expense was added, but its receipt details could not be saved."),
                 Severity.Warning);
         }
 
         var attachment = await receiptAttachments.UploadAsync(created.Id, file, ct);
         if (attachment is null)
         {
-            snackbar.Add("The expense was added, but its receipt file could not be attached.",
+            snackbar.Add(UiText.Get("The expense was added, but its receipt file could not be attached."),
                 Severity.Warning);
         }
 
@@ -58,7 +59,7 @@ public sealed class TransactionCommands(
             created = await transactions.CreateTransactionAsync(request, ct);
             if (complete)
                 await CompleteCreationAsync(created, ct);
-        }, "Could not save the expense.");
+        }, UiText.Get("Could not save the expense."));
 
         return succeeded ? created : null;
     }
@@ -69,8 +70,8 @@ public sealed class TransactionCommands(
         // navigation, which cancels the page's remaining upload work.
         snackbar.Add(
             created.GroupName is { Length: > 0 } group
-                ? $"{created.Name} added to {group}."
-                : $"{created.Name} added to your personal expenses.",
+                ? UiText.Format($"{created.Name} added to {group}.")
+                : UiText.Format($"{created.Name} added to your personal expenses."),
             Severity.Success);
         await changes.NotifyTransactionsChangedAsync();
         await OfferBankRowsAsync(created, ct);
@@ -114,7 +115,7 @@ public sealed class TransactionCommands(
 
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
 
-        await dialogs.ShowAsync<AttachBankRowDialog>("Your bank already sent this", parameters, options);
+        await dialogs.ShowAsync<AttachBankRowDialog>(UiText.Get("Your bank already sent this"), parameters, options);
     }
 
     public Task<bool> UpdateAsync(Guid transactionId, JsonPatchDocument<UpdateTransactionRequest> patch,
@@ -122,18 +123,18 @@ public sealed class TransactionCommands(
         errors.TryAsync(async () =>
         {
             await transactions.UpdateTransactionAsync(transactionId, patch, ct);
-            snackbar.Add($"{name} updated.", Severity.Success);
+            snackbar.Add(UiText.Format($"{name} updated."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not update the expense.");
+        }, UiText.Get("Could not update the expense."));
 
     public Task<bool> DeleteAsync(Guid transactionId, string name, string noun = "expense",
         CancellationToken ct = default) =>
         errors.TryAsync(async () =>
         {
             await transactions.DeleteTransactionAsync(transactionId, ct);
-            snackbar.Add($"{name} deleted.", Severity.Success);
+            snackbar.Add(UiText.Format($"{name} deleted."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, $"Could not delete the {noun}.");
+        }, UiText.Format($"Could not delete the {noun}."));
 
     /// <summary>
     /// Says out loud anything the dialog cannot say for itself.
@@ -160,7 +161,7 @@ public sealed class TransactionCommands(
         if (error.Kind is ApiErrorKind.Validation || error.Code == ErrorCodes.SplitsDoNotSumToAmount)
             return;
 
-        await errors.ShowAsync(error, "Could not work out how this divides.");
+        await errors.ShowAsync(error, UiText.Get("Could not work out how this divides."));
     }
 
     public async Task<SplitPreviewResponse?> PreviewAsync(CreateTransactionRequest request,
@@ -210,13 +211,13 @@ public sealed class TransactionCommands(
             // on screen do not move, so a bare "updated" would read as nothing happening.
             snackbar.Add(
                 splitRuleVersionId is null
-                    ? $"{name}'s shares are recorded as its own. No amount moved."
-                    : $"Recorded what divided {name}. No amount moved.",
+                    ? UiText.Format($"{name}'s shares are recorded as its own. No amount moved.")
+                    : UiText.Format($"Recorded what divided {name}. No amount moved."),
                 Severity.Success);
 
             // Nothing a listing prints has changed, and it is told anyway: an expense's
             // division source decides what its next edit does, and the dialogs that make
             // that edit read it from the listings.
             await changes.NotifyTransactionsChangedAsync();
-        }, "Could not record what divided the expense.");
+        }, UiText.Get("Could not record what divided the expense."));
 }

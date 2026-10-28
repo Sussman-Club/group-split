@@ -13,9 +13,7 @@
    nuisance whichever dialog it is in. *@
 <MudDialog Class="gs-sheet">
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">
-            Edit Settlement
-        </MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@Loc["Edit Settlement"]</MudText>
     </TitleContent>
 
     <DialogContent>
@@ -39,12 +37,12 @@
                                    Variant="Variant.Outlined"/>
 
                     <MudTimePicker @bind-Time="_selectedTime"
-                                   Label="Time"
+                                   Label="@Loc["Time"]"
                                    Variant="Variant.Outlined"
-                                   AmPm="true"/>
+                                   AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')"/>
                 </MudStack>
 
-                <MudSelect T="Guid" Label="Paid By"
+                <MudSelect T="Guid" Label="@Loc["Paid By"]"
                            Variant="Variant.Outlined"
                            Disabled="@(!_groupUsers.Any())"
                            @bind-Value="_editModel.PaidByUserId">
@@ -54,7 +52,7 @@
                     }
                 </MudSelect>
 
-                <MudSelect T="Guid?" Label="Paid To"
+                <MudSelect T="Guid?" Label="@Loc["Paid To"]"
                            Variant="Variant.Outlined"
                            Disabled="@(!_groupUsers.Any())"
                            @bind-Value="_paidToUserId"
@@ -66,27 +64,27 @@
                 </MudSelect>
 
                 <MudTextField @bind-Value="_editModel.Description"
-                              Label="Note"
+                              Label="@Loc["Note"]"
                               Variant="Variant.Outlined"
-                              Placeholder="Cash, bank transfer, a reference…"
+                              Placeholder="@Loc["Cash, bank transfer, a reference…"]"
                               Immediate="true"/>
 
                 @* What the payment was for, which nothing adds up: correcting it, or
                    clearing it on a payment that was never meant as a period, moves no
                    balance. *@
                 <MudDatePicker @bind-Date="_coversThrough"
-                               Label="Covers activity up to"
+                               Label="@Loc["Covers activity up to"]"
                                Variant="Variant.Outlined"
                                Clearable="true"
-                               HelperText="Optional. The last day this payment was meant to settle."/>
+                               HelperText="@Loc["Optional. The last day this payment was meant to settle."]"/>
 
             </MudStack>
         </MudForm>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@_loading" OnClick="Submit">Save</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@_loading" OnClick="Submit">@Loc["Save"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -151,7 +149,7 @@
                 var details = await TransactionsClient.GetTransactionAsync(Original.Id);
                 _paidToUserId = details.Splits.FirstOrDefault()?.UserId;
             }
-        }, "Could not load group members.");
+        }, Loc["Could not load group members."].Value);
 
         if (!loaded)
         {
@@ -165,9 +163,9 @@
     private IEnumerable<string> ValidatePaidTo(Guid? paidToId)
     {
         if (paidToId is null)
-            yield return "Recipient is required.";
+            yield return Loc["Recipient is required."].Value;
         if (paidToId == _editModel.PaidByUserId)
-            yield return "A settlement needs two different people.";
+            yield return Loc["A settlement needs two different people."].Value;
     }
 
     private async Task Submit()

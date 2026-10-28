@@ -37,7 +37,7 @@
     here, beside the itemised bill it came from.
 *@
 
-<MudDialog Class="gs-transaction-dialog">
+<MudDialog Class="gs-sheet gs-transaction-dialog gs-expandable-expense">
     <TitleContent>
         @* The subject, not the screen. Until it loads there is no subject, so the heading
            says what kind of thing is coming rather than sitting empty. *@
@@ -49,14 +49,14 @@
                                   MerchantName="@loaded.MerchantName"
                                   MerchantLogoUrl="@loaded.MerchantLogoUrl" />
                     <div style="min-width: 0">
-                        <div class="gs-eyebrow">@(loaded.GroupName ?? "Personal")</div>
+                        <div class="gs-eyebrow">@(loaded.GroupName ?? Loc["Personal"].Value)</div>
                         <h2 class="gs-dialog-title">@Title(loaded)</h2>
                     </div>
                 </div>
             }
             else
             {
-                <h2 class="gs-dialog-title">Expense</h2>
+                <h2 class="gs-dialog-title">@Loc["Expense"]</h2>
             }
         </div>
     </TitleContent>
@@ -65,7 +65,7 @@
         <ReceiptReadLock IsLocked="@(_transcribingAttachmentId is not null)">
         @if (details is null)
         {
-            <div class="gs-dialog-loading" role="status" aria-label="Loading transaction">
+            <div class="gs-dialog-loading" role="status" aria-label="@Loc["Loading transaction"]">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }
@@ -86,7 +86,7 @@
                 *@
                 <div class="gs-figures">
                     <div class="gs-figure">
-                        <span class="gs-eyebrow">Total</span>
+                        <span class="gs-eyebrow">@Loc["Total"]</span>
                         <span class="gs-figure-value gs-num">@details.Amount.ToMoney(details.Currency)</span>
                     </div>
 
@@ -95,22 +95,48 @@
                     @if (!IsSettlement && MyShare is { } mine)
                     {
                         <div class="gs-figure">
-                            <span class="gs-eyebrow">@(PaidByMe ? "Your share" : "You owe")</span>
+                            <span class="gs-eyebrow">@Loc["Your share"]</span>
                             <span class="gs-figure-value gs-num is-quiet">@mine.ToMoney(details.Currency)</span>
-                            @* Which of the two it is changes what the figure means: your
-                               share of your own expense is money you already have. *@
-                            <span class="gs-figure-note">
-                                @(PaidByMe
-                                    ? "you fronted the rest"
-                                    : $"{details.PaidByUserName} paid")
-                            </span>
+
                         </div>
                     }
                 </div>
 
+                @if (!IsSettlement)
+                {
+                    <div class="gs-chip-row" aria-label="@Loc["Expense details"]">
+                        <ExpenseChip ReadOnly="true" Set="true" Label="when"
+                                     Value="@Clock.Stamp(details.DateTime, "d MMM yyyy", "HH:mm")" />
+                        <ExpenseChip ReadOnly="true" Set="true" Label="where" Lead="at"
+                                     Value="@(details.MerchantName ?? Loc["not specified"].Value)">
+                            <Mark>
+                                @if (HasUsableMerchantLogo)
+                                {
+                                    <img class="gs-mark-inline" src="@details.MerchantLogoUrl" alt=""
+                                         width="20" height="20" loading="lazy" @onerror="HandleMerchantLogoError" />
+                                }
+                                else if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                                {
+                                    <span class="gs-mark-inline-fallback @details.MerchantName.AvatarTone()" aria-hidden="true">
+                                        @details.MerchantName.Initials()
+                                    </span>
+                                }
+                            </Mark>
+                        </ExpenseChip>
+                        <ExpenseChip ReadOnly="true" Set="true" Label="category" Lead="for"
+                                     Value="@(string.IsNullOrWhiteSpace(details.Category) ? Loc["Copy.Lower.uncategorized"].Value : details.Category)" />
+                        <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
+                                     Value="@($"{(PaidByMe ? "You" : details.PaidByUserName)}{(details.PaidByIsGuest ? " (guest)" : "")}")" />
+                    </div>
+                }
+                else
+                {
+                <details class="gs-expense-disclosure">
+                    <summary>@Loc["Copy.Sentence.Transaction_details"]<span>@Loc["Payer, category, merchant & date"]</span></summary>
+                    <div class="gs-expense-disclosure-body">
                 <dl class="gs-kv">
                     <div class="gs-kv-row">
-                        <dt>When</dt>
+                        <dt>@Loc["When"]</dt>
                         @* The app's date, not the machine's: "9/8/2026 9:45 PM" is ambiguous
                            between two continents and matches nothing else in the product. A
                            bank row is a date with no time, and shows the bank's day alone. *@
@@ -120,7 +146,7 @@
                     @if (!string.IsNullOrWhiteSpace(details.MerchantName))
                     {
                         <div class="gs-kv-row">
-                            <dt>Where</dt>
+                            <dt>@Loc["Where"]</dt>
                             <dd class="gs-inline" style="gap: 8px; justify-content: flex-end">
                                 @if (HasUsableMerchantLogo)
                                 {
@@ -143,20 +169,20 @@
                     @if (!string.IsNullOrWhiteSpace(details.Category))
                     {
                         <div class="gs-kv-row">
-                            <dt>Category</dt>
+                            <dt>@Loc["Category"]</dt>
                             <dd><span class="gs-tag">@details.Category</span></dd>
                         </div>
                     }
 
                     <div class="gs-kv-row">
-                        <dt>Paid by</dt>
+                        <dt>@Loc["Copy.Sentence.Paid_by"]</dt>
                         <dd class="gs-kv-tagged">
-                            <span>@(PaidByMe ? "You" : details.PaidByUserName)</span>
+                            <span>@(PaidByMe ? Loc["You"].Value : details.PaidByUserName)</span>
                             @* A guest can front money for the group like anybody else,
                                so the name here is not always a member's. *@
                             @if (details.PaidByIsGuest)
                             {
-                                <span class="gs-tag">guest</span>
+                                <span class="gs-tag">@Loc["Copy.Lower.guest"]</span>
                             }
                         </dd>
                     </div>
@@ -164,8 +190,8 @@
                     @if (IsSettlement)
                     {
                         <div class="gs-kv-row">
-                            <dt>Paid to</dt>
-                            <dd>@(details.PaidToUserId == Me ? "You" : details.PaidToUserName)</dd>
+                            <dt>@Loc["Copy.Sentence.Paid_to"]</dt>
+                            <dd>@(details.PaidToUserId == Me ? Loc["You"].Value : details.PaidToUserName)</dd>
                         </div>
                     }
 
@@ -174,21 +200,24 @@
                     @if (details.Coverage is { } coverage)
                     {
                         <div class="gs-kv-row">
-                            <dt>Covers</dt>
+                            <dt>@Loc["Covers"]</dt>
                             <dd class="gs-kv-tagged">
                                 <span>@Period(coverage)</span>
                                 @if (coverage.StillOwed > 0)
                                 {
-                                    <span class="gs-tag clay">open</span>
+                                    <span class="gs-tag clay">@Loc["Copy.Lower.open"]</span>
                                 }
                                 else
                                 {
-                                    <span class="gs-tag">square</span>
+                                    <span class="gs-tag">@Loc["square"]</span>
                                 }
                             </dd>
                         </div>
                     }
                 </dl>
+                    </div>
+                </details>
+                }
 
                 @*
                     What a settlement made through a day covers, as things stand now -- worked
@@ -205,8 +234,8 @@
                         <div class="gs-notice is-warn" role="status">
                             <MudIcon Icon="@Icons.Material.Outlined.Warning" />
                             <div class="gs-notice-body">
-                                <strong>No longer fully settled</strong>
-                                <span>Something dated in this period was added or changed since. @StillOwedSentence(details, period)</span>
+                                <strong>@Loc["No longer fully settled"]</strong>
+                                <span>@Loc["Something dated in this period was added or changed since. {0}", StillOwedSentence(details, period)].Value</span>
                             </div>
                         </div>
                     }
@@ -214,9 +243,9 @@
                     @* Newest few, then the rest on request. With no earlier settlement between
                        the two of them the period runs back to the group's first expense, and
                        a phone's worth of rows under a dialog's facts buries them. *@
-                    <section aria-label="Expenses in the period">
+                    <section aria-label="@Loc["Expenses in the period"]">
                         <div class="gs-period-head">
-                            <h3>Expenses in the period</h3>
+                            <h3>@Loc["Expenses in the period"]</h3>
                             @if (_periodExpenseCount > 0)
                             {
                                 <span class="gs-period-count">@_periodExpenseCount</span>
@@ -229,9 +258,7 @@
                         }
                         else if (_periodExpenses.Count == 0)
                         {
-                            <p class="gs-muted" style="margin: 0; font-size: .875rem">
-                                No expenses are dated in it.
-                            </p>
+                            <p class="gs-muted" style="margin: 0; font-size: .875rem">@Loc["No expenses are dated in it."]</p>
                         }
                         else
                         {
@@ -242,7 +269,7 @@
                                         <div class="gs-period-what">
                                             <span class="gs-period-name">@expense.Name</span>
                                             <span class="gs-period-meta">
-                                                @Clock.Day(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? "you" : expense.PaidByUserName) paid
+                                                @Clock.Day(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? Loc["you paid"] : Loc["{0} paid", expense.PaidByUserName ?? ""])
                                             </span>
                                         </div>
                                         <span class="gs-period-amount">@expense.Amount.ToMoney()</span>
@@ -255,15 +282,13 @@
                                 <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-quiet mt-1"
                                            aria-expanded="@(_showAllPeriod ? "true" : "false")"
                                            OnClick="@(() => _showAllPeriod = !_showAllPeriod)">
-                                    @(_showAllPeriod ? "Show fewer" : $"Show all {_periodExpenses.Count}")
+                                    @(_showAllPeriod ? Loc["Show fewer"].Value : Loc["Show all {0}", _periodExpenses.Count].Value)
                                 </MudButton>
                             }
 
                             @if (_showAllPeriod && _periodExpenseCount > _periodExpenses.Count)
                             {
-                                <p class="gs-muted" style="margin: 4px 0 0; font-size: .8125rem">
-                                    And @(_periodExpenseCount - _periodExpenses.Count) older, on the group's Expenses tab.
-                                </p>
+                                <p class="gs-muted" style="margin: 4px 0 0; font-size: .8125rem">@Loc["And {0} older, on the group's Expenses tab.", _periodExpenseCount - _periodExpenses.Count].Value</p>
                             }
                         }
                     </section>
@@ -288,10 +313,10 @@
                                 <div class="gs-split @(split.UserId == Me ? "is-me" : "")">
                                     <Avatar Name="@split.UserName" Size="sm" />
                                     <span class="gs-split-who">
-                                        <span>@(split.UserId == Me ? "You" : split.UserName)</span>
+                                        <span>@(split.UserId == Me ? Loc["You"].Value : split.UserName)</span>
                                         @if (split.IsGuest)
                                         {
-                                            <span class="gs-tag">guest</span>
+                                            <span class="gs-tag">@Loc["Copy.Lower.guest"]</span>
                                         }
                                     </span>
                                     <span class="gs-split-amount gs-num">@split.Amount.ToMoney(details.Currency)</span>
@@ -321,7 +346,7 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Close">Close</MudButton>
+        <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Close">@Loc["Close"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -364,8 +389,8 @@
             : null;
 
     private string SplitHeadline => details is { Splits.Count: var count } && count > 0
-        ? $"Split between {count} {(count == 1 ? "person" : "people")}"
-        : "Split";
+        ? Loc["Split between {0} {1}", count, (count == 1 ? Loc["person"].Value : Loc["Copy.Lower.people"].Value)].Value
+        : Loc["Split"].Value;
 
     private bool IsSettlement => details is { Kind: ActivityKind.Transfer };
 
@@ -380,7 +405,7 @@
     /// every settlement is called "Settlement", which names nothing.
     /// </summary>
     private string Title(TransactionDetailsResponse loaded) => loaded.Kind is ActivityKind.Transfer
-        ? $"{(loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName)} paid {(loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)}"
+        ? Loc["{0} paid {1}", (loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName), (loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)].Value
         : loaded.Name;
 
     /// <summary>How many of a period's expenses show before "Show all".</summary>
@@ -388,17 +413,17 @@
 
     private bool _showAllPeriod;
 
-    private static string Period(SettlementCoverage coverage) => coverage.From is { } from
-        ? $"{from:d MMM} – {coverage.Through:d MMM yyyy}"
-        : $"Up to {coverage.Through:d MMM yyyy}";
+    private string Period(SettlementCoverage coverage) => coverage.From is { } from
+        ? Loc["{0:d MMM} – {1:d MMM yyyy}", from, coverage.Through].Value
+        : Loc["Up to {0:d MMM yyyy}", coverage.Through].Value;
 
     /// <summary>Who still owes whom for the period, named from where the reader sits.</summary>
     private string StillOwedSentence(TransactionDetailsResponse loaded, SettlementCoverage coverage) =>
         (loaded.PaidByUserId == Me, loaded.PaidToUserId == Me) switch
         {
-            (true, _) => $"You still owe {loaded.PaidToUserName} {coverage.StillOwed.ToMoney()}.",
-            (_, true) => $"{loaded.PaidByUserName} still owes you {coverage.StillOwed.ToMoney()}.",
-            _ => $"{loaded.PaidByUserName} still owes {loaded.PaidToUserName} {coverage.StillOwed.ToMoney()}."
+            (true, _) => Loc["You still owe {0} {1}.", loaded.PaidToUserName, coverage.StillOwed.ToMoney()].Value,
+            (_, true) => Loc["{0} still owes you {1}.", loaded.PaidByUserName, coverage.StillOwed.ToMoney()].Value,
+            _ => Loc["{0} still owes {1} {2}.", loaded.PaidByUserName, loaded.PaidToUserName, coverage.StillOwed.ToMoney()].Value
         };
 
     /// <summary>
@@ -421,7 +446,7 @@
         await Errors.TryAsync(async () =>
                 page = await GroupsClient.GetGroupTransactionsAsync(groupId, from, to,
                     page: 1, pageSize: PeriodListLimit),
-            "Could not load the expenses in that period.");
+            Loc["Could not load the expenses in that period."].Value);
 
         _periodExpenses = page?.Items ?? [];
         _periodExpenseCount = page?.TotalCount ?? 0;
@@ -439,7 +464,7 @@
         var loaded = await Errors.TryAsync(
             async () => details = await TransactionsClient.GetTransactionAsync(TransactionId,
                 Clock.CutoffOffsetMinutes),
-            "Could not load the expense.");
+            Loc["Could not load the expense."].Value);
 
         if (!loaded)
         {
@@ -501,7 +526,7 @@
             if (transcription is null || details is not { } expenseDetails)
                 return;
 
-            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>("Review receipt", new DialogParameters<ReceiptDraftDialog>
+            var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(Loc["Review receipt"].Value, new DialogParameters<ReceiptDraftDialog>
             {
                 { x => x.TransactionId, TransactionId },
                 { x => x.ExpenseAmount, expenseDetails.Amount },
@@ -528,7 +553,7 @@
             return;
 
         var dialog = await DialogService.ShowAsync<ReceiptDraftDialog>(
-            "Edit itemized receipt", new DialogParameters<ReceiptDraftDialog>
+            Loc["Edit itemized receipt"].Value, new DialogParameters<ReceiptDraftDialog>
             {
                 { x => x.TransactionId, TransactionId },
                 { x => x.ExpenseAmount, expenseDetails.Amount },
@@ -554,7 +579,7 @@
         if (await Errors.TryAsync(async () =>
                 refreshed = await TransactionsClient.GetTransactionAsync(TransactionId,
                     Clock.CutoffOffsetMinutes),
-            "Could not refresh the expense after saving the receipt.")
+            Loc["Could not refresh the expense after saving the receipt."].Value)
             && refreshed is not null)
         {
             details = refreshed;
@@ -566,12 +591,12 @@
     {
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Remove \"{attachment.FileName}\" from this expense? The itemized receipt will stay available if it has already been saved." },
-            { x => x.ButtonText, "Remove" },
+            { x => x.ContentText, Loc["Remove \"{0}\" from this expense? The itemized receipt will stay available if it has already been saved.", attachment.FileName].Value },
+            { x => x.ButtonText, Loc["Remove"].Value },
             { x => x.Color, Color.Error }
         };
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
-            "Remove receipt", parameters,
+            Loc["Remove receipt"].Value, parameters,
             new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
 
         if (!await dialog.ConfirmedAsync())
@@ -581,9 +606,9 @@
             _attachments = _attachments.Where(existing => existing.Id != attachment.Id).ToList();
     }
 
-    private static string FormatFileSize(long length) => length < 1024 * 1024
-        ? $"{Math.Max(1, length / 1024)} KB"
-        : $"{length / 1024d / 1024d:0.0} MB";
+    private string FormatFileSize(long length) => length < 1024 * 1024
+        ? Loc["{0} KB", Math.Max(1, length / 1024)].Value
+        : Loc["{0:0.0} MB", length / 1024d / 1024d].Value;
 
     private void Close()
     {

@@ -32,11 +32,11 @@ public record CreateCategoryRequest
 {
     public Guid GroupId { get; init; }
 
-    [Required(ErrorMessage = "Name is required")]
-    [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+    [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; init; } = null!;
 
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string Description { get; init; } = string.Empty;
 
     public Guid? DefaultSplitRuleId { get; init; }
@@ -44,11 +44,11 @@ public record CreateCategoryRequest
 
 public record UpdateCategoryRequest
 {
-    [Required(ErrorMessage = "Name is required")]
-    [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
+    [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; set; } = null!;
 
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string Description { get; set; } = string.Empty;
 
     public Guid? DefaultSplitRuleId { get; set; }

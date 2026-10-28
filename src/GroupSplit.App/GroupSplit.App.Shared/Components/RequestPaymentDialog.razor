@@ -9,45 +9,45 @@
 @inject LocalClock Clock
 
 <MudDialog Class="gs-sheet">
-    <TitleContent><MudText Typo="Typo.h5">Request payment from @RecipientName</MudText></TitleContent>
+    <TitleContent><MudText Typo="Typo.h5">@Loc["Request payment from {0}", RecipientName].Value</MudText></TitleContent>
     <DialogContent>
         @if (_link is { } link)
         {
             <MudStack Spacing="2">
-                <MudText>Share this private link with @RecipientName. It does not record a payment.</MudText>
-                <MudTextField Value="@link" Label="Settlement request link" ReadOnly="true" Variant="Variant.Outlined" />
-                <MudButton OnClick="CopyAsync">Copy request link</MudButton>
+                <MudText>@Loc["Share this private link with {0}. It does not record a payment.", RecipientName].Value</MudText>
+                <MudTextField Value="@link" Label="@Loc["Settlement request link"]" ReadOnly="true" Variant="Variant.Outlined" />
+                <MudButton OnClick="CopyAsync">@Loc["Copy request link"]</MudButton>
             </MudStack>
         }
         else
         {
             <MudStack Spacing="2">
-                <MudText>@RecipientName currently owes you @CurrentDebt.ToMoney().</MudText>
-                <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync" Label="Up to a date"
+                <MudText>@Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney()].Value</MudText>
+                <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync" Label="@Loc["Up to a date"]"
                                Variant="Variant.Outlined" Clearable="true" MaxDate="@Clock.Today"
                                Disabled="@(_busy || _readingPeriod)"
-                               HelperText="Leave empty to request the full balance." />
-                <DecimalField @bind-Value="_amount" Label="Amount to request" Variant="Variant.Outlined"
+                               HelperText="@Loc["Leave empty to request the full balance."]" />
+                <DecimalField @bind-Value="_amount" Label="@Loc["Amount to request"]" Variant="Variant.Outlined"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
                               HideSpinButtons="true" />
                 @if (_amount <= 0 || decimal.Round(_amount, 2) != _amount)
                 {
-                    <MudText Color="Color.Error">Enter a positive amount with no more than two decimal places.</MudText>
+                    <MudText Color="Color.Error">@Loc["Enter a positive amount with no more than two decimal places."]</MudText>
                 }
-                <MudText Typo="Typo.caption">You can request a different amount, including one for an earlier period. Recording it is still a separate confirmation.</MudText>
+                <MudText Typo="Typo.caption">@Loc["You can request a different amount, including one for an earlier period. Recording it is still a separate confirmation."]</MudText>
             </MudStack>
         }
     </DialogContent>
     <DialogActions>
         @if (_link is null)
         {
-            <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@(_busy || _readingPeriod || _amount <= 0 || decimal.Round(_amount, 2) != _amount)" OnClick="CreateAsync">Create link</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cancel"]</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@(_busy || _readingPeriod || _amount <= 0 || decimal.Round(_amount, 2) != _amount)" OnClick="CreateAsync">@Loc["Create link"]</MudButton>
         }
         else
         {
-            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelRequestAsync">Cancel request</MudButton>
-            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="Close">Done</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelRequestAsync">@Loc["Cancel request"]</MudButton>
+            <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="Close">@Loc["Done"]</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -83,7 +83,7 @@
                     Through = _through is { } day ? DateOnly.FromDateTime(day) : null,
                     UtcOffset = _periodOffset
                 }),
-                "Could not create the settlement request.");
+                Loc["Could not create the settlement request."].Value);
             if (saved && created is not null)
                 _link = Navigation.ToAbsoluteUri($"/settlement-requests/{created.Token}").ToString();
         }
@@ -108,7 +108,7 @@
             var offset = Clock.CutoffOffsetMinutes;
             UserGroupBalanceResponse? balance = null;
             if (await Errors.TryAsync(async () => balance = await GroupsClient.GetGroupUserBalanceAsync(
-                    GroupId, DateOnly.FromDateTime(day.Value), offset), "Could not read the balance for that date.") && balance is not null)
+                    GroupId, DateOnly.FromDateTime(day.Value), offset), Loc["Could not read the balance for that date."].Value) && balance is not null)
             {
                 _through = day;
                 _periodOffset = offset;
@@ -123,7 +123,7 @@
         var copied = false;
         try { copied = await JS.InvokeAsync<bool>("gs.copy", _link); }
         catch (JSException) { }
-        Snackbar.Add(copied ? "Request link copied." : "Select the link above and copy it by hand.",
+        Snackbar.Add(copied ? Loc["Request link copied."].Value : Loc["Select the link above and copy it by hand."].Value,
             copied ? Severity.Success : Severity.Info);
     }
 
@@ -133,7 +133,7 @@
             return;
         var token = _link[(_link.LastIndexOf('/') + 1)..];
         var cancelled = await Errors.TryAsync(() => SettlementRequestsClient.CancelSettlementRequestAsync(token),
-            "Could not cancel the settlement request.");
+            Loc["Could not cancel the settlement request."].Value);
         if (cancelled)
             MudDialog.Close();
     }

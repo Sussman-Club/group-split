@@ -367,6 +367,9 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# Verified PDF.js assets restored by build/PdfJs.targets.
+src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/vendor/pdfjs/
+
 # Visual Studio 6 build log
 *.plg
 

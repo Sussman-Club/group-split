@@ -1,6 +1,7 @@
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
+@inject IDialogService ChoiceDialogs
 
 @*
     Everything about an expense that is picked rather than typed, as one row of chips with
@@ -75,11 +76,17 @@
    shown in place, so nothing about choosing is new except where it appears. *@
 @if (_open is not Picker.None)
 {
-    <div class="gs-picker">
+    <div class="@(UseSelectionSheets ? "gs-inline-sheet-backdrop" : "")">
+        <MudFocusTrap Disabled="@(!UseSelectionSheets)">
+        <div class="gs-picker @(UseSelectionSheets ? "gs-inline-selection-sheet" : "")" role="@(UseSelectionSheets ? "dialog" : null)" aria-label="@Loc["Expense selection"]">
+        @if (UseSelectionSheets)
+        {
+            <MudButton OnClick="Close" StartIcon="@Icons.Material.Outlined.ArrowBack">@Loc["Cancel"]</MudButton>
+        }
         @switch (_open)
         {
             case Picker.Group:
-                <MudSelect T="Guid?" Label="Group"
+                <MudSelect T="Guid?" Label="@Loc["Group"]"
                            Variant="Variant.Outlined"
                            Clearable="false"
                            Value="@GroupValue"
@@ -87,7 +94,7 @@
                            ToStringFunc="@GroupText">
                     @if (AllowPersonal)
                     {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)Personal)">Personal (just you)</MudSelectItem>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)Personal)">@Loc["Personal (just you)"]</MudSelectItem>
                     }
 
                     @foreach (var group in Groups)
@@ -100,7 +107,7 @@
             case Picker.Category:
                 @* The rule beside the name, because "Groceries" says nothing about how
                    Groceries is divided and the person picking is choosing both. *@
-                <MudSelect T="Guid?" Label="Category"
+                <MudSelect T="Guid?" Label="@Loc["Category"]"
                            Variant="Variant.Outlined"
                            Clearable="true"
                            Disabled="@(Categories.Count == 0)"
@@ -108,8 +115,7 @@
                            Value="@CategoryId"
                            ValueChanged="@OnCategoryPickedAsync"
                            ToStringFunc="@CategoryText">
-                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">
-                        No category <span class="gs-muted">· uncategorized</span>
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">@Loc["No category"]<span class="gs-muted">@Loc["· uncategorized"]</span>
                     </MudSelectItem>
                     @foreach (var category in Categories)
                     {
@@ -126,7 +132,7 @@
                 break;
 
             case Picker.Payer:
-                <MudSelect T="Guid?" Label="Paid by"
+                <MudSelect T="Guid?" Label="@Loc["Copy.Sentence.Paid_by"]"
                            Variant="Variant.Outlined"
                            Disabled="@(Members.Count == 0)"
                            Value="@PayerId"
@@ -146,21 +152,57 @@
                     @* Both report: the version of a rule that divides an expense is the one
                        that stood on the day it was spent, so the day is part of the
                        division. *@
-                    <MudDatePicker Date="@Date" DateChanged="@OnDatePickedAsync" Label="Date"
+                    <MudDatePicker Date="@(UseSelectionSheets ? _sheetDate : Date)" DateChanged="@OnSheetDateChangedAsync" Label="@Loc["Date"]"
                                    Variant="Variant.Outlined"/>
-                    <MudTimePicker Time="@Time" TimeChanged="@OnTimePickedAsync" Label="Time"
-                                   Variant="Variant.Outlined" AmPm="true"/>
+                    <MudTimePicker Time="@(UseSelectionSheets ? _sheetTime : Time)" TimeChanged="@OnSheetTimeChangedAsync" Label="@Loc["Time"]"
+                                   Variant="Variant.Outlined" AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')"/>
                 </MudStack>
                 break;
 
             case Picker.Where:
-                <MerchantPicker Value="@MerchantId" ValueChanged="@OnMerchantPickedAsync"/>
+                <MerchantPicker Value="@(UseSelectionSheets ? _sheetMerchant : MerchantId)" ValueChanged="@OnSheetMerchantChangedAsync"/>
                 break;
         }
+        @if (UseSelectionSheets)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySheetAsync">@Loc["Use selection"]</MudButton>
+        }
+    </div>
+        </MudFocusTrap>
     </div>
 }
 
 @code {
+    private DateTime? _sheetDate;
+    private TimeSpan? _sheetTime;
+    private Guid? _sheetMerchant;
+    private async Task OnSheetDateChangedAsync(DateTime? date)
+    {
+        if (UseSelectionSheets) _sheetDate = date;
+        else await OnDatePickedAsync(date);
+    }
+    private async Task OnSheetTimeChangedAsync(TimeSpan? time)
+    {
+        if (UseSelectionSheets) _sheetTime = time;
+        else await OnTimePickedAsync(time);
+    }
+    private async Task OnSheetMerchantChangedAsync(Guid? merchant)
+    {
+        if (UseSelectionSheets) _sheetMerchant = merchant;
+        else await OnMerchantPickedAsync(merchant);
+    }
+    private async Task ApplySheetAsync()
+    {
+        var picker = _open;
+        _open = Picker.None;
+        if (picker == Picker.When)
+        {
+            await OnDatePickedAsync(_sheetDate);
+            await OnTimePickedAsync(_sheetTime);
+        }
+        else if (picker == Picker.Where) await OnMerchantPickedAsync(_sheetMerchant);
+    }
+
     /// <summary>A group this expense could be recorded in.</summary>
     public sealed record GroupChoice(Guid Id, string Name);
 
@@ -280,7 +322,7 @@
     private string GroupText(Guid? id) => id switch
     {
         null => "",
-        { } value when value == Personal => "Personal (just you)",
+        { } value when value == Personal => Loc["Personal (just you)"].Value,
         _ => Groups.FirstOrDefault(group => group.Id == id)?.Name ?? ""
     };
 
@@ -291,12 +333,81 @@
         id is null ? "" : Members.FirstOrDefault(member => member.Id == id).Label();
 
     private string CategoryName =>
-        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? "uncategorized";
+        Categories.FirstOrDefault(category => category.Id == CategoryId)?.Name ?? Loc["Copy.Lower.uncategorized"];
 
     private string PayerName =>
         Members.FirstOrDefault(member => member.Id == PayerId).Label();
 
-    private void Toggle(Picker which) => _open = _open == which ? Picker.None : which;
+    private async Task Toggle(Picker which)
+    {
+        if (!UseSelectionSheets)
+        {
+            _sheetDate = Date;
+            _sheetTime = Time;
+            _sheetMerchant = MerchantId;
+            _open = _open == which ? Picker.None : which;
+            return;
+        }
+        if (which is Picker.When or Picker.Where)
+        {
+            var details = await ChoiceDialogs.ShowAsync<ExpenseDetailsChoiceDialog>(
+                which == Picker.When ? Loc["Choose date and time"].Value : Loc["Choose a merchant"].Value,
+                new DialogParameters<ExpenseDetailsChoiceDialog>
+                {
+                    { x => x.ChooseMerchant, which == Picker.Where },
+                    { x => x.Date, Date }, { x => x.Time, Time }, { x => x.MerchantId, MerchantId }
+                }, new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await details.Result is { Canceled: false, Data: ExpenseDetailsChoiceDialog.Selection selection })
+            {
+                if (which == Picker.When)
+                {
+                    await OnDatePickedAsync(selection.Date);
+                    await OnTimePickedAsync(selection.Time);
+                }
+                else await OnMerchantPickedAsync(selection.MerchantId);
+            }
+            return;
+        }
+        var choices = new List<ExpenseChoiceDialog.Option>();
+        var selected = "";
+        var title = Loc["Choose an option"].Value;
+        switch (which)
+        {
+            case Picker.Group:
+                title = Loc["Choose a group"].Value;
+                selected = GroupValue?.ToString() ?? "";
+                if (AllowPersonal) choices.Add(new(Personal.ToString(), Loc["Personal"].Value, Loc["Just you; no shared balance"]));
+                choices.AddRange(Groups.Select(g => new ExpenseChoiceDialog.Option(g.Id.ToString(), g.Name)));
+                break;
+            case Picker.Category:
+                title = Loc["Choose a category"].Value;
+                selected = CategoryId?.ToString() ?? "";
+                choices.Add(new("", Loc["No category"].Value));
+                choices.AddRange(Categories.Select(c => new ExpenseChoiceDialog.Option(c.Id.ToString(), c.Name, c.Divides)));
+                break;
+            case Picker.Payer:
+                title = Loc["Who paid?"].Value;
+                selected = PayerId?.ToString() ?? "";
+                choices.AddRange(Members.Select(m => new ExpenseChoiceDialog.Option(m.Id.ToString(), m.Label())));
+                break;
+        }
+        var parameters = new DialogParameters<ExpenseChoiceDialog>
+        {
+            { x => x.Items, choices }, { x => x.Selected, selected }
+        };
+        var dialog = await ChoiceDialogs.ShowAsync<ExpenseChoiceDialog>(title, parameters,
+            new DialogOptions { CloseButton = true, FullWidth = true, MaxWidth = MaxWidth.Small });
+        if (await dialog.Result is not { Canceled: false, Data: string picked }) return;
+        var id = Guid.TryParse(picked, out var value) ? value : (Guid?)null;
+        switch (which)
+        {
+            case Picker.Group: await OnGroupPickedAsync(id); break;
+            case Picker.Category: await OnCategoryPickedAsync(id); break;
+            case Picker.Payer: await OnPayerPickedAsync(id); break;
+        }
+    }
+
+    [Parameter] public bool UseSelectionSheets { get; set; }
 
     /// <summary>
     /// Reports the pick, with Personal turned back into the absent group it stands for.

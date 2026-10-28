@@ -2,6 +2,7 @@
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
+using GroupSplit.Data;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 
@@ -19,6 +20,7 @@ public static class UserApi
             group.WithTags("Users");
 
             group.MapGetCurrentUser();
+            group.MapSetCurrentUserLanguage();
             group.MapGetPosition();
             group.MapGetSettlementPlan();
             group.MapSettleWithPerson();
@@ -33,6 +35,26 @@ public static class UserApi
 
     extension(RouteGroupBuilder group)
     {
+        private RouteHandlerBuilder MapSetCurrentUserLanguage()
+        {
+            return group.MapPut("/me/language", async (LanguagePreferenceRequest request,
+                    ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
+                {
+                    if (!AppLanguages.IsSupported(request.Language))
+                        return Results.ValidationProblem(new Dictionary<string, string[]>
+                        {
+                            [nameof(request.Language)] = ["Choose a supported language: en, es, pt."]
+                        });
+
+                    currentUser.User.PreferredLanguage = request.Language;
+                    await db.SaveChangesAsync(ct);
+                    return Results.NoContent();
+                })
+                .WithName("SetCurrentUserLanguage")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesValidationProblem();
+        }
+
         private RouteHandlerBuilder MapExportPersonalData()
         {
             return group.MapGet("/me/export", async (IPersonalDataExport export, HttpContext http, CancellationToken ct) =>
@@ -57,7 +79,8 @@ public static class UserApi
                     ICurrentUser currentUser) =>
                 {
                     var user = currentUser.User;
-                    var userInfo = new UserInfo(user.Id, user.FirstName, user.LastName, user.Email);
+                    var userInfo = new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
+                        PreferredLanguage: user.PreferredLanguage);
                     return Results.Ok(userInfo);
                 })
                 .WithName("GetCurrentUser")

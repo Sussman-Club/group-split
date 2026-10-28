@@ -53,18 +53,16 @@ public class GuestTagTest : ComponentTest
     }
 
     /// <summary>
-    /// The payer's name and the tag are separate elements in the box that spaces them.
+    /// The payer chip includes the guest's name and guest status.
     /// </summary>
     [Fact]
-    public async Task A_guest_who_paid_is_named_apart_from_the_tag()
+    public async Task A_guest_who_paid_is_identified_in_the_payer_chip()
     {
         var dialog = await OpenAsync(Details(paidByGuest: true));
 
-        var value = dialog.Find(".gs-kv-tagged");
+        var payer = dialog.FindAll(".gs-expense-chip").Single(chip => chip.TextContent.Contains("paid by"));
+        Assert.Contains("Omar Haddad (guest)", payer.TextContent);
 
-        // The name in its own element, so the box can space the two rather than the markup.
-        Assert.Equal("Omar Haddad", value.QuerySelector("span:not(.gs-tag)")!.TextContent.Trim());
-        Assert.Equal("guest", value.QuerySelector(".gs-tag")!.TextContent.Trim());
     }
 
     /// <summary>

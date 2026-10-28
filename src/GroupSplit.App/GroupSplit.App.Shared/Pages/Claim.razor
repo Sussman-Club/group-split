@@ -30,20 +30,20 @@
     surface whose heading and body swap, rather than five different-looking screens.
 *@
 
-<PageTitle>Join a group - Group Split</PageTitle>
+<PageTitle>@Loc["Join a group - Group Split"]</PageTitle>
 
 @if (UserInfo is null)
 {
-    <AuthHandoff Title="Someone sent you a link to a group"
-                 Subtitle="Sign in, or create an account, and we will bring you straight back here."
-                 ActionLabel="Continue" ReturnUrl="@($"/claim/{Token}")" />
+    <AuthHandoff Title="@Loc["Someone sent you a link to a group"]"
+                 Subtitle="@Loc["Sign in, or create an account, and we will bring you straight back here."]"
+                 ActionLabel="@Loc["Continue"]" ReturnUrl="@($"/claim/{Token}")" />
 }
 else if (_loading)
 {
-    <LinkLanding Title="Someone sent you a link to a group">
+    <LinkLanding Title="@Loc["Someone sent you a link to a group"]">
         <div class="gs-inline gs-muted" style="font-size: .875rem; padding: 4px 0">
             <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Small" />
-            <span>Looking up the link…</span>
+            <span>@Loc["Looking up the link…"]</span>
         </div>
     </LinkLanding>
 }
@@ -53,10 +53,10 @@ else if (_declined is { } declined)
        last thing this person will see of the group, and the part worth leaving them with
        is that nothing happened to anybody -- the guest is still there, only the link is
        gone. *@
-    <LinkLanding Title="This link no longer works"
-                 Subtitle="@($"{declined.GroupName} still has {declined.Name} as a guest. Nothing recorded for them has changed.")">
+    <LinkLanding Title="@Loc["This link no longer works"]"
+                 Subtitle="@(Loc["{0} still has {1} as a guest. Nothing recorded for them has changed.", declined.GroupName, declined.Name].Value)">
         <MudButton Variant="Variant.Text" Href="/"
-                   StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
+                   StartIcon="@Icons.Material.Rounded.ArrowBack">@Loc["Back home"]</MudButton>
     </LinkLanding>
 }
 else if (_error is not null)
@@ -66,9 +66,9 @@ else if (_error is not null)
        an old chat, lands here -- and the message names each of those rather than implying
        the URL was mistyped. The API cannot say which: all of them are the same 404, so as
        not to tell whoever holds a link that it used to be good. *@
-    <LinkLanding Title="This link no longer works" Subtitle="@_error">
+    <LinkLanding Title="@Loc["This link no longer works"]" Subtitle="@_error">
         <MudButton Variant="Variant.Text" Href="/"
-                   StartIcon="@Icons.Material.Rounded.ArrowBack">Back home</MudButton>
+                   StartIcon="@Icons.Material.Rounded.ArrowBack">@Loc["Back home"]</MudButton>
     </LinkLanding>
 }
 else if (_invitation is { } invitation)
@@ -90,10 +90,7 @@ else if (_invitation is { } invitation)
         }
         else
         {
-            <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">
-                @Sent(invitation) No amounts change: what was recorded for @invitation.Name
-                simply becomes yours.
-            </MudAlert>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="w-100" Style="text-align: left">@Loc["{0} No amounts change: what was recorded for {1} simply becomes yours.", Sent(invitation), invitation.Name].Value</MudAlert>
         }
 
         <div class="gs-link-landing-actions">
@@ -103,8 +100,8 @@ else if (_invitation is { } invitation)
                        Disabled="@_busy"
                        OnClick="@ClaimAsync">
                 @(invitation.AlreadyAMember
-                    ? $"This is me: merge {invitation.Name} into my account"
-                    : $"Join as {invitation.Name}")
+                    ? Loc["This is me: merge {0} into my account", invitation.Name].Value
+                    : Loc["Join as {0}", invitation.Name].Value)
             </MudButton>
 
             @if (invitation.AlreadyAMember)
@@ -114,15 +111,11 @@ else if (_invitation is { } invitation)
                    them the way out has to leave it working, or checking the link would be
                    what broke it. *@
                 <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy"
-                           Href="@($"/groups/{invitation.GroupId}")">
-                    Back to @invitation.GroupName
-                </MudButton>
+                           Href="@($"/groups/{invitation.GroupId}")">@Loc["Back to {0}", invitation.GroupName].Value</MudButton>
             }
             else
             {
-                <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">
-                    This isn't me
-                </MudButton>
+                <MudButton Variant="Variant.Text" FullWidth Disabled="@_busy" OnClick="@DeclineAsync">@Loc["This isn't me"]</MudButton>
             }
         </div>
     </LinkLanding>
@@ -180,28 +173,28 @@ else if (_invitation is { } invitation)
     /// What the group has been doing and what claiming does, which is what somebody needs
     /// before they agree to it.
     /// </summary>
-    private static string Asked(InvitationClaimResponse invitation) =>
+    private string Asked(InvitationClaimResponse invitation) =>
         invitation.AlreadyAMember
-            ? $"You are already in {invitation.GroupName}. This link is for {invitation.Name}, a guest."
-            : $"{invitation.GroupName} has been keeping track of {invitation.Name} as a guest. " +
-              $"Join to take over: everything recorded for {invitation.Name} becomes yours.";
+            ? Loc["You are already in {0}. This link is for {1}, a guest.", invitation.GroupName, invitation.Name].Value
+            : Loc["{0} has been keeping track of {1} as a guest. ", invitation.GroupName, invitation.Name].Value +
+              Loc["Join to take over: everything recorded for {0} becomes yours.", invitation.Name].Value;
 
     /// <summary>
     /// Who sent it, and how many people are on the other side. The sender is nullable -- an
     /// account that has since been deleted leaves its links behind -- so the sentence is
     /// built rather than interpolated blind.
     /// </summary>
-    private static string Sent(InvitationClaimResponse invitation) =>
+    private string Sent(InvitationClaimResponse invitation) =>
         string.IsNullOrWhiteSpace(invitation.InvitedByUserName)
-            ? $"{Members(invitation.MemberCount)} already."
-            : $"{invitation.InvitedByUserName} sent you this link. {Members(invitation.MemberCount)} already.";
+            ? Loc["{0} already.", Members(invitation.MemberCount)].Value
+            : Loc["{0} sent you this link. {1} already.", invitation.InvitedByUserName, Members(invitation.MemberCount)].Value;
 
     /// <summary>
     /// What claiming does to somebody who is already a member, said before the button: it is
     /// the one claim that changes an existing balance. The confirmation after it asks rather
     /// than repeating this.
     /// </summary>
-    private static string MergeWarning(InvitationClaimResponse invitation) =>
+    private string MergeWarning(InvitationClaimResponse invitation) =>
         ParticipantCopy.MergeWarning(invitation.Name);
 
     private async Task ClaimAsync()
@@ -256,11 +249,11 @@ else if (_invitation is { } invitation)
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
-            $"Merge {invitation.Name} into your account", parameters, options);
+            Loc["Merge {0} into your account", invitation.Name].Value, parameters, options);
 
         return await dialog.ConfirmedAsync();
     }
 
-    private static string Members(int count) =>
-        count == 1 ? "One person is in it" : $"{count} people are in it";
+    private string Members(int count) =>
+        count == 1 ? Loc["One person is in it"].Value : Loc["{0} people are in it", count].Value;
 }

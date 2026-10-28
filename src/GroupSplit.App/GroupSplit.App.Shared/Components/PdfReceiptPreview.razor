@@ -1,0 +1,69 @@
+@namespace GroupSplit.App.Shared.Components
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div @ref="_host" class="gs-pdf-preview" aria-label="@Loc["PDF preview of {0}", FileName]">
+    <div class="gs-pdf-toolbar" role="toolbar" aria-label="@Loc["PDF controls"]">
+        <div class="gs-pdf-pages">
+            <button type="button" data-pdf-action="previous" aria-label="@Loc["Previous PDF page"]" disabled><MudIcon Icon="@Icons.Material.Rounded.ChevronLeft" Size="Size.Small" /></button>
+            <span data-pdf-page aria-live="polite">@(_error ? Loc["Preview unavailable"].Value : Loc["Loading PDF..."].Value)</span>
+            <button type="button" data-pdf-action="next" aria-label="@Loc["Next PDF page"]" disabled><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" /></button>
+        </div>
+        <div class="gs-pdf-zoom">
+            <button type="button" data-pdf-action="out" aria-label="@Loc["Zoom PDF out"]" disabled><MudIcon Icon="@Icons.Material.Rounded.Remove" Size="Size.Small" /></button>
+            <button type="button" data-pdf-action="fit" disabled>@Loc["Fit width"]</button>
+            <button type="button" data-pdf-action="in" aria-label="@Loc["Zoom PDF in"]" disabled><MudIcon Icon="@Icons.Material.Rounded.Add" Size="Size.Small" /></button>
+        </div>
+        <a class="gs-receipt-action gs-btn-quiet" href="@DownloadUrl" download="@FileName">@Loc["Download PDF"]</a>
+    </div>
+    <p data-pdf-status role="status" class="gs-pdf-status" hidden="@_error">@Loc["Loading the original PDF..."]</p>
+    <div class="gs-pdf-viewport" hidden="@_error"><canvas role="img" aria-label="@Loc["PDF page"]"></canvas></div>
+    @if (_error)
+    {
+        <p class="gs-pdf-status" role="alert">@Loc["The PDF preview couldn't load. Download the original to view it."]</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+    [Parameter, EditorRequired] public string DownloadUrl { get; set; } = "";
+    [Parameter] public string FileName { get; set; } = "receipt.pdf";
+    private ElementReference _host;
+    private IJSObjectReference? _module;
+    private bool _disposed;
+    private bool _error;
+    private string? _loadedUrl;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed || _error || _loadedUrl == Url) return;
+        _loadedUrl = Url;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GroupSplit.App.Shared/js/pdf-preview.js");
+            if (_disposed || _module is null) return;
+            await _module.InvokeVoidAsync("mount", _host, Url, new
+            {
+                page = Loc["Page {0} of {1}"].Value,
+                pdfPage = Loc["PDF page {0} of {1}"].Value,
+                password = Loc["This PDF is password-protected. Download the original to open it."].Value,
+                failed = Loc["The PDF preview couldn't load. Download the original to view it."].Value,
+                unavailable = Loc["Preview unavailable"].Value,
+                rendering = Loc["Rendering PDF page..."].Value
+            });
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { if (!_disposed) { _error = true; StateHasChanged(); } }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("dispose", _host);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+}

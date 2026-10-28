@@ -29,7 +29,7 @@
             <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
                 @if (UserBalance > 0)
                 {
-                    <div class="gs-eyebrow">You are owed</div>
+                    <div class="gs-eyebrow">@Loc["You are owed"]</div>
                     <Money Value="UserBalance" Animate Class="gs-hero-amount" />
                     @* Guests count: they are people the group shares costs with, and what
                        they owe is owed to somebody like anybody else's. *@
@@ -41,7 +41,7 @@
                             var guest = IsGuest(owed.UserId);
                             <div class="gs-hero-row">
                                 <Avatar Name="@owed.UserName" Size="sm" />
-                                <div class="who">@Named(owed.UserId, owed.UserName) <small>owes you</small></div>
+                                <div class="who">@Named(owed.UserId, owed.UserName) <small>@Loc["owes you"]</small></div>
                                 <Money Value="owed.Amount" Animate />
                                 @* Named for a guest. "They paid" reads as the other person
                                    telling the app, and a guest cannot: it is you saying it on
@@ -49,13 +49,13 @@
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
-                                        @(guest ? $"{owed.UserName} paid" : "They paid")
+                                        @(guest ? Loc["{0} paid", owed.UserName].Value : Loc["They paid"].Value)
                                     </MudButton>
                                     @if (!guest)
                                     {
                                         <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                    OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
-                                            Request payment
+                                            @Loc["Request payment"]
                                         </MudButton>
                                     }
                                 </div>
@@ -65,7 +65,7 @@
                 }
                 else if (UserBalance < 0)
                 {
-                    <div class="gs-eyebrow">You owe</div>
+                    <div class="gs-eyebrow">@Loc["You owe"]</div>
                     <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
                     <div class="gs-hero-sub">to @People(balance.YouOwed.Count()) in @GroupName</div>
                     <div class="gs-hero-list">
@@ -76,7 +76,7 @@
                             var owing = debt;
                             <div class="gs-hero-row">
                                 <Avatar Name="@owing.UserName" Size="sm" />
-                                <div class="who">@Named(owing.UserId, owing.UserName) <small>is waiting on you</small></div>
+                                <div class="who">@Named(owing.UserId, owing.UserName) <small>@Loc["is waiting on you"]</small></div>
                                 <Money Value="owing.Amount" Animate />
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
@@ -90,9 +90,9 @@
                 }
                 else
                 {
-                    <div class="gs-eyebrow">Your balance</div>
-                    <div class="gs-hero-amount">All settled</div>
-                    <div class="gs-hero-sub">Nothing owed either way in @GroupName. Nice.</div>
+                    <div class="gs-eyebrow">@Loc["Your balance"]</div>
+                    <div class="gs-hero-amount">@Loc["All settled"]</div>
+                    <div class="gs-hero-sub">@Loc["Nothing owed either way in {0}. Nice.", GroupName].Value</div>
                 }
             </section>
         }
@@ -101,8 +101,8 @@
         {
             <section class="gs-card gs-card-pad gs-reveal" style="--i: 1">
                 <div class="gs-card-title">
-                    <h2>@Payments(Plan.Count) clear@(Plan.Count == 1 ? "s" : "") this group</h2>
-                    <span class="gs-tag neutral">the shortest way</span>
+                    <h2>@(Plan.Count == 1 ? Loc["Clear this group with one payment"] : Loc["Clear this group with {0} payments", Plan.Count])</h2>
+                    <span class="gs-tag neutral">@Loc["the shortest way"]</span>
                 </div>
                 <div class="gs-plan-list">
                     @foreach (var payment in Plan)
@@ -112,7 +112,7 @@
                         <div class="gs-plan-row @(yours ? "" : "is-theirs")">
                             <Avatar Name="@line.FromUserName" Size="sm" />
                             <div style="min-width: 0">
-                                <div class="who">@Payer(line) <small>@(line.FromUserId == UserId ? "pay" : "pays")</small> @Who(line.ToUserId, line.ToUserName)</div>
+                                <div class="who">@(line.FromUserId == UserId ? Loc["You pay {0}", Who(line.ToUserId, line.ToUserName)] : Loc["{0} pays {1}", Payer(line), Who(line.ToUserId, line.ToUserName)])</div>
                                 <div class="meta">@Explain(line)</div>
                             </div>
                             <Money Value="line.Amount" />
@@ -120,7 +120,7 @@
                             {
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                            OnClick="@(() => RecordAsync(line))">
-                                    @(line.FromUserId == UserId ? "I paid them" : "They paid me")
+                                    @(line.FromUserId == UserId ? Loc["I paid them"].Value : Loc["They paid me"].Value)
                                 </MudButton>
                             }
                             else if (BetweenGuests(line))
@@ -130,9 +130,9 @@
                                    any member's to record -- named in full, because the
                                    person pressing it is on neither end of it. *@
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                           aria-label="@($"Record that {line.FromUserName} paid {line.ToUserName}")"
+                                           aria-label="@(Loc["Record that {0} paid {1}", line.FromUserName, line.ToUserName].Value)"
                                            OnClick="@(() => RecordBetweenGuestsAsync(line))">
-                                    @line.FromUserName paid @line.ToUserName
+                                    @Loc["{0} paid {1}", line.FromUserName, line.ToUserName]
                                 </MudButton>
                             }
                             else
@@ -141,7 +141,7 @@
                                    hides a step does not add up. A line between a guest and
                                    another member is that member's, the same as a line
                                    between two other members: they were there for it. *@
-                                <span class="gs-muted" style="font-size: .8125rem">their call</span>
+                                <span class="gs-muted" style="font-size: .8125rem">@Loc["their call"]</span>
                             }
                         </div>
                     }
@@ -151,19 +151,17 @@
 
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
             <div class="gs-card-title">
-                <h2>Recent activity</h2>
+                <h2>@Loc["Recent activity"]</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                            Href="@($"/groups/{GroupId}/activity")"
-                           EndIcon="@Icons.Material.Rounded.ArrowForward">All activity</MudButton>
+                           EndIcon="@Icons.Material.Rounded.ArrowForward">@Loc["All activity"]</MudButton>
             </div>
             <LoadView Skeleton="SkeletonLayout.Rows" Loading="_recentLoading" Failed="@(_recent is null)" Retry="LoadRecentAsync">
                 <GroupEntryList Entries="Recent" />
             </LoadView>
             @if (_recent is { } ledger && ledger.TotalCount > ledger.Items.Count)
             {
-                <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">
-                    Showing the @ledger.Items.Count newest of @ledger.TotalCount.
-                </div>
+                <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">@Loc["Showing the {0} newest of {1}.", ledger.Items.Count, ledger.TotalCount].Value</div>
             }
         </div>
     </div>
@@ -171,10 +169,10 @@
     <div class="gs-stack">
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 3">
             <div class="gs-card-title">
-                <h2>People</h2>
+                <h2>@Loc["People"]</h2>
                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                            Href="@($"/groups/{GroupId}/people")"
-                           EndIcon="@Icons.Material.Rounded.ArrowForward">View people</MudButton>
+                           EndIcon="@Icons.Material.Rounded.ArrowForward">@Loc["View people"]</MudButton>
             </div>
             @if (Balance is { } b && b.NetBalances.Any())
             {
@@ -214,7 +212,7 @@
             {
                 <div class="gs-empty" style="padding: 20px">
                     <MudIcon Icon="@Icons.Material.Rounded.Balance" />
-                    <span>Balances appear once there is an expense.</span>
+                    <span>@Loc["Balances appear once there is an expense."]</span>
                 </div>
             }
         </div>
@@ -272,30 +270,19 @@
         _ => "is-zero"
     };
 
-    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
-
-    private static string Payments(int count) => count == 1 ? "One payment" : $"{Word(count)} payments";
-
-    private static string Word(int count) => count switch
-    {
-        2 => "Two",
-        3 => "Three",
-        4 => "Four",
-        5 => "Five",
-        _ => count.ToString()
-    };
+    private string People(int count) => count == 1 ? Loc["1 person"].Value : Loc["{0} people", count].Value;
 
     private bool Involves(SettlementPayment payment) =>
         payment.FromUserId == UserId || payment.ToUserId == UserId;
 
-    private string Who(Guid userId, string name) => userId == UserId ? "you" : Named(userId, name);
+    private string Who(Guid userId, string name) => userId == UserId ? Loc["Copy.Lower.you"] : Named(userId, name);
 
     /// <summary>
     /// The start of a plan line: "You", capitalised because it opens the sentence, or the
     /// payer's name. It read "you pays Sofia" when the caller was the one paying.
     /// </summary>
     private string Payer(SettlementPayment line) =>
-        line.FromUserId == UserId ? "You" : Who(line.FromUserId, line.FromUserName);
+        line.FromUserId == UserId ? Loc["You"].Value : Who(line.FromUserId, line.FromUserName);
 
     /// <summary>
     /// Whether somebody in this group's balances is one of its guests. Read off the balances
@@ -325,10 +312,10 @@
     private string Explain(SettlementPayment payment)
     {
         if (BetweenGuests(payment))
-            return "between two guests — any member can record it";
+            return Loc["between two guests — any member can record it"].Value;
 
         if (!Involves(payment))
-            return "not yours to record — shown so the plan adds up";
+            return Loc["not yours to record — shown so the plan adds up"].Value;
 
         var other = payment.FromUserId == UserId ? payment.ToUserName : payment.FromUserName;
         var theirBalance = Balance?.NetBalances
@@ -337,8 +324,8 @@
             ?.Balance ?? 0m;
 
         return Math.Abs(theirBalance) == payment.Amount
-            ? $"clears {other} entirely"
-            : $"part of what stands between you and {other}";
+            ? Loc["clears {0} entirely", other].Value
+            : Loc["part of what stands between you and {0}", other].Value;
     }
 
     private Task RecordAsync(SettlementPayment payment)
@@ -378,16 +365,16 @@
         {
             {
                 x => x.ContentText,
-                $"Record that {payment.FromUserName} paid {payment.ToUserName} {payment.Amount.ToMoney()}? " +
-                "Both of them are guests, so this goes in the group's ledger for them."
+                Loc["Record that {0} paid {1} {2}? ", payment.FromUserName, payment.ToUserName, payment.Amount.ToMoney()].Value +
+                Loc["Both of them are guests, so this goes in the group's ledger for them."].Value
             },
-            { x => x.ButtonText, "Record" }
+            { x => x.ButtonText, Loc["Record"].Value }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
-            $"{payment.FromUserName} paid {payment.ToUserName}", parameters, options);
+            Loc["{0} paid {1}", payment.FromUserName, payment.ToUserName].Value, parameters, options);
 
         if (!await dialog.ConfirmedAsync())
             return;
@@ -424,7 +411,7 @@
         var loaded = await Errors.TryAsync(async () =>
                 recent = await GroupsClient.GetGroupActivityAsync(
                     groupId, page: 1, pageSize: RecentCount),
-            "Could not load this group's recent entries.");
+            Loc["Could not load this group's recent entries."].Value);
 
         // Something newer has been asked for since. That answer is the one to show.
         if (version != _recentVersion)

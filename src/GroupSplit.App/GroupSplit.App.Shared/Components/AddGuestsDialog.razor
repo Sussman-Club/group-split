@@ -22,24 +22,21 @@
     </TitleContent>
 
     <DialogContent>
-        <MudText Typo="Typo.body2" Class="gs-muted" Style="padding-bottom: 8px">
-            Name whoever is sharing the costs. They join as guests: you can record expenses,
-            shares and repayments for them right away. Nobody gets a link unless you send one.
-        </MudText>
+        <MudText Typo="Typo.body2" Class="gs-muted" Style="padding-bottom: 8px">@Loc["Name whoever is sharing the costs. They join as guests: you can record expenses, shares and repayments for them right away. Nobody gets a link unless you send one."]</MudText>
 
         <MudForm @ref="@_form">
             <MudStack Row AlignItems="AlignItems.Center">
                 @* The same bound the API and the columns behind it hold, so somebody is
                    stopped at the keyboard rather than at Add. *@
                 <MudTextField @bind-Value="_currentInput"
-                              Label="Name"
+                              Label="@Loc["Name"]"
                               Variant="Variant.Outlined"
                               MaxLength="InviteToGroupRequest.NameLength"
                               OnKeyDown="@HandleKeyDown"
                               Immediate
-                              Placeholder="Type a name…"/>
+                              Placeholder="@Loc["Type a name…"]"/>
                 <MudIconButton Icon="@Icons.Material.Rounded.Add" OnClick="@AddNameToList"
-                               aria-label="Add this person"
+                               aria-label="@Loc["Add this person"]"
                                Color="Color.Primary"/>
             </MudStack>
         </MudForm>
@@ -63,11 +60,9 @@
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_model.Names.Count == 0)" OnClick="@Submit">
-            Add
-        </MudButton>
+                   Disabled="@(_model.Names.Count == 0)" OnClick="@Submit">@Loc["Add"]</MudButton>
     </DialogActions>
 </MudDialog>
 

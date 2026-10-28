@@ -5,24 +5,19 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h5" Class="font-weight-bold">New split rule</MudText>
+        <MudText Typo="Typo.h5" Class="font-weight-bold">@Loc["New split rule"]</MudText>
     </TitleContent>
 
     <DialogContent>
-        <MudText Typo="Typo.body2" Class="mb-4">
-            A division the group keeps, for its categories to point at. Several categories
-            may divide by the same one.
-        </MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">@Loc["A division the group keeps, for its categories to point at. Several categories may divide by the same one."]</MudText>
 
         <RuleEditorForm @ref="_form" GroupId="GroupId" Model="_model"/>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@_saving" OnClick="@Submit">
-            Create
-        </MudButton>
+                   Disabled="@_saving" OnClick="@Submit">@Loc["Create"]</MudButton>
     </DialogActions>
 </MudDialog>
 

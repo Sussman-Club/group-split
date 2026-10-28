@@ -8,12 +8,12 @@
     <div class="gs-android-update" role="status">
         <MudIcon Icon="@Icons.Material.Rounded.SystemUpdate" />
         <div class="gs-android-update-copy">
-            <strong>Update available</strong>
-            <span>Group Split @release.Version is ready to install.</span>
+            <strong>@Loc["Update available"]</strong>
+            <span>@Loc["Group Split {0} is ready to install.", release.Version].Value</span>
         </div>
         <MudButton Href="@(new Uri(AppLinks.PublicOrigin!, "android").AbsoluteUri)" Target="_blank"
-                   Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill">Update app</MudButton>
-        <MudIconButton Icon="@Icons.Material.Rounded.Close" OnClick="Dismiss" aria-label="Dismiss update notice" />
+                   Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill">@Loc["Update app"]</MudButton>
+        <MudIconButton Icon="@Icons.Material.Rounded.Close" OnClick="Dismiss" aria-label="@Loc["Dismiss update notice"]" />
     </div>
 }
 

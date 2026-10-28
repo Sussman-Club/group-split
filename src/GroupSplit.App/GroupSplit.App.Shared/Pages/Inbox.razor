@@ -24,15 +24,15 @@
     paid and how much, and everything else is secondary.
 *@
 
-<PageTitle>Activity - Not filed - Group Split</PageTitle>
+<PageTitle>@Loc["Bank transactions - Group Split"]</PageTitle>
 
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">Activity</div>
-        <h1>Not filed</h1>
+        <div class="gs-eyebrow">@Loc["Bank transactions"]</div>
+        <h1>@Loc["Not filed"]</h1>
         @if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
         {
-            <p role="status" aria-live="polite">@Counted(State.TotalCount) left to review in this range.</p>
+            <p role="status" aria-live="polite">@Loc["{0} left to review in this range.", Counted(State.TotalCount)].Value</p>
         }
         @if (Headline is { Length: > 0 } headline)
         {
@@ -69,7 +69,7 @@
 
     @if (Selectable && State.Rows.Count > 0)
     {
-        <nav class="gs-inline" aria-label="Review suggestions" style="gap: 8px; flex-wrap: wrap">
+        <nav class="gs-inline" aria-label="@Loc["Review suggestions"]" style="gap: 8px; flex-wrap: wrap">
             @foreach (var review in Enum.GetValues<ReviewFilter>())
             {
                 <MudButton Size="Size.Small" Class="gs-btn-pill"
@@ -78,11 +78,10 @@
                     @ReviewLabel(review) (@State.Rows.Count(row => MatchesReview(row, review)))
                 </MudButton>
             }
-            <span class="note">Suggestions for the loaded charges</span>
         </nav>
         @if (!VisibleRows.Any())
         {
-            <p role="status">No loaded charges in this view. Choose All charges or load more below.</p>
+            <p role="status">@Loc["No loaded charges in this view. Choose All charges or load more below."]</p>
         }
     }
 
@@ -90,24 +89,24 @@
     {
         <div class="gs-card gs-empty" style="padding: 48px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
-            <h3>Bank sync is not switched on</h3>
-            <span>This copy of the app has no bank provider configured, so there is nothing to import.</span>
+            <h3>@Loc["Bank sync is not switched on"]</h3>
+            <span>@Loc["This copy of the app has no bank provider configured, so there is nothing to import."]</span>
         </div>
     }
     else if (State.Connections is { Connections.Count: 0 })
     {
         <div class="gs-card gs-empty" style="padding: 48px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />
-            <h3>No bank linked yet</h3>
+            <h3>@Loc["No bank linked yet"]</h3>
             @if (!BankLink.RequiresExternalBrowser)
             {
-                <span>Link a bank and your transactions will start arriving here.</span>
+                <span>@Loc["Link a bank and your transactions will start arriving here."]</span>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                           Href="/account">Link a bank</MudButton>
+                           Href="/account">@Loc["Link a bank"]</MudButton>
             }
             else
             {
-                <span>Open Group Split in your browser to link a bank.</span>
+                <span>@Loc["Open Group Split in your browser to link a bank."]</span>
             }
         </div>
     }
@@ -141,8 +140,8 @@
                                      Color="Color.Primary"
                                      Dense="true"
                                      Class="gs-row-check"
-                                     aria-label="Select every row that can be" />
-                        <span>@(_selected.Count > 0 ? $"{_selected.Count} selected" : "Select all")</span>
+                                     aria-label="@Loc["Select every row that can be"]" />
+                        <span>@(_selected.Count > 0 ? Loc["{0} selected", _selected.Count].Value : Loc["Select all"].Value)</span>
                     </label>
 
                     @* Said apart from the label rather than tacked onto it: select-all ticks
@@ -151,7 +150,7 @@
                     @if (FlaggedCount > 0)
                     {
                         <span class="note">
-                            @FlaggedCount may already be recorded, and @(FlaggedCount == 1 ? "needs" : "need") answering one by one
+                            @Loc["{0} may already be recorded and must be checked individually", FlaggedCount]
                         </span>
                     }
                 </div>
@@ -173,30 +172,30 @@
                             <details class="gs-inbox-bundle" @key="row.Id">
                                 <summary>
                                     <strong>@row.Title</strong>
-                                    <span>@bundle.Rows.Count matching charges</span>
+                                    <span>@Loc["{0} matching charges", bundle.Rows.Count].Value</span>
                                     @if (bundle.Rows.Any(member => _selected.Contains(member.Id)))
                                     {
-                                        <span>@bundle.Rows.Count(member => _selected.Contains(member.Id)) selected</span>
+                                        <span>@Loc["{0} selected", bundle.Rows.Count(member => _selected.Contains(member.Id))]</span>
                                     }
-                                    <span>Suggested: @bundle.Suggestion.Destination</span>
+                                    <span>@Loc["Suggested: {0}", bundle.Suggestion.Destination].Value</span>
                                     <Money Value="@bundle.Rows.Sum(member => member.Amount)" Currency="@row.Currency" />
                                 </summary>
-                                <p class="note">Same account and available context this month. Each charge has its own suggestion. Review before confirming.</p>
+                                <p class="note">@Loc["Same account and available context this month. Each charge has its own suggestion. Review before confirming."]</p>
                                 @foreach (var member in bundle.Rows)
                                 {
                                     <div class="gs-inline gs-inbox-bundle-charge" @key="member.Id">
                                         <MudCheckBox T="bool" Value="@_selected.Contains(member.Id)"
                                                      ValueChanged="@((bool on) => Select(member.Id, on))"
-                                                     Dense="true" aria-label="@($"Select {member.Title} on {member.SpentOn:d}")" />
+                                                     Dense="true" aria-label="@(Loc["Select {0} on {1:d}", member.Title, member.SpentOn].Value)" />
                                         <span>@member.AccountName · @member.SpentOn.ToShortDateString()</span>
                                         <Money Value="@member.Amount" Currency="@member.Currency" />
                                         <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
                                                    OnClick="@(() => AddToGroupAsync(member))"
-                                                   aria-label="@($"Change destination for {member.Title} on {member.SpentOn:d}")">Change destination</MudButton>
+                                                   aria-label="@(Loc["Change destination for {0} on {1:d}", member.Title, member.SpentOn].Value)">@Loc["Change destination"]</MudButton>
                                         <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
-                                                   OnClick="@(() => KeepPersonalAsync(member))">Keep personal</MudButton>
+                                                   OnClick="@(() => KeepPersonalAsync(member))">@Loc["Keep personal"]</MudButton>
                                         <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
-                                                   OnClick="@(() => IgnoreAsync(member))">Ignore</MudButton>
+                                                   OnClick="@(() => IgnoreAsync(member))">@Loc["Ignore"]</MudButton>
                                     </div>
                                 }
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
@@ -223,7 +222,7 @@
                                          Color="Color.Primary"
                                          Dense="true"
                                          Class="gs-row-check"
-                                         aria-label="@($"Select {row.Title}")" />
+                                         aria-label="@(Loc["Select {0}", row.Title].Value)" />
                         }
                         @* The merchant's own logo where the bank sent one: a row reads as
                            the place it happened rather than as two initials. No payer to
@@ -236,11 +235,11 @@
                                 <span>@row.Title</span>
                                 @if (row.Pending)
                                 {
-                                    <span class="gs-tag neutral">Pending</span>
+                                    <span class="gs-tag neutral">@Loc["Pending"]</span>
                                 }
                                 @if (row.RemovedAt is not null)
                                 {
-                                    <span class="gs-tag">Withdrawn by the bank</span>
+                                    <span class="gs-tag">@Loc["Withdrawn by the bank"]</span>
                                 }
                             </div>
                             <div class="meta">
@@ -265,10 +264,10 @@
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                    Class="gs-btn-pill"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AddToGroupAsync(row))">Add to group</MudButton>
+                                                   OnClick="@(() => AddToGroupAsync(row))">@Loc["Add to group"]</MudButton>
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => IgnoreAsync(row))">Ignore</MudButton>
+                                                   OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudButton>
                                     }
                                     else
                                     {
@@ -278,26 +277,26 @@
                                                        Class="gs-btn-pill gs-inbox-suggestion"
                                                        StartIcon="@Icons.Material.Rounded.AutoAwesome"
                                                        Disabled="@(_busy == row.Id)"
-                                                       title="@($"File it in {suggestion.Destination}")"
-                                                       aria-label="@($"File {row.Title} in {suggestion.Destination}")"
+                                                       title="@(Loc["File it in {0}", suggestion.Destination].Value)"
+                                                       aria-label="@(Loc["File {0} in {1}", row.Title, suggestion.Destination].Value)"
                                                        OnClick="@(() => AcceptSuggestionAsync(row, suggestion))">@suggestion.Destination</MudButton>
                                         }
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                    Class="gs-btn-pill"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AddToGroupAsync(row))">Add to group</MudButton>
+                                                   OnClick="@(() => AddToGroupAsync(row))">@Loc["Add to group"]</MudButton>
                                         <MudMenu Icon="@Icons.Material.Rounded.MoreHoriz"
                                                  Size="Size.Small"
                                                  Dense="true"
                                                  AnchorOrigin="Origin.BottomRight"
                                                  TransformOrigin="Origin.TopRight"
                                                  Disabled="@(_busy == row.Id)"
-                                                 aria-label="@($"Other answers for {row.Title}")">
-                                            <MudMenuItem OnClick="@(() => IgnoreAsync(row))">Ignore</MudMenuItem>
+                                                 aria-label="@(Loc["Other answers for {0}", row.Title].Value)">
+                                            <MudMenuItem OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudMenuItem>
                                         </MudMenu>
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                                    Disabled="@(_busy == row.Id || _bulkBusy)"
-                                                   OnClick="@(() => KeepPersonalAsync(row))">Keep personal</MudButton>
+                                                   OnClick="@(() => KeepPersonalAsync(row))">@Loc["Keep personal"]</MudButton>
                                     }
                                 </div>
                             }
@@ -305,7 +304,7 @@
                             {
                                 <MudButton Variant="Variant.Text" Size="Size.Small"
                                            Disabled="@(_busy == row.Id)"
-                                           OnClick="@(() => RestoreAsync(row))">Put back</MudButton>
+                                           OnClick="@(() => RestoreAsync(row))">@Loc["Put back"]</MudButton>
                             }
                         </div>
                     </div>
@@ -332,10 +331,10 @@
                                   Style="margin-top: -4px">
                             <div class="gs-match-lead">
                                 @(sure
-                                    ? "You may already have recorded this:"
+                                    ? Loc["You may already have recorded this:"].Value
                                     : row.PossibleDuplicates.Count == 1
-                                        ? "This could be one you have already recorded:"
-                                        : "These could be ones you have already recorded:")
+                                        ? Loc["This could be one you have already recorded:"].Value
+                                        : Loc["These could be ones you have already recorded:"].Value)
                             </div>
                             @foreach (var match in row.PossibleDuplicates)
                             {
@@ -352,10 +351,10 @@
                                                    Size="Size.Small"
                                                    Class="@(match.IsConfident ? "gs-btn-pill" : null)"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AttachAsync(row, match.TransactionId))">Same payment</MudButton>
+                                                   OnClick="@(() => AttachAsync(row, match.TransactionId))">@Loc["Same payment"]</MudButton>
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
                                                    Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => DismissMatchAsync(row, match))">Not the same</MudButton>
+                                                   OnClick="@(() => DismissMatchAsync(row, match))">@Loc["Not the same"]</MudButton>
                                     </div>
                                 </div>
                             }
@@ -368,9 +367,7 @@
             {
                 <div class="gs-inline" style="justify-content: center; margin-top: 12px">
                     <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_loadingMore"
-                               OnClick="LoadMoreAsync">
-                        Show more (@State.Rows.Count of @State.TotalCount)
-                    </MudButton>
+                               OnClick="LoadMoreAsync">@Loc["Show more ({0} of {1})", State.Rows.Count, State.TotalCount].Value</MudButton>
                 </div>
             }
         </div>
@@ -388,17 +385,17 @@
 @if (_selected.Count > 0)
 {
     <div class="gs-selection-bar" role="status">
-        <span class="count">@_selected.Count selected</span>
+        <span class="count">@Loc["{0} selected", _selected.Count].Value</span>
 
         <div class="gs-inline" style="gap: 6px; flex-wrap: nowrap">
             <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
                        Disabled="@_bulkBusy"
-                       OnClick="@KeepSelectedPersonalAsync">Keep personal</MudButton>
+                       OnClick="@KeepSelectedPersonalAsync">@Loc["Keep personal"]</MudButton>
             <MudButton Variant="Variant.Text" Size="Size.Small" Class="gs-btn-pill"
                        Disabled="@_bulkBusy"
-                       OnClick="@IgnoreSelectedAsync">Ignore</MudButton>
+                       OnClick="@IgnoreSelectedAsync">@Loc["Ignore"]</MudButton>
             <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small"
-                           aria-label="Clear the selection"
+                           aria-label="@Loc["Clear the selection"]"
                            Disabled="@_bulkBusy"
                            OnClick="@(() => _selected.Clear())" />
         </div>
@@ -439,12 +436,12 @@
         _ => true
     };
 
-    private static string ReviewLabel(ReviewFilter filter) => filter switch
+    private string ReviewLabel(ReviewFilter filter) => filter switch
     {
-        ReviewFilter.Shared => "Likely shared",
-        ReviewFilter.Personal => "Likely personal",
-        ReviewFilter.Uncertain => "Needs a decision",
-        _ => "All charges"
+        ReviewFilter.Shared => Loc["Likely shared"].Value,
+        ReviewFilter.Personal => Loc["Likely personal"].Value,
+        ReviewFilter.Uncertain => Loc["Needs a decision"].Value,
+        _ => Loc["All charges"].Value
     };
 
     private async Task ConfirmBundleAsync(InboxBundle bundle)
@@ -481,8 +478,8 @@
                 completed++;
             }
             Snackbar.Add(completed == bundle.Rows.Count
-                ? $"All {completed} charges filed."
-                : $"{completed} of {bundle.Rows.Count} charges filed. The remaining charges still need review.", Severity.Info);
+                ? Loc["All {0} charges filed.", completed].Value
+                : Loc["{0} of {1} charges filed. The remaining charges still need review.", completed, bundle.Rows.Count].Value, Severity.Info);
         }
         finally
         {
@@ -584,14 +581,14 @@
             if (credits > 0)
             {
                 Snackbar.Add(
-                    $"{credits} left alone: review incoming money individually with Add to group.",
+                    Loc["{0} left alone: review incoming money individually with Add to group.", credits].Value,
                     Severity.Info);
             }
 
             if (asked > 0)
             {
                 Snackbar.Add(
-                    $"{asked} left alone: each may already be recorded, so answer it on the row.",
+                    Loc["{0} left alone: each may already be recorded, so answer it on the row.", asked].Value,
                     Severity.Info);
             }
 
@@ -749,11 +746,11 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private static string Label(InboxStatus status) => status switch
+    private string Label(InboxStatus status) => status switch
     {
-        InboxStatus.New => "Waiting",
-        InboxStatus.Filed => "Added",
-        _ => "Ignored"
+        InboxStatus.New => Loc["Waiting"].Value,
+        InboxStatus.Filed => Loc["Added"],
+        _ => Loc["Ignored"]
     };
 
     /// <summary>
@@ -773,11 +770,11 @@
             if (!State.Range.IsAllTime)
                 return $"{Counted(State.TotalCount)} {State.Range.Label.ToLowerInvariant()}.";
 
-            return State.NewCount > 0 ? null : "Everything your bank sent has been dealt with.";
+            return State.NewCount > 0 ? null : Loc["Everything your bank sent has been dealt with."].Value;
         }
     }
 
-    private static string Counted(int rows) => $"{rows} transaction{(rows == 1 ? "" : "s")}";
+    private string Counted(int rows) => Loc["{0} transaction{1}", rows, (rows == 1 ? "" : "s")].Value;
 
     /// <summary>
     /// Narrowed and empty is not the same as empty: the rows exist, they are just not in the
@@ -785,21 +782,21 @@
     /// sends them looking for a fault that is not there.
     /// </summary>
     private string EmptyTitle => !State.Range.IsAllTime
-        ? "Nothing in this range"
+        ? Loc["Nothing in this range"].Value
         : State.Filter switch
         {
-            InboxStatus.New => "Nothing waiting",
-            InboxStatus.Filed => "Nothing added yet",
-            _ => "Nothing ignored"
+            InboxStatus.New => Loc["Nothing waiting"].Value,
+            InboxStatus.Filed => Loc["Nothing added yet"].Value,
+            _ => Loc["Nothing ignored"].Value
         };
 
     private string EmptyHint => !State.Range.IsAllTime
-        ? $"Nothing {State.Range.Label.ToLowerInvariant()}. Widen the range to see more."
+        ? Loc["Nothing {0}. Widen the range to see more.", State.Range.Label.ToLowerInvariant()].Value
         : State.Filter switch
         {
-            InboxStatus.New => "New transactions from your bank will show up here.",
-            InboxStatus.Filed => "Transactions you add become expenses and appear here.",
-            _ => "Transactions you ignore stay out of the way, and can be put back."
+            InboxStatus.New => Loc["New transactions from your bank will show up here."].Value,
+            InboxStatus.Filed => Loc["Transactions you add become expenses and appear here."].Value,
+            _ => Loc["Transactions you ignore stay out of the way, and can be put back."].Value
         };
 
     /// <summary>
@@ -809,7 +806,7 @@
     /// </summary>
     private async Task KeepPersonalAsync(BankTransactionResponse row) =>
         await FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
-            "your own expenses");
+            Loc["your own expenses"].Value);
 
     /// <summary>Files the row exactly as choosing this suggestion in the dialog would.</summary>
     private async Task AcceptSuggestionAsync(BankTransactionResponse row, FilingSuggestionResponse suggestion) =>
@@ -818,7 +815,7 @@
                 GroupId = suggestion.IsPersonal ? null : suggestion.GroupId,
                 CategoryId = suggestion.CategoryId
             },
-            suggestion.IsPersonal ? "your own expenses" : suggestion.GroupName);
+            suggestion.IsPersonal ? Loc["your own expenses"].Value : suggestion.GroupName);
 
     private async Task<TransactionResponse?> AttachAsync(BankTransactionResponse row, Guid transactionId)
     {
@@ -848,16 +845,16 @@
     /// there is nothing to explain -- and spelling out a difference of zero reads as though
     /// there were.
     /// </remarks>
-    private static string Apart(ExpenseMatchResponse match)
+    private string Apart(ExpenseMatchResponse match)
     {
         var days = match.DaysApart switch
         {
-            0 => "same day",
-            1 => "1 day apart",
-            var apart => $"{apart} days apart"
+            0 => Loc["same day"].Value,
+            1 => Loc["1 day apart"].Value,
+            var apart => Loc["{0} days apart", apart].Value
         };
 
-        return $"{days}, {match.AmountDifference:N2} apart";
+        return Loc["{0}, {1:N2} apart", days, match.AmountDifference].Value;
     }
 
     private async Task DismissMatchAsync(BankTransactionResponse row, ExpenseMatchResponse match)
@@ -896,7 +893,7 @@
         // Not "Add to a group" any more: a group is one of the answers and Personal is the
         // other, and a title that names one of them is a title that is wrong half the time.
         var reference = await DialogService.ShowAsync<FileBankTransactionDialog>(
-            row.PossibleDuplicates.Count > 0 ? "Which expense is this?" : "Record this payment",
+            row.PossibleDuplicates.Count > 0 ? Loc["Which expense is this?"].Value : Loc["Record this payment"].Value,
             parameters, options);
         var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
 
@@ -946,7 +943,7 @@
 
         await Errors.TryAsync(
             () => Receipts.SaveAsync(expense.Id, receipt),
-            "Could not save the receipt.");
+            Loc["Could not save the receipt."].Value);
     }
 
     private async Task IgnoreAsync(BankTransactionResponse row)

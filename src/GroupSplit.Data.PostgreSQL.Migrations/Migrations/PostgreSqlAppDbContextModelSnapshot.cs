@@ -751,9 +751,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<DateOnly?>("PurchaseDate")
                         .HasColumnType("date");
 
-                    b.Property<string>("SourceValues")
-                        .HasColumnType("text");
-
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -1182,6 +1179,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<string>("LastName")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PreferredLanguage")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 

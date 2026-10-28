@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.Shared;
 
 namespace GroupSplit.App.Shared.Models;
@@ -59,12 +60,12 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
 
     public string Label => Preset switch
     {
-        DateFilterPreset.ThisMonth => "This month",
-        DateFilterPreset.LastMonth => "Last month",
-        DateFilterPreset.LastThreeMonths => "Last 3 months",
-        DateFilterPreset.ThisYear => "This year",
+        DateFilterPreset.ThisMonth => UiText.Get("This month"),
+        DateFilterPreset.LastMonth => UiText.Get("Last month"),
+        DateFilterPreset.LastThreeMonths => UiText.Get("Last 3 months"),
+        DateFilterPreset.ThisYear => UiText.Get("This year"),
         DateFilterPreset.Custom => Describe(),
-        _ => "All time"
+        _ => UiText.Get("All time")
     };
 
     /// <summary>
@@ -164,10 +165,10 @@ public sealed record DateFilter(DateFilterPreset Preset = DateFilterPreset.AllTi
 
     private string Describe() => (CustomFrom, CustomTo) switch
     {
-        (null, null) => "All time",
-        ({ } from, null) => $"From {from:d MMM yyyy}",
-        (null, { } to) => $"Until {to:d MMM yyyy}",
-        ({ } from, { } to) when from.Date == to.Date => $"{from:d MMM yyyy}",
-        var (from, to) => $"{from:d MMM} – {to:d MMM yyyy}"
+        (null, null) => UiText.Get("All time"),
+        ({ } from, null) => UiText.Format($"From {from:d MMM yyyy}"),
+        (null, { } to) => UiText.Format($"Until {to:d MMM yyyy}"),
+        ({ } from, { } to) when from.Date == to.Date => UiText.Format($"{from:d MMM yyyy}"),
+        var (from, to) => UiText.Format($"{from:d MMM} – {to:d MMM yyyy}")
     };
 }

@@ -44,7 +44,7 @@
                expense and the chips would all show the same rows. *@
             @if (!Personal)
             {
-                <div class="gs-ledger-segments" role="group" aria-label="Which entries">
+                <div class="gs-ledger-segments" role="group" aria-label="@Loc["Which entries"]">
                     @foreach (var (label, value) in Kinds)
                     {
                         var kind = value;
@@ -67,12 +67,12 @@
                     <ActivatorContent Context="menu">
                         <button type="button" class="gs-ledger-payer" aria-haspopup="menu"
                                 @onclick="@(args => menu.ToggleAsync(args))">
-                            <span>Paid by @(_paidBy is null ? "everyone" : _payers.FirstOrDefault(payer => payer.Id == _paidBy)?.FullName ?? "selected person")</span>
+                            <span>@Loc["Paid by {0}", _paidBy is null ? Loc["Copy.Lower.everyone"].Value : _payers.FirstOrDefault(payer => payer.Id == _paidBy)?.FullName ?? Loc["selected person"].Value]</span>
                             <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
                         </button>
                     </ActivatorContent>
                     <ChildContent>
-                        <MudMenuItem OnClick="@(() => SetPaidByAsync(null))">Everyone</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => SetPaidByAsync(null))">@Loc["Everyone"]</MudMenuItem>
                         @foreach (var payer in _payers)
                         {
                             <MudMenuItem OnClick="@(() => SetPaidByAsync(payer.Id))">@payer.FullName</MudMenuItem>
@@ -86,8 +86,8 @@
                reader gets. A placeholder listing the columns is a spec, not a hint, and it is
                the first thing to truncate on a phone. *@
             <MudTextField @bind-Value="_searchString"
-                          Placeholder="Search"
-                          aria-label="Search this group by name, note, category or either party"
+                          Placeholder="@Loc["Search"]"
+                          aria-label="@Loc["Search this group by name, note, category or either party"]"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Rounded.Search"
                           Immediate="true"
@@ -102,14 +102,14 @@
 
     <LoadView Skeleton="SkeletonLayout.Summary" Loading="@(_initializing || (_spending is null && _inFlight is not null))" Failed="@(_spending is null || _byCategory is null)" Retry="ReadSummaryAsync">
     <div class="gs-mobile-spending" aria-live="polite">
-        <span>@ExpenseCount expense@(ExpenseCount == 1 ? "" : "s") · @Spent.ToMoney() spent</span>
-        <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">Details</button>
+        <span>@(ExpenseCount == 1 ? Loc["{0} expense · {1} spent", ExpenseCount, Spent.ToMoney()] : Loc["{0} expenses · {1} spent", ExpenseCount, Spent.ToMoney()])</span>
+        <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">@Loc["Details"]</button>
     </div>
 
     <div class="gs-stats gs-ledger-stats">
         <div class="gs-card gs-stat gs-reveal" style="--i: 0">
             <span class="gs-stat-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
-            <span class="gs-eyebrow">Expenses</span>
+            <span class="gs-eyebrow">@Loc["Expenses"]</span>
             <span class="gs-stat-value gs-num" data-gs-count="@ExpenseCount">@ExpenseCount</span>
             <span class="gs-muted" style="font-size: .8125rem">@CountedOver</span>
         </div>
@@ -118,19 +118,19 @@
             @* Expenses only, whatever the chips say. This is the label that makes one tab
                safe: two figures on one screen, one counting a subset of the list beneath
                it, and the wording is all that tells them apart. *@
-            <span class="gs-eyebrow">Total spent</span>
+            <span class="gs-eyebrow">@Loc["Total spent"]</span>
             <Money Value="Spent" Animate Class="gs-stat-value" />
             @if (!Personal)
             {
-                <span class="gs-muted" style="font-size: .8125rem">your share @YourShare.ToMoney()</span>
+                <span class="gs-muted" style="font-size: .8125rem">@Loc["Copy.Lower.your_share_{0}", YourShare.ToMoney()].Value</span>
             }
         </div>
     </div>
 
-    <section class="gs-card gs-category-summary" aria-label="Spending by category">
+    <section class="gs-card gs-category-summary" aria-label="@Loc["Spending by category"]">
         <div class="gs-category-heading">
-            <h3>Spending</h3>
-            <span class="gs-muted">By category</span>
+            <h3>@Loc["Spending"]</h3>
+            <span class="gs-muted">@Loc["By category"]</span>
         </div>
         <span class="gs-muted gs-category-period">@Span</span>
         @if (_byCategory is { Categories.Count: > 0 } spending)
@@ -141,7 +141,7 @@
         }
         else
         {
-            <span class="gs-muted gs-category-empty">No spending matches these filters.</span>
+            <span class="gs-muted gs-category-empty">@Loc["No spending matches these filters."]</span>
         }
     </section>
 
@@ -152,17 +152,17 @@
             <EmptyContent>
                 <div class="gs-empty" role="status">
                     <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    <h3>@(IsNarrowedByHand ? Loc["Nothing matches"].Value : Loc["Nothing recorded yet"].Value)</h3>
                     <span>@EmptyBlurb</span>
                     @if (IsSearching)
                     {
-                        <MudButton OnClick="ClearSearchAsync">Clear search</MudButton>
+                        <MudButton OnClick="ClearSearchAsync">@Loc["Clear search"]</MudButton>
                     }
                 </div>
             </EmptyContent>
             <ItemTemplate Context="entry">
                 <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
-                        aria-label="@($"Details for {Headline(entry)}")"
+                        aria-label="@(Loc["Details for {0}", Headline(entry)].Value)"
                         @onclick="@(() => ViewAsync(entry))">
                     @if (entry.Kind is ActivityKind.Transfer)
                     {
@@ -176,7 +176,7 @@
                     <span class="gs-feed-copy">
                         <strong>@Headline(entry)</strong>
                         <span class="gs-muted">
-                            @(entry.Kind is ActivityKind.Transfer ? "Settlement" + entry.CoversThrough.ThroughSuffix() : Detail(entry))
+                            @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() : Detail(entry))
                             @if (Clock.TimeOf(entry.DateTime) is { } time)
                             {
                                 <span> · @time.ToString("t")</span>
@@ -184,15 +184,15 @@
                         </span>
                         @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
                         {
-                            <span class="gs-muted">Your share @share.ToMoney()</span>
+                            <span class="gs-muted">@Loc["Your share {0}", share.ToMoney()].Value</span>
                         }
                     </span>
                     <Money Value="entry.Amount" Class="gs-feed-amount" />
                 </button>
                 <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
-                         aria-label="@($"Actions for {Headline(entry)}")" PopoverClass="gs-menu">
-                    <MudMenuItem OnClick="@(() => EditAsync(entry))">Edit</MudMenuItem>
-                    <MudMenuItem OnClick="@(() => DeleteAsync(entry))">Delete</MudMenuItem>
+                         aria-label="@(Loc["Actions for {0}", Headline(entry)].Value)" PopoverClass="gs-menu">
+                    <MudMenuItem OnClick="@(() => EditAsync(entry))">@Loc["Edit"]</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => DeleteAsync(entry))">@Loc["Delete"]</MudMenuItem>
                 </MudMenu>
             </ItemTemplate>
         </ActivityFeed>
@@ -266,11 +266,11 @@
                 @* HideSmall on the three that are context rather than the point. A phone
                    turns every column into its own line, and seven lines an entry is a
                    ledger nobody scrolls: what is left is when, what, and how much. *@
-                <PropertyColumn Property="x => x.Category" Title="Category" Sortable="false" HideSmall="true">
+                <PropertyColumn Property="x => x.Category" Title="@Loc["Category"]" Sortable="false" HideSmall="true">
                     <CellTemplate>
                         @if (context.Item.Kind is ActivityKind.Transfer)
                         {
-                            <span class="gs-tag clay">Settlement</span>
+                            <span class="gs-tag clay">@Loc["Settlement"]</span>
                         }
                         else if (!string.IsNullOrWhiteSpace(context.Item.Category))
                         {
@@ -290,7 +290,7 @@
                    every listing in the app used to show only the first. A transfer has no
                    share -- paying somebody back is not a cost anyone carries a part of --
                    so it renders as a dash rather than as zero. *@
-                <TemplateColumn Title="Your share" Sortable="false" HideSmall="true" Hidden="@Personal"
+                <TemplateColumn Title="@Loc["Your share"]" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         @if (context.Item.Share is { } share)
@@ -304,7 +304,7 @@
                     </CellTemplate>
                 </TemplateColumn>
 
-                <TemplateColumn Title="Balance" Sortable="false" HideSmall="true" Hidden="@Personal"
+                <TemplateColumn Title="@Loc["Balance"]" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
                         <Money Value="context.Item.RunningBalance" Signed Class="gs-grid-balance" />
@@ -327,17 +327,17 @@
                                that opens the row. *@
                             <span class="gs-inline" style="gap: 2px; flex-wrap: nowrap"
                                   @onclick:stopPropagation="true">
-                            <MudTooltip Text="Edit" ShowOnFocus="false">
+                            <MudTooltip Text="@Loc["Edit"]" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.Edit"
                                                Size="Size.Small"
-                                               aria-label="@($"Edit {Headline(context.Item)}")"
+                                               aria-label="@(Loc["Edit {0}", Headline(context.Item)].Value)"
                                                OnClick="@(async () => await EditAsync(context.Item))" />
                             </MudTooltip>
-                            <MudTooltip Text="Delete" ShowOnFocus="false">
+                            <MudTooltip Text="@Loc["Delete"]" ShowOnFocus="false">
                                 <MudIconButton Icon="@Icons.Material.Rounded.DeleteOutline"
                                                Size="Size.Small"
                                                Color="Color.Error"
-                                               aria-label="@($"Delete {Headline(context.Item)}")"
+                                               aria-label="@(Loc["Delete {0}", Headline(context.Item)].Value)"
                                                OnClick="@(async () => await DeleteAsync(context.Item))" />
                             </MudTooltip>
                             </span>
@@ -352,7 +352,7 @@
                        to. The opening month is the tab's own doing, so keying this on
                        IsNarrowed put "Nothing matches" over a group created a minute ago
                        -- naming a filter nobody set. *@
-                    <h3>@(IsNarrowedByHand ? "Nothing matches" : "Nothing recorded yet")</h3>
+                    <h3>@(IsNarrowedByHand ? Loc["Nothing matches"].Value : Loc["Nothing recorded yet"].Value)</h3>
                     @* The tab opens on the group's default span, the current month for most,
                        so an empty ledger is the default state for any group that has been
                        quiet -- and "Nothing matches" over a span nobody chose reads as "this
@@ -413,11 +413,11 @@
     /// </summary>
     [Parameter] public ActivityPeriod DefaultPeriod { get; set; } = ActivityPeriod.ThisMonth;
 
-    private static readonly (string Label, ActivityKind? Value)[] Kinds =
+    private (string Label, ActivityKind? Value)[] Kinds =>
     [
-        ("Everything", null),
-        ("Expenses", ActivityKind.Expense),
-        ("Settlements", ActivityKind.Transfer)
+        (Loc["Everything"].Value, null),
+        (Loc["Expenses"].Value, ActivityKind.Expense),
+        (Loc["Settlements"].Value, ActivityKind.Transfer)
     ];
 
     private string _searchString = "";
@@ -486,14 +486,14 @@
     private string? Search => IsSearching ? _searchString.Trim() : null;
 
     /// <summary>The span in words, for a sentence rather than a chip.</summary>
-    private string Span => _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant();
+    private string Span => _range.IsAllTime ? Loc["Copy.Lower.all_time"].Value : _range.Label.ToLowerInvariant();
 
     /// <summary>
     /// The span to hang on the end of a clause, or nothing at all when there is no span to
     /// name. "No settlements in all time" is not a sentence anybody writes; the sentence
     /// somebody writes about that set is "No settlements".
     /// </summary>
-    private string InSpan => _range.IsAllTime ? "" : $" in {Span}";
+    private string InSpan => _range.IsAllTime ? "" : Loc[" in {0}", Span].Value;
 
     /// <summary>
     /// What an empty ledger means. Never simply "there is nothing": this tab opens on the
@@ -507,16 +507,16 @@
         // point. Offering "All time" from here was advice to do the thing they had done.
         // First, because a group can open on all time too.
         (false, null) when _range.IsAllTime =>
-            "Nothing recorded in this group yet. Expenses and settlements will show up here.",
+            Loc["Nothing recorded in this group yet. Expenses and settlements will show up here."].Value,
         // The default empty state: a quiet month in a group that may have years behind it.
         // Names the span and says how to leave it.
         (false, null) when _range == OpensOn =>
-            $"Nothing in {Span}. This group's Activity opens on {Span} — pick \"All time\" for "
-            + "the whole ledger.",
-        (false, null) => $"Nothing in {Span}.",
-        (false, ActivityKind.Transfer) => $"No settlements{InSpan}.",
-        (false, ActivityKind.Expense) => $"Nothing spent{InSpan}.",
-        _ => $"Nothing{InSpan} matches. Try a different name, category, person or date."
+            Loc["Nothing in {0}. This group's Activity opens on {1} — pick \"All time\" for ", Span, Span].Value
+            + Loc["the whole ledger."].Value,
+        (false, null) => Loc["Nothing in {0}.", Span].Value,
+        (false, ActivityKind.Transfer) => Loc["No settlements{0}.", InSpan].Value,
+        (false, ActivityKind.Expense) => Loc["Nothing spent{0}.", InSpan].Value,
+        _ => Loc["Nothing{0} matches. Try a different name, category, person or date.", InSpan].Value
     };
 
     private int ExpenseCount => _spending?.Count ?? 0;
@@ -533,7 +533,7 @@
             { dialog => dialog.Personal, Personal },
             { dialog => dialog.Period, Span }
         };
-        var dialog = await DialogService.ShowAsync<CategorySpendingDialog>("Spending by category", parameters,
+        var dialog = await DialogService.ShowAsync<CategorySpendingDialog>(Loc["Spending by category"].Value, parameters,
             new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: CategorySpendingResponse category })
             await SetCategoryAsync(category.CategoryId);
@@ -550,12 +550,12 @@
         {
             var said = new List<string>(3)
             {
-                Personal ? "by you" : "by everyone",
-                _range.IsAllTime ? "all time" : _range.Label.ToLowerInvariant()
+                Personal ? Loc["by you"].Value : Loc["by everyone"].Value,
+                _range.IsAllTime ? Loc["Copy.Lower.all_time"].Value : _range.Label.ToLowerInvariant()
             };
 
             if (IsSearching)
-                said.Add("matching your search");
+                said.Add(Loc["matching your search"].Value);
 
             return string.Join(" · ", said);
         }
@@ -621,7 +621,7 @@
     private async Task<T?> ReadAsync<T>(Func<Task<T>> read) where T : class
     {
         T? result = null;
-        await Errors.TryAsync(async () => result = await read(), "Could not load this group's ledger.");
+        await Errors.TryAsync(async () => result = await read(), Loc["Could not load this group's ledger."].Value);
         return result;
     }
 
@@ -805,7 +805,7 @@
         entry.Kind is not ActivityKind.Transfer || entry.CoversThrough is not null;
 
     /// <summary>The pointer says which rows open, so the cursor is not a lie over a settlement.</summary>
-    private static string RowClass(GroupLedgerEntryResponse entry, int _) => Opens(entry) ? "is-openable" : "";
+    private string RowClass(GroupLedgerEntryResponse entry, int _) => Opens(entry) ? "is-openable" : "";
 
     /// <summary>
     /// The row is the way in. It used to be an eye in the actions column beside Edit and
@@ -850,7 +850,7 @@
 
         try
         {
-            dialog = await DialogService.ShowAsync<TransactionDetailsDialog>("Transaction Details", parameters, options);
+            dialog = await DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value, parameters, options);
         }
         catch
         {
@@ -918,7 +918,7 @@
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<UpdateSettlementDialog>("Edit Settlement", parameters, options);
+        var dialog = await DialogService.ShowAsync<UpdateSettlementDialog>(Loc["Edit Settlement"].Value, parameters, options);
 
         var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
 
@@ -948,7 +948,7 @@
         var parameters = new DialogParameters<UpdateTransactionDialog> { { x => x.Original, original } };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
 
-        var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>("Edit Transaction", parameters, options);
+        var dialog = await DialogService.ShowAsync<UpdateTransactionDialog>(Loc["Edit Transaction"].Value, parameters, options);
 
         var request = await dialog.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
 
@@ -969,34 +969,34 @@
         // asking. The spared "Delete?" is one whose only outcome is that refusal.
         if (await DeleteGuard.FirstLeaverOnAsync(entry.Id, GroupId) is { } leaver)
         {
-            await DialogService.ShowDepartedNoticeAsync(leaver, settlement ? "settlement" : "expense");
+            await DialogService.ShowDepartedNoticeAsync(leaver, settlement ? Loc["Copy.Lower.settlement"].Value : "expense");
             return;
         }
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             { x => x.ContentText, settlement
-                ? $"Delete the settlement where {Headline(entry)}? Everybody's balance in this group "
-                  + "goes back to what it was before it was recorded."
-                : $"Are you sure you want to delete \"{entry.Name}\"?" },
-            { x => x.ButtonText, "Delete" },
+                ? Loc["Delete the settlement where {0}? Everybody's balance in this group ", Headline(entry)].Value
+                  + Loc["goes back to what it was before it was recorded."].Value
+                : Loc["Are you sure you want to delete \"{0}\"?", entry.Name].Value },
+            { x => x.ButtonText, Loc["Delete"].Value },
             { x => x.Color, Color.Error }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
 
         var dialog = await DialogService.ShowAsync<ConfirmationDialog>(
-            settlement ? "Delete Settlement" : "Delete Transaction", parameters, options);
+            settlement ? Loc["Delete Settlement"].Value : Loc["Delete Transaction"].Value, parameters, options);
 
         if (!await dialog.ConfirmedAsync())
             return;
 
-        await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? "settlement" : "expense");
+        await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? Loc["Copy.Lower.settlement"].Value : "expense");
     }
 
-    private static string Headline(GroupLedgerEntryResponse entry) =>
+    private string Headline(GroupLedgerEntryResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? $"{entry.PaidByUserName} paid {entry.PaidToUserName}"
+            ? Loc["{0} paid {1}", entry.PaidByUserName, entry.PaidToUserName].Value
             : entry.Name;
 
     /// <summary>
@@ -1004,10 +1004,10 @@
     /// been on the row and nothing ever put anything in it, so every repayment read the
     /// same: "Settling up", with no way to tell one from another.
     /// </summary>
-    private static string Detail(GroupLedgerEntryResponse entry) =>
+    private string Detail(GroupLedgerEntryResponse entry) =>
         entry.Kind is ActivityKind.Transfer
-            ? (entry.Description is { Length: > 0 } note ? note : "Settling up") + entry.CoversThrough.ThroughSuffix()
-            : $"{entry.PaidByUserName} paid";
+            ? (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix()
+            : Loc["{0} paid", entry.PaidByUserName].Value;
 
     private async Task OnDataChangedAsync()
     {

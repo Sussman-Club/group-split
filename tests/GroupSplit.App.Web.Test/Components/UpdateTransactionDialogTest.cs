@@ -34,11 +34,11 @@ public class UpdateTransactionDialogTest : ComponentTest
         _login.SetupGet(l => l.User).Returns(new UserInfo(MeId, "Ana", "Benitez", "ana@example.com"));
 
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2)]);
 
         _groups
-            .Setup(g => g.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()))
             .Returns(() => new[] { new GroupResponse(GroupId, "Trip", 2) }.ToAsyncEnumerable());
 
         _groups
@@ -78,6 +78,11 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Setup(m => m.GetMerchantsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
+        _commands.Setup(c => c.PreviewUpdateAsync(It.IsAny<Guid>(), It.IsAny<UpdateTransactionRequest>(),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, UpdateTransactionRequest request, bool redivide, CancellationToken token) =>
+                new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana Benitez", request.Amount)], null));
+
         Services.AddSingleton(_groups.Object);
         Services.AddSingleton(_transactions.Object);
         Services.AddSingleton(_categories.Object);
@@ -116,7 +121,27 @@ public class UpdateTransactionDialogTest : ComponentTest
             .First(candidate => candidate.GetAttribute("aria-label")!
                 .Contains(label, StringComparison.Ordinal));
 
-        await chip.ClickAsync(new MouseEventArgs());
+        _ = chip.ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.True(provider.FindComponents<ExpenseChoiceDialog>().Count > 0
+            || provider.FindComponents<ExpenseDetailsChoiceDialog>().Count > 0));
+    }
+
+    private static Task UseSelectionAsync(IRenderedComponent<MudDialogProvider> provider) =>
+        provider.FindAll("button").Single(button => button.TextContent.Trim() == "Use selection")
+            .ClickAsync(new MouseEventArgs());
+
+    private static async Task ReviewAndConfirmAsync(IRenderedComponent<MudDialogProvider> provider)
+    {
+        var submission = provider.FindAll("button").First(button => button.TextContent.Trim() == "Review changes")
+            .ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.True(submission.IsCompleted || provider.FindComponents<ExpenseReviewDialog>().Count > 0));
+        if (provider.FindComponents<ExpenseReviewDialog>().Count > 0)
+        {
+            var confirm = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm changes");
+            Assert.False(confirm.HasAttribute("disabled"), "The test submitted an unchanged expense; no patch should be sent.");
+            await confirm.ClickAsync(new MouseEventArgs());
+        }
+        await submission.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference DialogRef)> OpenAsync(
@@ -250,9 +275,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync(string.Empty));
 
-        await provider.FindAll("button")
-            .First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
         // Still open, and still holding the edit: the dialog is the only place left where
         // the name can be put back.
@@ -313,9 +336,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner with the cousins"));
         await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
 
-        await provider.FindAll("button")
-            .First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
         Assert.False(dialogRef.Result.IsCompleted);
 
@@ -371,9 +392,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(120m));
 
-        var save = () => provider.FindAll("button")
-            .First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        var save = () => ReviewAndConfirmAsync(provider);
 
         await save();
         Assert.False(dialogRef.Result.IsCompleted);
@@ -387,7 +406,7 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await save();
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.NotNull(patch);
         Assert.Contains(patch!.Operations, operation => operation.path == "/Amount");
     }
@@ -408,7 +427,7 @@ public class UpdateTransactionDialogTest : ComponentTest
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         _groups
-            .Setup(g => g.GetGroupsAsync(It.IsAny<CancellationToken>()))
+            .Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new GroupResponse(GroupId, "Trip", 2), flat, trip]);
         _groups
             .Setup(g => g.GetGroupMembersAsync(flat.Id, It.IsAny<CancellationToken>()))
@@ -510,10 +529,12 @@ public class UpdateTransactionDialogTest : ComponentTest
         // Submit to verify the patch does not inadvertently wipe the category
         await ToSplitStepAsync(provider);
 
-        var submitButton = provider.FindAll("button").First(b => b.TextContent.Trim() == "Save");
-        await submitButton.ClickAsync(new MouseEventArgs());
+        // Make a real note edit while asserting unrelated fields remain untouched.
+        await provider.InvokeAsync(() => provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Note").Instance.ValueChanged.InvokeAsync("Updated note"));
+        await ReviewAndConfirmAsync(provider);
 
-        var result = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var result = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.NotNull(result);
 
         // No fields changed, so patch operations shouldn't remove categoryId.
@@ -560,6 +581,8 @@ public class UpdateTransactionDialogTest : ComponentTest
             PaidByUserId = MeId
         });
 
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Open receipts")
+            .ClickAsync(new MouseEventArgs());
         provider.WaitForAssertion(() => Assert.Contains("dinner.jpg", provider.Markup));
         Assert.Contains("Receipts", provider.Markup);
         Assert.Contains("Original receipt", provider.Markup);
@@ -599,12 +622,12 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         var picker = provider.FindComponent<MerchantPicker>();
         await provider.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(corner));
+        await UseSelectionAsync(provider);
 
         await ToSplitStepAsync(provider);
-        await provider.FindAll("button").First(b => b.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
 
@@ -715,7 +738,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         {
             Assert.Contains("This expense uses the built-in rule for a member who has left the group.",
                 provider.Markup, StringComparison.Ordinal);
-            Assert.Contains("choose <strong>By hand</strong>", provider.Markup, StringComparison.Ordinal);
+            Assert.Contains("choose By hand", provider.Markup, StringComparison.Ordinal);
             Assert.Contains("the current shares will be filled in for you.", provider.Markup,
                 StringComparison.Ordinal);
         });
@@ -795,10 +818,9 @@ public class UpdateTransactionDialogTest : ComponentTest
         var editor = provider.FindComponent<SplitEditor>();
         await provider.InvokeAsync(() => editor.Instance.ValueChanged.InvokeAsync(null));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
 
@@ -808,7 +830,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         // And the preview was asked the same question, or the numbers on screen would be
         // the shares being replaced rather than the ones about to be stored.
         _commands.Verify(c => c.PreviewUpdateAsync(transactionId, It.IsAny<UpdateTransactionRequest>(),
-            true, It.IsAny<CancellationToken>()), Times.Once);
+            true, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     /// <summary>
@@ -847,20 +869,12 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await OpenChipAsync(provider, "category");
 
-        var select = provider.FindComponents<MudSelect<Guid?>>()
-            .Single(component => component.Instance.Label == "Category");
+        Assert.Contains("By room size", provider.Markup, StringComparison.Ordinal);
+        Assert.Contains("even split", provider.Markup, StringComparison.Ordinal);
+        Assert.Contains("No category", provider.Markup, StringComparison.Ordinal);
+        await provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel")
+            .ClickAsync(new MouseEventArgs());
 
-        await provider.InvokeAsync(() => select.Instance.OpenMenu());
-
-        popovers.WaitForAssertion(() =>
-        {
-            // The rule a category names...
-            Assert.Contains("By room size", popovers.Markup, StringComparison.Ordinal);
-
-            // ...and the answer for one that names none, which is an answer and not a gap.
-            Assert.Contains("even split", popovers.Markup, StringComparison.Ordinal);
-            Assert.Contains("No category", popovers.Markup, StringComparison.Ordinal);
-        });
     }
 
     /// <summary>
@@ -888,16 +902,14 @@ public class UpdateTransactionDialogTest : ComponentTest
         var (provider, dialogRef) = await OpenAsync(Row(transactionId));
 
         await OpenChipAsync(provider, "category");
-        var select = provider.FindComponents<MudSelect<Guid?>>()
-            .Single(component => component.Instance.Label == "Category");
-
-        await provider.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync((Guid?)null));
+        await provider.FindAll(".gs-selection-option").Single(option => option.TextContent.Contains("No category"))
+            .ClickAsync(new MouseEventArgs());
+        await UseSelectionAsync(provider);
 
         await ToSplitStepAsync(provider);
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
         Assert.Null(Assert.Single(patch!.Operations, op => Touches(op, "categoryId")).value);
@@ -944,10 +956,9 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await ToSplitStepAsync(provider);
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
 
@@ -1008,10 +1019,9 @@ public class UpdateTransactionDialogTest : ComponentTest
             new SplitInput { UserId = daniel, Amount = 30m }
         ]));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
 
@@ -1082,10 +1092,12 @@ public class UpdateTransactionDialogTest : ComponentTest
         Assert.NotNull(editor.Instance.Value);
         Assert.Equal(100m, Assert.Single(editor.Instance.Value!, split => split.UserId == MeId).Amount);
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        // Make a real note edit while asserting unrelated fields remain untouched.
+        await provider.InvokeAsync(() => provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Note").Instance.ValueChanged.InvokeAsync("Updated note"));
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
 
@@ -1121,14 +1133,12 @@ public class UpdateTransactionDialogTest : ComponentTest
     private static async Task PickCategoryAsync(
         IRenderedComponent<MudDialogProvider> provider, Guid categoryId)
     {
-        // The category is a chip, and its select is rendered only while that chip is open.
-        if (!provider.FindComponents<MudSelect<Guid?>>().Any(c => c.Instance.Label == "Category"))
-            await OpenChipAsync(provider, "category");
+        await OpenChipAsync(provider, "category");
+        await provider.FindAll(".gs-selection-option").Single(option => option.QuerySelector("strong")!.TextContent ==
+            provider.FindComponent<ExpenseChoiceDialog>().Instance.Items.Single(item => item.Id == categoryId.ToString()).Label)
+            .ClickAsync(new MouseEventArgs());
+        await UseSelectionAsync(provider);
 
-        var select = provider.FindComponents<MudSelect<Guid?>>()
-            .Single(component => component.Instance.Label == "Category");
-
-        await provider.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(categoryId));
     }
 
     /// <summary>
@@ -1321,7 +1331,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var refusal = provider.WaitForElement("[data-testid=currency-refusal]");
         Assert.Contains("This expense is in EUR and Trip keeps its balances in USD", refusal.TextContent);
 
-        var save = provider.FindAll("button").First(button => button.TextContent.Trim() == "Save");
+        var save = provider.FindAll("button").First(button => button.TextContent.Trim() == "Review changes");
         Assert.True(save.HasAttribute("disabled"));
 
         await save.ClickAsync(new MouseEventArgs());
@@ -1353,10 +1363,9 @@ public class UpdateTransactionDialogTest : ComponentTest
             .Single(field => field.Instance.Label == "What was it?");
         await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Dinner at Ramiro"));
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.NotNull(patch);
         Assert.DoesNotContain(patch!.Operations, op => Touches(op, "groupId"));
     }
@@ -1423,10 +1432,12 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         var (provider, dialogRef) = await OpenBankRowAsync();
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        // Make a real note edit while asserting unrelated fields remain untouched.
+        await provider.InvokeAsync(() => provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "Note").Instance.ValueChanged.InvokeAsync("Updated note"));
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(patch);
         Assert.DoesNotContain(patch!.Operations, op => Touches(op, "dateTime"));
@@ -1444,11 +1455,11 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         var time = provider.FindComponents<MudTimePicker>().Single(picker => picker.Instance.Label == "Time");
         await provider.InvokeAsync(() => time.Instance.TimeChanged.InvokeAsync(new TimeSpan(14, 15, 0)));
+        await UseSelectionAsync(provider);
 
-        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Save")
-            .ClickAsync(new MouseEventArgs());
+        await ReviewAndConfirmAsync(provider);
 
-        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>();
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
 
         var operation = Assert.Single(patch!.Operations, op => Touches(op, "dateTime"));
 

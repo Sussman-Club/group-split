@@ -210,7 +210,7 @@ public class PageStateRefreshTest
             .ReturnsAsync(() => new UserPositionResponse(0m, 0m, 0m, []));
 
         _groupsClient
-            .Setup(c => c.GetGroupsAsAsyncEnumerable(It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()))
             .Returns(() => _groups.ToList().ToAsyncEnumerable());
 
         _groupsClient

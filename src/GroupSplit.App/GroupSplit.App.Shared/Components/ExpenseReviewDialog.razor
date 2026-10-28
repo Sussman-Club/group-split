@@ -1,0 +1,75 @@
+@using GroupSplit.App.Shared.Extensions
+@namespace GroupSplit.App.Shared.Components
+<MudDialog Class="gs-sheet gs-transaction-dialog gs-expense-review">
+    <TitleContent><h2 class="gs-dialog-title">@Loc["Review changes"]</h2></TitleContent>
+    <DialogContent>
+        @if (!HasChanges)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">@Loc["No changes to save. Everything matches the saved expense."]</MudAlert>
+        }
+        else
+        {
+            <p class="gs-muted">@Loc["Only the changes below will be saved."]</p>
+        }
+        @foreach (var change in ChangedDetails)
+        {
+            <section class="gs-review-change" aria-label="@change.Label">
+                <h3>@change.Label</h3>
+                <div class="gs-review-comparison">
+                    <div class="gs-review-before"><span class="gs-review-label">@Loc["Before"]</span><span>@Display(change.Before)</span></div>
+                    <span class="gs-review-arrow" aria-hidden="true">&rarr;</span>
+                    <div class="gs-review-after"><span class="gs-review-label">@Loc["After"]</span><strong>@Display(change.After)</strong></div>
+                </div>
+            </section>
+        }
+        @if (ChangedShares.Count > 0)
+        {
+            <h3 class="gs-review-heading">@Loc["Whose share changes"]</h3>
+            @foreach (var share in ChangedShares)
+            {
+                <section class="gs-review-share">
+                    <div class="gs-review-person"><strong>@share.Name</strong><span class="gs-review-delta">@Math.Abs(share.After - share.Before).ToMoney(Currency) @(share.After > share.Before ? Loc["more"] : Loc["less"])</span></div>
+                    <div class="gs-review-comparison">
+                        <div class="gs-review-before"><span class="gs-review-label">@Loc["Before"]</span><span>@share.Before.ToMoney(Currency)</span></div>
+                        <span class="gs-review-arrow" aria-hidden="true">&rarr;</span>
+                        <div class="gs-review-after"><span class="gs-review-label">@Loc["After"]</span><strong>@share.After.ToMoney(Currency)</strong></div>
+                    </div>
+                </section>
+            }
+            <p class="gs-muted">@Loc["These are shares of this expense, not outstanding group balances."]</p>
+        }
+        else if (Shares.Count > 0)
+        {
+            <p class="gs-review-unchanged">@Loc["Everyone's share stays the same."]</p>
+        }
+        @if (UnchangedShares.Count > 0 && ChangedShares.Count > 0)
+        {
+            <details class="gs-expense-disclosure">
+                <summary>@Loc["Unchanged shares: {0}", UnchangedShares.Count]</summary>
+                @foreach (var share in UnchangedShares)
+                {
+                    <div class="gs-review-unchanged"><span>@share.Name</span><span>@share.After.ToMoney(Currency)</span></div>
+                }
+            </details>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">@Loc["Keep editing"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!HasChanges)" OnClick="Confirm">@Loc["Confirm changes"]</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    public sealed record Change(string Label, string Before, string After, bool? IsChanged = null);
+    public sealed record Share(string Name, decimal Before, decimal After);
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<Change> Changes { get; set; } = [];
+    [Parameter] public IReadOnlyList<Share> Shares { get; set; } = [];
+    [Parameter] public string Currency { get; set; } = "USD";
+    private IReadOnlyList<Change> ChangedDetails => Changes.Where(x => x.IsChanged ?? x.Before != x.After).ToList();
+    private IReadOnlyList<Share> ChangedShares => Shares.Where(x => x.Before != x.After).ToList();
+    private IReadOnlyList<Share> UnchangedShares => Shares.Where(x => x.Before == x.After).ToList();
+    private bool HasChanges => ChangedDetails.Count > 0 || ChangedShares.Count > 0;
+    private string Display(string value) => string.IsNullOrWhiteSpace(value) ? Loc["Not set"].Value : value;
+    private void Cancel() => MudDialog.Cancel();
+    private void Confirm() { if (HasChanges) MudDialog.Close(DialogResult.Ok(true)); }
+}

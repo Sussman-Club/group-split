@@ -22,18 +22,18 @@
     grievance list rather than a settling tool.
 *@
 
-<PageTitle>Settle up - Group Split</PageTitle>
+<PageTitle>@Loc["Settle up - Group Split"]</PageTitle>
 
 <LoadView Loading="_initializing">
 <div class="gs-page-head">
     <div>
-        <div class="gs-eyebrow">Across every group</div>
-        <h1>Settle up</h1>
+        <div class="gs-eyebrow">@Loc["Across every group"]</div>
+        <h1>@Loc["Settle up"]</h1>
         <p>@Summary</p>
     </div>
     @if (Plan?.LastSettled is { } last)
     {
-        <span class="gs-tag neutral">last settled @Clock.Day(last).ToString("d MMM")</span>
+        <span class="gs-tag neutral">@Loc["last settled {0:d MMM}", Clock.Day(last)]</span>
     }
 </div>
 
@@ -47,28 +47,28 @@
         {
             @* No plan is not a plan with nothing in it. Saying "All settled" here told
                somebody who owed money that they were square whenever the read failed. *@
-            <div class="gs-eyebrow">Overall</div>
-            <div class="gs-hero-amount">@(_planFailed ? "Not loaded" : "…")</div>
+            <div class="gs-eyebrow">@Loc["Overall"]</div>
+            <div class="gs-hero-amount">@(_planFailed ? Loc["Not loaded"].Value : "…")</div>
         }
         else if (Net > 0)
         {
-            <div class="gs-eyebrow">Overall, you are owed</div>
+            <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
             <Money Value="Net" Animate Class="gs-hero-amount" />
         }
         else if (Net < 0)
         {
-            <div class="gs-eyebrow">Overall, you owe</div>
+            <div class="gs-eyebrow">@Loc["Overall, you owe"]</div>
             <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
         }
         else
         {
-            <div class="gs-eyebrow">Overall</div>
-            <div class="gs-hero-amount">All settled</div>
+            <div class="gs-eyebrow">@Loc["Overall"]</div>
+            <div class="gs-hero-amount">@Loc["All settled"]</div>
         }
         <div class="gs-hero-sub">@HeroSub</div>
         @if (Plan is null && _planFailed)
         {
-            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryPlanAsync">Try again</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryPlanAsync">@Loc["Try again"]</MudButton>
         }
     </section>
 
@@ -78,11 +78,11 @@
            it, and it should be worth reaching. *@
         <div class="gs-card gs-empty gs-reveal" style="--i: 1; padding: 56px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.DoneAll" />
-            <h3>All settled</h3>
+            <h3>@Loc["All settled"]</h3>
             <span>
-                Nothing owed either way, in any group@(Plan?.LastSettled is { } since
-                                                          ? $" since {Clock.Day(since).ToString("d MMMM yyyy")}"
-                                                          : "").
+                @(Plan?.LastSettled is { } since
+                    ? Loc["Nothing owed either way, in any group since {0:d MMMM yyyy}.", Clock.Day(since)]
+                    : Loc["Nothing owed either way, in any group."])
             </span>
         </div>
     }
@@ -91,7 +91,7 @@
     {
         <section class="gs-card gs-card-pad gs-reveal" style="--i: 1">
             <div class="gs-card-title">
-                <h2>You pay</h2>
+                <h2>@Loc["You pay"]</h2>
                 <span class="gs-tag neutral">@Payments(YouPay.Count)</span>
             </div>
             <div class="gs-settle-list">
@@ -110,7 +110,7 @@
     {
         <section class="gs-card gs-card-pad gs-reveal" style="--i: 2">
             <div class="gs-card-title">
-                <h2>You are owed</h2>
+                <h2>@Loc["You are owed"]</h2>
                 <span class="gs-tag neutral">@People(OwedToYou.Count)</span>
             </div>
             <div class="gs-settle-list">
@@ -129,7 +129,7 @@
        and which used to mean opening each group's activity tab in turn. *@
     <section class="gs-card gs-card-pad gs-reveal" style="--i: 3">
         <div class="gs-card-title">
-            <h2>Already settled</h2>
+            <h2>@Loc["Already settled"]</h2>
             @if (History is { TotalCount: > 0 } recorded)
             {
                 <span class="gs-tag neutral">@recorded.TotalCount</span>
@@ -139,20 +139,20 @@
         @if (History is null && _historyFailed)
         {
             <div class="gs-empty" style="padding: 24px">
-                <span>Could not load your settlements.</span>
-                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryHistoryAsync">Try again</MudButton>
+                <span>@Loc["Could not load your settlements."]</span>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryHistoryAsync">@Loc["Try again"]</MudButton>
             </div>
         }
         else if (History is null)
         {
-            <div class="gs-empty" style="padding: 24px"><span>Loading…</span></div>
+            <div class="gs-empty" style="padding: 24px"><span>@Loc["Loading…"]</span></div>
         }
         else if (History.Items.Count == 0)
         {
             <div class="gs-empty" style="padding: 32px">
                 <MudIcon Icon="@Icons.Material.Rounded.Handshake" />
-                <h3>No settlements yet</h3>
-                <span>Repayments you record — in any group — show up here.</span>
+                <h3>@Loc["No settlements yet"]</h3>
+                <span>@Loc["Repayments you record — in any group — show up here."]</span>
             </div>
         }
         else
@@ -179,7 +179,7 @@
             {
                 <div style="display: flex; justify-content: center; padding-top: 12px">
                     <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                               OnClick="@(() => Settling.ShowMoreHistoryAsync())">Show more</MudButton>
+                               OnClick="@(() => Settling.ShowMoreHistoryAsync())">@Loc["Show more"]</MudButton>
                 </div>
             }
         }
@@ -222,38 +222,37 @@
     /// this screen exists.
     /// </summary>
     private string Summary => Plan is null
-        ? (_planFailed ? "Could not work out what clears everything." : "Working out what clears everything.")
+        ? (_planFailed ? Loc["Could not work out what clears everything."].Value : Loc["Working out what clears everything."].Value)
         : Nothing
-            ? "Nothing owed either way, in any group."
+            ? Loc["Nothing owed either way, in any group."].Value
             : YouPay.Count == 0
-                ? $"{People(OwedToYou.Count)} owe you. Marking one as paid is one tap."
-                : $"{Payments(YouPay.Count)} clear{(YouPay.Count == 1 ? "s" : "")} everything you owe. "
-                  + "Recording one clears it in every group it came from.";
+                ? Loc["{0} owe you. Marking one as paid is one tap.", People(OwedToYou.Count)].Value
+                : Loc["Clear everything you owe with {0}. Recording one clears it in every group it came from.", Payments(YouPay.Count)].Value;
 
     private string HeroSub => Plan is null
-        ? (_planFailed ? "Could not load what you owe and are owed." : "")
+        ? (_planFailed ? Loc["Could not load what you owe and are owed."].Value : "")
         : Plan is { OwedToYouTotal: > 0, YouOweTotal: > 0 }
-            ? $"{Plan.OwedToYouTotal.ToMoney()} owed to you by {People(OwedToYou.Count)}, "
-              + $"{Plan.YouOweTotal.ToMoney()} owed by you to {People(YouPay.Count)}. They do not cancel out."
+            ? Loc["{0} owed to you by {1}, ", Plan.OwedToYouTotal.ToMoney(), People(OwedToYou.Count)].Value
+              + Loc["{0} owed by you to {1}. They do not cancel out.", Plan.YouOweTotal.ToMoney(), People(YouPay.Count)].Value
             : Plan.OwedToYouTotal > 0
-                ? $"From {People(OwedToYou.Count)}."
+                ? Loc["From {0}.", People(OwedToYou.Count)].Value
                 : Plan.YouOweTotal > 0
-                    ? $"To {People(YouPay.Count)}."
-                    : "Nothing outstanding in any of your groups.";
+                    ? Loc["To {0}.", People(YouPay.Count)].Value
+                    : Loc["Nothing outstanding in any of your groups."].Value;
 
-    private static string People(int count) => count == 1 ? "1 person" : $"{count} people";
+    private string People(int count) => count == 1 ? Loc["1 person"].Value : Loc["{0} people", count].Value;
 
-    private static string Payments(int count) => count == 1 ? "1 payment" : $"{count} payments";
+    private string Payments(int count) => count == 1 ? Loc["1 payment"].Value : Loc["{0} payments", count].Value;
 
     private string Headline(SettlementResponse settlement) => settlement.PaidByYou
-        ? $"You paid {settlement.ToUserName}"
-        : $"{settlement.FromUserName} paid you";
+        ? Loc["You paid {0}", settlement.ToUserName].Value
+        : Loc["{0} paid you", settlement.FromUserName].Value;
 
     /// <summary>
     /// The group always, the note when there is one. Which group a repayment landed in is
     /// the fact this list is here to supply -- the plan above deliberately hides it.
     /// </summary>
-    private static string Detail(SettlementResponse settlement) =>
+    private string Detail(SettlementResponse settlement) =>
         (settlement.Description is { Length: > 0 } note
             ? $"{settlement.GroupName} · {note}"
             : settlement.GroupName) + settlement.CoversThrough.ThroughSuffix();
@@ -269,7 +268,7 @@
         };
 
         var dialog = await DialogService.ShowAsync<SettleWithPersonDialog>(
-            $"Settle with {person.UserName}", parameters, options);
+            Loc["Settle with {0}", person.UserName].Value, parameters, options);
 
         var request = await dialog.GetReturnValueAsync<SettleWithPersonRequest>();
 

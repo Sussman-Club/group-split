@@ -116,7 +116,7 @@ public class ReceiptService(
         {
             ExpenseId = expense.Id, Subtotal = request.Subtotal,
             MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
-            SourceValues = request.SourceValues ?? existing?.SourceValues, Tax = request.Tax, Tip = request.Tip,
+            Tax = request.Tax, Tip = request.Tip,
             Total = request.Total
         };
         // Worked out once, and only if some line needs it.
@@ -205,7 +205,6 @@ public class ReceiptService(
             existing.Subtotal = draft.Subtotal;
             existing.MerchantName = draft.MerchantName;
             existing.PurchaseDate = draft.PurchaseDate;
-            existing.SourceValues = draft.SourceValues;
             existing.Tax = draft.Tax;
             existing.Tip = draft.Tip;
             existing.Total = draft.Total;
@@ -335,7 +334,6 @@ public class ReceiptService(
             Total = receipt.Total,
             MerchantName = receipt.MerchantName,
             PurchaseDate = receipt.PurchaseDate,
-            SourceValues = receipt.SourceValues,
             Items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id)
                 .Select(item => item.Id == itemId
                     ? new ReceiptItemInput

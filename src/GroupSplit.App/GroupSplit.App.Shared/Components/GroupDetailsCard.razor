@@ -19,12 +19,12 @@
 <section class="gs-card gs-card-pad" aria-labelledby="group-details-heading">
     <div class="gs-card-title">
         <div>
-            <div class="gs-eyebrow">Group settings</div>
-            <h2 id="group-details-heading">Group details</h2>
+            <div class="gs-eyebrow">@Loc["Group settings"]</div>
+            <h2 id="group-details-heading">@Loc["Group details"]</h2>
         </div>
         @if (Group.IsArchive)
         {
-            <span class="gs-tag neutral">Archived</span>
+            <span class="gs-tag neutral">@Loc["Archived"]</span>
         }
     </div>
 
@@ -33,16 +33,16 @@
             <div class="gs-group-setting-section" aria-labelledby="group-name-heading">
                 <div class="gs-group-setting-heading">
                     <div>
-                        <h3 id="group-name-heading" class="gs-group-setting-title">Name</h3>
+                        <h3 id="group-name-heading" class="gs-group-setting-title">@Loc["Name"]</h3>
                         <span class="gs-group-setting-description">
-                            @(Group.IsPersonal ? "The name your own spending goes under." : "The name your members see throughout the app.")
+                            @(Group.IsPersonal ? Loc["The name your own spending goes under."].Value : Loc["The name your members see throughout the app."].Value)
                         </span>
                     </div>
                 </div>
 
                 <MudTextField @bind-Value="_edit.Name"
                               For="@(() => _edit.Name)"
-                              Label="Group name"
+                              Label="@Loc["Group name"]"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Immediate="true" />
@@ -51,13 +51,13 @@
             <div class="gs-group-setting-section" aria-labelledby="group-description-heading">
                 <div class="gs-group-setting-heading">
                     <div>
-                        <h3 id="group-description-heading" class="gs-group-setting-title">Description</h3>
-                        <span class="gs-group-setting-description">What this group is for.</span>
+                        <h3 id="group-description-heading" class="gs-group-setting-title">@Loc["Description"]</h3>
+                        <span class="gs-group-setting-description">@Loc["What this group is for."]</span>
                     </div>
                 </div>
                 <MudTextField @bind-Value="_edit.Description"
                               For="@(() => _edit.Description)"
-                              Label="Description"
+                              Label="@Loc["Description"]"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Lines="2"
@@ -70,9 +70,9 @@
             <div class="gs-group-setting-section" aria-labelledby="default-period-heading">
                 <div class="gs-group-setting-heading">
                     <div>
-                        <h3 id="default-period-heading" class="gs-group-setting-title">Activity opens on</h3>
+                        <h3 id="default-period-heading" class="gs-group-setting-title">@Loc["Activity opens on"]</h3>
                         <span class="gs-group-setting-description">
-                            @(Group.IsPersonal ? "The span your Activity tab starts on." : "The span every member's Activity tab starts on.")
+                            @(Group.IsPersonal ? Loc["The span your Activity tab starts on."].Value : Loc["The span every member's Activity tab starts on."].Value)
                         </span>
                     </div>
                 </div>
@@ -80,7 +80,7 @@
                 <MudSelect T="ActivityPeriod"
                            @bind-Value="_edit.DefaultPeriod"
                            ToStringFunc="@DateFilter.LabelOf"
-                           Label="Activity opens on"
+                           Label="@Loc["Activity opens on"]"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense">
                     @foreach (var period in Enum.GetValues<ActivityPeriod>())
@@ -99,10 +99,8 @@
                         <MudIcon Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" />
                     </span>
                     <div>
-                        <h3 id="default-split-heading" class="gs-group-setting-title">Default split</h3>
-                        <span class="gs-group-setting-description">
-                            Used when an expense has no category.
-                        </span>
+                        <h3 id="default-split-heading" class="gs-group-setting-title">@Loc["Default split"]</h3>
+                        <span class="gs-group-setting-description">@Loc["Used when an expense has no category."]</span>
                     </div>
                 </div>
 
@@ -115,7 +113,7 @@
                 <MudSelect T="Guid?"
                            @bind-Value="_edit.DefaultSplitRuleId"
                            ToStringFunc="@NameOf"
-                           Label="How should it be divided?"
+                           Label="@Loc["How should it be divided?"]"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
                            Disabled="@(!Loaded || Offered.Count == 0)">
@@ -127,7 +125,7 @@
 
                 <div class="gs-group-setting-note">
                     <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" aria-hidden="true" />
-                    <span>Categories with their own split keep using it.</span>
+                    <span>@Loc["Categories with their own split keep using it."]</span>
                 </div>
             </div>
             }
@@ -137,15 +135,11 @@
     <div class="gs-group-setting-actions">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                    Disabled="@(!Dirty || _saving)"
-                   OnClick="@SaveAsync">
-            Save changes
-        </MudButton>
+                   OnClick="@SaveAsync">@Loc["Save changes"]</MudButton>
 
         @if (Dirty && !_saving)
         {
-            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Discard">
-                Discard
-            </MudButton>
+            <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Discard">@Loc["Discard"]</MudButton>
         }
 
         @* One tap, no confirmation: archiving hides the group from this person's own list
@@ -158,7 +152,7 @@
                        Class="gs-btn-quiet gs-group-setting-archive"
                        StartIcon="@(Group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
                        OnClick="@ToggleArchiveAsync">
-                @(Group.IsArchive ? "Restore group" : "Archive group")
+                @(Group.IsArchive ? Loc["Restore group"].Value : Loc["Archive group"].Value)
             </MudButton>
         }
     </div>

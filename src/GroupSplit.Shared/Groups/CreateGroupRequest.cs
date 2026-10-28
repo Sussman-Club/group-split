@@ -4,11 +4,11 @@ namespace GroupSplit.Shared;
 
 public record CreateGroupRequest
 {
-    [Required(ErrorMessage = "Name is required.")]
-    [StringLength(64, ErrorMessage = "Name must be less than 64 characters.")]
+    [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequired))]
+    [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; set; } = null!;
 
-    [StringLength(256, ErrorMessage = "Description must be 256 characters or fewer.")]
+    [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string Description { get; set; } = string.Empty;
 
     /// <summary>The fallback rule for uncategorized expenses.</summary>
@@ -16,6 +16,6 @@ public record CreateGroupRequest
     public Guid? DefaultSplitRuleId { get; set; }
 
     /// <summary>The span the group's Activity tab opens on, for every member.</summary>
-    [EnumDataType(typeof(ActivityPeriod), ErrorMessage = "Default period is not one of the periods offered.")]
+    [EnumDataType(typeof(ActivityPeriod), ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DefaultPeriod))]
     public ActivityPeriod DefaultPeriod { get; set; } = ActivityPeriod.ThisMonth;
 }

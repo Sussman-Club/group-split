@@ -28,6 +28,8 @@ public class User : Entity
 
     public string? LastName { get; set; }
 
+    public string? PreferredLanguage { get; set; }
+
     /// <summary>
     /// Null for anybody who has not signed in. Unique where it is set, so two accounts
     /// cannot answer to one address.

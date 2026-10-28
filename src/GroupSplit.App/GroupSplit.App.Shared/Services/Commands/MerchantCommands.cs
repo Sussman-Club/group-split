@@ -1,3 +1,4 @@
+using GroupSplit.App.Shared.Localization;
 using GroupSplit.App.Shared.Services.Errors;
 using GroupSplit.Shared;
 using MudBlazor;
@@ -70,8 +71,8 @@ public sealed class MerchantCommands(
         var done = await errors.TryAsync(async () =>
         {
             created = await merchants.CreateMerchantAsync(new CreateMerchantRequest { Name = name }, ct);
-            snackbar.Add($"{created.Name} added.", Severity.Success);
-        }, "Could not add the place.");
+            snackbar.Add(UiText.Format($"{created.Name} added."), Severity.Success);
+        }, UiText.Get("Could not add the place."));
 
         return done ? created : null;
     }

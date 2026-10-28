@@ -18,7 +18,7 @@ namespace GroupSplit.API.Services;
 public static class ReceiptSplitCalculator
 {
     /// <summary>Writes the tax implied by the receipt's rates and taxable flags. Existing
-    /// receipts with no tax metadata retain their manually reviewed line tax values.</summary>
+    /// line taxes are retained; missing tax is distributed across identified taxable items.</summary>
     public static void CalculateLineTaxes(Receipt receipt)
     {
         var items = receipt.Items.OrderBy(item => item.Position).ThenBy(item => item.Id).ToList();

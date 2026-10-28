@@ -4,56 +4,51 @@
 @attribute [AllowAnonymous]
 @inject AppLinks AppLinks
 
-<PageTitle>Group Split</PageTitle>
+<PageTitle>@Loc["Group Split"]</PageTitle>
 
 @if (UserInfo is null)
 {
     <section class="gs-landing">
         <div>
-            <div class="gs-eyebrow" style="color: var(--gs-teal)">Shared expenses, settled</div>
-            <h1>Split the bill.<br />Keep the <em>friends</em>.</h1>
-            <p class="lead">
-                Track what your group spends, split it by the rules you choose, and see at a glance
-                who owes whom. No spreadsheets, no awkward maths.
-            </p>
+            <div class="gs-eyebrow" style="color: var(--gs-teal)">@Loc["Shared expenses, settled"]</div>
+            <h1>@Loc["Split the bill."]<br /><em>@Loc["Keep the friends."]</em></h1>
+            <p class="lead">@Loc["Track what your group spends, split it by the rules you choose, and see at a glance who owes whom. No spreadsheets, no awkward maths."]</p>
             <div class="gs-inline">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill gs-landing-cta"
-                           EndIcon="@Icons.Material.Rounded.ArrowForward" Href="/login">
-                    Sign in to get started
-                </MudButton>
+                           EndIcon="@Icons.Material.Rounded.ArrowForward" Href="/login">@Loc["Sign in to get started"]</MudButton>
                 @if (!AppLinks.IsNative)
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill gs-android-only"
-                               StartIcon="@Icons.Material.Rounded.Download" Href="/android">Get the Android app</MudButton>
+                               StartIcon="@Icons.Material.Rounded.Download" Href="/android">@Loc["Get the Android app"]</MudButton>
                 }
             </div>
         </div>
 
         <div class="gs-landing-art" aria-hidden="true">
             <div class="gs-card gs-card-pad" style="padding: 18px 20px">
-                <div class="gs-eyebrow">Weekend in Lisbon</div>
+                <div class="gs-eyebrow">@Loc["Weekend in Lisbon"]</div>
                 <div class="gs-inline" style="margin-top: 8px; justify-content: space-between">
                     <span class="gs-avatar-stack">
                         <Avatar Name="Daniel Rivero" Size="sm" Style="--i:0" />
                         <Avatar Name="Anabel Benítez" Size="sm" Style="--i:1" />
                         <Avatar Name="Omar Sussman" Size="sm" Style="--i:2" />
                     </span>
-                    <span class="gs-money" style="font-size: 1.25rem">$1,284.50</span>
+                    <span class="gs-money" style="font-size: 1.25rem">@((1284.50m).ToMoney("USD"))</span>
                 </div>
             </div>
             <div class="gs-card gs-hero" style="padding: 18px 20px">
-                <div class="gs-eyebrow">You are owed</div>
-                <div class="gs-hero-amount" style="font-size: 2.25rem; margin-top: 6px">$214.20</div>
-                <div class="gs-hero-sub">from 2 people</div>
+                <div class="gs-eyebrow">@Loc["You are owed"]</div>
+                <div class="gs-hero-amount" style="font-size: 2.25rem; margin-top: 6px">@((214.20m).ToMoney("USD"))</div>
+                <div class="gs-hero-sub">@Loc["from 2 people"]</div>
             </div>
             <div class="gs-card gs-card-pad" style="padding: 14px 20px">
                 <div class="gs-row" style="margin: 0; padding: 0; cursor: default">
                     <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Restaurant" /></span>
                     <div>
-                        <div class="title"><span>Dinner at Cervejaria</span> <span class="gs-tag">Food</span></div>
-                        <div class="meta">Paid by Anabel</div>
+                        <div class="title"><span>@Loc["Dinner at Cervejaria"]</span> <span class="gs-tag">@Loc["Food"]</span></div>
+                        <div class="meta">@Loc["Paid by Anabel"]</div>
                     </div>
-                    <div class="gs-money">$96.00</div>
+                    <div class="gs-money">@((96m).ToMoney("USD"))</div>
                 </div>
             </div>
         </div>
@@ -62,18 +57,18 @@
     <section class="gs-features gs-scroll-reveal">
         <div class="gs-card gs-feature gs-card-hover">
             <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Groups" /></span>
-            <h3>Groups that fit real life</h3>
-            <p>Flatmates, trips, the five-a-side team. Members come and go, the history stays put.</p>
+            <h3>@Loc["Groups that fit real life"]</h3>
+            <p>@Loc["Flatmates, trips, the five-a-side team. Members come and go, the history stays put."]</p>
         </div>
         <div class="gs-card gs-feature gs-card-hover">
             <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Rule" /></span>
-            <h3>Split by your rules</h3>
-            <p>Equal, by percentage, or a category rule you define once and reuse on every expense.</p>
+            <h3>@Loc["Split by your rules"]</h3>
+            <p>@Loc["Equal, by percentage, or a category rule you define once and reuse on every expense."]</p>
         </div>
         <div class="gs-card gs-feature gs-card-hover">
             <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.Handshake" /></span>
-            <h3>Settle in one tap</h3>
-            <p>Balances net out automatically, so you pay the fewest people the smallest amounts.</p>
+            <h3>@Loc["Settle in one tap"]</h3>
+            <p>@Loc["Balances net out automatically, so you pay the fewest people the smallest amounts."]</p>
         </div>
     </section>
 }

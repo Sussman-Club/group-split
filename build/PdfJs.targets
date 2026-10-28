@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <PdfJsVersion>6.4.299</PdfJsVersion>
+    <PdfJsIntegrity>AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==</PdfJsIntegrity>
+    <PdfJsAssetsDirectory>$(MSBuildProjectDirectory)/wwwroot/vendor/pdfjs</PdfJsAssetsDirectory>
+  </PropertyGroup>
+
+  <!-- Populate content before static-web-asset discovery, including on the first build.
+       Remove evaluation-time glob entries so subsequent builds do not duplicate them. -->
+  <ItemGroup>
+    <Content Remove="wwwroot/vendor/pdfjs/**" />
+    <None Remove="wwwroot/vendor/pdfjs/**" />
+  </ItemGroup>
+  <Target Name="RestorePdfJsAssets" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="dotnet run --file &quot;$(MSBuildThisFileDirectory)../tools/restore-pdfjs.cs&quot; -- &quot;$(PdfJsVersion)&quot; &quot;$(PdfJsIntegrity)&quot; &quot;$(PdfJsAssetsDirectory)&quot; &quot;$(MSBuildProjectDirectory)/obj/pdfjs&quot;" />
+    <ItemGroup>
+      <Content Include="wwwroot/vendor/pdfjs/**/*" Exclude="wwwroot/vendor/pdfjs/.restored" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

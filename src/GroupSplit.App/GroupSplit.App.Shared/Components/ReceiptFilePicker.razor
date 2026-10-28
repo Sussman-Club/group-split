@@ -12,36 +12,36 @@
                accept="@Accept"
                disabled="@IsBusy"
                class="gs-file-picker-input"
-               aria-label="Receipt file" />
+               aria-label="@Loc["Receipt file"]" />
     <div class="gs-file-picker-dropzone" hidden="@IsAttached">
         <label for="@_inputId" class="gs-file-picker-main-action">
             <span class="gs-file-picker-mark" aria-hidden="true">
                 <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
             </span>
             <span class="gs-file-picker-copy">
-                <span class="gs-file-picker-title">@Title</span>
-                <span class="gs-file-picker-subtitle">@Description</span>
-                <span class="gs-file-picker-formats">JPG, PNG, WebP or PDF · up to 10 MB</span>
+                <span class="gs-file-picker-title">@(Title ?? Loc["Attach the original receipt"])</span>
+                <span class="gs-file-picker-subtitle">@(Description ?? Loc["Keep the file now. Read it when you are ready."])</span>
+                <span class="gs-file-picker-formats">@Loc["JPG, PNG, WebP or PDF · up to 10 MB"]</span>
             </span>
-            <span class="gs-file-picker-action">Browse</span>
+            <span class="gs-file-picker-action">@Loc["Browse"]</span>
         </label>
         @if (Camera is not null)
         {
             <button type="button" class="gs-file-picker-camera-action" disabled="@(IsBusy || _capturing)" @onclick="CaptureAsync">
                 <MudIcon Icon="@Icons.Material.Rounded.PhotoCamera" Size="Size.Small" />
-                <span>Scan receipt</span>
+                <span>@Loc["Scan receipt"]</span>
             </button>
         }
         else
         {
             <label class="gs-file-picker-camera-action">
                 <MudIcon Icon="@Icons.Material.Rounded.PhotoCamera" Size="Size.Small" />
-                <span>Scan receipt</span>
+                <span>@Loc["Scan receipt"]</span>
                 @* A direct tap on the input preserves the browser's camera activation.
                    Keep it mounted after selection so its file handle remains readable. *@
                 <InputFile OnChange="FileChanged" accept="image/*" capture="environment"
                            disabled="@IsBusy" class="gs-file-picker-camera-input"
-                           aria-label="Scan receipt with camera" />
+                           aria-label="@Loc["Scan receipt with camera"]" />
             </label>
         }
     </div>
@@ -52,17 +52,17 @@
                 <MudIcon Icon="@Icons.Material.Rounded.Check" />
             </span>
             <span class="gs-file-picker-copy">
-                <span class="gs-file-picker-title">@(FileName ?? "Receipt attached")</span>
-                <span class="gs-file-picker-subtitle">@AttachedDescription</span>
+                <span class="gs-file-picker-title">@(FileName ?? Loc["Receipt attached"].Value)</span>
+                <span class="gs-file-picker-subtitle">@(AttachedDescription ?? Loc["Receipt attached"])</span>
             </span>
             <div class="gs-file-picker-actions">
                 <MudButton HtmlTag="label" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                            Class="gs-btn-pill gs-file-picker-replace" Disabled="@IsBusy">
-                    Change file
+                    @Loc["Change file"]
                     @* A direct native input tap also works in phone browsers. Keep both
                        inputs mounted so replacing one never invalidates the other handle. *@
                     <InputFile OnChange="FileChanged" accept="@Accept" disabled="@IsBusy"
-                               class="gs-file-picker-replace-input" aria-label="Change receipt file" />
+                               class="gs-file-picker-replace-input" aria-label="@Loc["Change receipt file"]" />
                 </MudButton>
             @if (ReadRequested.HasDelegate)
             {
@@ -73,7 +73,7 @@
                            Class="gs-btn-pill gs-file-picker-read"
                            Disabled="@IsBusy"
                            OnClick="RequestReadAsync">
-                    @(HasTranscript ? "Read again" : "Read receipt")
+                    @(HasTranscript ? Loc["Read again"].Value : Loc["Read receipt"].Value)
                 </MudButton>
             }
             </div>
@@ -84,7 +84,7 @@
     {
         <div class="gs-file-picker-status" role="status">
             <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
-            <span>@BusyText</span>
+            <span>@(BusyText ?? Loc["Working on receipt…"])</span>
         </div>
     }
 
@@ -92,7 +92,7 @@
     {
         <div class="gs-file-picker-transcript" role="status">
             <MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />
-            <span>Receipt checked · @TranscriptItemCount item(s) ready to use.</span>
+            <span>@Loc["Receipt checked · {0} item(s) ready to use.", TranscriptItemCount].Value</span>
         </div>
     }
 
@@ -128,7 +128,7 @@
         catch (OperationCanceledException) { }
         catch (Exception)
         {
-            _cameraError = "Could not take a receipt photo. Check camera permission in your phone settings, or use Browse to attach a photo.";
+            _cameraError = Loc["Could not take a receipt photo. Check camera permission in your phone settings, or use Browse to attach a photo."].Value;
         }
         finally
         {
@@ -139,13 +139,13 @@
     [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
     [Parameter] public EventCallback ReadRequested { get; set; }
     [Parameter] public string Accept { get; set; } = ReceiptFileTypes.Accept;
-    [Parameter] public string Title { get; set; } = "Attach the original receipt";
-    [Parameter] public string Description { get; set; } = "Keep the file now. Read it when you are ready.";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
     [Parameter] public string? FileName { get; set; }
     [Parameter] public bool IsAttached { get; set; }
-    [Parameter] public string AttachedDescription { get; set; } = "Receipt attached";
+    [Parameter] public string? AttachedDescription { get; set; }
     [Parameter] public bool IsBusy { get; set; }
-    [Parameter] public string BusyText { get; set; } = "Working on receipt…";
+    [Parameter] public string? BusyText { get; set; }
     [Parameter] public bool HasTranscript { get; set; }
     [Parameter] public int TranscriptItemCount { get; set; }
     [Parameter] public string? Error { get; set; }

@@ -2,7 +2,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="gs-category-chips" @ref="_row">
+<div class="gs-category-chips" @ref="_row" data-more-label="@Loc["+{0} more"]">
     @foreach (var category in Spending.Categories)
     {
         <button type="button" class="gs-category-leader" @key="category.CategoryId"
@@ -14,8 +14,8 @@
         </button>
     }
     <button type="button" class="gs-category-toggle" aria-haspopup="dialog"
-            aria-label="View all categories" @onclick="ShowAll">
-        <span class="gs-category-more">View all</span>
+            aria-label="@Loc["View all categories"]" @onclick="ShowAll">
+        <span class="gs-category-more">@Loc["View all"]</span>
         <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" />
     </button>
 </div>
