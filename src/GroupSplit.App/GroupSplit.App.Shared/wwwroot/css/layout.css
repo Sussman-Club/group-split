@@ -474,17 +474,42 @@ html:not([data-gs-ready]) .gs-group-card {
 
 /* ------------------------------------------------------ theme switcher ---- */
 
+.gs-language-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.gs-language-copy {
+    min-width: 0;
+}
+
 .gs-language-picker h3 {
     margin: 0;
 }
 
 .gs-language-picker p {
-    margin: 4px 0 16px;
+    margin: 4px 0 0;
 }
 
 .gs-language-select {
     position: relative;
     width: min(100%, 320px);
+    flex: 0 1 320px;
+}
+
+@media (max-width: 600px) {
+    .gs-language-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .gs-language-select {
+        width: 100%;
+        flex: none;
+    }
 }
 
 .gs-language-select select {

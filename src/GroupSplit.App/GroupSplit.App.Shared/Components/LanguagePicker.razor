@@ -4,15 +4,19 @@
 @inject LanguagePreference Preference
 
 <div class="gs-card gs-card-pad gs-language-picker">
-    <label for="settings-language"><h3>@Loc["Language"]</h3></label>
-    <p class="gs-muted">@Loc["Your language follows you across devices."]</p>
-    <div class="gs-language-select">
-    <select id="settings-language" value="@Selected" @onchange="ChangeAsync" disabled="@_saving">
-        <option value="en">English</option>
-        <option value="es">Español</option>
-        <option value="pt">Português</option>
-    </select>
-    <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" aria-hidden="true" />
+    <div class="gs-language-row">
+        <div class="gs-language-copy">
+            <label for="settings-language"><h3>@Loc["Language"]</h3></label>
+            <p class="gs-muted">@Loc["Your language follows you across devices."]</p>
+        </div>
+        <div class="gs-language-select">
+            <select id="settings-language" value="@Selected" @onchange="ChangeAsync" disabled="@_saving">
+                <option value="en">English</option>
+                <option value="es">Español</option>
+                <option value="pt">Português</option>
+            </select>
+            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" aria-hidden="true" />
+        </div>
     </div>
     @if (_error)
     {
