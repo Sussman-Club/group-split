@@ -3021,9 +3021,6 @@
   <data name="Suggested: {0}" xml:space="preserve">
     <value>Sugerido: {0}</value>
   </data>
-  <data name="Suggestions for the loaded charges" xml:space="preserve">
-    <value>Sugestões para os débitos carregados</value>
-  </data>
   <data name="Taking you to the secure sign-in page…" xml:space="preserve">
     <value>A redirecionar para o acesso seguro…</value>
   </data>

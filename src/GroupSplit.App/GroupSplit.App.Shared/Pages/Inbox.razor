@@ -78,7 +78,6 @@
                     @ReviewLabel(review) (@State.Rows.Count(row => MatchesReview(row, review)))
                 </MudButton>
             }
-            <span class="note">@Loc["Suggestions for the loaded charges"]</span>
         </nav>
         @if (!VisibleRows.Any())
         {
