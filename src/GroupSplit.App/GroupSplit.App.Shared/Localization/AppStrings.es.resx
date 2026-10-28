@@ -283,7 +283,7 @@
     <value>Gastos</value>
   </data>
   <data name="Settlements" xml:space="preserve">
-    <value>Pagos de saldo</value>
+    <value>Pagos</value>
   </data>
   <data name="Guests joining" xml:space="preserve">
     <value>Invitados que se unen</value>
@@ -640,7 +640,7 @@
     <value>Saldar</value>
   </data>
   <data name="Settlement" xml:space="preserve">
-    <value>Pago de saldo</value>
+    <value>Pago</value>
   </data>
   <data name="Share" xml:space="preserve">
     <value>Parte</value>
