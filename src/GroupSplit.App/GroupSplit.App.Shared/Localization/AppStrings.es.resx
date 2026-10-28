@@ -4557,4 +4557,6 @@
   <data name="Copy.Lower.uncategorized" xml:space="preserve"><value>sin categoría</value></data>
   <data name="{0} expense · {1} spent" xml:space="preserve"><value>{0} gasto · {1} gastados</value></data>
   <data name="{0} expenses · {1} spent" xml:space="preserve"><value>{0} gastos · {1} gastados</value></data>
+  <data name="Clear this group with one payment" xml:space="preserve"><value>Liquida este grupo con un pago</value></data>
+  <data name="Clear this group with {0} payments" xml:space="preserve"><value>Liquida este grupo con {0} pagos</value></data>
 </root>

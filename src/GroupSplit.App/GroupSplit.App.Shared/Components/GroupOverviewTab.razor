@@ -55,7 +55,7 @@
                                     {
                                         <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                    OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
-                                            Request payment
+                                            @Loc["Request payment"]
                                         </MudButton>
                                     }
                                 </div>
@@ -101,7 +101,7 @@
         {
             <section class="gs-card gs-card-pad gs-reveal" style="--i: 1">
                 <div class="gs-card-title">
-                    <h2>@Loc["Clear this group with {0}", Payments(Plan.Count)]</h2>
+                    <h2>@(Plan.Count == 1 ? Loc["Clear this group with one payment"] : Loc["Clear this group with {0} payments", Plan.Count])</h2>
                     <span class="gs-tag neutral">@Loc["the shortest way"]</span>
                 </div>
                 <div class="gs-plan-list">
@@ -272,21 +272,10 @@
 
     private string People(int count) => count == 1 ? Loc["1 person"].Value : Loc["{0} people", count].Value;
 
-    private string Payments(int count) => count == 1 ? Loc["One payment"].Value : Loc["{0} payments", Word(count)].Value;
-
-    private string Word(int count) => count switch
-    {
-        2 => Loc["Two"],
-        3 => Loc["Three"],
-        4 => Loc["Four"],
-        5 => Loc["Five"],
-        _ => count.ToString()
-    };
-
     private bool Involves(SettlementPayment payment) =>
         payment.FromUserId == UserId || payment.ToUserId == UserId;
 
-    private string Who(Guid userId, string name) => userId == UserId ? "you" : Named(userId, name);
+    private string Who(Guid userId, string name) => userId == UserId ? Loc["Copy.Lower.you"] : Named(userId, name);
 
     /// <summary>
     /// The start of a plan line: "You", capitalised because it opens the sentence, or the
