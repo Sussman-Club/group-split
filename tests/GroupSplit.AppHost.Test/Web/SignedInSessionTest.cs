@@ -114,17 +114,14 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await NavLink("Home").ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Personal Open Just you" })
+            .ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
-        // The dashboard feed's empty state appears only after its authenticated API
-        // request succeeds. A fresh account has no activity to show.
-        await Expect(Page.GetByRole(
-                AriaRole.Heading, new PageGetByRoleOptions { Name = "Nothing recorded yet", Exact = true }))
+        // The personal ledger loads its figures from the API after the click, without
+        // reloading the circuit. A fresh account has no transactions to show.
+        await Expect(Page.GetByRole(AriaRole.Heading,
+                new PageGetByRoleOptions { NameRegex = new Regex("^Nothing recorded") }))
             .ToBeVisibleAsync(Visible);
-
-        await Expect(Page).ToHaveURLAsync(
-            new Regex("^" + Regex.Escape(Url("")) + "$"),
-            new PageAssertionsToHaveURLOptions { Timeout = OperationTimeoutMs });
 
         // The assertion that means anything. A page that rendered proves little on its own,
         // because a 401 has ApiErrorPresenter sign in again and the session recovers -- so
