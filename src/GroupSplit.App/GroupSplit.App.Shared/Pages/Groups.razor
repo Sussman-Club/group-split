@@ -29,7 +29,20 @@
 <LoadView Skeleton="SkeletonLayout.Groups" Loading="@(!GroupsService.IsReadyTask.IsCompleted || _retrying)" Failed="@(GroupsService.Position is null)" Retry="RetryAsync">
 
 
+<MudTextField @bind-Value="_search" Placeholder="@Loc["Search groups"]"
+              aria-label="@Loc["Search groups"]" Immediate="true" Clearable="true"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search"
+              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+
 <div class="gs-stack">
+    @if (IsSearching && Active.Count == 0 && Archived.Count == 0)
+    {
+        <div class="gs-card gs-empty" role="status">
+            <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+            <h3>@Loc["No groups match your search."]</h3>
+            <MudButton OnClick="@(() => _search = string.Empty)">@Loc["Clear search"]</MudButton>
+        </div>
+    }
     @if (Active.Count > 0)
     {
         <div class="gs-group-grid">
@@ -44,7 +57,7 @@
     @* Asked of the shared groups: everybody has a personal one, so a new account would never
        be invited to make the group it came here for. Below the personal card, not instead
        of it. *@
-    @if (!GroupsService.Groups.Any(group => !group.IsPersonal))
+    @if (!IsSearching && !GroupsService.Groups.Any(group => !group.IsPersonal))
     {
         <div class="gs-card gs-empty" style="padding: 64px 24px">
             <MudIcon Icon="@Icons.Material.Rounded.Groups" />
@@ -99,12 +112,19 @@
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     // The personal group first, as the API lists it: it is the one everybody has.
+    private string _search = string.Empty;
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
+    private bool Matches(GroupResponse group) => !IsSearching ||
+        System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+            group.Name, _search.Trim(), System.Globalization.CompareOptions.IgnoreCase |
+            System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
     private List<GroupResponse> Active =>
-        [.. GroupsService.Groups.Where(group => !group.IsArchive)
+        [.. GroupsService.Groups.Where(group => !group.IsArchive && Matches(group))
             .OrderByDescending(group => group.IsPersonal).ThenBy(group => group.Name)];
 
     private List<GroupResponse> Archived =>
-        [.. GroupsService.Groups.Where(group => group.IsArchive).OrderBy(group => group.Name)];
+        [.. GroupsService.Groups.Where(group => group.IsArchive && Matches(group)).OrderBy(group => group.Name)];
 
     /// <summary>
     /// What this person is owed or owes in one group. Read from the position endpoint,

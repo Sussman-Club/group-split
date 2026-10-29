@@ -4656,4 +4656,6 @@
   <data name="Load more" xml:space="preserve">
     <value>Carregar mais</value>
   </data>
+  <data name="Search groups" xml:space="preserve"><value>Pesquisar grupos</value></data>
+  <data name="No groups match your search." xml:space="preserve"><value>Nenhum grupo corresponde à sua pesquisa.</value></data>
 </root>
