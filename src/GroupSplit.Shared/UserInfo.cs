@@ -28,8 +28,14 @@ public record UserInfo(
     string? PreferredLanguage = null,
     Guid? OnboardingGroupId = null,
     bool OnboardingChecklistDismissed = false,
-    bool OnboardingExpenseDismissed = false)
+    bool OnboardingExpenseDismissed = false,
+    bool OnboardingBankDismissed = false)
 {
+    /// <summary>Onboarding progress, grouped for current clients. The flat fields remain
+    /// on the wire for older clients during the transition.</summary>
+    public OnboardingInfo Onboarding => new(OnboardingGroupId, OnboardingChecklistDismissed,
+        OnboardingExpenseDismissed, OnboardingBankDismissed);
+
     /// <summary>The name <see cref="IsGuest"/> had while guests were called pending invitees.</summary>
     /// <remarks>
     /// Still written, so a client built before the rename -- the published CLI, an agent

@@ -29,9 +29,7 @@ public class User : Entity
     public string? LastName { get; set; }
 
     public string? PreferredLanguage { get; set; }
-    public Guid? OnboardingGroupId { get; set; }
-    public bool OnboardingChecklistDismissed { get; set; }
-    public bool OnboardingExpenseDismissed { get; set; }
+    public OnboardingState Onboarding { get; set; } = new();
 
     /// <summary>
     /// Null for anybody who has not signed in. Unique where it is set, so two accounts

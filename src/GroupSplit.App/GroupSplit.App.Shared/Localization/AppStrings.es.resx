@@ -4719,4 +4719,9 @@
   <data name="Copy.GroupNameExample" xml:space="preserve"><value>Por ejemplo, Casa</value></data>
   <data name="Copy.GroupDescriptionExample" xml:space="preserve"><value>Por ejemplo, alquiler, compras y facturas</value></data>
   <data name="Copy.DefaultHouseholdDescription" xml:space="preserve"><value>Gastos compartidos de nuestra casa, incluidos el alquiler, las compras y las facturas.</value></data>
+  <data name="{0} of 2" xml:space="preserve"><value>{0} de 2</value></data>
+  <data name="Check for an existing expense" xml:space="preserve"><value>Comprueba si el gasto ya existe</value></data>
+  <data name="Choose where it belongs" xml:space="preserve"><value>Elige dónde registrarlo</value></data>
+  <data name="If you already recorded this payment, attach it to that expense to avoid counting it twice." xml:space="preserve"><value>Si ya registraste este pago, vincúlalo al gasto existente para no contarlo dos veces.</value></data>
+  <data name="For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it." xml:space="preserve"><value>Para un gasto nuevo, elige un grupo o Personal. Si es compartido, revisa la categoría y la parte de cada persona antes de añadirlo.</value></data>
 </root>

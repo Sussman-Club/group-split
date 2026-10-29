@@ -262,9 +262,9 @@ public class GroupService(
 
         // Only the creator's first shared group starts onboarding. Existing members and
         // later groups do not receive a fresh checklist.
-        if (user.OnboardingGroupId is null && !await context.Set<GroupMembership>().IgnoreQueryFilters()
+        if (user.Onboarding.GroupId is null && !await context.Set<GroupMembership>().IgnoreQueryFilters()
                 .AnyAsync(membership => membership.UserId == user.Id && membership.GroupId != user.Id, cancellationToken))
-            user.OnboardingGroupId = group.Id;
+            user.Onboarding.GroupId = group.Id;
 
         context.Add(group);
         await context.SaveChangesAsync(cancellationToken);

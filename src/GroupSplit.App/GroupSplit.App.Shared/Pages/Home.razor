@@ -104,7 +104,7 @@ else
         _checkedUser = user.Id;
         var version = ++_checkVersion;
         _checkingStart = false;
-        if (user.OnboardingGroupId is not null) return;
+        if (user.Onboarding.GroupId is not null) return;
 
         _checkingStart = true;
         var redirect = false;

@@ -178,8 +178,8 @@ else if (NotFound)
     private bool HasPeople => GroupsService.Balance?.NetBalances.Count() > 1;
     private bool HasExpense => GroupsService.Transactions?.TotalCount > 0;
     private int CompletedSteps => 1 + (HasPeople ? 1 : 0) + (HasExpense ? 1 : 0);
-    private bool ShowGettingStarted => UserInfo?.OnboardingGroupId == GroupId &&
-        !UserInfo.OnboardingChecklistDismissed && !_checklistDismissed && CompletedSteps < 3;
+    private bool ShowGettingStarted => UserInfo?.Onboarding.GroupId == GroupId &&
+        !UserInfo.Onboarding.ChecklistDismissed && !_checklistDismissed && CompletedSteps < 3;
 
     private async Task DismissChecklistAsync()
     {
@@ -358,7 +358,7 @@ else if (NotFound)
     private async Task CompleteChecklistIfDoneAsync()
     {
         if (_initializing || _checklistSaving || _checklistDismissed || Group is null ||
-            UserInfo?.OnboardingGroupId != GroupId || UserInfo.OnboardingChecklistDismissed || CompletedSteps < 3)
+            UserInfo?.Onboarding.GroupId != GroupId || UserInfo.Onboarding.ChecklistDismissed || CompletedSteps < 3)
             return;
 
         _checklistSaving = true;
@@ -454,7 +454,7 @@ else if (NotFound)
             { x => x.SelectedGroupId, GroupId },
             { x => x.SelectedGroupName, Group?.Name },
             { x => x.SelectedGroupCurrency, Group?.Currency },
-            { x => x.ShowFirstExpenseGuide, UserInfo?.OnboardingGroupId == GroupId && !UserInfo.OnboardingExpenseDismissed && !HasExpense }
+            { x => x.ShowFirstExpenseGuide, UserInfo?.Onboarding.GroupId == GroupId && !UserInfo.Onboarding.ExpenseDismissed && !HasExpense }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>(Loc["Add an expense"].Value, parameters, options);

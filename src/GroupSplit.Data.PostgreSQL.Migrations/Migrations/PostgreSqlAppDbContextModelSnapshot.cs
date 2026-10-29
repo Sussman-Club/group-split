@@ -1180,15 +1180,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<bool>("OnboardingChecklistDismissed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("OnboardingExpenseDismissed")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid?>("OnboardingGroupId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("PreferredLanguage")
                         .HasColumnType("text");
 
@@ -1734,6 +1725,41 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Transaction");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.User", b =>
+                {
+                    b.OwnsOne("GroupSplit.Data.Entities.OnboardingState", "Onboarding", b1 =>
+                        {
+                            b1.Property<Guid>("UserId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("BankDismissed")
+                                .HasColumnType("boolean")
+                                .HasColumnName("OnboardingBankDismissed");
+
+                            b1.Property<bool>("ChecklistDismissed")
+                                .HasColumnType("boolean")
+                                .HasColumnName("OnboardingChecklistDismissed");
+
+                            b1.Property<bool>("ExpenseDismissed")
+                                .HasColumnType("boolean")
+                                .HasColumnName("OnboardingExpenseDismissed");
+
+                            b1.Property<Guid?>("GroupId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("OnboardingGroupId");
+
+                            b1.HasKey("UserId");
+
+                            b1.ToTable("User");
+
+                            b1.WithOwner()
+                                .HasForeignKey("UserId");
+                        });
+
+                    b.Navigation("Onboarding")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.UserIdentity", b =>

@@ -24,7 +24,7 @@ public class FirstTimeAccountTest
         var user = await db.Set<User>().Include(x => x.Groups).SingleAsync(x => x.Email == "nueva@test.com", ct);
         Assert.Equal(user.Id, Assert.Single(user.Groups).Id);
         Assert.Empty(await db.Set<Transaction>().Where(x => x.UserId == user.Id).ToListAsync(ct));
-        Assert.Null(user.OnboardingGroupId);
+        Assert.Null(user.Onboarding.GroupId);
     }
 
     private static string SourceFile([System.Runtime.CompilerServices.CallerFilePath] string file = "") => file;

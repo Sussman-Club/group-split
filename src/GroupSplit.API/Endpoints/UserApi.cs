@@ -61,8 +61,9 @@ public static class UserApi
             return group.MapPut("/me/onboarding/{part}/dismiss", async (string part,
                 ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
             {
-                if (part == "checklist") currentUser.User.OnboardingChecklistDismissed = true;
-                else if (part == "expense") currentUser.User.OnboardingExpenseDismissed = true;
+                if (part == "checklist") currentUser.User.Onboarding.ChecklistDismissed = true;
+                else if (part == "expense") currentUser.User.Onboarding.ExpenseDismissed = true;
+                else if (part == "bank") currentUser.User.Onboarding.BankDismissed = true;
                 else return Results.BadRequest();
                 await db.SaveChangesAsync(ct);
                 return Results.NoContent();
@@ -95,9 +96,10 @@ public static class UserApi
                 {
                     var user = currentUser.User;
                     var userInfo = new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
-                        PreferredLanguage: user.PreferredLanguage, OnboardingGroupId: user.OnboardingGroupId,
-                        OnboardingChecklistDismissed: user.OnboardingChecklistDismissed,
-                        OnboardingExpenseDismissed: user.OnboardingExpenseDismissed);
+                        PreferredLanguage: user.PreferredLanguage, OnboardingGroupId: user.Onboarding.GroupId,
+                        OnboardingChecklistDismissed: user.Onboarding.ChecklistDismissed,
+                        OnboardingExpenseDismissed: user.Onboarding.ExpenseDismissed,
+                        OnboardingBankDismissed: user.Onboarding.BankDismissed);
                     return Results.Ok(userInfo);
                 })
                 .WithName("GetCurrentUser")

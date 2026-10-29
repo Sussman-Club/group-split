@@ -4719,4 +4719,9 @@
   <data name="Copy.GroupNameExample" xml:space="preserve"><value>For example, Home</value></data>
   <data name="Copy.GroupDescriptionExample" xml:space="preserve"><value>For example, rent, groceries and bills</value></data>
   <data name="Copy.DefaultHouseholdDescription" xml:space="preserve"><value>Shared expenses for our home, including rent, groceries and bills.</value></data>
+  <data name="{0} of 2" xml:space="preserve"><value>{0} of 2</value></data>
+  <data name="Check for an existing expense" xml:space="preserve"><value>Check for an existing expense</value></data>
+  <data name="Choose where it belongs" xml:space="preserve"><value>Choose where it belongs</value></data>
+  <data name="If you already recorded this payment, attach it to that expense to avoid counting it twice." xml:space="preserve"><value>If you already recorded this payment, attach it to that expense to avoid counting it twice.</value></data>
+  <data name="For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it." xml:space="preserve"><value>For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it.</value></data>
 </root>

@@ -48,10 +48,10 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var service = GetService<IGroupService>();
         var user = GetService<ICurrentUser>().User;
         var first = await service.CreateGroup(new CreateGroupRequest { Name = "First" }, TestContext.Current.CancellationToken);
-        Assert.Equal(first.Id, user.OnboardingGroupId);
+        Assert.Equal(first.Id, user.Onboarding.GroupId);
         var second = await service.CreateGroup(new CreateGroupRequest { Name = "Second" }, TestContext.Current.CancellationToken);
-        Assert.NotEqual(second.Id, user.OnboardingGroupId);
-        Assert.Equal(first.Id, user.OnboardingGroupId);
+        Assert.NotEqual(second.Id, user.Onboarding.GroupId);
+        Assert.Equal(first.Id, user.Onboarding.GroupId);
     }
 
     [Fact]

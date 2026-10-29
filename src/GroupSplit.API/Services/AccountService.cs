@@ -146,9 +146,10 @@ public sealed class AccountService(
         user.FirstName = null;
         user.LastName = null;
         user.PreferredLanguage = null;
-        user.OnboardingGroupId = null;
-        user.OnboardingChecklistDismissed = false;
-        user.OnboardingExpenseDismissed = false;
+        user.Onboarding.GroupId = null;
+        user.Onboarding.ChecklistDismissed = false;
+        user.Onboarding.ExpenseDismissed = false;
+        user.Onboarding.BankDismissed = false;
         user.Email = null;
         user.Kind = UserKind.Deleted;
         context.RemoveRange(await context.Set<PushDevice>()
