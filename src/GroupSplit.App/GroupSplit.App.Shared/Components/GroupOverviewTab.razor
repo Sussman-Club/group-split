@@ -33,7 +33,7 @@
                     <Money Value="UserBalance" Animate Class="gs-hero-amount" />
                     @* Guests count: they are people the group shares costs with, and what
                        they owe is owed to somebody like anybody else's. *@
-                    <div class="gs-hero-sub">by @People(balance.OwedToYou.Count()) in @GroupName</div>
+                    <div class="gs-hero-sub">@Loc["by {0} in {1}", People(balance.OwedToYou.Count()), GroupName].Value</div>
                     <div class="gs-hero-list">
                         @foreach (var debt in balance.OwedToYou)
                         {
@@ -67,7 +67,7 @@
                 {
                     <div class="gs-eyebrow">@Loc["You owe"]</div>
                     <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
-                    <div class="gs-hero-sub">to @People(balance.YouOwed.Count()) in @GroupName</div>
+                    <div class="gs-hero-sub">@Loc["to {0} in {1}", People(balance.YouOwed.Count()), GroupName].Value</div>
                     <div class="gs-hero-list">
                         @* Both sides can record a repayment. The person who actually did the
                            paying had no way to say so, and had to ask the other one to. *@
@@ -81,7 +81,7 @@
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
-                                        I paid
+                                        @Loc["I paid"]
                                     </MudButton>
                                 </div>
                             </div>
@@ -189,7 +189,7 @@
                                     @member.UserName
                                     @if (member.UserId == UserId)
                                     {
-                                        <span class="gs-muted" style="font-weight: 500"> (you)</span>
+                                        <span class="gs-muted" style="font-weight: 500">@($" {Loc["(you)"].Value}")</span>
                                     }
                                     @* A guest's balance is like anybody's, and they are in the
                                        plan too. The mark is so the name is not read as a

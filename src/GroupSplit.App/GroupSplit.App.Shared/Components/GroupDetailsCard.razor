@@ -16,11 +16,14 @@
     and Save is the only thing left to press.
 *@
 
-<section class="gs-card gs-card-pad" aria-labelledby="group-details-heading">
+<section class="gs-card gs-card-pad gs-group-details-form" aria-labelledby="group-details-heading">
     <div class="gs-card-title">
-        <div>
-            <div class="gs-eyebrow">@Loc["Group settings"]</div>
-            <h2 id="group-details-heading">@Loc["Group details"]</h2>
+        <div class="gs-group-details-identity">
+            <div class="gs-group-details-mark" aria-hidden="true"><MudIcon Icon="@Icons.Material.Rounded.Tune" /></div>
+            <div class="gs-group-details-intro">
+                <h2 id="group-details-heading">@Loc["Group details"]</h2>
+                <p>@(Group.IsPersonal ? Loc["Your spending group and its activity preferences."].Value : Loc["Your group's identity and shared expense preferences."].Value)</p>
+            </div>
         </div>
         @if (Group.IsArchive)
         {
@@ -29,7 +32,7 @@
     </div>
 
     <MudForm @ref="_form" Model="@_edit">
-        <div class="gs-stack" style="gap: 20px">
+        <div class="gs-group-details-fields">
             <div class="gs-group-setting-section" aria-labelledby="group-name-heading">
                 <div class="gs-group-setting-heading">
                     <div>
@@ -48,7 +51,7 @@
                               Immediate="true" />
             </div>
 
-            <div class="gs-group-setting-section" aria-labelledby="group-description-heading">
+            <div class="gs-group-setting-section gs-group-description" aria-labelledby="group-description-heading">
                 <div class="gs-group-setting-heading">
                     <div>
                         <h3 id="group-description-heading" class="gs-group-setting-title">@Loc["Description"]</h3>
@@ -95,9 +98,6 @@
             {
             <div class="gs-group-setting-section gs-group-default-split" aria-labelledby="default-split-heading">
                 <div class="gs-group-setting-heading">
-                    <span class="gs-group-setting-icon" aria-hidden="true">
-                        <MudIcon Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" />
-                    </span>
                     <div>
                         <h3 id="default-split-heading" class="gs-group-setting-title">@Loc["Default split"]</h3>
                         <span class="gs-group-setting-description">@Loc["Used when an expense has no category."]</span>
@@ -142,20 +142,24 @@
             <MudButton Variant="Variant.Text" Class="gs-btn-quiet" OnClick="@Discard">@Loc["Discard"]</MudButton>
         }
 
-        @* One tap, no confirmation: archiving hides the group from this person's own list
-           and nothing else, and the same button puts it back. Not for the personal group,
-           which is where their own spending goes whatever else they tidy away. *@
-        @if (!Group.IsPersonal)
-        {
-            <MudButton Variant="Variant.Text" Size="Size.Small"
-                       Color="@(Group.IsArchive ? Color.Primary : Color.Error)"
-                       Class="gs-btn-quiet gs-group-setting-archive"
+    </div>
+
+    @if (!Group.IsPersonal)
+    {
+        <div class="gs-group-archive-row">
+            <div>
+                <h3>@(Group.IsArchive ? Loc["Restore group"].Value : Loc["Archive group"].Value)</h3>
+                <p>@(Group.IsArchive ? Loc["Show this group in your active groups again."].Value : Loc["Hide this group from your active list. You can restore it anytime."].Value)</p>
+            </div>
+            <MudButton Variant="Variant.Outlined" Size="Size.Medium" Color="Color.Primary"
+                       Class="gs-group-setting-archive"
                        StartIcon="@(Group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
                        OnClick="@ToggleArchiveAsync">
                 @(Group.IsArchive ? Loc["Restore group"].Value : Loc["Archive group"].Value)
             </MudButton>
-        }
-    </div>
+        </div>
+    }
+
 </section>
 
 @code {

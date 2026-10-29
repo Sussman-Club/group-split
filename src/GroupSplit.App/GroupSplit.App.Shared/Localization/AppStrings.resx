@@ -4557,4 +4557,112 @@
   <data name="Clear this group with one payment" xml:space="preserve"><value>Clear this group with one payment</value></data>
   <data name="Clear this group with {0} payments" xml:space="preserve"><value>Clear this group with {0} payments</value></data>
   <data name="Everything" xml:space="preserve"><value>Everything</value></data>
+  <data name="I paid" xml:space="preserve">
+    <value>I paid</value>
+  </data>
+  <data name="by {0} in {1}" xml:space="preserve">
+    <value>by {0} in {1}</value>
+  </data>
+  <data name="to {0} in {1}" xml:space="preserve">
+    <value>to {0} in {1}</value>
+  </data>
+  <data name="(you)" xml:space="preserve">
+    <value>(you)</value>
+  </data>
+  <data name="· history stays in the group" xml:space="preserve">
+    <value>· history stays in the group</value>
+  </data>
+  <data name="Copy the join link" xml:space="preserve">
+    <value>Copy the join link</value>
+  </data>
+  <data name="Entry" xml:space="preserve">
+    <value>Entry</value>
+  </data>
+  <data name="Copy.Sentence.Amount" xml:space="preserve">
+    <value>Amount</value>
+  </data>
+  <data name="Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Copy.Sentence.Item" xml:space="preserve">
+    <value>Item</value>
+  </data>
+  <data name="Quantity" xml:space="preserve">
+    <value>Quantity</value>
+  </data>
+  <data name="Options" xml:space="preserve">
+    <value>Options</value>
+  </data>
+  <data name="expires {0:d MMM}" xml:space="preserve">
+    <value>expires {0:d MMM}</value>
+  </data>
+  <data name="Confirm {0} in {1}" xml:space="preserve">
+    <value>Confirm {0} in {1}</value>
+  </data>
+  <data name="Copy.Lower.expense" xml:space="preserve">
+    <value>expense</value>
+  </data>
+  <data name="Add your first category" xml:space="preserve">
+    <value>Add your first category</value>
+  </data>
+  <data name="Show this group in your active groups again." xml:space="preserve">
+    <value>Show this group in your active groups again.</value>
+  </data>
+  <data name="Hide this group from your active list. You can restore it anytime." xml:space="preserve">
+    <value>Hide this group from your active list. You can restore it anytime.</value>
+  </data>
+  <data name="Name, description and defaults" xml:space="preserve">
+    <value>Change the name, description and default settings.</value>
+  </data>
+  <data name="Members, guests and invitations" xml:space="preserve">
+    <value>Add members or guests and manage their access links.</value>
+  </data>
+  <data name="Organise expenses" xml:space="preserve">
+    <value>Organise expenses with labels such as groceries or rent.</value>
+  </data>
+  <data name="Choose how expenses are shared" xml:space="preserve">
+    <value>Save how expenses are divided between people in the group.</value>
+  </data>
+  <data name="Back to group settings" xml:space="preserve">
+    <value>Back to group settings</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Your spending group and its activity preferences." xml:space="preserve">
+    <value>Your spending group and its activity preferences.</value>
+  </data>
+  <data name="Your group's identity and shared expense preferences." xml:space="preserve">
+    <value>Your group's identity and shared expense preferences.</value>
+  </data>
+  <data name="Filters" xml:space="preserve">
+    <value>Filters</value>
+  </data>
+  <data name="View all time" xml:space="preserve">
+    <value>View all time</value>
+  </data>
+  <data name="Nothing recorded {0}" xml:space="preserve">
+    <value>Nothing recorded {0}</value>
+  </data>
+  <data name="Entry type: {0}" xml:space="preserve">
+    <value>Entry type: {0}</value>
+  </data>
+  <data name="{0} expense" xml:space="preserve">
+    <value>{0} expense</value>
+  </data>
+  <data name="{0} expenses" xml:space="preserve">
+    <value>{0} expenses</value>
+  </data>
+  <data name="Load more" xml:space="preserve">
+    <value>Load more</value>
+  </data>
+  <data name="Search groups" xml:space="preserve"><value>Search groups</value></data>
+  <data name="No groups match your search." xml:space="preserve"><value>No groups match your search.</value></data>
+  <data name="Categories organise expenses. Each category can use a split rule to choose how its expenses are shared." xml:space="preserve"><value>Categories organise expenses. Each category can use a split rule to choose how its expenses are shared.</value></data>
+  <data name="Your share, this month" xml:space="preserve"><value>Your share, this month</value></data>
+  <data name="Payment amount" xml:space="preserve"><value>Payment amount</value></data>
+  <data name="Settlement details" xml:space="preserve"><value>Settlement details</value></data>
+  <data name="Who paid whom and when" xml:space="preserve"><value>Who paid whom and when</value></data>
+  <data name="Search categories" xml:space="preserve"><value>Search categories</value></data>
+  <data name="Search split rules" xml:space="preserve"><value>Search split rules</value></data>
 </root>

@@ -26,7 +26,7 @@
         <h2>@Loc["Join link"]</h2>
         @if (_link is not null)
         {
-            <span class="gs-tag">expires @Clock.Local(_link.ExpiresAt).ToString("d MMM")</span>
+            <span class="gs-tag">@Loc["expires {0:d MMM}", Clock.Local(_link.ExpiresAt)]</span>
         }
     </div>
 
@@ -55,7 +55,7 @@
                       Label="@Loc["Anyone with this link can join"]"
                       Adornment="Adornment.End"
                       AdornmentIcon="@Icons.Material.Rounded.ContentCopy"
-                      AdornmentAriaLabel="Copy the join link"
+                      AdornmentAriaLabel="@Loc["Copy the join link"]"
                       OnAdornmentClick="@CopyAsync" />
 
         <div class="meta" style="padding-top: 8px">

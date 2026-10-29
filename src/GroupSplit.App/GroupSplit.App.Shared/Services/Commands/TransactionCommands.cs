@@ -134,7 +134,7 @@ public sealed class TransactionCommands(
             await transactions.DeleteTransactionAsync(transactionId, ct);
             snackbar.Add(UiText.Format($"{name} deleted."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
-        }, UiText.Format($"Could not delete the {noun}."));
+        }, UiText.Format($"Could not delete the {(noun == "expense" ? UiText.Get("Copy.Lower.expense") : noun)}."));
 
     /// <summary>
     /// Says out loud anything the dialog cannot say for itself.

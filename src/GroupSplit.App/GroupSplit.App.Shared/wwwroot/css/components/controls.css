@@ -113,18 +113,11 @@
     transform: scale(1.1);
 }
 
-/*
-    The secondary button the system did not have.
-
-    .gs-btn-glass was doing this job at seven call sites, but every one of its rules is
-    scoped to .gs-hero -- it is white-on-teal glass for the balance cards. At the two sites
-    outside a hero (the group toolbar's "Settle up", the home card's "Review") it therefore
-    styled nothing at all, and a Mud text button with no chrome reads as a link rather than
-    a control. This is the ordinary-surface version: a pill that pairs with the filled one
-    beside it and still gives it the emphasis.
-*/
-.gs-btn-quiet {
-    background: var(--gs-surface-2) !important;
+/* Shared action pill. Balance cards override these surfaces with white glass. */
+.gs-btn-quiet,
+.gs-btn-glass,
+:where(.mud-button-root.mud-button-text:not(.gs-btn-danger):not(.mud-button-text-error)) {
+    background: color-mix(in srgb, var(--gs-ink) 6%, var(--gs-surface)) !important;
     border: 1px solid var(--gs-line-strong) !important;
     color: var(--gs-ink-2) !important;
     transition: background var(--gs-fast) var(--gs-ease),
@@ -133,8 +126,10 @@
                 transform var(--gs-base) var(--gs-ease-spring) !important;
 }
 
-.gs-btn-quiet:hover {
-    background: var(--gs-surface-3) !important;
+.gs-btn-quiet:where(:not(.mud-disabled)):hover,
+.gs-btn-glass:where(:not(.mud-disabled)):hover,
+:where(.mud-button-root.mud-button-text:not(.gs-btn-danger):not(.mud-button-text-error):not(.mud-disabled)):hover {
+    background: color-mix(in srgb, var(--gs-ink) 11%, var(--gs-surface)) !important;
     color: var(--gs-ink) !important;
 }
 

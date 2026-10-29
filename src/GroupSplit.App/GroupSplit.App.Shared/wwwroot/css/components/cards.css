@@ -88,16 +88,28 @@
     flex-wrap: nowrap;
     gap: 16px;
     min-width: 0;
+    width: 100%;
 }
 
 /* The one thing allowed to shrink. Without it the block claims its min-content width and
    nowrap turns a wrap into an overflow, which is the worse of the two failures. */
 .gs-identity-who {
     min-width: 0;
+    flex: 1 1 auto;
 }
 
 /* A long group name breaks rather than running off the edge -- "Weekend in Lisbon" at
    2.25rem is wider than a phone. */
 .gs-identity-who h1 {
     overflow-wrap: anywhere;
+}
+
+.gs-identity .gs-group-header-archive { flex: 0 0 auto; min-height: 44px; margin-left: auto; }
+@media (max-width: 480px) {
+    .gs-identity .gs-group-header-archive { padding-inline: 10px; font-size: .75rem; }
+}
+
+@media (max-width: 380px) {
+    .gs-inline.gs-identity { flex-wrap: wrap; }
+    .gs-identity .gs-group-header-archive { flex-basis: 100%; }
 }
