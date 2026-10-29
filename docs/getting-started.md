@@ -102,6 +102,11 @@ password:
 | `sofia@test.com` | `GroupSplit123!` |
 | `mateo@test.com` | `GroupSplit123!` |
 | `priya@test.com` | `GroupSplit123!` |
+| `nueva@test.com` | `GroupSplit123!` |
+
+`nueva@test.com` starts with only its automatically created personal group and no
+expenses or shared groups. Use it to try first-group and first-expense onboarding.
+The seeder is additive: it does not reset this account after you use it.
 
 The password is `Keycloak:DefaultPassword` in the seeder's `appsettings.json`; a seed entry
 may name its own instead.

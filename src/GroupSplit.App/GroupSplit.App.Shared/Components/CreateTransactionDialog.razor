@@ -4,6 +4,7 @@
 @using GroupSplit.App.Shared.Services.Errors
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject IUsersClient UsersClient
 @inject ICategoriesClient CategoriesClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
@@ -109,11 +110,12 @@
                 }
 
                 <MudTextField @bind-Value="_model.Name"
-                              @bind-Value:after="OnNameChangedAsync"
                               For="@(() => _model.Name)"
                               Label="@Loc["What was it?"]"
                               Variant="Variant.Outlined"
                               Immediate="true"/>
+
+                @if (ShowGuide && _guideStep == 0) { @GuideTip }
 
                 <ExpenseDecisions UseSelectionSheets="true" ShowGroup="true"
                                   Groups="@(_groups.Where(g => !g.IsPersonal).Select(g => new ExpenseDecisions.GroupChoice(g.Id, g.Name)).ToList())"
@@ -137,6 +139,7 @@
                                   MerchantIdChanged="@OnMerchantChangedAsync"
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
+                @if (ShowGuide && _guideStep == 1) { @GuideTip }
                 <details class="gs-expense-disclosure" open="@_showDetailErrors">
                     <summary>@Loc["Note"]<span>@Loc["Optional"]</span></summary>
                     <div class="gs-expense-disclosure-body">
@@ -155,6 +158,7 @@
 
                 @if (IsShared)
                 {
+                    @if (ShowGuide && _guideStep == 2) { @GuideTip }
                     <details class="gs-expense-disclosure" open>
                         <summary>@Loc["People & shares"]<span>@Loc["Review how this expense is divided"]</span></summary>
                         <div class="gs-expense-disclosure-body">
@@ -208,6 +212,30 @@
     /// <summary>The result when a receipt has to be attached after the new expense exists.</summary>
     public sealed record Answer(CreateTransactionRequest Request, IBrowserFile File,
         SaveReceiptRequest? Receipt);
+
+    [Parameter] public bool ShowFirstExpenseGuide { get; set; }
+    private int _guideStep;
+    private bool _guideDismissed;
+    private bool ShowGuide => IsShared && ShowFirstExpenseGuide && !_guideDismissed;
+    private RenderFragment GuideTip => @<div class="gs-guide-tip" role="note">
+        <div class="gs-guide-head"><strong>@Loc["A quick tip"]</strong><span>@Loc["{0} of 3", _guideStep + 1]</span></div>
+        <strong>@(_guideStep switch { 0 => Loc["Start with the basics"].Value, 1 => Loc["Categories do more than organize"].Value, _ => Loc["Choose how to share"].Value })</strong>
+        <p>@(_guideStep switch { 0 => Loc["Enter the amount and what it was for, or read a receipt to fill in details."].Value, 1 => Loc["A category organizes spending and can suggest a split rule. You can set up categories and rules in group settings."].Value, _ => Loc["Review each person’s share. Choose an even split, custom amounts, or receipt items."].Value })</p>
+        <div class="gs-guide-actions"><MudButton OnClick="DismissGuideAsync">@Loc["Skip tips"]</MudButton><MudButton Color="Color.Primary" OnClick="NextGuideAsync">@(_guideStep == 2 ? Loc["Got it"].Value : Loc["Next"].Value)</MudButton></div>
+    </div>;
+    private async Task NextGuideAsync()
+    {
+        if (_guideStep < 2) _guideStep++;
+        else await DismissGuideAsync();
+    }
+    private async Task DismissGuideAsync()
+    {
+        if (await Errors.TryAsync(() => UsersClient.DismissOnboardingAsync("expense"), Loc["Could not save your preference."].Value))
+        {
+            _guideDismissed = true;
+            await Login.RefreshLoginAsync();
+        }
+    }
 
     /// <summary>Hides "paid by": the expenses page records what the caller paid.</summary>
     [Parameter] public bool DisablePayingUserSelection { get; set; }
@@ -321,23 +349,8 @@
     public void Dispose() => _previewing?.Cancel();
 
 
-    /// <summary>
-    /// Whether the expense is described well enough for the API to answer at all.
-    /// </summary>
-    /// <remarks>
-    /// The preview is the same request the save makes, so it is validated the same way: a
-    /// blank name or a zero amount comes back a 400. Asked on a form nobody has touched
-    /// yet, that reached the person as a warning that their shares did not add up.
-    /// </remarks>
     private string? Missing()
     {
-        // Zero, not "not positive": a negative amount is a refund, and it divides.
-        if (_model.Amount == 0m)
-            return Loc["Enter an amount to see how it divides."].Value;
-
-        if (string.IsNullOrWhiteSpace(_model.Name))
-            return Loc["Name it to see how it divides."].Value;
-
         if (_receipt is { } receipt && receipt.Total != _model.Amount)
             return Loc["Match the expense amount to the receipt total before splitting."].Value;
 
@@ -790,20 +803,6 @@
     private Task OnMoneyChangedAsync() => RefreshPreviewAsync();
 
     /// <summary>
-    /// Asks again only when naming it changed whether it can be asked about at all.
-    /// </summary>
-    /// <remarks>
-    /// The field is immediate, so this runs on every keystroke; a preview per letter of
-    /// "Dinner" is six round trips for an answer the name has no part in. What the name
-    /// decides is whether the API will answer at all, and that flips once.
-    /// </remarks>
-    private async Task OnNameChangedAsync()
-    {
-        if (Missing() != _awaiting)
-            await RefreshPreviewAsync();
-    }
-
-    /// <summary>
     /// Records the pick and resolves the name the chip will show.
     /// </summary>
     /// <remarks>
@@ -862,6 +861,18 @@
             return;
         }
 
+        // Zero divides to zero for everyone. No server preview is needed, and the save
+        // still validates the amount independently.
+        if (_model.Amount == 0m)
+        {
+            _previewing?.Cancel();
+            _preview = new SplitPreviewResponse(
+                _members.Select(member => new TransactionSplitResponse(member.Id, member.FullName, 0m, member.IsGuest)).ToList(), null);
+            _previewError = null;
+            StateHasChanged();
+            return;
+        }
+
         // What is on screen stays there while the new answer is out. It was blanked first
         // and rendered, which took the share list away by its own height and put it back a
         // few tens of milliseconds later -- a flinch on every pick, worst on the chips,
@@ -872,7 +883,10 @@
         _previewing = new CancellationTokenSource();
         var asked = _previewing.Token;
 
-        var preview = await Transactions.PreviewAsync(Request(), asked);
+        // The name does not affect a division. The preview endpoint validates a save
+        // request, so give its transient copy a name without changing the form value.
+        var request = Request() with { Name = string.IsNullOrWhiteSpace(_model.Name) ? "Preview" : _model.Name };
+        var preview = await Transactions.PreviewAsync(request, asked);
 
         // A newer ask started while this one was out, or the dialog has gone.
         if (asked.IsCancellationRequested)

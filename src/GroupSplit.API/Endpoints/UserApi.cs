@@ -21,6 +21,7 @@ public static class UserApi
 
             group.MapGetCurrentUser();
             group.MapSetCurrentUserLanguage();
+            group.MapDismissOnboarding();
             group.MapGetPosition();
             group.MapGetSettlementPlan();
             group.MapSettleWithPerson();
@@ -55,6 +56,20 @@ public static class UserApi
                 .ProducesValidationProblem();
         }
 
+        private RouteHandlerBuilder MapDismissOnboarding()
+        {
+            return group.MapPut("/me/onboarding/{part}/dismiss", async (string part,
+                ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
+            {
+                if (part == "checklist") currentUser.User.OnboardingChecklistDismissed = true;
+                else if (part == "expense") currentUser.User.OnboardingExpenseDismissed = true;
+                else return Results.BadRequest();
+                await db.SaveChangesAsync(ct);
+                return Results.NoContent();
+            }).WithName("DismissOnboarding").Produces(StatusCodes.Status204NoContent)
+                .Produces(StatusCodes.Status400BadRequest);
+        }
+
         private RouteHandlerBuilder MapExportPersonalData()
         {
             return group.MapGet("/me/export", async (IPersonalDataExport export, HttpContext http, CancellationToken ct) =>
@@ -80,7 +95,9 @@ public static class UserApi
                 {
                     var user = currentUser.User;
                     var userInfo = new UserInfo(user.Id, user.FirstName, user.LastName, user.Email,
-                        PreferredLanguage: user.PreferredLanguage);
+                        PreferredLanguage: user.PreferredLanguage, OnboardingGroupId: user.OnboardingGroupId,
+                        OnboardingChecklistDismissed: user.OnboardingChecklistDismissed,
+                        OnboardingExpenseDismissed: user.OnboardingExpenseDismissed);
                     return Results.Ok(userInfo);
                 })
                 .WithName("GetCurrentUser")

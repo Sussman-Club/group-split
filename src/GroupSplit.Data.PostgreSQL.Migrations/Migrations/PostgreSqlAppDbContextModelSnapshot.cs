@@ -1180,6 +1180,15 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<bool>("OnboardingChecklistDismissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("OnboardingExpenseDismissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("OnboardingGroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PreferredLanguage")
                         .HasColumnType("text");
 

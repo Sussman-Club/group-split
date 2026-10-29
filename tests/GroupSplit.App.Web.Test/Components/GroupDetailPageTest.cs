@@ -62,6 +62,36 @@ public class GroupDetailPageTest : ComponentTest
             .Add(page => page.Tab, tab));
 
     [Fact]
+    public void First_group_checklist_uses_the_group_and_its_progress()
+    {
+        var user = new UserInfo(Guid.NewGuid(), "Ana", null, null, OnboardingGroupId: Lisbon.Id);
+        var page = Render<GroupDetail>(parameters => parameters
+            .Add(x => x.GroupId, Lisbon.Id).AddCascadingValue(user));
+        page.WaitForAssertion(() => Assert.Contains("Let’s get Weekend in Lisbon started", page.Markup));
+        Assert.Contains("1 of 3 complete", page.Markup);
+        Assert.Contains("Add the people you share with", page.Markup);
+        Assert.Contains("Add your first expense", page.Markup);
+    }
+
+    [Fact]
+    public void Completed_checklist_is_saved_and_leaves_no_reopen_button()
+    {
+        var users = new Mock<IUsersClient>();
+        users.Setup(x => x.DismissOnboardingAsync("checklist", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(users.Object);
+        _state.SetupGet(x => x.Balance).Returns(new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Guid.NewGuid() }, new GroupNetBalance { UserId = Guid.NewGuid() }]
+        });
+        _state.SetupGet(x => x.Transactions).Returns(new PagedResponseOfTransactionResponse([], 1, 8, 1));
+        var user = new UserInfo(Guid.NewGuid(), "Ana", null, null, OnboardingGroupId: Lisbon.Id);
+        var page = Render<GroupDetail>(parameters => parameters.Add(x => x.GroupId, Lisbon.Id).AddCascadingValue(user));
+        page.WaitForAssertion(() => users.Verify(x => x.DismissOnboardingAsync("checklist", It.IsAny<CancellationToken>()), Times.Once));
+        Assert.Empty(page.FindAll(".gs-start"));
+        Assert.DoesNotContain("Getting started", page.Markup);
+    }
+
+    [Fact]
     public void Pending_group_figures_do_not_instantiate_the_tab()
     {
         var ready = new TaskCompletionSource();

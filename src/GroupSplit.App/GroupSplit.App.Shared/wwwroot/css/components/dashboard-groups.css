@@ -136,3 +136,24 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* A welcoming first shared group, without hiding the personal group above it. */
+.gs-first-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+    overflow: hidden;
+    background: var(--gs-surface-3);
+}
+.gs-first-home-copy { padding: clamp(28px, 4vw, 52px); align-self: center; }
+.gs-first-home-kicker { color: var(--gs-clay-deep); font-weight: 700; font-size: .8125rem; }
+.gs-first-home h2 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(1.9rem, 3vw, 2.8rem); line-height: 1.12; letter-spacing: -.025em; max-width: 15ch; margin: 12px 0; }
+.gs-first-home p { max-width: 42ch; color: var(--gs-ink-2); line-height: 1.6; margin: 0 0 22px; }
+.gs-first-home-note { display: block; max-width: 42ch; color: var(--gs-muted); font-size: .8125rem; line-height: 1.5; margin-top: 14px; }
+.gs-first-home-image { min-height: 330px; background: #d6b18d url("../../images/first-household.webp") 58% center / cover no-repeat; }
+:root[data-theme="dark"] .gs-first-home-kicker { color: var(--gs-clay); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gs-first-home-kicker { color: var(--gs-clay); } }
+@media (max-width: 650px) {
+    .gs-first-home { grid-template-columns: 1fr; }
+    .gs-first-home-copy { padding: 25px; }
+    .gs-first-home-image { min-height: 0; aspect-ratio: 16 / 9; background-position: center 58%; }
+}

@@ -51,6 +51,17 @@
     <DialogContent>
         <ReceiptReadLock IsLocked="@ReceiptBusy">
         <div class="gs-stack" style="gap: 16px">
+            <details class="gs-expense-disclosure">
+                <summary>@Loc["How to review this transaction"]</summary>
+                <div class="gs-expense-disclosure-body">
+                    <ol>
+                        <li>@Loc["Check whether this payment is already recorded. If it is, attach the bank transaction to the existing expense to avoid counting it twice."]</li>
+                        <li>@Loc["If it is new, choose a shared group or Personal. You can add a category to organize it and attach a receipt if you have one."]</li>
+                        <li>@Loc["For a shared expense, review the split and each person's share before filing it. A category may suggest a split rule, and you can choose another split."]</li>
+                        <li>@Loc["File the transaction to add it to your expenses. The amount and date shown here come from your bank."]</li>
+                    </ol>
+                </div>
+            </details>
             @* What the bank sent, in the same summary card the expense dialog uses for its
                own figures. It stands where the amount field stands there, because it is
                that -- the amount -- and the only difference is that nobody may type it. *@

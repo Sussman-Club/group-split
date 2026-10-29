@@ -43,6 +43,18 @@ public class GroupCreateTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task First_shared_group_starts_onboarding_only_once()
+    {
+        var service = GetService<IGroupService>();
+        var user = GetService<ICurrentUser>().User;
+        var first = await service.CreateGroup(new CreateGroupRequest { Name = "First" }, TestContext.Current.CancellationToken);
+        Assert.Equal(first.Id, user.OnboardingGroupId);
+        var second = await service.CreateGroup(new CreateGroupRequest { Name = "Second" }, TestContext.Current.CancellationToken);
+        Assert.NotEqual(second.Id, user.OnboardingGroupId);
+        Assert.Equal(first.Id, user.OnboardingGroupId);
+    }
+
+    [Fact]
     public async Task CreateGroup_MultipleCallsCreateSeparateGroups()
     {
         // Arrange

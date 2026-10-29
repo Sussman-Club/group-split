@@ -3,6 +3,9 @@
 @using GroupSplit.Shared
 @attribute [AllowAnonymous]
 @inject AppLinks AppLinks
+@inject IGroupsClient GroupsClient
+@inject IUsersClient UsersClient
+@inject NavigationManager Nav
 
 <PageTitle>@Loc["Group Split"]</PageTitle>
 
@@ -72,6 +75,10 @@
         </div>
     </section>
 }
+else if (_checkingStart)
+{
+    <LoadView Loading="true" />
+}
 else
 {
     <Dashboard UserInfo="UserInfo" />
@@ -79,4 +86,48 @@ else
 
 @code {
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
+    private bool _checkingStart;
+    private Guid? _checkedUser;
+    private int _checkVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = UserInfo;
+        if (user is null)
+        {
+            _checkedUser = null;
+            _checkVersion++;
+            _checkingStart = false;
+            return;
+        }
+        if (_checkedUser == user.Id) return;
+        _checkedUser = user.Id;
+        var version = ++_checkVersion;
+        _checkingStart = false;
+        if (user.OnboardingGroupId is not null) return;
+
+        _checkingStart = true;
+        var redirect = false;
+        try
+        {
+            // Personal is ordered first. Asking for two also reveals any shared group,
+            // including an archived one, without loading the full group list.
+            var groups = await GroupsClient.GetGroupsAsync(page: 1, pageSize: 2);
+            var activity = await UsersClient.GetCurrentUserActivityAsync(page: 1, pageSize: 1);
+            if (version == _checkVersion && UserInfo?.Id == user.Id &&
+                groups is not null && groups.Any(group => group.IsPersonal) &&
+                groups.All(group => group.IsPersonal) && activity is { TotalCount: 0 })
+                redirect = true;
+        }
+        catch (Exception)
+        {
+            // If either read fails, leave the dashboard to show its own retry controls.
+        }
+        finally
+        {
+            if (version == _checkVersion) _checkingStart = false;
+        }
+        if (redirect && version == _checkVersion && UserInfo?.Id == user.Id)
+            Nav.NavigateTo("/groups", replace: true);
+    }
 }

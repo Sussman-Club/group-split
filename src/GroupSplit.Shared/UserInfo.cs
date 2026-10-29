@@ -25,7 +25,10 @@ public record UserInfo(
     string? Email,
     bool IsGuest = false,
     bool IsPastMember = false,
-    string? PreferredLanguage = null)
+    string? PreferredLanguage = null,
+    Guid? OnboardingGroupId = null,
+    bool OnboardingChecklistDismissed = false,
+    bool OnboardingExpenseDismissed = false)
 {
     /// <summary>The name <see cref="IsGuest"/> had while guests were called pending invitees.</summary>
     /// <remarks>

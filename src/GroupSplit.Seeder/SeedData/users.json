@@ -85,5 +85,13 @@
       "E4B92C63-8A17-4D5E-9032-6F1A8C4B7D25",
       "D8F35A17-2C64-4B98-A501-7E9D3B6C0F42"
     ]
+  },
+  {
+    "Id": "B73167D4-A98E-4E76-B058-C2784CB783C1",
+    "FirstName": "Nueva",
+    "LastName": "Cuenta",
+    "Email": "nueva@test.com",
+    "ExternalUserId": "B7543994-9839-45D8-B955-4557CF940135",
+    "GroupIds": []
   }
 ]
