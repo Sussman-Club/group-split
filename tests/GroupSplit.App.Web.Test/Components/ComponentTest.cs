@@ -58,6 +58,7 @@ public abstract class ComponentTest : BunitContext
         // Answering "nobody" is a real state -- a page renders before the token is read --
         // and a test that cares about the highlight registers its own.
         Services.AddSingleton(Mock.Of<IUserLogin>());
+        Services.AddSingleton(Mock.Of<IUsersClient>());
 
         // The expense dialog reads the bill behind an expense, and nearly none has one. A
         // mock answering "no bill" keeps that read from being something every test about

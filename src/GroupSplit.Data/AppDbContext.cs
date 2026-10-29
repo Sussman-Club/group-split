@@ -56,6 +56,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(user => user.FirstName).HasMaxLength(64);
             entity.Property(user => user.LastName).HasMaxLength(64);
             entity.Property(user => user.Email).HasMaxLength(128);
+            entity.OwnsOne(user => user.Onboarding, onboarding =>
+            {
+                onboarding.Property(state => state.GroupId).HasColumnName("OnboardingGroupId");
+                onboarding.Property(state => state.ChecklistDismissed).HasColumnName("OnboardingChecklistDismissed");
+                onboarding.Property(state => state.ExpenseDismissed).HasColumnName("OnboardingExpenseDismissed");
+                onboarding.Property(state => state.BankDismissed).HasColumnName("OnboardingBankDismissed");
+            });
+
+            entity.Navigation(user => user.Onboarding).IsRequired();
 
             // By name, like LeftReason: a row read in psql should say what it is.
             entity.Property(user => user.Kind)

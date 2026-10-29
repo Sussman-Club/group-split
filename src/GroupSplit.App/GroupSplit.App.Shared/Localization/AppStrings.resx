@@ -4665,4 +4665,63 @@
   <data name="Who paid whom and when" xml:space="preserve"><value>Who paid whom and when</value></data>
   <data name="Search categories" xml:space="preserve"><value>Search categories</value></data>
   <data name="Search split rules" xml:space="preserve"><value>Search split rules</value></data>
+  <data name="Use a shared group for a household, trip, or other costs you share. Your personal group is for your own spending." xml:space="preserve"><value>Use a shared group for a household, trip, or other costs you share. Your personal group is for your own spending.</value></data>
+  <data name="Create a group and give it a name." xml:space="preserve"><value>Create a group and give it a name.</value></data>
+  <data name="Add people in group settings. They can join, or you can split with them as guests." xml:space="preserve"><value>Add people in group settings. They can join, or you can split with them as guests.</value></data>
+  <data name="Add expenses as you go. Group Split calculates balances so you can settle up." xml:space="preserve"><value>Add expenses as you go. Group Split calculates balances so you can settle up.</value></data>
+  <data name="A group keeps shared expenses together. Try a name like Home or Weekend trip." xml:space="preserve"><value>A group keeps shared expenses together. Try a name like Home or Weekend trip.</value></data>
+  <data name="Description (optional)" xml:space="preserve"><value>Description (optional)</value></data>
+  <data name="How to add an expense" xml:space="preserve"><value>How to add an expense</value></data>
+  <data name="Enter the amount and what it was for, or read a receipt to fill in details." xml:space="preserve"><value>Enter the amount and what it was for, or read a receipt to fill in details.</value></data>
+  <data name="Check the group, who paid, and the date. Tap a choice to change it." xml:space="preserve"><value>Check the group, who paid, and the date. Tap a choice to change it.</value></data>
+  <data name="A category helps organize spending. A category can also suggest a split rule; you can manage categories and rules in group settings." xml:space="preserve"><value>A category helps organize spending. A category can also suggest a split rule; you can manage categories and rules in group settings.</value></data>
+  <data name="Under People &amp; shares, review who shares the cost. Choose a split rule, enter shares by hand, or divide receipt items. The shares determine each person's balance." xml:space="preserve"><value>Under People &amp; shares, review who shares the cost. Choose a split rule, enter shares by hand, or divide receipt items. The shares determine each person's balance.</value></data>
+  <data name="Add the expense, then check balances in the group. Record payments when people settle up." xml:space="preserve"><value>Add the expense, then check balances in the group. Record payments when people settle up.</value></data>
+  <data name="For personal spending, choose your personal group; there are no shares to divide." xml:space="preserve"><value>For personal spending, choose your personal group; there are no shares to divide.</value></data>
+  <data name="Use categories to organize expenses and split rules to choose how costs are shared. You can set these up in group settings." xml:space="preserve"><value>Use categories to organize expenses and split rules to choose how costs are shared. You can set these up in group settings.</value></data>
+  <data name="Update the receipt details and items below, then save your changes." xml:space="preserve"><value>Update the receipt details and items below, then save your changes.</value></data>
+  <data name="Review the receipt details and items below. You can edit them or add a missing item, then choose Use this receipt to continue to the expense." xml:space="preserve"><value>Review the receipt details and items below. You can edit them or add a missing item, then choose Use this receipt to continue to the expense.</value></data>
+  <data name="Review the receipt details and items below. You can edit them or add a missing item, then save the receipt to this expense." xml:space="preserve"><value>Review the receipt details and items below. You can edit them or add a missing item, then save the receipt to this expense.</value></data>
+  <data name="How to review this transaction" xml:space="preserve"><value>How to review this transaction</value></data>
+  <data name="Check whether this payment is already recorded. If it is, attach the bank transaction to the existing expense to avoid counting it twice." xml:space="preserve"><value>Check whether this payment is already recorded. If it is, attach the bank transaction to the existing expense to avoid counting it twice.</value></data>
+  <data name="If it is new, choose a shared group or Personal. You can add a category to organize it and attach a receipt if you have one." xml:space="preserve"><value>If it is new, choose a shared group or Personal. You can add a category to organize it and attach a receipt if you have one.</value></data>
+  <data name="For a shared expense, review the split and each person's share before filing it. A category may suggest a split rule, and you can choose another split." xml:space="preserve"><value>For a shared expense, review the split and each person's share before filing it. A category may suggest a split rule, and you can choose another split.</value></data>
+  <data name="File the transaction to add it to your expenses. The amount and date shown here come from your bank." xml:space="preserve"><value>File the transaction to add it to your expenses. The amount and date shown here come from your bank.</value></data>
+  <data name="Let’s get {0} started" xml:space="preserve"><value>Let’s get {0} started</value></data>
+  <data name="A few steps will help you see where everyone stands." xml:space="preserve"><value>A few steps will help you see where everyone stands.</value></data>
+  <data name="Dismiss getting started" xml:space="preserve"><value>Dismiss getting started</value></data>
+  <data name="Getting started progress" xml:space="preserve"><value>Getting started progress</value></data>
+  <data name="{0} of 3 complete" xml:space="preserve"><value>{0} of 3 complete</value></data>
+  <data name="Create your group" xml:space="preserve"><value>Create your group</value></data>
+  <data name="Your group is ready to share." xml:space="preserve"><value>Your group is ready to share.</value></data>
+  <data name="Add the people you share with" xml:space="preserve"><value>Add the people you share with</value></data>
+  <data name="Invite them or add them as guests." xml:space="preserve"><value>Invite them or add them as guests.</value></data>
+  <data name="Add your first expense" xml:space="preserve"><value>Add your first expense</value></data>
+  <data name="We’ll help you choose how to split it." xml:space="preserve"><value>We’ll help you choose how to split it.</value></data>
+  <data name="Could not save your preference." xml:space="preserve"><value>Could not save your preference.</value></data>
+  <data name="A quick tip" xml:space="preserve"><value>A quick tip</value></data>
+  <data name="{0} of 3" xml:space="preserve"><value>{0} of 3</value></data>
+  <data name="Start with the basics" xml:space="preserve"><value>Start with the basics</value></data>
+  <data name="Categories do more than organize" xml:space="preserve"><value>Categories do more than organize</value></data>
+  <data name="Choose how to share" xml:space="preserve"><value>Choose how to share</value></data>
+  <data name="A category organizes spending and can suggest a split rule. You can set up categories and rules in group settings." xml:space="preserve"><value>A category organizes spending and can suggest a split rule. You can set up categories and rules in group settings.</value></data>
+  <data name="Review each person’s share. Choose an even split, custom amounts, or receipt items." xml:space="preserve"><value>Review each person’s share. Choose an even split, custom amounts, or receipt items.</value></data>
+  <data name="Skip tips" xml:space="preserve"><value>Skip tips</value></data>
+  <data name="Got it" xml:space="preserve"><value>Got it</value></data>
+  <data name="Getting started" xml:space="preserve"><value>Getting started</value></data>
+  <data name="Expense tips" xml:space="preserve"><value>Expense tips</value></data>
+  <data name="A place for your household" xml:space="preserve"><value>A place for your household</value></data>
+  <data name="A home, with the bills made clear." xml:space="preserve"><value>A home, with the bills made clear.</value></data>
+  <data name="Rent, groceries, utilities… Keep the expenses you share with your housemates together." xml:space="preserve"><value>Rent, groceries, utilities… Keep the expenses you share with your housemates together.</value></data>
+  <data name="Create a group for your home" xml:space="preserve"><value>Create a group for your home</value></data>
+  <data name="Add your housemates afterwards, whether or not they use the app." xml:space="preserve"><value>Add your housemates afterwards, whether or not they use the app.</value></data>
+  <data name="A group keeps shared expenses together." xml:space="preserve"><value>A group keeps shared expenses together.</value></data>
+  <data name="Copy.GroupNameExample" xml:space="preserve"><value>For example, Home</value></data>
+  <data name="Copy.GroupDescriptionExample" xml:space="preserve"><value>For example, rent, groceries and bills</value></data>
+  <data name="Copy.DefaultHouseholdDescription" xml:space="preserve"><value>Shared expenses for our home, including rent, groceries and bills.</value></data>
+  <data name="{0} of 2" xml:space="preserve"><value>{0} of 2</value></data>
+  <data name="Check for an existing expense" xml:space="preserve"><value>Check for an existing expense</value></data>
+  <data name="Choose where it belongs" xml:space="preserve"><value>Choose where it belongs</value></data>
+  <data name="If you already recorded this payment, attach it to that expense to avoid counting it twice." xml:space="preserve"><value>If you already recorded this payment, attach it to that expense to avoid counting it twice.</value></data>
+  <data name="For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it." xml:space="preserve"><value>For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it.</value></data>
 </root>

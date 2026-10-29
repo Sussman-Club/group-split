@@ -1,6 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Services.Commands;
+using GroupSplit.App.Shared.Services.Users;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -82,6 +83,23 @@ public class FileBankTransactionDialogTest : ComponentTest
                 }));
 
         return (provider, reference!);
+    }
+
+    [Fact]
+    public async Task Bank_tips_can_be_skipped_and_save_the_preference()
+    {
+        var login = new Mock<IUserLogin>();
+        login.SetupGet(x => x.User).Returns(Ana);
+        login.Setup(x => x.RefreshLoginAsync()).Returns(Task.CompletedTask);
+        Services.AddSingleton(login.Object);
+        var users = new Mock<IUsersClient>();
+        users.Setup(x => x.DismissOnboardingAsync("bank", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(users.Object);
+        var (provider, _) = await OpenAsync();
+        Assert.Contains("Check for an existing expense", provider.Markup);
+        await provider.FindAll("button").Single(x => x.TextContent.Trim() == "Skip tips").ClickAsync(new MouseEventArgs());
+        Assert.Empty(provider.FindAll(".gs-guide-tip"));
+        users.Verify(x => x.DismissOnboardingAsync("bank", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

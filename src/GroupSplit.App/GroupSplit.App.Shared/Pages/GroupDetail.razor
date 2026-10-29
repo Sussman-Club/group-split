@@ -13,6 +13,8 @@
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject LocalClock Clock
+@inject IUsersClient Users
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -81,6 +83,22 @@
             </a>
         </MudTooltip>
     </nav>
+
+    @if (ShowGettingStarted && Current == "balances")
+    {
+        <section class="gs-card gs-start" aria-labelledby="gs-start-title">
+            <div class="gs-start-head">
+                <div><h2 id="gs-start-title">@Loc["Let’s get {0} started", group.Name]</h2>
+                    <p>@Loc["A few steps will help you see where everyone stands."]</p></div>
+                <MudIconButton Icon="@Icons.Material.Rounded.Close" aria-label="@Loc["Dismiss getting started"]" OnClick="DismissChecklistAsync" />
+            </div>
+            <div class="gs-start-progress" role="progressbar" aria-label="@Loc["Getting started progress"]" aria-valuemin="0" aria-valuemax="3" aria-valuenow="@CompletedSteps"><span style="width: @(CompletedSteps * 100 / 3)%"></span></div>
+            <div class="gs-muted">@Loc["{0} of 3 complete", CompletedSteps]</div>
+            <div class="gs-start-row"><span class="gs-start-number is-done">✓</span><div><strong>@Loc["Create your group"]</strong><small>@Loc["Your group is ready to share."]</small></div></div>
+            <div class="gs-start-row"><span class="gs-start-number @(HasPeople ? "is-done" : "")">@(HasPeople ? "✓" : "2")</span><div><strong>@Loc["Add the people you share with"]</strong><small>@Loc["Invite them or add them as guests."]</small></div><MudButton Href="@Href("people")" Color="Color.Primary">@Loc["Add people"]</MudButton></div>
+            <div class="gs-start-row"><span class="gs-start-number @(HasExpense ? "is-done" : "")">@(HasExpense ? "✓" : "3")</span><div><strong>@Loc["Add your first expense"]</strong><small>@Loc["We’ll help you choose how to split it."]</small></div><MudButton OnClick="AddExpenseAsync" Color="Color.Primary">@Loc["Add expense"]</MudButton></div>
+        </section>
+    }
 
     @if (Current is "settings" or "people")
     {
@@ -155,6 +173,22 @@ else if (NotFound)
 
 @code {
     private bool _archiveBusy;
+    private bool _checklistDismissed;
+    private bool _checklistSaving;
+    private bool HasPeople => GroupsService.Balance?.NetBalances.Count() > 1;
+    private bool HasExpense => GroupsService.Transactions?.TotalCount > 0;
+    private int CompletedSteps => 1 + (HasPeople ? 1 : 0) + (HasExpense ? 1 : 0);
+    private bool ShowGettingStarted => UserInfo?.Onboarding.GroupId == GroupId &&
+        !UserInfo.Onboarding.ChecklistDismissed && !_checklistDismissed && CompletedSteps < 3;
+
+    private async Task DismissChecklistAsync()
+    {
+        if (await Errors.TryAsync(() => Users.DismissOnboardingAsync("checklist"), Loc["Could not save your preference."].Value))
+        {
+            _checklistDismissed = true;
+            await Login.RefreshLoginAsync();
+        }
+    }
 
     private async Task ToggleArchiveAsync()
     {
@@ -315,7 +349,22 @@ else if (NotFound)
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
-    private void ReRender() => InvokeAsync(StateHasChanged);
+    private void ReRender() => _ = InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        await CompleteChecklistIfDoneAsync();
+    });
+
+    private async Task CompleteChecklistIfDoneAsync()
+    {
+        if (_initializing || _checklistSaving || _checklistDismissed || Group is null ||
+            UserInfo?.Onboarding.GroupId != GroupId || UserInfo.Onboarding.ChecklistDismissed || CompletedSteps < 3)
+            return;
+
+        _checklistSaving = true;
+        try { await DismissChecklistAsync(); }
+        finally { _checklistSaving = false; }
+    }
 
     protected override void OnInitialized()
     {
@@ -364,7 +413,11 @@ else if (NotFound)
         if (GroupsService.SelectedGroup?.Id == GroupId)
             await GroupsService.EnsureSelectedLoadedAsync();
 
-        if (version == _initializationVersion) _initializing = false;
+        if (version == _initializationVersion)
+        {
+            _initializing = false;
+            await CompleteChecklistIfDoneAsync();
+        }
     }
 
     private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
@@ -400,7 +453,8 @@ else if (NotFound)
         {
             { x => x.SelectedGroupId, GroupId },
             { x => x.SelectedGroupName, Group?.Name },
-            { x => x.SelectedGroupCurrency, Group?.Currency }
+            { x => x.SelectedGroupCurrency, Group?.Currency },
+            { x => x.ShowFirstExpenseGuide, UserInfo?.Onboarding.GroupId == GroupId && !UserInfo.Onboarding.ExpenseDismissed && !HasExpense }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>(Loc["Add an expense"].Value, parameters, options);

@@ -23,6 +23,56 @@ namespace GroupSplit.App.Web.Test.Components;
 public class CreateTransactionDialogTest : ComponentTest
 {
     [Fact]
+    public async Task Preview_shows_zero_for_every_person_and_does_not_need_a_name()
+    {
+        var other = Guid.NewGuid();
+        _groups.Setup(g => g.GetGroupMembersAsync(GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new UserInfo(MeId, "Ana", null, null), new UserInfo(other, "Luis", null, null, IsGuest: true)]);
+        _commands.Setup(c => c.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana", 5m),
+                new TransactionSplitResponse(other, "Luis", 5m, true)], "Even"));
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.SelectedGroupId, GroupId } }));
+        provider.WaitForAssertion(() =>
+        {
+            var preview = provider.FindComponent<SplitEditor>().Instance.Preview;
+            Assert.NotNull(preview);
+            Assert.Equal(2, preview.Splits.Count);
+            Assert.All(preview.Splits, share => Assert.Equal(0m, share.Amount));
+            Assert.True(preview.Splits.Single(x => x.UserId == other).IsGuest);
+        });
+        _commands.Verify(c => c.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        var amount = provider.FindComponents<MudNumericField<decimal>>().Single(field => field.Instance.Label == "How much?");
+        await provider.InvokeAsync(() => amount.Instance.ValueChanged.InvokeAsync(10m));
+        provider.WaitForAssertion(() => Assert.Equal(5m, provider.FindComponent<SplitEditor>().Instance.Preview!.Splits[0].Amount));
+        _commands.Verify(c => c.PreviewAsync(It.Is<CreateTransactionRequest>(r => r.Amount == 10m && !string.IsNullOrWhiteSpace(r.Name)), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.True(string.IsNullOrWhiteSpace(provider.FindComponents<MudTextField<string>>()
+            .Single(field => field.Instance.Label == "What was it?").Instance.Value));
+    }
+
+    [Fact]
+    public async Task First_expense_tips_move_between_decisions_and_can_be_dismissed()
+    {
+        var users = new Mock<IUsersClient>();
+        users.Setup(x => x.DismissOnboardingAsync("expense", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(users.Object);
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.SelectedGroupId, GroupId }, { x => x.ShowFirstExpenseGuide, true } }));
+        provider.WaitForAssertion(() => Assert.Contains("Start with the basics", provider.Markup));
+        await provider.FindAll("button").Single(b => b.TextContent.Trim() == "Next").ClickAsync(new MouseEventArgs());
+        Assert.Contains("Categories do more than organize", provider.Markup);
+        await provider.FindAll("button").Single(b => b.TextContent.Trim() == "Next").ClickAsync(new MouseEventArgs());
+        Assert.Contains("Choose how to share", provider.Markup);
+        await provider.FindAll("button").Single(b => b.TextContent.Trim() == "Got it").ClickAsync(new MouseEventArgs());
+        Assert.Empty(provider.FindAll(".gs-guide-tip"));
+        users.Verify(x => x.DismissOnboardingAsync("expense", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task A_new_scanned_expense_can_assign_receipt_lines_before_it_is_saved()
     {
         var itemized = Guid.NewGuid();

@@ -5,6 +5,7 @@
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
 @inject NavigationManager Nav
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @implements IDisposable
 
 @*
@@ -61,13 +62,17 @@
        of it. *@
     @if (!IsSearching && !GroupsService.Groups.Any(group => !group.IsPersonal))
     {
-        <div class="gs-card gs-empty" style="padding: 64px 24px">
-            <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-            <h3>@Loc["No shared group yet"]</h3>
-            <span>@Loc["Create a group and name the people you share costs with."]</span>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["Create a group"]</MudButton>
-        </div>
+        <section class="gs-card gs-first-home" aria-labelledby="first-home-title">
+            <div class="gs-first-home-copy">
+                <span class="gs-first-home-kicker">@Loc["A place for your household"]</span>
+                <h2 id="first-home-title">@Loc["A home, with the bills made clear."]</h2>
+                <p>@Loc["Rent, groceries, utilities… Keep the expenses you share with your housemates together."]</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill gs-first-home-action"
+                           StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["Create a group for your home"]</MudButton>
+                <span class="gs-first-home-note">@Loc["Add your housemates afterwards, whether or not they use the app."]</span>
+            </div>
+            <div class="gs-first-home-image" aria-hidden="true"></div>
+        </section>
     }
 
     @if (Archived.Count > 0)
@@ -196,6 +201,8 @@
 
         if (!await GroupsService.CreateGroupAsync(request))
             return;
+
+        await Login.RefreshLoginAsync();
 
         // Straight into the group that was just made -- the state service selected it, so
         // this does not have to guess which of the list it was. There is nothing on its

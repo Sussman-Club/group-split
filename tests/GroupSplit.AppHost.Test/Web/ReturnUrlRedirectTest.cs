@@ -46,13 +46,13 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
     [InlineData("%2F%0A%2Fevil.example")]
     [InlineData("%2F%5Cevil.example")]
     [InlineData("%2F%255Cevil.example")]
-    public async Task A_crafted_return_url_lands_on_the_home_page(string returnUrl)
+    public async Task A_crafted_return_url_lands_on_groups_for_a_new_account(string returnUrl)
     {
         await Page.GotoAsync(Url($"auth/login?returnUrl={returnUrl}"), new PageGotoOptions { Timeout = OperationTimeoutMs });
 
         await SignInAtKeycloakAsync();
 
-        await AssertLandedOnAsync("/");
+        await AssertLandedOnAsync("/groups");
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
     /// to the challenge itself.
     /// </summary>
     [Fact(Timeout = 240_000)]
-    public async Task A_crafted_return_url_through_the_sign_in_page_lands_on_the_home_page()
+    public async Task A_crafted_return_url_through_the_sign_in_page_lands_on_groups_for_a_new_account()
     {
         await Page.GotoAsync(Url("login?returnUrl=%2F%09%2Fevil.example"), new PageGotoOptions { Timeout = OperationTimeoutMs });
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue to sign in" })
@@ -68,7 +68,7 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
 
         await SignInAtKeycloakAsync();
 
-        await AssertLandedOnAsync("/");
+        await AssertLandedOnAsync("/groups");
     }
 
     /// <summary>
@@ -118,6 +118,13 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
             // A redirect to a host that does not exist fails to load at all. Where it went is
             // in the navigations, which the assertion below reports.
         }
+
+        // New accounts are redirected from the safe home fallback to Groups once their
+        // account has loaded. Wait for that navigation before inspecting the final URL.
+        if (path == "/groups")
+            await Page.WaitForURLAsync(url => Uri.TryCreate(url, UriKind.Absolute, out var target)
+                && target.Authority == web.Authority && target.AbsolutePath == path,
+                new PageWaitForURLOptions { Timeout = OperationTimeoutMs });
 
         lock (_navigations)
         {

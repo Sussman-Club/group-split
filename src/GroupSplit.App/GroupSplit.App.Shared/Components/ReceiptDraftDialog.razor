@@ -16,20 +16,20 @@
     <DialogContent>
         <MudForm @ref="_form">
         <div class="gs-stack" style="gap: 16px">
-            <MudAlert Severity="Severity.Info" Dense="true">
+            <p class="gs-muted">
                 @if (IsEditing)
                 {
-                    <text>@Loc["Correct the itemized receipt. Changes are saved to this expense."]</text>
+                    <text>@Loc["Update the receipt details and items below, then save your changes."]</text>
                 }
                 else if (IsDraftReview)
                 {
-                    <text>@Loc["Check the extracted values before adding the expense. OCR can misread a price or miss a line; after this, choose the group and how the expense is split."]</text>
+                    <text>@Loc["Review the receipt details and items below. You can edit them or add a missing item, then choose Use this receipt to continue to the expense."]</text>
                 }
                 else
                 {
-                    <text>@Loc["Check the extracted values before saving them to this expense. OCR can misread a price or miss a line."]</text>
+                    <text>@Loc["Review the receipt details and items below. You can edit them or add a missing item, then save the receipt to this expense."]</text>
                 }
-            </MudAlert>
+            </p>
 
             @if (!string.IsNullOrWhiteSpace(_validationError))
             {

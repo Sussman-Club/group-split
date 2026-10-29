@@ -6,6 +6,8 @@
 @using Microsoft.AspNetCore.Components.Forms
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
+@inject IUsersClient UsersClient
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject ICategoriesClient CategoriesClient
 @inject IInboxClient InboxClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
@@ -51,6 +53,15 @@
     <DialogContent>
         <ReceiptReadLock IsLocked="@ReceiptBusy">
         <div class="gs-stack" style="gap: 16px">
+            @if (Login.User is { Onboarding.BankDismissed: false } && !_bankGuideDismissed)
+            {
+                <div class="gs-guide-tip" role="note">
+                    <div class="gs-guide-head"><strong>@Loc["A quick tip"]</strong><span>@Loc["{0} of 2", _bankGuideStep + 1]</span></div>
+                    <strong>@(_bankGuideStep == 0 ? Loc["Check for an existing expense"].Value : Loc["Choose where it belongs"].Value)</strong>
+                    <p>@(_bankGuideStep == 0 ? Loc["If you already recorded this payment, attach it to that expense to avoid counting it twice."].Value : Loc["For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it."].Value)</p>
+                    <div class="gs-guide-actions"><MudButton OnClick="DismissBankGuideAsync">@Loc["Skip tips"]</MudButton><MudButton Color="Color.Primary" OnClick="NextBankGuideAsync">@(_bankGuideStep == 0 ? Loc["Next"].Value : Loc["Got it"].Value)</MudButton></div>
+                </div>
+            }
             @* What the bank sent, in the same summary card the expense dialog uses for its
                own figures. It stands where the amount field stands there, because it is
                that -- the amount -- and the only difference is that nobody may type it. *@
@@ -236,6 +247,22 @@
 </MudDialog>
 
 @code {
+    private int _bankGuideStep;
+    private bool _bankGuideDismissed;
+    private async Task NextBankGuideAsync()
+    {
+        if (_bankGuideStep == 0) _bankGuideStep = 1;
+        else await DismissBankGuideAsync();
+    }
+    private async Task DismissBankGuideAsync()
+    {
+        if (await Errors.TryAsync(() => UsersClient.DismissOnboardingAsync("bank"), Loc["Could not save your preference."].Value))
+        {
+            _bankGuideDismissed = true;
+            await Login.RefreshLoginAsync();
+        }
+    }
+
     /// <summary>
     /// What the dialog answers with: one of the two things a person can decide.
     /// </summary>
