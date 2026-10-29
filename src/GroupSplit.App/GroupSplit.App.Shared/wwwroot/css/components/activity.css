@@ -11,7 +11,7 @@
 
 .gs-ledger-listing > .gs-mobile-ledger { display: block; }
 .gs-ledger-listing > .gs-grid .mud-table-container { display: none; }
-/* The grid keeps the existing query state; Virtualize renders the feed. */
+/* The grid keeps the existing query state; the scroll feed renders the rows. */
 
 .gs-ledger-listing .gs-mobile-ledger .gs-empty { padding: 36px 12px 12px; }
 .gs-ledger-listing .gs-mobile-ledger .gs-empty > .mud-icon-root { color: var(--gs-teal); }
@@ -54,12 +54,26 @@
 .gs-ledger-listing .gs-feed-amount { font-size: .9375rem; font-weight: 700; white-space: nowrap; }
 .gs-ledger-listing .gs-feed-row > .mud-menu { flex-shrink: 0; }
 .gs-ledger-listing .gs-feed-row .mud-icon-button { min-width: 40px; min-height: 44px; color: var(--gs-muted); }
-.gs-virtual-row, .gs-virtual-placeholder { height: 120px; min-height: 120px; max-height: 120px; box-sizing: border-box; }
-.gs-virtual-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--gs-line); padding-top: 8px; }
-.gs-virtual-date { color: var(--gs-muted); font-size: .75rem; line-height: 20px; flex: 0 0 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gs-ledger-listing .gs-virtual-row .gs-feed-row { min-height: 0; flex: 1; border: 0; }
-.gs-ledger-listing .gs-virtual-row .gs-feed-entry { min-height: 0; padding: 6px 0; }
+.gs-virtual-row { display: flex; flex-direction: column; }
+.gs-virtual-date { margin: 24px 0 0; padding: 0 0 12px; border-bottom: 1px solid var(--gs-line); font-size: .875rem; font-weight: 700; color: var(--gs-ink); }
+.gs-virtual-row:first-child .gs-virtual-date { margin-top: 8px; }
+.gs-ledger-listing .gs-virtual-row .gs-feed-row { min-height: 84px; border-bottom: 1px solid var(--gs-line); }
+.gs-ledger-listing .gs-virtual-row .gs-feed-entry { padding: 12px 0; }
+.gs-feed-sentinel { display: flex; justify-content: center; padding: 16px 0; }
 .gs-ledger-listing .gs-virtual-row .gs-feed-copy strong,
 .gs-ledger-listing .gs-virtual-row .gs-feed-copy > .gs-muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The page already reserves space for the floating action and bottom navigation. */
+
+/* Desktop keeps the day-grouped feed but gives each piece of information a column. */
+.gs-feed-desktop-meta, .gs-feed-desktop-share { display: none; }
+.gs-feed-money { text-align: right; min-width: 0; }
+@media (min-width: 900px) {
+    .gs-ledger-listing .gs-feed-entry { grid-template-columns: 40px minmax(0, 1.5fr) minmax(130px, .8fr) minmax(125px, .6fr); gap: 18px; }
+    .gs-ledger-listing .gs-feed-desktop-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; font-size: .75rem; }
+    .gs-ledger-listing .gs-feed-category { display: inline-block; max-width: 100%; padding: 3px 8px; border-radius: 6px; background: var(--gs-surface-2); color: var(--gs-ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .gs-ledger-listing .gs-feed-desktop-share { display: block; margin-top: 4px; font-size: .75rem; }
+    .gs-ledger-listing .gs-feed-mobile-share, .gs-ledger-listing .gs-feed-mobile-time { display: none; }
+    .gs-ledger-listing .gs-feed-row { padding-inline: 12px; transition: background var(--gs-fast); }
+    .gs-ledger-listing .gs-feed-row:hover, .gs-ledger-listing .gs-feed-row:focus-within { background: var(--gs-surface-2); }
+}

@@ -86,7 +86,7 @@
                 *@
                 <div class="gs-figures">
                     <div class="gs-figure">
-                        <span class="gs-eyebrow">@Loc["Total"]</span>
+                        <span class="gs-eyebrow">@(IsSettlement ? Loc["Payment amount"].Value : Loc["Total"].Value)</span>
                         <span class="gs-figure-value gs-num">@details.Amount.ToMoney(details.Currency)</span>
                     </div>
 
@@ -131,8 +131,8 @@
                 }
                 else
                 {
-                <details class="gs-expense-disclosure">
-                    <summary>@Loc["Copy.Sentence.Transaction_details"]<span>@Loc["Payer, category, merchant & date"]</span></summary>
+                <details class="gs-expense-disclosure" open>
+                    <summary>@Loc["Settlement details"]<span>@Loc["Who paid whom and when"]</span></summary>
                     <div class="gs-expense-disclosure-body">
                 <dl class="gs-kv">
                     <div class="gs-kv-row">
@@ -143,7 +143,7 @@
                         <dd>@Clock.Stamp(details.DateTime, "d MMM yyyy", "HH:mm")</dd>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                    @if (!IsSettlement && !string.IsNullOrWhiteSpace(details.MerchantName))
                     {
                         <div class="gs-kv-row">
                             <dt>@Loc["Where"]</dt>
@@ -166,7 +166,7 @@
                         </div>
                     }
 
-                    @if (!string.IsNullOrWhiteSpace(details.Category))
+                    @if (!IsSettlement && !string.IsNullOrWhiteSpace(details.Category))
                     {
                         <div class="gs-kv-row">
                             <dt>@Loc["Category"]</dt>

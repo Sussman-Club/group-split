@@ -160,7 +160,7 @@ public class GroupLedgerTabTest : ComponentTest
         base.Render<GroupLedgerTab>(parameters => parameters.Add(tab => tab.GroupId, Group));
 
     [Fact]
-    public void Each_virtualized_movement_has_its_own_date_and_fixed_row_wrapper()
+    public void Each_movement_remains_openable_with_long_names()
     {
         _entries = [Expense(Guid.NewGuid(), new string('x', 200)), Expense(Guid.NewGuid(), "Short")];
         var tab = Render();
@@ -171,7 +171,6 @@ public class GroupLedgerTabTest : ComponentTest
             Assert.Equal(2, rows.Count);
             Assert.All(rows, row =>
             {
-                Assert.Single(row.QuerySelectorAll(".gs-virtual-date"));
                 Assert.Single(row.QuerySelectorAll(".gs-feed-entry"));
             });
             Assert.Contains(new string('x', 200), rows[0].TextContent + rows[1].TextContent);
@@ -211,7 +210,7 @@ public class GroupLedgerTabTest : ComponentTest
         void AssertOrder() => tab.WaitForAssertion(() =>
         {
             Assert.Equal(expected, tab.FindAll(".gs-feed-copy strong").Select(entry => entry.TextContent));
-            Assert.Equal(3, tab.FindAll(".gs-virtual-date").Count);
+            Assert.Equal(2, tab.FindAll(".gs-virtual-date").Count);
             Assert.NotEmpty(_orders);
             Assert.All(_orders, order => Assert.Equal(("dateTime", (bool?)descending),
                 (order.Key, order.Descending)));

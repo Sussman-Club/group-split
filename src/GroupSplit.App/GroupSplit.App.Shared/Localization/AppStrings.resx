@@ -4658,4 +4658,11 @@
   </data>
   <data name="Search groups" xml:space="preserve"><value>Search groups</value></data>
   <data name="No groups match your search." xml:space="preserve"><value>No groups match your search.</value></data>
+  <data name="Categories organise expenses. Each category can use a split rule to choose how its expenses are shared." xml:space="preserve"><value>Categories organise expenses. Each category can use a split rule to choose how its expenses are shared.</value></data>
+  <data name="Your share, this month" xml:space="preserve"><value>Your share, this month</value></data>
+  <data name="Payment amount" xml:space="preserve"><value>Payment amount</value></data>
+  <data name="Settlement details" xml:space="preserve"><value>Settlement details</value></data>
+  <data name="Who paid whom and when" xml:space="preserve"><value>Who paid whom and when</value></data>
+  <data name="Search categories" xml:space="preserve"><value>Search categories</value></data>
+  <data name="Search split rules" xml:space="preserve"><value>Search split rules</value></data>
 </root>

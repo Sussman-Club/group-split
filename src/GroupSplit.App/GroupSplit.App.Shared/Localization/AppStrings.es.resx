@@ -4658,4 +4658,11 @@
   </data>
   <data name="Search groups" xml:space="preserve"><value>Buscar grupos</value></data>
   <data name="No groups match your search." xml:space="preserve"><value>Ningún grupo coincide con tu búsqueda.</value></data>
+  <data name="Categories organise expenses. Each category can use a split rule to choose how its expenses are shared." xml:space="preserve"><value>Las categorías organizan los gastos. Cada categoría puede usar una regla de reparto para definir cómo se comparten sus gastos.</value></data>
+  <data name="Your share, this month" xml:space="preserve"><value>Tu parte, este mes</value></data>
+  <data name="Payment amount" xml:space="preserve"><value>Importe del pago</value></data>
+  <data name="Settlement details" xml:space="preserve"><value>Detalles del pago</value></data>
+  <data name="Who paid whom and when" xml:space="preserve"><value>Quién pagó a quién y cuándo</value></data>
+  <data name="Search categories" xml:space="preserve"><value>Buscar categorías</value></data>
+  <data name="Search split rules" xml:space="preserve"><value>Buscar reglas de reparto</value></data>
 </root>

@@ -90,6 +90,24 @@ public class GroupSettingsTabTest : ComponentTest
         Services.AddSingleton<ISplitRuleCommands, SplitRuleCommands>();
     }
 
+    [Fact]
+    public async Task Category_and_rule_search_are_independent_and_match_linked_names()
+    {
+        var tab = await RenderTabAsync();
+        await tab.Find("#group-categories input").InputAsync(new() { Value = "household" });
+        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll("#group-categories .gs-row").Count));
+        Assert.Equal(2, tab.FindAll("#group-rules .gs-rule").Count);
+        await tab.Find("#group-rules input").InputAsync(new() { Value = "groceries" });
+        tab.WaitForAssertion(() => Assert.Single(tab.FindAll("#group-rules .gs-rule")));
+        await tab.Find("#group-categories input").InputAsync(new() { Value = "no such category" });
+        tab.WaitForAssertion(() =>
+        {
+            Assert.Empty(tab.FindAll("#group-categories .gs-row"));
+            Assert.Contains("Nothing matches", tab.Find("#group-categories").TextContent);
+            Assert.Single(tab.FindAll("#group-rules .gs-rule"));
+        });
+    }
+
     private static SplitRuleDetailsResponse ARule(Guid id, string name, SplitRuleDto definition) => new()
     {
         Id = id,

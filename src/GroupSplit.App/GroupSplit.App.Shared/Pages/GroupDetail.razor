@@ -1,3 +1,4 @@
+<GroupNavigationMemory @key="Nav.ToAbsoluteUri(Nav.Uri).AbsolutePath" />
 @page "/groups/{GroupId:guid}"
 @page "/groups/{GroupId:guid}/{Tab}"
 @using GroupSplit.App.Shared.Components
@@ -70,14 +71,13 @@
             <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
         }
 
-        @* A cog at the far end rather than a fifth word: settings is not one of the
-           questions somebody asks about a group day to day, and every app puts it here. *@
+        @* Keep Settings a text tab alongside Balances and Activity. *@
         <MudTooltip Text="@Loc["Settings"]" ShowOnFocus="false">
-            <a class="gs-tab gs-tab-icon @(Current is "settings" or "people" ? "is-current" : "")"
+            <a class="gs-tab gs-settings-tab @(Current is "settings" or "people" ? "is-current" : "")"
                href="@Href("settings")"
                aria-label="@Loc["Settings"]"
                aria-current="@(Current is "settings" or "people" ? "page" : null)">
-                <MudIcon Icon="@Icons.Material.Rounded.Settings" />
+                <span>@Loc["Settings"]</span>
             </a>
         </MudTooltip>
     </nav>

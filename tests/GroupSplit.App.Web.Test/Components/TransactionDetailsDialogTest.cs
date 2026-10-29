@@ -287,6 +287,10 @@ public class TransactionDetailsDialogTest : ComponentTest
         Assert.DoesNotContain("You owe", dialog.Markup);
         Assert.DoesNotContain("Split between", dialog.Markup);
         Assert.DoesNotContain("Expenses in the period", dialog.Markup);
+        Assert.Contains("Settlement details", dialog.Markup);
+        Assert.Contains("Payment amount", dialog.Markup);
+        Assert.DoesNotContain("Payer, category, merchant", dialog.Markup);
+        Assert.True(dialog.Find(".gs-expense-disclosure").HasAttribute("open"));
     }
 
     [Fact]

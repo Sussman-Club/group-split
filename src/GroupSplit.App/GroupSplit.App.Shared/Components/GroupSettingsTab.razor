@@ -71,15 +71,22 @@
 
         @if (Section is null or "categories")
         {
-        <div id="group-categories" class="gs-card gs-card-pad gs-settings-section">
+        <section id="group-categories" class="gs-card gs-card-pad gs-settings-section" aria-labelledby="group-categories-title">
             <div class="gs-card-title">
-                <h3>@Loc["Categories"]</h3>
+                <h3 id="group-categories-title">@Loc["Categories"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Add"
                            OnClick="@(() => EditCategoryAsync(null))">
                     @Loc["New category"]
                 </MudButton>
             </div>
+
+            <p class="gs-settings-description">@Loc["Categories organise expenses. Each category can use a split rule to choose how its expenses are shared."]</p>
+
+            <MudTextField @bind-Value="_categorySearch" Immediate="true" Clearable="true"
+                          Placeholder="@Loc["Search categories"]" aria-label="@Loc["Search categories"]"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
 
             @* Only where the emptiness was read rather than assumed: "none" is a claim, and
                neither a failed read nor a read still in flight is entitled to make it. *@
@@ -105,10 +112,17 @@
                     </MudButton>
                 </div>
             }
+            else if (VisibleCategories.Count == 0 && !string.IsNullOrWhiteSpace(_categorySearch))
+            {
+                <div class="gs-empty" role="status">
+                    <h3>@Loc["Nothing matches"]</h3>
+                    <MudButton OnClick="@(() => _categorySearch = string.Empty)">@Loc["Clear search"]</MudButton>
+                </div>
+            }
             else
             {
                 <div class="gs-list">
-                    @foreach (var category in _categories)
+                    @foreach (var category in VisibleCategories)
                     {
                         <div class="gs-row gs-row-has-actions" @key="category.Id">
                             <span class="gs-avatar sm tile ink">@Initials(category.Name)</span>
@@ -164,20 +178,27 @@
                     }
                 </div>
             }
-        </div>
+        </section>
 
         }
 
         @* A personal group has nobody to divide with, so it keeps no rules. *@
         @if (!Group.IsPersonal && Section is null or "rules")
         {
-        <div id="group-rules" class="gs-card gs-card-pad gs-settings-section">
+        <section id="group-rules" class="gs-card gs-card-pad gs-settings-section" aria-labelledby="group-rules-title">
             <div class="gs-card-title">
-                <h3>@Loc["Split rules"]</h3>
+                <h3 id="group-rules-title">@Loc["Split rules"]</h3>
                 <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
                            StartIcon="@Icons.Material.Outlined.Add"
                            OnClick="@CreateRuleAsync">@Loc["New rule"]</MudButton>
             </div>
+
+            <p class="gs-settings-description">@Loc["A division the group keeps, for its categories to point at. Several categories may divide by the same one."]</p>
+
+            <MudTextField @bind-Value="_ruleSearch" Immediate="true" Clearable="true"
+                          Placeholder="@Loc["Search split rules"]" aria-label="@Loc["Search split rules"]"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
 
             @if (!_loaded)
             {
@@ -193,10 +214,17 @@
                                OnClick="@CreateRuleAsync">@Loc["Save a division"]</MudButton>
                 </div>
             }
+            else if (VisibleRules.Count == 0 && !string.IsNullOrWhiteSpace(_ruleSearch))
+            {
+                <div class="gs-empty" role="status">
+                    <h3>@Loc["Nothing matches"]</h3>
+                    <MudButton OnClick="@(() => _ruleSearch = string.Empty)">@Loc["Clear search"]</MudButton>
+                </div>
+            }
             else
             {
                 <div class="gs-list">
-                    @foreach (var rule in _rules)
+                    @foreach (var rule in VisibleRules)
                     {
                         var used = UsedBy(rule.Id);
 
@@ -289,7 +317,7 @@
                     }
                 </div>
             }
-        </div>
+        </section>
         }
     </div>
 </div>
@@ -300,6 +328,16 @@
     [Parameter] public string? Section { get; set; }
 
     private Guid GroupId => Group.Id;
+    private string _categorySearch = string.Empty;
+    private string _ruleSearch = string.Empty;
+    private IReadOnlyList<CategoryResponse> VisibleCategories =>
+        [.. _categories.Where(category => MatchesSearch(category.Name + " " + (Group.IsPersonal ? "" : DividesBy(category)), _categorySearch))];
+    private IReadOnlyList<SplitRuleResponse> VisibleRules =>
+        [.. _rules.Where(rule => MatchesSearch(NameOf(rule) + " " + Describe(rule.Id) + " " + string.Join(" ", UsedBy(rule.Id)), _ruleSearch))];
+    private static bool MatchesSearch(string text, string query) => string.IsNullOrWhiteSpace(query) ||
+        System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(text, query.Trim(),
+            System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
 
     private IReadOnlyList<CategoryResponse> _categories = [];
     private IReadOnlyList<SplitRuleResponse> _rules = [];

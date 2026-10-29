@@ -1,11 +1,6 @@
 /* ---------------------------------------------------- group details card ---- */
 
-/*
-    Two settings with different weight. The name is plain identity and gets a field. The
-    default split is the consequential one -- it decides how money divides when nothing else
-    says -- so it sits in its own box and explains itself before offering a choice, without
-    reading as an alert.
-*/
+/* Group settings share the same plain field layout. */
 .gs-group-setting-section {
     display: flex;
     flex-direction: column;
@@ -31,13 +26,6 @@
     color: var(--gs-muted);
     font-size: 0.8125rem;
     line-height: 1.4;
-}
-
-.gs-group-default-split {
-    padding: 16px;
-    border: 1px solid var(--gs-line);
-    border-radius: var(--gs-radius);
-    background: var(--gs-surface-2);
 }
 
 .gs-group-setting-icon {

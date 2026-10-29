@@ -138,9 +138,34 @@
 .gs-group-details-intro h2 { margin: 0; font-size: 1.25rem; }
 .gs-group-details-intro p { margin: 5px 0 0; color: var(--gs-muted); font-size: .875rem; line-height: 1.4; }
 @media (min-width: 1100px) {
-    .gs-group-details-form .gs-group-default-split { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(0, 1.3fr); align-items: center; column-gap: 24px; }
-    .gs-group-details-form .gs-group-default-split .gs-group-setting-note { grid-column: 1 / -1; }
+    .gs-group-details-form .gs-group-default-split { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(0, 1.3fr); align-items: start; column-gap: 24px; }
+    .gs-group-details-form .gs-group-default-split .gs-group-setting-note { grid-column: 2; margin-top: 12px; }
 }
 @media (max-width: 480px) {
     .gs-group-details-form .gs-group-setting-actions > .mud-button-filled { width: 100%; }
 }
+
+/* Category and rule actions stay discoverable for touch and keyboard users. */
+.gs-settings-content .gs-row-actions { opacity: 1; transform: none; }
+.gs-settings-content .gs-splits-grid .mud-icon-button { min-width: 44px; min-height: 44px; }
+.gs-settings-content .gs-rule-head { flex-wrap: wrap; align-items: flex-start; }
+.gs-settings-content .gs-rule .title { flex: 1 1 180px; flex-wrap: wrap; }
+.gs-settings-content .gs-rule .title span { white-space: normal; overflow-wrap: anywhere; }
+.gs-settings-content .gs-rule .meta,
+.gs-settings-content #group-categories .title,
+.gs-settings-content #group-categories .meta { overflow-wrap: anywhere; white-space: normal; }
+.gs-settings-content .gs-rule-head > .gs-inline { flex-shrink: 0; margin-left: auto; }
+.gs-settings-content #group-categories .gs-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+@media (max-width: 640px) {
+    .gs-settings-content #group-categories .gs-row { grid-template-columns: auto minmax(0, 1fr); }
+    .gs-settings-content #group-categories .gs-row-actions { grid-column: 2; justify-content: flex-end; }
+}
+
+.gs-settings-tab { display: inline-flex; align-items: center; gap: 6px; }
+.gs-settings-tab .mud-icon-root { width: 20px; height: 20px; }
+.gs-settings-description { color: var(--gs-muted); margin: 0; line-height: 1.5; }
+.gs-archived-groups > summary { cursor: pointer; min-height: 44px; flex-wrap: wrap; }
+.gs-archived-groups > summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; }
+.gs-archived-groups[open] > summary { margin-bottom: 20px; }
+
+.gs-archived-label { display: inline-flex; align-items: center; gap: 8px; }
