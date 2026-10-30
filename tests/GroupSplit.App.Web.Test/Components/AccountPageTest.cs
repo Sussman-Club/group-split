@@ -55,7 +55,9 @@ public class AccountPageTest : ComponentTest
         var (page, _) = Open();
         var links = page.FindAll(".gs-settings-nav a");
 
-        Assert.Equal(4, links.Count);
+        Assert.Equal(5, links.Count);
+        Assert.Contains(links, link => new Uri(new Uri(navigation.BaseUri), link.GetAttribute("href")).Fragment == "#settings-help");
+        Assert.Equal("/help", page.Find("#settings-help a").GetAttribute("href"));
         foreach (var link in links)
         {
             var destination = new Uri(new Uri(navigation.BaseUri), link.GetAttribute("href"));

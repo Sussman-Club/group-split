@@ -34,6 +34,54 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.Priority).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(10000).IsRequired();
+            entity.Property(x => x.ReproductionSteps).HasMaxLength(10000);
+            entity.Property(x => x.AppVersion).HasMaxLength(64);
+            entity.Property(x => x.Platform).HasMaxLength(64);
+            entity.Property(x => x.OperatingSystemVersion).HasMaxLength(128);
+            entity.Property(x => x.BrowserVersion).HasMaxLength(128);
+            entity.Property(x => x.GitHubRepository).HasMaxLength(256);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.ReporterUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.AssignedUserId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.DuplicateOfTicketId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.ReporterUserId, x.CreatedAt });
+            entity.HasIndex(x => new { x.Status, x.Priority, x.CreatedAt });
+            entity.HasIndex(x => new { x.AssignedUserId, x.Status });
+            entity.HasIndex(x => new { x.GitHubRepository, x.GitHubIssueNumber });
+        });
+        modelBuilder.Entity<SupportTicketMessage>(entity =>
+        {
+            entity.Property(x => x.Visibility).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.Body).HasMaxLength(10000).IsRequired();
+            entity.HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.AuthorUserId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(x => new { x.TicketId, x.CreatedAt });
+        });
+        modelBuilder.Entity<SupportTicketAttachment>(entity =>
+        {
+            entity.Property(x => x.ObjectKey).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.FileName).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.ContentType).HasMaxLength(128).IsRequired();
+            entity.HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(x => x.ObjectKey).IsUnique();
+            entity.HasIndex(x => new { x.TicketId, x.UploadedAt });
+        });
+        modelBuilder.Entity<SupportTicketStatusChange>(entity =>
+        {
+            entity.Property(x => x.FromStatus).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.ToStatus).HasConversion<string>().HasMaxLength(32);
+            entity.HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.ChangedByUserId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(x => new { x.TicketId, x.ChangedAt });
+        });
+
         modelBuilder.Entity<PushDevice>(entity =>
         {
             entity.Property(device => device.Token).HasMaxLength(4096).IsRequired();

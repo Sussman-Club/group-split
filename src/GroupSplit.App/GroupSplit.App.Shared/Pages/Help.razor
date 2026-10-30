@@ -1,0 +1,92 @@
+@page "/help"
+@using GroupSplit.Shared
+@inject ISupportReportsClient Reports
+
+<PageTitle>@Loc["Help & feedback - Group Split"]</PageTitle>
+<div class="gs-page-head">
+    <div><h1>@Loc["Help & feedback"]</h1><p>@Loc["Tell us what happened, suggest an improvement, or ask for help."]</p></div>
+</div>
+<div class="support-layout">
+    <section class="gs-card gs-card-pad support-compose" aria-labelledby="report-heading">
+        <h2 id="report-heading">@Loc["Send a report"]</h2>
+        <p class="support-intro">@Loc["Share a few details so we can understand your request."]</p>
+        <div class="support-form">
+            <label for="report-type">@Loc["What can we help with?"]</label>
+            <div class="support-select">
+            <select id="report-type" @bind="_report.Type">
+                <option value="Bug">@Loc["Something isn't working"]</option>
+                <option value="FeatureRequest">@Loc["Suggest an improvement"]</option>
+                <option value="Support">@Loc["I need help"]</option>
+            </select>
+            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Class="support-select-icon" aria-hidden="true" />
+            </div>
+            <label for="report-description">@Loc["What happened?"]</label>
+            <textarea id="report-description" @bind="_report.Description" maxlength="10000" rows="5" placeholder="@Loc["Describe the problem, suggestion, or question"]"></textarea>
+            @if (_report.Type == "Bug")
+            {
+                <label for="report-steps">@Loc["Steps to reproduce (optional)"]</label>
+                <textarea id="report-steps" @bind="_report.ReproductionSteps" maxlength="10000" rows="3" placeholder="@Loc["What did you do before the problem appeared?"]"></textarea>
+            }
+            <div class="support-privacy"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" /><span>@Loc["Please leave out passwords and payment details. Device details and diagnostics are not collected."]</span></div>
+            @if (_error is not null) { <div role="alert" class="support-error">@_error</div> }
+            @if (_sent) { <div role="status" class="support-success">@Loc["Report sent. You can follow its status below."]</div> }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill" Disabled="@_saving" OnClick="SendAsync">@(_saving ? Loc["Sending…"].Value : Loc["Send report"].Value)</MudButton>
+        </div>
+    </section>
+    <section class="gs-card gs-card-pad support-inbox" aria-labelledby="reports-heading">
+        <h2 id="reports-heading">@Loc["My reports"]</h2>
+        <p class="gs-muted">@Loc["See the status of the reports you've sent."]</p>
+        @if (_loading) { <p role="status">@Loc["Loading reports…"]</p> }
+        else if (_loadFailed) { <p role="alert">@Loc["Couldn't load your reports."]</p><MudButton OnClick="LoadAsync">@Loc["Try again"]</MudButton> }
+        else if (_reports.Count == 0) { <div class="support-empty"><span class="support-empty-icon"><MudIcon Icon="@Icons.Material.Rounded.Forum" /></span><h3>@Loc["No reports yet"]</h3><p>@Loc["When you send a report, you can check its status here."]</p></div> }
+        else
+        {
+            <div class="support-list">
+                @foreach (var report in _reports)
+                {
+                    <details class="support-report" @key="report.Id">
+                        <summary><span><strong>@report.Title</strong><small>@TypeLabel(report.Type) · @report.CreatedAt.ToLocalTime().ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
+                        <p class="support-description">@report.Description</p>
+                        @if (!string.IsNullOrWhiteSpace(report.ReproductionSteps)) { <h3>@Loc["Steps to reproduce"]</h3><p class="support-description">@report.ReproductionSteps</p> }
+                        <small class="gs-muted">@Loc["Report ID"]: @report.Id</small>
+                    </details>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private CreateSupportReportRequest _report = new();
+    private List<SupportReportResponse> _reports = [];
+    private bool _loading = true, _loadFailed, _saving, _sent;
+    private string? _error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        _loading = true; _loadFailed = false;
+        try { _reports = await Reports.ListAsync(); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _loadFailed = true; }
+        finally { _loading = false; }
+    }
+    private async Task SendAsync()
+    {
+        if (_saving) return;
+        _sent = false;
+        if (string.IsNullOrWhiteSpace(_report.Description))
+        { _error = Loc["Add a description before sending."]; return; }
+        _saving = true; _error = null;
+        try
+        {
+            if (_report.Type != "Bug") _report.ReproductionSteps = null;
+            await Reports.CreateAsync(_report);
+            _report = new(); _sent = true;
+            await LoadAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        { _error = Loc["Couldn't send your report. Please try again."]; }
+        finally { _saving = false; }
+    }
+    private string TypeLabel(string type) => type switch { "Bug" => Loc["Problem"], "FeatureRequest" => Loc["Suggestion"], _ => Loc["Help"] };
+    private string StatusLabel(string status) => status switch { "New" => Loc["New"], "UnderReview" => Loc["Under review"], "InProgress" => Loc["In progress"], "Resolved" => Loc["Resolved"], "Closed" => Loc["Closed"], _ => status };
+}

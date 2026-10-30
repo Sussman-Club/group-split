@@ -1055,6 +1055,242 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.UseTptMappingStrategy();
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("AssignedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BrowserVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<bool>("DiagnosticsConsent")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("DuplicateOfTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("GitHubIssueNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GitHubRepository")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("OperatingSystemVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Platform")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("ReporterUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReproductionSteps")
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DuplicateOfTicketId");
+
+                    b.HasIndex("AssignedUserId", "Status");
+
+                    b.HasIndex("GitHubRepository", "GitHubIssueNumber");
+
+                    b.HasIndex("ReporterUserId", "CreatedAt");
+
+                    b.HasIndex("Status", "Priority", "CreatedAt");
+
+                    b.ToTable("SupportTicket", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupportTicket_DiagnosticsConsent", "\"DiagnosticsConsent\" OR (\"Platform\" IS NULL AND \"OperatingSystemVersion\" IS NULL AND \"BrowserVersion\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_SupportTicket_Duplicate", "\"DuplicateOfTicketId\" IS NULL OR \"DuplicateOfTicketId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_SupportTicket_GitHub", "(\"GitHubRepository\" IS NULL AND \"GitHubIssueNumber\" IS NULL) OR (\"GitHubRepository\" IS NOT NULL AND length(trim(\"GitHubRepository\")) > 0 AND \"GitHubIssueNumber\" IS NOT NULL AND \"GitHubIssueNumber\" > 0)");
+
+                            t.HasCheckConstraint("CK_SupportTicket_Priority", "\"Priority\" IN ('Low', 'Normal', 'High', 'Urgent')");
+
+                            t.HasCheckConstraint("CK_SupportTicket_Status", "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+
+                            t.HasCheckConstraint("CK_SupportTicket_Type", "\"Type\" IN ('Bug', 'FeatureRequest', 'Support')");
+                        });
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.HasIndex("TicketId", "UploadedAt");
+
+                    b.ToTable("SupportTicketAttachment", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupportTicketAttachment_Length", "\"Length\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AuthorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("TicketId", "CreatedAt");
+
+                    b.ToTable("SupportTicketMessage", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupportTicketMessage_Visibility", "\"Visibility\" IN ('Public', 'Internal')");
+                        });
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketStatusChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("TicketId", "ChangedAt");
+
+                    b.ToTable("SupportTicketStatusChange", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupportTicketStatusChange_From", "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+
+                            t.HasCheckConstraint("CK_SupportTicketStatusChange_To", "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+                        });
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1666,6 +1902,67 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
 
                     b.Navigation("SplitRule");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicket", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("DuplicateOfTicketId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReporterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketAttachment", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketMessage", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicketStatusChange", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GroupSplit.Data.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Transaction", b =>
