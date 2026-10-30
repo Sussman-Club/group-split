@@ -243,6 +243,11 @@ else
     var compose = builder.AddDockerComposeEnvironment("compose")
         .WithProtectedDashboard(dashboardToken);
 
+    // Dashboard metrics are for trends; five-minute exports avoid rewriting every
+    // series every minute. Prometheus host/container scrapes keep their own cadence.
+    api.WithEnvironment("OTEL_METRIC_EXPORT_INTERVAL", "300000");
+    web.WithEnvironment("OTEL_METRIC_EXPORT_INTERVAL", "300000");
+
     // Supplied rather than left to Aspire, which would generate a new one per publish and
     // not match the password the running container was started with.
     cache.WithPassword(

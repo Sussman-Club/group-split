@@ -48,6 +48,11 @@ public sealed class PublishedDashboardTest : IDisposable
             .ToList();
 
         Assert.Equal([$"127.0.0.1:{DeploymentExtensions.DashboardPort}:18888"], published);
+
+        var yaml = string.Join(Environment.NewLine, compose);
+        Assert.Contains("Dashboard__TelemetryLimits__MaxLogCount: \"10000\"", yaml);
+        Assert.Contains("Dashboard__TelemetryLimits__MaxTraceCount: \"10000\"", yaml);
+        Assert.Contains("Dashboard__TelemetryLimits__MaxMetricsCount: \"1000\"", yaml);
     }
 
     [Theory]
