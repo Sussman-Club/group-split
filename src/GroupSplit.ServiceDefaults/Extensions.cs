@@ -70,6 +70,9 @@ public static class Extensions
                 .WithLogging(logging => logging.AddProcessor(new TokenRedaction.LogProcessor()))
                 .WithMetrics(metrics =>
                 {
+                    if (builder.Configuration.GetValue<bool>("Telemetry:EssentialMetricsOnly"))
+                        metrics.AddView(EssentialMetrics.Select);
+
                     metrics.AddAspNetCoreInstrumentation()
                         .AddMeter("Npgsql")
                         .AddHttpClientInstrumentation()
