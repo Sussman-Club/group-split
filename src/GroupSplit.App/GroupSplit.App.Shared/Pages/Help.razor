@@ -12,15 +12,16 @@
         <p class="support-intro">@Loc["Share a few details so we can understand your request."]</p>
         <div class="support-form">
             <label for="report-type">@Loc["What can we help with?"]</label>
+            <div class="support-select">
             <select id="report-type" @bind="_report.Type">
                 <option value="Bug">@Loc["Something isn't working"]</option>
                 <option value="FeatureRequest">@Loc["Suggest an improvement"]</option>
                 <option value="Support">@Loc["I need help"]</option>
             </select>
-            <label for="report-title">@Loc["Title"]</label>
-            <input id="report-title" @bind="_report.Title" maxlength="200" placeholder="@Loc["A short summary"]" />
-            <label for="report-description">@Loc["Description"]</label>
-            <textarea id="report-description" @bind="_report.Description" maxlength="10000" rows="5" placeholder="@Loc["Tell us more about it"]"></textarea>
+            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Class="support-select-icon" aria-hidden="true" />
+            </div>
+            <label for="report-description">@Loc["What happened?"]</label>
+            <textarea id="report-description" @bind="_report.Description" maxlength="10000" rows="5" placeholder="@Loc["Describe the problem, suggestion, or question"]"></textarea>
             @if (_report.Type == "Bug")
             {
                 <label for="report-steps">@Loc["Steps to reproduce (optional)"]</label>
@@ -72,8 +73,8 @@
     {
         if (_saving) return;
         _sent = false;
-        if (string.IsNullOrWhiteSpace(_report.Title) || string.IsNullOrWhiteSpace(_report.Description))
-        { _error = Loc["Add a title and description before sending." ]; return; }
+        if (string.IsNullOrWhiteSpace(_report.Description))
+        { _error = Loc["Add a description before sending."]; return; }
         _saving = true; _error = null;
         try
         {

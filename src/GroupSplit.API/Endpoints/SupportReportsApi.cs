@@ -25,13 +25,20 @@ public static class SupportReportsApi
             AppDbContext db, CancellationToken ct) =>
         {
             if (!Enum.TryParse<SupportTicketType>(request.Type, false, out var type)
-                || !Enum.IsDefined(type) || string.IsNullOrWhiteSpace(request.Title)
-                || request.Title.Length > 200 || string.IsNullOrWhiteSpace(request.Description)
+                || !Enum.IsDefined(type) || request.Title?.Length > 200 || string.IsNullOrWhiteSpace(request.Description)
                 || request.Description.Length > 10000 || request.ReproductionSteps?.Length > 10000)
                 return Results.BadRequest();
+            var description = request.Description.Trim();
+            var summary = string.Join(" ", description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            if (summary.Length > 200)
+            {
+                var end = char.IsHighSurrogate(summary[198]) ? 198 : 199;
+                summary = summary[..end].TrimEnd() + "…";
+            }
+            var title = string.IsNullOrWhiteSpace(request.Title) ? summary : request.Title.Trim();
             var now = DateTimeOffset.UtcNow;
             var ticket = new SupportTicket { ReporterUserId = current.User.Id, Type = type,
-                Title = request.Title.Trim(), Description = request.Description.Trim(),
+                Title = title, Description = description,
                 ReproductionSteps = string.IsNullOrWhiteSpace(request.ReproductionSteps) ? null : request.ReproductionSteps.Trim(),
                 CreatedAt = now, UpdatedAt = now };
             db.Add(ticket);

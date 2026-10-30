@@ -36,10 +36,18 @@ public class SupportReportsEndpointTest : IAsyncLifetime
         Assert.Equal(SupportTicketStatus.New, history.ToStatus);
     }
 
+    [Fact]
+    public async Task Description_supplies_a_summary_when_no_title_is_given()
+    {
+        var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
+        { Type = "Bug", Description = "  The app\n   stops responding  " }, TestContext.Current.CancellationToken);
+        var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(TestContext.Current.CancellationToken))!;
+        Assert.Equal("The app stops responding", report.Title);
+    }
+
     [Theory]
     [InlineData("Bogus", "Title", "Details")]
-    [InlineData("Bug", " ", "Details")]
-    [InlineData("Bug", "Title", " ")]
+        [InlineData("Bug", "Title", " ")]
     public async Task Invalid_reports_are_rejected(string type, string title, string description)
     {
         var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest

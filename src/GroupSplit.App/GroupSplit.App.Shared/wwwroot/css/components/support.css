@@ -7,7 +7,9 @@
 .support-form label { color: var(--gs-ink); font-size: .875rem; font-weight: 700; margin-top: 12px; }
 .support-form label:first-child { margin-top: 0; }
 .support-form input, .support-form textarea, .support-form select { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 11px 13px; border: 1px solid var(--gs-line-strong); border-radius: var(--gs-radius-sm); background: var(--gs-surface-2); color: var(--gs-ink); font: inherit; font-size: .9rem; line-height: 1.5; }
-.support-form select { min-height: 46px; }
+.support-select { position: relative; }
+.support-form select { min-height: 46px; appearance: none; padding-right: 44px; }
+.support-select .support-select-icon { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: var(--gs-muted); pointer-events: none; font-size: 1.25rem; }
 .support-form textarea { resize: vertical; }
 .support-form input::placeholder, .support-form textarea::placeholder { color: var(--gs-muted); opacity: .8; }
 .support-form input:focus-visible, .support-form textarea:focus-visible, .support-form select:focus-visible, .support-report summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
