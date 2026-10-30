@@ -1,0 +1,28 @@
+/* Support uses the shared stylesheet, which is loaded by both web and native hosts. */
+.support-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 20px; align-items: start; }
+.support-compose, .support-inbox { min-width: 0; }
+.support-compose h2, .support-inbox h2 { font-size: 1.25rem; margin: 0; line-height: 1.25; }
+.support-intro, .support-inbox > p { margin: 6px 0 22px; color: var(--gs-muted); font-size: .9rem; line-height: 1.55; }
+.support-form { display: grid; gap: 8px; }
+.support-form label { color: var(--gs-ink); font-size: .875rem; font-weight: 700; margin-top: 12px; }
+.support-form label:first-child { margin-top: 0; }
+.support-form input, .support-form textarea, .support-form select { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 11px 13px; border: 1px solid var(--gs-line-strong); border-radius: var(--gs-radius-sm); background: var(--gs-surface-2); color: var(--gs-ink); font: inherit; font-size: .9rem; line-height: 1.5; }
+.support-form select { min-height: 46px; }
+.support-form textarea { resize: vertical; }
+.support-form input::placeholder, .support-form textarea::placeholder { color: var(--gs-muted); opacity: .8; }
+.support-form input:focus-visible, .support-form textarea:focus-visible, .support-form select:focus-visible, .support-report summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+.support-form button { justify-self: start; margin-top: 8px; }
+.support-privacy { display: flex; gap: 10px; align-items: flex-start; padding: 13px 14px; margin-top: 12px; border-radius: var(--gs-radius-sm); background: var(--gs-teal-soft); color: var(--gs-ink-2); font-size: .8rem; line-height: 1.5; }
+.support-privacy .mud-icon-root { flex: none; color: var(--gs-teal); margin-top: 1px; }
+.support-error { color: var(--gs-danger); font-size: .875rem; }
+.support-success { color: var(--gs-success); font-size: .875rem; }
+.support-empty { display: grid; justify-items: start; padding: 24px 0 8px; border-top: 1px solid var(--gs-line); }
+.support-empty-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: var(--gs-teal); background: var(--gs-teal-soft); }
+.support-empty h3 { margin: 15px 0 4px; font-size: 1rem; }
+.support-empty p { max-width: 30ch; margin: 0; color: var(--gs-muted); font-size: .875rem; line-height: 1.55; }
+.support-report { border-top: 1px solid var(--gs-line); padding: 16px 0; }
+.support-report summary { cursor: pointer; display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.support-report summary span:first-child { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.support-report small { color: var(--gs-muted); }
+.support-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 820px) { .support-layout { grid-template-columns: 1fr; } }

@@ -7,9 +7,9 @@
     <div><h1>@Loc["Help & feedback"]</h1><p>@Loc["Tell us what happened, suggest an improvement, or ask for help."]</p></div>
 </div>
 <div class="support-layout">
-    <section class="gs-card gs-card-pad" aria-labelledby="report-heading">
+    <section class="gs-card gs-card-pad support-compose" aria-labelledby="report-heading">
         <h2 id="report-heading">@Loc["Send a report"]</h2>
-        <p class="gs-muted">@Loc["Please leave out passwords, payment details, and other sensitive information."]</p>
+        <p class="support-intro">@Loc["Share a few details so we can understand your request."]</p>
         <div class="support-form">
             <label for="report-type">@Loc["What can we help with?"]</label>
             <select id="report-type" @bind="_report.Type">
@@ -26,18 +26,18 @@
                 <label for="report-steps">@Loc["Steps to reproduce (optional)"]</label>
                 <textarea id="report-steps" @bind="_report.ReproductionSteps" maxlength="10000" rows="3" placeholder="@Loc["What did you do before the problem appeared?"]"></textarea>
             }
-            <p class="gs-muted support-privacy">@Loc["Device details and diagnostics are not collected with this report."]</p>
+            <div class="support-privacy"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" /><span>@Loc["Please leave out passwords and payment details. Device details and diagnostics are not collected."]</span></div>
             @if (_error is not null) { <div role="alert" class="support-error">@_error</div> }
             @if (_sent) { <div role="status" class="support-success">@Loc["Report sent. You can follow its status below."]</div> }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill" Disabled="@_saving" OnClick="SendAsync">@(_saving ? Loc["Sending…"].Value : Loc["Send report"].Value)</MudButton>
         </div>
     </section>
-    <section class="gs-card gs-card-pad" aria-labelledby="reports-heading">
+    <section class="gs-card gs-card-pad support-inbox" aria-labelledby="reports-heading">
         <h2 id="reports-heading">@Loc["My reports"]</h2>
         <p class="gs-muted">@Loc["See the status of the reports you've sent."]</p>
         @if (_loading) { <p role="status">@Loc["Loading reports…"]</p> }
         else if (_loadFailed) { <p role="alert">@Loc["Couldn't load your reports."]</p><MudButton OnClick="LoadAsync">@Loc["Try again"]</MudButton> }
-        else if (_reports.Count == 0) { <p class="gs-muted">@Loc["No reports yet. When you send one, it will appear here."]</p> }
+        else if (_reports.Count == 0) { <div class="support-empty"><span class="support-empty-icon"><MudIcon Icon="@Icons.Material.Rounded.Forum" /></span><h3>@Loc["No reports yet"]</h3><p>@Loc["When you send a report, you can check its status here."]</p></div> }
         else
         {
             <div class="support-list">
