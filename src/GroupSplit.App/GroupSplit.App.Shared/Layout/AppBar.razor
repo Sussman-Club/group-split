@@ -16,6 +16,15 @@
                        title="@Loc["Get the Android app"]" aria-label="@Loc["Get the Android app"]" />
     }
 
+    @if (UserInfo is not null)
+    {
+        <a class="gs-topbar-help" href="/help" aria-label="@Loc["Help & feedback"]">
+            <MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Size="Size.Small" />
+            <span class="gs-topbar-help-full">@Loc["Help & feedback"]</span>
+            <span class="gs-topbar-help-short" aria-hidden="true">@Loc["Help"]</span>
+        </a>
+    }
+
     <ThemeModeMenu />
 
     @if (UserInfo is { } user)

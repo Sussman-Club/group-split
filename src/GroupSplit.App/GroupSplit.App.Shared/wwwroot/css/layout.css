@@ -136,6 +136,34 @@ html:not([data-gs-ready]) .gs-group-card {
     white-space: nowrap;
 }
 
+.gs-topbar-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+    font-size: .8125rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.gs-topbar-help:hover { background: var(--gs-teal-glow); }
+.gs-topbar-help:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
+.gs-topbar-help-short { display: none; }
+@media (max-width: 820px) {
+    .gs-topbar-help-full { display: none; }
+    .gs-topbar-help-short { display: inline; }
+}
+@media (max-width: 380px) {
+    .gs-topbar { gap: 6px; }
+    .gs-topbar-help { padding: 0 8px; }
+}
+
 .gs-topbar-spacer {
     flex: 1;
 }
