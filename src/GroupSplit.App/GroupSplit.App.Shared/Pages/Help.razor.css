@@ -1,0 +1,15 @@
+.support-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.support-form { display: grid; gap: 8px; }
+.support-form label { font-weight: 600; margin-top: 10px; }
+.support-form input, .support-form textarea, .support-form select { width: 100%; padding: 10px 12px; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 8px; background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); font: inherit; }
+.support-form input:focus-visible, .support-form textarea:focus-visible, .support-form select:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+.support-form button { justify-self: start; }
+.support-privacy { margin: 8px 0; font-size: .875rem; }
+.support-error { color: var(--mud-palette-error); }
+.support-success { color: var(--mud-palette-success); }
+.support-report { border-top: 1px solid var(--mud-palette-lines-default); padding: 14px 0; }
+.support-report summary { cursor: pointer; display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.support-report summary span:first-child { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.support-report small { color: var(--mud-palette-text-secondary); }
+.support-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .support-layout { grid-template-columns: 1fr; } }
