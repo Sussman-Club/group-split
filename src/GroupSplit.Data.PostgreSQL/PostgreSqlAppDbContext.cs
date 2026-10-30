@@ -9,6 +9,25 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<SupportTicket>().ToTable(table =>
+        {
+            table.HasCheckConstraint("CK_SupportTicket_Type", "\"Type\" IN ('Bug', 'FeatureRequest', 'Support')");
+            table.HasCheckConstraint("CK_SupportTicket_Status", "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+            table.HasCheckConstraint("CK_SupportTicket_Priority", "\"Priority\" IN ('Low', 'Normal', 'High', 'Urgent')");
+            table.HasCheckConstraint("CK_SupportTicket_DiagnosticsConsent", "\"DiagnosticsConsent\" OR (\"Platform\" IS NULL AND \"OperatingSystemVersion\" IS NULL AND \"BrowserVersion\" IS NULL)");
+            table.HasCheckConstraint("CK_SupportTicket_Duplicate", "\"DuplicateOfTicketId\" IS NULL OR \"DuplicateOfTicketId\" <> \"Id\"");
+            table.HasCheckConstraint("CK_SupportTicket_GitHub", "(\"GitHubRepository\" IS NULL AND \"GitHubIssueNumber\" IS NULL) OR (\"GitHubRepository\" IS NOT NULL AND length(trim(\"GitHubRepository\")) > 0 AND \"GitHubIssueNumber\" IS NOT NULL AND \"GitHubIssueNumber\" > 0)");
+        });
+        modelBuilder.Entity<SupportTicketMessage>().ToTable(table => table.HasCheckConstraint(
+            "CK_SupportTicketMessage_Visibility", "\"Visibility\" IN ('Public', 'Internal')"));
+        modelBuilder.Entity<SupportTicketAttachment>().ToTable(table => table.HasCheckConstraint(
+            "CK_SupportTicketAttachment_Length", "\"Length\" > 0"));
+        modelBuilder.Entity<SupportTicketStatusChange>().ToTable(table =>
+        {
+            table.HasCheckConstraint("CK_SupportTicketStatusChange_From", "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+            table.HasCheckConstraint("CK_SupportTicketStatusChange_To", "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+        });
+
         modelBuilder.Entity<BackgroundJob>().Property(job => job.Payload).HasColumnType("jsonb");
 
         modelBuilder.Entity<Transaction>(entity =>
