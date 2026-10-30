@@ -23,7 +23,7 @@
                 <DecimalField
                     @bind-Value="_editModel.Amount"
                     For="@(() => _editModel.Amount)"
-                    Label="Amount"
+                    Label="@Loc["Copy.Sentence.Amount"]"
                     Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
                     AdornmentIcon="@Icons.Material.Filled.AttachMoney"
@@ -33,7 +33,7 @@
 
                 <MudStack Row="true" Spacing="4" Class="gs-field-pair">
                     <MudDatePicker @bind-Date="_selectedDate"
-                                   Label="When"
+                                   Label="@Loc["When"]"
                                    Variant="Variant.Outlined"/>
 
                     <MudTimePicker @bind-Time="_selectedTime"

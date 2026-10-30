@@ -725,3 +725,18 @@
 .gs-review-delta { color: var(--gs-teal); font-size: .8125rem; font-weight: 700; }
 .gs-review-unchanged { display: flex; justify-content: space-between; gap: 12px; color: var(--gs-muted); padding: 8px 0; font-size: .8125rem; }
 @media (max-width: 380px) { .gs-review-comparison { grid-template-columns: minmax(0, 1fr); } .gs-review-arrow { display: none; } }
+/* First-use guidance sits alongside the work it describes. */
+.gs-start { background: var(--gs-teal-soft); padding: 24px; margin: 0 0 20px; }
+.gs-start-head, .gs-guide-head, .gs-guide-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.gs-start h2 { margin: 0; }
+.gs-start p, .gs-guide-tip p { margin: 6px 0 12px; color: var(--gs-muted); }
+.gs-start-progress { height: 5px; border-radius: 8px; background: var(--gs-line); overflow: hidden; margin: 12px 0 6px; }
+.gs-start-progress span { display: block; height: 100%; background: var(--gs-teal); }
+.gs-start-row { display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--gs-line); padding: 12px 0; }
+.gs-start-row > div { flex: 1; min-width: 0; }
+.gs-start-row small { display: block; color: var(--gs-muted); }
+.gs-start-number { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--gs-teal); border-radius: 50%; flex: none; }
+.gs-start-number.is-done { background: var(--gs-teal); color: var(--gs-surface); }
+.gs-guide-tip { background: var(--gs-teal-soft); padding: 16px; border-radius: 12px; }
+.gs-guide-head { color: var(--gs-teal); font-size: .8rem; margin-bottom: 8px; }
+@media (max-width: 480px) { .gs-start { padding: 16px; } .gs-start-row { flex-wrap: wrap; } .gs-start-row .mud-button-root { margin-left: 40px; } }

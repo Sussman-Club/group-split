@@ -86,7 +86,7 @@
                 *@
                 <div class="gs-figures">
                     <div class="gs-figure">
-                        <span class="gs-eyebrow">@Loc["Total"]</span>
+                        <span class="gs-eyebrow">@(IsSettlement ? Loc["Payment amount"].Value : Loc["Total"].Value)</span>
                         <span class="gs-figure-value gs-num">@details.Amount.ToMoney(details.Currency)</span>
                     </div>
 
@@ -126,13 +126,13 @@
                         <ExpenseChip ReadOnly="true" Set="true" Label="category" Lead="for"
                                      Value="@(string.IsNullOrWhiteSpace(details.Category) ? Loc["Copy.Lower.uncategorized"].Value : details.Category)" />
                         <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
-                                     Value="@($"{(PaidByMe ? "You" : details.PaidByUserName)}{(details.PaidByIsGuest ? " (guest)" : "")}")" />
+                                     Value="@($"{(PaidByMe ? Loc["You"].Value : details.PaidByUserName)}{(details.PaidByIsGuest ? $" {ParticipantCopy.GuestMark}" : "")}")" />
                     </div>
                 }
                 else
                 {
-                <details class="gs-expense-disclosure">
-                    <summary>@Loc["Copy.Sentence.Transaction_details"]<span>@Loc["Payer, category, merchant & date"]</span></summary>
+                <details class="gs-expense-disclosure" open>
+                    <summary>@Loc["Settlement details"]<span>@Loc["Who paid whom and when"]</span></summary>
                     <div class="gs-expense-disclosure-body">
                 <dl class="gs-kv">
                     <div class="gs-kv-row">
@@ -143,7 +143,7 @@
                         <dd>@Clock.Stamp(details.DateTime, "d MMM yyyy", "HH:mm")</dd>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(details.MerchantName))
+                    @if (!IsSettlement && !string.IsNullOrWhiteSpace(details.MerchantName))
                     {
                         <div class="gs-kv-row">
                             <dt>@Loc["Where"]</dt>
@@ -166,7 +166,7 @@
                         </div>
                     }
 
-                    @if (!string.IsNullOrWhiteSpace(details.Category))
+                    @if (!IsSettlement && !string.IsNullOrWhiteSpace(details.Category))
                     {
                         <div class="gs-kv-row">
                             <dt>@Loc["Category"]</dt>
@@ -405,7 +405,11 @@
     /// every settlement is called "Settlement", which names nothing.
     /// </summary>
     private string Title(TransactionDetailsResponse loaded) => loaded.Kind is ActivityKind.Transfer
-        ? Loc["{0} paid {1}", (loaded.PaidByUserId == Me ? "You" : loaded.PaidByUserName), (loaded.PaidToUserId == Me ? "you" : loaded.PaidToUserName)].Value
+        ? loaded.PaidByUserId == Me
+            ? Loc["You paid {0}", loaded.PaidToUserName].Value
+            : loaded.PaidToUserId == Me
+                ? Loc["{0} paid you", loaded.PaidByUserName].Value
+                : Loc["{0} paid {1}", loaded.PaidByUserName, loaded.PaidToUserName].Value
         : loaded.Name;
 
     /// <summary>How many of a period's expenses show before "Show all".</summary>

@@ -5,6 +5,7 @@
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
 @using Microsoft.AspNetCore.JsonPatch.SystemTextJson
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject ITransactionsPageStateService TransactionsService
@@ -44,6 +45,26 @@
                expense and the chips would all show the same rows. *@
             @if (!Personal)
             {
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                         PopoverClass="gs-menu" Class="gs-mobile-kind">
+                    <ActivatorContent Context="menu">
+                        <button type="button" class="gs-ledger-payer gs-kind-trigger" aria-haspopup="menu"
+                                aria-label="@(Loc["Entry type: {0}", Kinds.First(item => item.Value == Kind).Label].Value)"
+                                @onclick="@(args => menu.ToggleAsync(args))">
+                            <span>@(Kinds.First(item => item.Value == Kind).Label)</span>
+                            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" />
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var (label, value) in Kinds)
+                        {
+                            var kind = value;
+                            <MudMenuItem OnClick="@(() => SetKindAsync(kind))">
+                                <span class="gs-menu-item @(Kind == kind ? "is-on" : "")">@label</span>
+                            </MudMenuItem>
+                        }
+                    </ChildContent>
+                </MudMenu>
                 <div class="gs-ledger-segments" role="group" aria-label="@Loc["Which entries"]">
                     @foreach (var (label, value) in Kinds)
                     {
@@ -100,10 +121,29 @@
         </Search>
     </ActivityToolbar>
 
+    @if (Kind is not ActivityKind.Transfer)
+    {
     <LoadView Skeleton="SkeletonLayout.Summary" Loading="@(_initializing || (_spending is null && _inFlight is not null))" Failed="@(_spending is null || _byCategory is null)" Retry="ReadSummaryAsync">
     <div class="gs-mobile-spending" aria-live="polite">
-        <span>@(ExpenseCount == 1 ? Loc["{0} expense · {1} spent", ExpenseCount, Spent.ToMoney()] : Loc["{0} expenses · {1} spent", ExpenseCount, Spent.ToMoney()])</span>
-        <button type="button" class="gs-category-toggle" @onclick="ShowCategoriesAsync">@Loc["Details"]</button>
+        <div class="gs-mobile-spending-head">
+            <div class="gs-mobile-spending-figures">
+                <span class="gs-mobile-spending-label">@Loc["Total spent"] · @(_range.IsAllTime ? Loc["All time"].Value : _range.Label)</span>
+                <Money Value="Spent" Class="gs-mobile-spending-value" />
+            </div>
+            <span class="gs-mobile-spending-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+        </div>
+        <div class="gs-mobile-spending-meta">
+            <span>@(ExpenseCount == 1 ? Loc["{0} expense", ExpenseCount].Value : Loc["{0} expenses", ExpenseCount].Value)</span>
+            @if (!Personal)
+            {
+                <span aria-hidden="true">·</span>
+                <span>@Loc["Your share"] <Money Value="YourShare" /></span>
+            }
+        </div>
+        <button type="button" class="gs-mobile-spending-details" @onclick="ShowCategoriesAsync">
+            <span><MudIcon Icon="@Icons.Material.Rounded.PieChart" Size="Size.Small" />@Loc["Spending by category"]</span>
+            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" />
+        </button>
     </div>
 
     <div class="gs-stats gs-ledger-stats">
@@ -146,21 +186,19 @@
     </section>
 
     </LoadView>
+    }
 
     <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
-        <ActivityFeed Items="@_mobileEntries" Date="@(entry => entry.DateTime)" Key="@(entry => entry.Id)" Loaded="@_ledgerLoaded">
-            <EmptyContent>
-                <div class="gs-empty" role="status">
-                    <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
-                    <h3>@(IsNarrowedByHand ? Loc["Nothing matches"].Value : Loc["Nothing recorded yet"].Value)</h3>
-                    <span>@EmptyBlurb</span>
-                    @if (IsSearching)
-                    {
-                        <MudButton OnClick="ClearSearchAsync">@Loc["Clear search"]</MudButton>
-                    }
-                </div>
-            </EmptyContent>
-            <ItemTemplate Context="entry">
+        <div class="gs-mobile-ledger" aria-label="@Loc["Transactions"]">
+            <ScrollFeed TItem="DayGroupedItem<GroupLedgerEntryResponse>" @key="_gridGeneration" @ref="_virtualFeed" ItemsProvider="ProvideItemsAsync" Context="row">
+                <ItemContent>
+                    @{ var entry = row.Entry; }
+                    <div class="gs-virtual-row" @key="entry.Id">
+                        @if (row.StartsDay)
+                        {
+                            <h3 class="gs-virtual-date">@Clock.Day(entry.DateTime).ToString("d MMMM")</h3>
+                        }
+                        <div class="gs-feed-row">
                 <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
                         aria-label="@(Loc["Details for {0}", Headline(entry)].Value)"
                         @onclick="@(() => ViewAsync(entry))">
@@ -174,28 +212,66 @@
                                       MerchantName="@entry.MerchantName" MerchantLogoUrl="@entry.MerchantLogoUrl" />
                     }
                     <span class="gs-feed-copy">
-                        <strong>@Headline(entry)</strong>
+                        <strong>@(entry.Kind is ActivityKind.Transfer ? $"{entry.PaidByUserName} → {entry.PaidToUserName}" : Headline(entry))</strong>
                         <span class="gs-muted">
                             @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() : Detail(entry))
                             @if (Clock.TimeOf(entry.DateTime) is { } time)
                             {
-                                <span> · @time.ToString("t")</span>
+                                <span class="gs-feed-mobile-time"> · @time.ToString("t")</span>
                             }
                         </span>
                         @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
                         {
-                            <span class="gs-muted">@Loc["Your share {0}", share.ToMoney()].Value</span>
+                            <span class="gs-muted gs-feed-mobile-share">@Loc["Your share {0}", share.ToMoney()].Value</span>
                         }
                     </span>
-                    <Money Value="entry.Amount" Class="gs-feed-amount" />
+                    <span class="gs-feed-desktop-meta">
+                        <span class="gs-feed-category">@(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value : string.IsNullOrWhiteSpace(entry.Category) ? Loc["Uncategorized"].Value : entry.Category)</span>
+                        @if (Clock.TimeOf(entry.DateTime) is { } desktopTime)
+                        {
+                            <span class="gs-muted">@desktopTime.ToString("t")</span>
+                        }
+                    </span>
+                    <span class="gs-feed-money">
+                        <Money Value="entry.Amount" Class="gs-feed-amount" />
+                        @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } desktopShare)
+                        {
+                            <span class="gs-muted gs-feed-desktop-share">@Loc["Your share {0}", desktopShare.ToMoney()].Value</span>
+                        }
+                    </span>
                 </button>
                 <MudMenu Icon="@Icons.Material.Rounded.MoreVert"
                          aria-label="@(Loc["Actions for {0}", Headline(entry)].Value)" PopoverClass="gs-menu">
                     <MudMenuItem OnClick="@(() => EditAsync(entry))">@Loc["Edit"]</MudMenuItem>
                     <MudMenuItem OnClick="@(() => DeleteAsync(entry))">@Loc["Delete"]</MudMenuItem>
                 </MudMenu>
-            </ItemTemplate>
-        </ActivityFeed>
+                        </div>
+                    </div>
+                </ItemContent>
+                <EmptyContent>
+                    @if (_virtualFailed)
+                    {
+                        <div class="gs-empty" role="alert"><span>@Loc["Could not load this group's ledger."]</span><MudButton OnClick="RetryVirtualAsync">@Loc["Try again"]</MudButton></div>
+                    }
+                    else
+                    {
+                <div class="gs-empty" role="status">
+                    <MudIcon Icon="@Icons.Material.Rounded.EventNote" />
+                    <h3>@(IsNarrowedByHand ? Loc["Nothing matches"].Value : _range.IsAllTime ? Loc["Nothing recorded yet"].Value : Loc["Nothing recorded {0}", Span].Value)</h3>
+                    <span>@EmptyBlurb</span>
+                    @if (IsSearching)
+                    {
+                        <MudButton OnClick="ClearSearchAsync">@Loc["Clear search"]</MudButton>
+                    }
+                    @if (!_range.IsAllTime)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="ShowAllTimeAsync">@Loc["View all time"]</MudButton>
+                    }
+                </div>
+                    }
+                </EmptyContent>
+            </ScrollFeed>
+        </div>
         @* Keyed so a URL arriving from outside rebuilds the grid on the page and sort it
            asks for: both are only read when a grid starts.
 
@@ -216,13 +292,13 @@
                      RowClassFunc="@RowClass"
                      Class="gs-grid">
             <Columns>
-                <PropertyColumn Property="x => x.DateTime" Title="When" InitialDirection="@Initially("dateTime")">
+                <PropertyColumn Property="x => x.DateTime" Title="@Loc["When"]" InitialDirection="@Initially("dateTime")">
                     <CellTemplate>
                         <TransactionWhen Value="@context.Item.DateTime"/>
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Name" Title="Entry" InitialDirection="@Initially("name")">
+                <PropertyColumn Property="x => x.Name" Title="@Loc["Entry"]" InitialDirection="@Initially("name")">
                     <CellTemplate>
                         <div class="gs-inline" style="gap: 12px; flex-wrap: nowrap">
                             @* An avatar for an expense and an icon for a transfer. It is
@@ -279,7 +355,7 @@
                     </CellTemplate>
                 </PropertyColumn>
 
-                <PropertyColumn Property="x => x.Amount" Title="Amount" HeaderClass="gs-right" CellClass="gs-right"
+                <PropertyColumn Property="x => x.Amount" Title="@Loc["Copy.Sentence.Amount"]" HeaderClass="gs-right" CellClass="gs-right"
                                 InitialDirection="@Initially("amount")">
                     <CellTemplate>
                         <Money Value="context.Item.Amount" Class="gs-grid-amount" />
@@ -316,7 +392,7 @@
                    its own line with its label beside it, and a column with no title put two
                    unattached icons in a band of their own -- which row they belonged to was
                    anybody's guess. *@
-                <TemplateColumn Title="Actions" Sortable="false"
+                <TemplateColumn Title="@Loc["Actions"]" Sortable="false"
                                 HeaderStyle="width: 96px" CellStyle="padding: 8px">
                     <CellTemplate>
                         <div class="gs-row-actions gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
@@ -361,9 +437,6 @@
                     <span>@EmptyBlurb</span>
                 </div>
             </NoRecordsContent>
-            <PagerContent>
-                <MudDataGridPager T="GroupLedgerEntryResponse" PageSizeOptions="@(new[] { 10, 25, 50 })" />
-            </PagerContent>
         </MudDataGrid>
     </div>
 </div>
@@ -459,6 +532,9 @@
     private TransactionSummaryResponse? _spending;
     private IReadOnlyList<GroupLedgerEntryResponse> _mobileEntries = [];
     private bool _ledgerLoaded;
+    private long _feedVersion;
+    private ScrollFeed<DayGroupedItem<GroupLedgerEntryResponse>>? _virtualFeed;
+    private bool _virtualFailed;
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
@@ -574,6 +650,7 @@
     private async Task<GridData<GroupLedgerEntryResponse>> LoadPageAsync(
         GridState<GroupLedgerEntryResponse> state, CancellationToken cancellationToken)
     {
+        var version = _feedVersion;
         var sort = state.SortDefinitions.FirstOrDefault();
 
         // Every narrowing ends up here, so this is where the URL catches up with it.
@@ -602,8 +679,11 @@
             cancellationToken: cancellationToken));
 
         cancellationToken.ThrowIfCancellationRequested();
-        _mobileEntries = page?.Items ?? [];
-        _ledgerLoaded = true;
+        if (version == _feedVersion && !_disposed)
+        {
+            _mobileEntries = page?.Items ?? [];
+            _ledgerLoaded = page is not null;
+        }
         await InvokeAsync(StateHasChanged);
 
         return new GridData<GroupLedgerEntryResponse>
@@ -611,6 +691,39 @@
             Items = page?.Items ?? [],
             TotalItems = page?.TotalCount ?? 0
         };
+    }
+
+    private async ValueTask<ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>> ProvideItemsAsync(ItemsProviderRequest request)
+    {
+        var group = GroupId;
+        var bounds = _range.Bounds(Clock.Offset, Clock.Today);
+        var kind = Kind;
+        var search = Search;
+        var category = _categoryId;
+        var uncategorized = _uncategorized;
+        var payer = _paidBy;
+        var sort = _sort;
+        var version = _feedVersion;
+        ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>> result = default;
+        var loaded = await Errors.TryAsync(async () =>
+        {
+            result = await DayGroupedItemsProvider.GetAsync<GroupLedgerEntryResponse>(request,
+                async (page, size, ct) => await GroupsClient.GetGroupActivityAsync(
+                    group, from: bounds.From, to: bounds.To, kind: (int?)kind, search: search,
+                    categoryId: category, uncategorized: uncategorized ? true : null, paidBy: payer,
+                    sortBy: sort.Key, sortDescending: sort.Descending, page: page, pageSize: size,
+                    cancellationToken: ct), entry => Clock.Day(entry.DateTime));
+        }, Loc["Could not load this group's ledger."].Value);
+        request.CancellationToken.ThrowIfCancellationRequested();
+        if (_disposed || version != _feedVersion) return new ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>([], 0);
+        _virtualFailed = !loaded;
+        return loaded ? result : new ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>([], 0);
+    }
+
+    private async Task RetryVirtualAsync()
+    {
+        _virtualFailed = false;
+        if (_virtualFeed is not null) await _virtualFeed.RefreshDataAsync();
     }
 
     private static string Camel(string propertyName) =>
@@ -630,6 +743,7 @@
         if (Kind == kind) return;
 
         Kind = kind;
+        InvalidateFeed();
 
         await WriteUrlAsync();
         await BackToFirstPageAsync();
@@ -637,6 +751,7 @@
 
     private async Task OnSearchChangedAsync(string _)
     {
+        InvalidateFeed();
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
     }
@@ -650,10 +765,13 @@
     private async Task OnRangeChangedAsync(DateFilter range)
     {
         _range = range;
+        InvalidateFeed();
 
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
     }
+
+    private Task ShowAllTimeAsync() => OnRangeChangedAsync(DateFilter.AllTime);
 
     /// <summary>Clicking the selected row clears it; every other row becomes the category filter.</summary>
     private async Task SetCategoryAsync(Guid? categoryId)
@@ -661,6 +779,7 @@
         var selectingCurrent = categoryId == _categoryId && (categoryId is not null || _uncategorized);
         _categoryId = selectingCurrent ? null : categoryId;
         _uncategorized = !selectingCurrent && categoryId is null;
+        InvalidateFeed();
 
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
@@ -672,6 +791,7 @@
             return;
 
         _paidBy = userId;
+        InvalidateFeed();
         await ReadSummaryAsync();
         await BackToFirstPageAsync();
     }
@@ -696,10 +816,16 @@
 
     private Task BackToFirstPageAsync()
     {
+        InvalidateFeed();
         if (_grid is null) return Task.CompletedTask;
 
         _grid.NavigateTo(MudBlazor.Page.First);
         return ReloadAsync();
+    }
+
+    private void InvalidateFeed()
+    {
+        ++_feedVersion;
     }
 
     /// <summary>
@@ -734,6 +860,7 @@
         {
             _reloadAgain = false;
             await InvokeAsync(() => grid.ReloadServerData());
+            if (_virtualFeed is not null) await InvokeAsync(() => _virtualFeed.RefreshDataAsync());
         }
         while (_reloadAgain);
     }
@@ -792,17 +919,10 @@
     }
 
     /// <summary>
-    /// Whether clicking a row opens anything: expenses do, and settlements made through a
-    /// day do.
+    /// Every expense and settlement row opens its details.
     /// </summary>
-    /// <remarks>
-    /// The same line the home page's lists take. A settlement is who paid whom and how
-    /// much, and all three of those are already on the row -- unless it was for a period,
-    /// when what that period held and whether it is still square are not, and are worth
-    /// opening it for.
-    /// </remarks>
-    private static bool Opens(GroupLedgerEntryResponse entry) =>
-        entry.Kind is not ActivityKind.Transfer || entry.CoversThrough is not null;
+    // Every movement opens its details: compact rows can truncate either participant.
+    private static bool Opens(GroupLedgerEntryResponse entry) => true;
 
     /// <summary>The pointer says which rows open, so the cursor is not a lie over a settlement.</summary>
     private string RowClass(GroupLedgerEntryResponse entry, int _) => Opens(entry) ? "is-openable" : "";
@@ -969,7 +1089,7 @@
         // asking. The spared "Delete?" is one whose only outcome is that refusal.
         if (await DeleteGuard.FirstLeaverOnAsync(entry.Id, GroupId) is { } leaver)
         {
-            await DialogService.ShowDepartedNoticeAsync(leaver, settlement ? Loc["Copy.Lower.settlement"].Value : "expense");
+            await DialogService.ShowDepartedNoticeAsync(leaver, settlement ? Loc["Copy.Lower.settlement"].Value : Loc["Copy.Lower.expense"].Value);
             return;
         }
 
@@ -991,7 +1111,7 @@
         if (!await dialog.ConfirmedAsync())
             return;
 
-        await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? Loc["Copy.Lower.settlement"].Value : "expense");
+        await Transactions.DeleteAsync(entry.Id, entry.Name, settlement ? Loc["Copy.Lower.settlement"].Value : Loc["Copy.Lower.expense"].Value);
     }
 
     private string Headline(GroupLedgerEntryResponse entry) =>
@@ -1011,6 +1131,7 @@
 
     private async Task OnDataChangedAsync()
     {
+        ++_feedVersion;
         _asked = null;
         _inFlight = null;
         ++_summaryVersion;
@@ -1124,6 +1245,7 @@
     {
         if (Asked != _settled)
         {
+            ++_feedVersion;
             Apply(Asked);
             _gridGeneration++;
         }
@@ -1135,6 +1257,7 @@
     public void Dispose()
     {
         _disposed = true;
+        ++_feedVersion;
 
         Changes.TransactionsChanged -= OnDataChangedAsync;
         Changes.GroupsChanged -= OnDataChangedAsync;

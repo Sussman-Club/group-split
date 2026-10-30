@@ -16,20 +16,20 @@
     <DialogContent>
         <MudForm @ref="_form">
         <div class="gs-stack" style="gap: 16px">
-            <MudAlert Severity="Severity.Info" Dense="true">
+            <p class="gs-muted">
                 @if (IsEditing)
                 {
-                    <text>@Loc["Correct the itemized receipt. Changes are saved to this expense."]</text>
+                    <text>@Loc["Update the receipt details and items below, then save your changes."]</text>
                 }
                 else if (IsDraftReview)
                 {
-                    <text>@Loc["Check the extracted values before adding the expense. OCR can misread a price or miss a line; after this, choose the group and how the expense is split."]</text>
+                    <text>@Loc["Review the receipt details and items below. You can edit them or add a missing item, then choose Use this receipt to continue to the expense."]</text>
                 }
                 else
                 {
-                    <text>@Loc["Check the extracted values before saving them to this expense. OCR can misread a price or miss a line."]</text>
+                    <text>@Loc["Review the receipt details and items below. You can edit them or add a missing item, then save the receipt to this expense."]</text>
                 }
-            </MudAlert>
+            </p>
 
             @if (!string.IsNullOrWhiteSpace(_validationError))
             {
@@ -99,7 +99,7 @@
                 var itemNameError = GetItemNameError(item);
                 <div class="gs-stack" @key="item.Key" style="gap: 8px; padding: 12px; border: 1px solid var(--gs-line); border-radius: 8px">
                     <div class="gs-inline" style="justify-content: space-between; gap: 8px">
-                        <MudTextField @bind-Value="item.Name" Label="Item" Variant="Variant.Outlined" Immediate="true"
+                        <MudTextField @bind-Value="item.Name" Label="@Loc["Copy.Sentence.Item"]" Variant="Variant.Outlined" Immediate="true"
                                       MaxLength="ReceiptItemInput.NameLength" Counter="ReceiptItemInput.NameLength"
                                       Validation="@(new Func<string, IEnumerable<string>>(ValidateItemName))"
                                       Error="@(itemNameError is not null)" ErrorText="@itemNameError"
@@ -108,7 +108,7 @@
                                        aria-label="@Loc["Remove item"]" OnClick="@(() => RemoveItem(item))" />
                     </div>
                     <div class="gs-receipt-fields">
-                        <DecimalField @bind-Value="item.Quantity" Label="Quantity" Variant="Variant.Outlined"
+                        <DecimalField @bind-Value="item.Quantity" Label="@Loc["Quantity"]" Variant="Variant.Outlined"
                                       Places="3" HideSpinButtons="true" />
                         <DecimalField @bind-Value="item.UnitPrice" Label="@Loc["Unit price"]" Variant="Variant.Outlined"
                                       Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />

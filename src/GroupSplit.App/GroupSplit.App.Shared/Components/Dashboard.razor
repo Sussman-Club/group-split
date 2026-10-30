@@ -115,7 +115,7 @@
         <div class="gs-stack">
             <div class="gs-card gs-stat gs-reveal" style="--i: 3">
                 <span class="gs-stat-icon clay"><MudIcon Icon="@Icons.Material.Rounded.CalendarMonth" /></span>
-                <span class="gs-eyebrow">@Loc["Shared, this month"]</span>
+                <span class="gs-eyebrow">@Loc["Your share, this month"]</span>
                 <LoadView Failed="@(_thisMonth is null || _lastMonth is null)" Retry="ReadAsync">
                     <Money Value="ThisMonth" Currency="@_thisMonth?.Currency" Animate Class="gs-stat-value" />
                     <span class="gs-muted" style="font-size: .8125rem">@MonthSub</span>
@@ -193,10 +193,8 @@
 
     private IReadOnlyList<UserActivityResponse> Recent => _activity?.Items ?? [];
 
-    // What the groups spent around you, not what you personally paid: the figure a shared
-    // ledger is actually about. Both months come from the same read so the comparison is
-    // between two of the same thing.
-    private decimal ThisMonth => _thisMonth?.Total ?? 0m;
+    // The caller's share of shared expenses, compared with their share last month.
+    private decimal ThisMonth => _thisMonth?.Share ?? 0m;
     private int ThisMonthCount => _thisMonth?.Count ?? 0;
 
     /// <summary>
@@ -210,7 +208,7 @@
             var said = Loc["{0} expense{1}", ThisMonthCount, (ThisMonthCount == 1 ? "" : "s")].Value;
 
             return _lastMonth is { } previous
-                ? Loc["{0} · {1} last month", said, previous.Total.ToMoney(previous.Currency)].Value
+                ? Loc["{0} · {1} last month", said, previous.Share.ToMoney(previous.Currency)].Value
                 : said;
         }
     }

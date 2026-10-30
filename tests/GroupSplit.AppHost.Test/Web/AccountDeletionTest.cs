@@ -98,7 +98,7 @@ public class AccountDeletionTest(AppHostFixture appHost) : WebPageTest(appHost)
             "#password", KeycloakAdmin.AccountPassword, new PageFillOptions { Timeout = OperationTimeoutMs });
         await Page.ClickAsync("#kc-login", new PageClickOptions { Timeout = OperationTimeoutMs });
 
-        await Expect(Page.GetByText("No shared group yet")).ToBeVisibleAsync(Visible);
+        await Expect(Page.GetByText("A home, with the bills made clear.")).ToBeVisibleAsync(Visible);
     }
 
     private static LocatorAssertionsToBeVisibleOptions Visible =>

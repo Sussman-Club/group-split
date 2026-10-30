@@ -9,17 +9,19 @@
     </TitleContent>
 
     <DialogContent>
+        <MudText Class="gs-muted mb-3">@Loc["A group keeps shared expenses together."]</MudText>
         <MudForm @ref="@form" Model="@model">
             <MudTextField
                 @bind-Value="model.Name"
                 For="@(() => model.Name)"
                 Label="@Loc["Name"]"
+                Placeholder="@Loc["Copy.GroupNameExample"]"
                 Variant="Variant.Outlined"
                 Immediate="true"
             />
             <MudTextField @bind-Value="model.Description"
                           For="@(() => model.Description)"
-                          Label="@Loc["Description"]"
+                          Label="@Loc["Description (optional)"]"
                           HelperText="@Loc["What this group is for."]"
                           Variant="Variant.Outlined"
                           Lines="2"
@@ -32,7 +34,7 @@
         <MudButton Variant="Variant.Text" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" Disabled="@loading" OnClick="@Submit">
-            @Loc["Submit"]
+            @Loc["Create a group"]
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -45,6 +47,11 @@
     private bool loading = false;
 
     private CreateGroupRequest model = new();
+
+    protected override void OnInitialized()
+    {
+        model.Description = Loc["Copy.DefaultHouseholdDescription"].Value;
+    }
 
     private async Task Submit()
     {

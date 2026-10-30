@@ -5,6 +5,7 @@
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
 @inject NavigationManager Nav
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @implements IDisposable
 
 @*
@@ -14,6 +15,8 @@
     it, so seeing a second group meant changing the subject of the whole page. A group has
     its own page now -- /groups/{id}, with tabs -- and this is the list they open from.
 *@
+
+<GroupNavigationMemory />
 
 <PageTitle>@Loc["Groups - Group Split"]</PageTitle>
 
@@ -29,7 +32,20 @@
 <LoadView Skeleton="SkeletonLayout.Groups" Loading="@(!GroupsService.IsReadyTask.IsCompleted || _retrying)" Failed="@(GroupsService.Position is null)" Retry="RetryAsync">
 
 
+<MudTextField @bind-Value="_search" @bind-Value:after="SearchChanged" Placeholder="@Loc["Search groups"]"
+              aria-label="@Loc["Search groups"]" Immediate="true" Clearable="true"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search"
+              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+
 <div class="gs-stack">
+    @if (IsSearching && Active.Count == 0 && Archived.Count == 0)
+    {
+        <div class="gs-card gs-empty" role="status">
+            <MudIcon Icon="@Icons.Material.Rounded.SearchOff" />
+            <h3>@Loc["No groups match your search."]</h3>
+            <MudButton OnClick="ClearSearch">@Loc["Clear search"]</MudButton>
+        </div>
+    }
     @if (Active.Count > 0)
     {
         <div class="gs-group-grid">
@@ -44,32 +60,36 @@
     @* Asked of the shared groups: everybody has a personal one, so a new account would never
        be invited to make the group it came here for. Below the personal card, not instead
        of it. *@
-    @if (!GroupsService.Groups.Any(group => !group.IsPersonal))
+    @if (!IsSearching && !GroupsService.Groups.Any(group => !group.IsPersonal))
     {
-        <div class="gs-card gs-empty" style="padding: 64px 24px">
-            <MudIcon Icon="@Icons.Material.Rounded.Groups" />
-            <h3>@Loc["No shared group yet"]</h3>
-            <span>@Loc["Create a group and name the people you share costs with."]</span>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill mt-4"
-                       StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["Create a group"]</MudButton>
-        </div>
+        <section class="gs-card gs-first-home" aria-labelledby="first-home-title">
+            <div class="gs-first-home-copy">
+                <span class="gs-first-home-kicker">@Loc["A place for your household"]</span>
+                <h2 id="first-home-title">@Loc["A home, with the bills made clear."]</h2>
+                <p>@Loc["Rent, groceries, utilities… Keep the expenses you share with your housemates together."]</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill gs-first-home-action"
+                           StartIcon="@Icons.Material.Rounded.Add" OnClick="OpenCreateDialogAsync">@Loc["Create a group for your home"]</MudButton>
+                <span class="gs-first-home-note">@Loc["Add your housemates afterwards, whether or not they use the app."]</span>
+            </div>
+            <div class="gs-first-home-image" aria-hidden="true"></div>
+        </section>
     }
 
     @if (Archived.Count > 0)
     {
         var i = Active.Count + 1;
-        <div class="gs-card gs-card-pad gs-reveal" style="--i: @(i + 1)">
-            <div class="gs-card-title">
-                <h2>@Loc["Archived"]</h2>
+        <details class="gs-card gs-card-pad gs-archived-groups" open="@(IsSearching || ArchivedExpanded)">
+            <summary class="gs-card-title" @onclick="ToggleArchived" @onclick:preventDefault="true">
+                <span class="gs-archived-label">@Loc["Archived"] <span class="gs-tag neutral">@Archived.Count</span></span>
                 <span class="gs-tag neutral">@Loc["only you see this"]</span>
-            </div>
+            </summary>
             <div class="gs-group-grid">
                 @foreach (var group in Archived)
                 {
                     @GroupCard(group, i++)
                 }
             </div>
-        </div>
+        </details>
     }
 </div>
 
@@ -99,12 +119,31 @@
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     // The personal group first, as the API lists it: it is the one everybody has.
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+    [SupplyParameterFromQuery(Name = "archived")] public bool ArchivedExpanded { get; set; }
+    private void ToggleArchived()
+    {
+        if (IsSearching) return;
+        ArchivedExpanded = !ArchivedExpanded;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("archived", ArchivedExpanded ? true : (bool?)null), replace: true);
+    }
+    private string _search = string.Empty;
+    protected override void OnParametersSet() => _search = Query ?? string.Empty;
+    private void SearchChanged() => Nav.NavigateTo(Nav.GetUriWithQueryParameter("q",
+        string.IsNullOrWhiteSpace(_search) ? null : _search), replace: true);
+    private void ClearSearch() { _search = string.Empty; SearchChanged(); }
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
+    private bool Matches(GroupResponse group) => !IsSearching ||
+        System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+            group.Name, _search.Trim(), System.Globalization.CompareOptions.IgnoreCase |
+            System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
     private List<GroupResponse> Active =>
-        [.. GroupsService.Groups.Where(group => !group.IsArchive)
+        [.. GroupsService.Groups.Where(group => !group.IsArchive && Matches(group))
             .OrderByDescending(group => group.IsPersonal).ThenBy(group => group.Name)];
 
     private List<GroupResponse> Archived =>
-        [.. GroupsService.Groups.Where(group => group.IsArchive).OrderBy(group => group.Name)];
+        [.. GroupsService.Groups.Where(group => group.IsArchive && Matches(group)).OrderBy(group => group.Name)];
 
     /// <summary>
     /// What this person is owed or owes in one group. Read from the position endpoint,
@@ -162,6 +201,8 @@
 
         if (!await GroupsService.CreateGroupAsync(request))
             return;
+
+        await Login.RefreshLoginAsync();
 
         // Straight into the group that was just made -- the state service selected it, so
         // this does not have to guess which of the list it was. There is nothing on its

@@ -159,6 +159,24 @@ public class GroupLedgerTabTest : ComponentTest
     private IRenderedComponent<GroupLedgerTab> Render() =>
         base.Render<GroupLedgerTab>(parameters => parameters.Add(tab => tab.GroupId, Group));
 
+    [Fact]
+    public void Each_movement_remains_openable_with_long_names()
+    {
+        _entries = [Expense(Guid.NewGuid(), new string('x', 200)), Expense(Guid.NewGuid(), "Short")];
+        var tab = Render();
+
+        tab.WaitForAssertion(() =>
+        {
+            var rows = tab.FindAll(".gs-virtual-row");
+            Assert.Equal(2, rows.Count);
+            Assert.All(rows, row =>
+            {
+                Assert.Single(row.QuerySelectorAll(".gs-feed-entry"));
+            });
+            Assert.Contains(new string('x', 200), rows[0].TextContent + rows[1].TextContent);
+        });
+    }
+
     [Theory]
     [InlineData(null, true, false)]
     [InlineData("-dateTime", true, false)]
@@ -192,7 +210,7 @@ public class GroupLedgerTabTest : ComponentTest
         void AssertOrder() => tab.WaitForAssertion(() =>
         {
             Assert.Equal(expected, tab.FindAll(".gs-feed-copy strong").Select(entry => entry.TextContent));
-            Assert.Equal(2, tab.FindAll(".gs-feed-day").Count);
+            Assert.Equal(2, tab.FindAll(".gs-virtual-date").Count);
             Assert.NotEmpty(_orders);
             Assert.All(_orders, order => Assert.Equal(("dateTime", (bool?)descending),
                 (order.Key, order.Descending)));
@@ -633,7 +651,7 @@ public class GroupLedgerTabTest : ComponentTest
     /// figures, and leaves them where they were.
     /// </summary>
     [Fact]
-    public async Task Filtering_by_kind_moves_the_list_and_leaves_the_total_alone()
+    public async Task Settlements_hide_expense_figures_and_expenses_restore_them()
     {
         var tab = Render();
 
@@ -643,13 +661,14 @@ public class GroupLedgerTabTest : ComponentTest
         await ClickChipAsync(tab, "Settlements");
 
         Assert.Single(_asks);
-        Assert.Equal(("5", "$29.00"), Cards(tab));
+        Assert.Empty(tab.FindAll(".gs-mobile-spending, .gs-ledger-stats, .gs-category-summary"));
         Assert.Equal((int)ActivityKind.Transfer, _kinds.Last());
 
         await ClickChipAsync(tab, "Expenses");
 
         Assert.Single(_asks);
         Assert.Equal((int)ActivityKind.Expense, _kinds.Last());
+        Assert.Equal(("5", "$29.00"), Cards(tab));
     }
 
     /// <summary>
@@ -1021,9 +1040,23 @@ public class GroupLedgerTabTest : ComponentTest
 
         var (heading, blurb) = Empty(tab);
 
-        Assert.Equal("Nothing recorded yet", heading);
+        Assert.Equal("Nothing recorded this month", heading);
         Assert.Contains("this month", blurb);
         Assert.Contains("All time", blurb);
+    }
+
+    [Fact]
+    public async Task The_empty_state_can_expand_the_date_range()
+    {
+        var tab = Render();
+        tab.WaitForElement(".gs-mobile-ledger .gs-empty");
+        var button = tab.FindAll(".gs-mobile-ledger button")
+            .Single(item => item.TextContent.Trim() == "View all time");
+        await button.ClickAsync(new());
+        tab.WaitForAssertion(() => Assert.Equal(DateFilterPreset.AllTime,
+            tab.FindComponent<DateRangeFilter>().Instance.Value.Preset));
+        Assert.DoesNotContain(tab.FindAll(".gs-mobile-ledger button"),
+            item => item.TextContent.Trim() == "View all time");
     }
 
     /// <summary>
@@ -1080,19 +1113,8 @@ public class GroupLedgerTabTest : ComponentTest
 
     // ---- opening one entry --------------------------------------------------------------
 
-    /// <summary>
-    /// Clicking an expense's row opens its details; clicking a settlement's opens nothing.
-    /// </summary>
-    /// <remarks>
-    /// The row is the way in. It used to be an eye in the actions column, beside Edit and
-    /// Delete, which made opening an entry look like one more thing to do to it. A
-    /// settlement's row is inert on the same grounds the home page's lists leave it so: a
-    /// settlement is who paid whom and how much, all three of which are already on the row,
-    /// and the dialog is mostly the division of an expense between people. The cursor says
-    /// which rows open, so nobody clicks a settlement to find out.
-    /// </remarks>
     [Fact]
-    public async Task An_expense_row_opens_its_details_and_a_settlement_row_does_not()
+    public async Task Both_expense_and_settlement_rows_open_their_details()
     {
         var expense = Expense(Guid.NewGuid());
         _entries = [expense, Transfer(Guid.NewGuid())];
@@ -1120,12 +1142,12 @@ public class GroupLedgerTabTest : ComponentTest
         Assert.Equal(2, tab.FindAll("tbody tr.mud-table-row").Count);
 
         Assert.Contains("is-openable", ExpenseRow(tab).ClassName);
-        Assert.DoesNotContain("is-openable", SettlementRow(tab).ClassName ?? "");
+        Assert.Contains("is-openable", SettlementRow(tab).ClassName);
 
         // Found again before each click: the grid re-renders on a row click, and a row
         // found before it points at handlers that are gone.
         await SettlementRow(tab).ClickAsync(new());
-        Assert.Null(viewed);
+        Assert.Equal(_entries[1].Id, viewed);
 
         await ExpenseRow(tab).ClickAsync(new());
         Assert.Equal(expense.Id, viewed);
@@ -1195,9 +1217,9 @@ public class GroupLedgerTabTest : ComponentTest
 
         var tab = Render();
 
-        tab.WaitForAssertion(() => Assert.Single(tab.FindAll("button.gs-row-open")));
+        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll("button.gs-row-open").Count));
 
-        var name = tab.Find("button.gs-row-open");
+        var name = ExpenseRow(tab).QuerySelector("button.gs-row-open")!;
         Assert.Equal("Dinner", name.TextContent.Trim());
 
         await name.ClickAsync(new());

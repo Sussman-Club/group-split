@@ -62,6 +62,36 @@ public class GroupDetailPageTest : ComponentTest
             .Add(page => page.Tab, tab));
 
     [Fact]
+    public void First_group_checklist_uses_the_group_and_its_progress()
+    {
+        var user = new UserInfo(Guid.NewGuid(), "Ana", null, null, OnboardingGroupId: Lisbon.Id);
+        var page = Render<GroupDetail>(parameters => parameters
+            .Add(x => x.GroupId, Lisbon.Id).AddCascadingValue(user));
+        page.WaitForAssertion(() => Assert.Contains("Let’s get Weekend in Lisbon started", page.Markup));
+        Assert.Contains("1 of 3 complete", page.Markup);
+        Assert.Contains("Add the people you share with", page.Markup);
+        Assert.Contains("Add your first expense", page.Markup);
+    }
+
+    [Fact]
+    public void Completed_checklist_is_saved_and_leaves_no_reopen_button()
+    {
+        var users = new Mock<IUsersClient>();
+        users.Setup(x => x.DismissOnboardingAsync("checklist", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(users.Object);
+        _state.SetupGet(x => x.Balance).Returns(new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Guid.NewGuid() }, new GroupNetBalance { UserId = Guid.NewGuid() }]
+        });
+        _state.SetupGet(x => x.Transactions).Returns(new PagedResponseOfTransactionResponse([], 1, 8, 1));
+        var user = new UserInfo(Guid.NewGuid(), "Ana", null, null, OnboardingGroupId: Lisbon.Id);
+        var page = Render<GroupDetail>(parameters => parameters.Add(x => x.GroupId, Lisbon.Id).AddCascadingValue(user));
+        page.WaitForAssertion(() => users.Verify(x => x.DismissOnboardingAsync("checklist", It.IsAny<CancellationToken>()), Times.Once));
+        Assert.Empty(page.FindAll(".gs-start"));
+        Assert.DoesNotContain("Getting started", page.Markup);
+    }
+
+    [Fact]
     public void Pending_group_figures_do_not_instantiate_the_tab()
     {
         var ready = new TaskCompletionSource();
@@ -80,7 +110,7 @@ public class GroupDetailPageTest : ComponentTest
         page.HasComponent<Stub<GroupOverviewTab>>() ? "balances"
         : page.HasComponent<Stub<GroupLedgerTab>>() ? "activity"
         : page.HasComponent<Stub<GroupMembersTab>>() ? "people"
-        : page.HasComponent<Stub<GroupSettingsTab>>() ? "settings"
+        : page.HasComponent<Stub<GroupSettingsTab>>() || page.FindAll(".gs-group-settings-overview").Count > 0 ? "settings"
         : null;
 
     /// <summary>A dialog that has already been answered, the state a component is handed after a click.</summary>
@@ -148,10 +178,29 @@ public class GroupDetailPageTest : ComponentTest
         Assert.Equal(expected, Section(page));
 
         var current = page.Find("nav.gs-tabs a.is-current");
-        var href = expected == "balances" ? $"/groups/{Lisbon.Id}" : $"/groups/{Lisbon.Id}/{expected}";
+        var href = expected == "balances" ? $"/groups/{Lisbon.Id}" : $"/groups/{Lisbon.Id}/{(expected == "people" ? "settings" : expected)}";
 
         Assert.Equal(href, current.GetAttribute("href"));
         Assert.Equal("page", current.GetAttribute("aria-current"));
+    }
+
+    [Fact]
+    public void Settings_overview_links_to_each_section()
+    {
+        var page = Open(Lisbon.Id, "settings");
+        var links = page.FindAll(".gs-group-settings-choices a").Select(link => link.GetAttribute("href")).ToArray();
+        Assert.Equal(new[] { $"/groups/{Lisbon.Id}/details", $"/groups/{Lisbon.Id}/people", $"/groups/{Lisbon.Id}/categories", $"/groups/{Lisbon.Id}/rules" }, links);
+    }
+
+    [Theory]
+    [InlineData("details")]
+    [InlineData("people")]
+    [InlineData("categories")]
+    [InlineData("rules")]
+    public void Settings_sections_offer_a_link_back(string tab)
+    {
+        var page = Open(Lisbon.Id, tab);
+        Assert.Equal($"/groups/{Lisbon.Id}/settings", page.Find("a.gs-settings-back").GetAttribute("href"));
     }
 
     /// <summary>

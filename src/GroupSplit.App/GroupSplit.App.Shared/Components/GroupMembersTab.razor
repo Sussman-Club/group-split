@@ -120,7 +120,7 @@
                     @foreach (var guest in _guests)
                     {
                         var row = guest;
-                        <div class="gs-row gs-row-tight-action" style="cursor: default">
+                        <div class="gs-row gs-guest-row" style="cursor: default">
                             <Avatar Name="@row.Name" />
                             <div style="min-width: 0">
                                 <div class="title"><span>@row.Name</span></div>
@@ -133,7 +133,7 @@
                                The link is copied rather than shown, because it is a bearer
                                credential on this guest's whole position in the ledger, and a
                                URL on screen is a URL in a screenshot. *@
-                            <div class="gs-inline" style="gap: 2px; justify-content: flex-end; flex-wrap: nowrap">
+                            <div class="gs-inline gs-guest-actions">
                                 @if (!row.HasLink)
                                 {
                                     @* Issue and copy in one press. Nobody wants a link to look
@@ -203,7 +203,7 @@
                             <Avatar Name="@person.FullName" />
                             <div style="min-width: 0">
                                 <div class="title">@person.FullName</div>
-                                <div class="meta">@(person.IsGuest ? Loc["Past guest"].Value : Loc["Past member"].Value) · history stays in the group</div>
+                                <div class="meta">@(person.IsGuest ? Loc["Past guest"].Value : Loc["Past member"].Value) @Loc["· history stays in the group"]</div>
                             </div>
                         </div>
                     }

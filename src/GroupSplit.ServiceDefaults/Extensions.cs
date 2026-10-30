@@ -2,6 +2,7 @@ using GroupSplit.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -69,6 +70,9 @@ public static class Extensions
                 .WithLogging(logging => logging.AddProcessor(new TokenRedaction.LogProcessor()))
                 .WithMetrics(metrics =>
                 {
+                    if (builder.Configuration.GetValue<bool>("Telemetry:EssentialMetricsOnly"))
+                        metrics.AddView(EssentialMetrics.Select);
+
                     metrics.AddAspNetCoreInstrumentation()
                         .AddMeter("Npgsql")
                         .AddHttpClientInstrumentation()
@@ -90,7 +94,12 @@ public static class Extensions
                         // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                         //.AddGrpcClientInstrumentation()
                         .AddHttpClientInstrumentation()
-                        .AddEntityFrameworkCoreInstrumentation()
+                        .AddEntityFrameworkCoreInstrumentation(options =>
+                        {
+                            if (builder.Configuration.GetValue<bool>("Telemetry:SuppressRoutineDatabaseTraces"))
+                                options.Filter = (_, command) =>
+                                    !RoutineDatabaseTelemetry.IsProbe(command);
+                        })
                         .AddAWSInstrumentation()
                         // Invitation and join-link tokens out of url.path and url.full, on
                         // server and client spans alike. See TokenRedaction.

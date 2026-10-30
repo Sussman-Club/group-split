@@ -226,8 +226,9 @@ public class DashboardTest : ComponentTest
             It.IsAny<CancellationToken>()), Times.Exactly(2));
 
         var month = page.Find(".gs-stat");
-        Assert.Equal("$120.00", Text(month.QuerySelector(".gs-stat-value")!));
-        Assert.Equal("9 expenses · $80.00 last month", Text(month.QuerySelector(".gs-muted")!));
+        Assert.Equal("$40.00", Text(month.QuerySelector(".gs-stat-value")!));
+        Assert.Contains("Your share, this month", month.TextContent);
+        Assert.Equal("9 expenses · $30.00 last month", Text(month.QuerySelector(".gs-muted")!));
     }
 
     /// <summary>
@@ -369,7 +370,7 @@ public class DashboardTest : ComponentTest
         page.WaitForAssertion(() => ShownOnce("Could not load your recent activity."));
         Assert.Contains("Could not load this view", page.Markup, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing recorded yet", page.Markup, StringComparison.Ordinal);
-        Assert.Equal("$120.00", Text(page.Find(".gs-stat .gs-stat-value")));
+        Assert.Equal("$40.00", Text(page.Find(".gs-stat .gs-stat-value")));
     }
 
     /// <summary>
@@ -400,7 +401,7 @@ public class DashboardTest : ComponentTest
 
         // What the last good read drew, rather than an empty page.
         Assert.Contains("Groceries", page.Markup, StringComparison.Ordinal);
-        Assert.Equal("$120.00", Text(page.Find(".gs-stat .gs-stat-value")));
+        Assert.Equal("$40.00", Text(page.Find(".gs-stat .gs-stat-value")));
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+<GroupNavigationMemory @key="Nav.ToAbsoluteUri(Nav.Uri).AbsolutePath" />
 @page "/groups/{GroupId:guid}"
 @page "/groups/{GroupId:guid}/{Tab}"
 @using GroupSplit.App.Shared.Components
@@ -6,11 +7,15 @@
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.App.Shared.Services.Transactions
 @using GroupSplit.Shared
+@using Microsoft.JSInterop
 @inject IDialogService DialogService
 @inject IGroupsPageStateService GroupsService
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject LocalClock Clock
+@inject IUsersClient Users
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 @*
@@ -50,6 +55,14 @@
                     @(group.IsPersonal ? Loc["Your own spending"].Value : Loc["{0} member{1}", group.MemberCount, (group.MemberCount == 1 ? "" : "s")].Value)@LastActivity
                 </p>
             </div>
+            @if (!group.IsPersonal && Current is "settings" or "people")
+            {
+                <MudButton Class="gs-group-header-archive" Variant="Variant.Outlined" Size="Size.Medium"
+                           Disabled="@_archiveBusy" StartIcon="@(group.IsArchive ? Icons.Material.Outlined.Unarchive : Icons.Material.Outlined.Archive)"
+                           OnClick="@ToggleArchiveAsync">
+                    @(group.IsArchive ? Loc["Restore"].Value : Loc["Archive"].Value)
+                </MudButton>
+            }
         </div>
 
     </div>
@@ -60,43 +73,86 @@
             <a class="gs-tab @(Current == key ? "is-current" : "")" href="@Href(key)" aria-current="@(Current == key ? "page" : null)">@label</a>
         }
 
-        @* A cog at the far end rather than a fifth word: settings is not one of the
-           questions somebody asks about a group day to day, and every app puts it here. *@
+        @* Keep Settings a text tab alongside Balances and Activity. *@
         <MudTooltip Text="@Loc["Settings"]" ShowOnFocus="false">
-            <a class="gs-tab gs-tab-icon @(Current == "settings" ? "is-current" : "")"
+            <a class="gs-tab gs-settings-tab @(Current is "settings" or "people" ? "is-current" : "")"
                href="@Href("settings")"
                aria-label="@Loc["Settings"]"
-               aria-current="@(Current == "settings" ? "page" : null)">
-                <MudIcon Icon="@Icons.Material.Rounded.Settings" />
+               aria-current="@(Current is "settings" or "people" ? "page" : null)">
+                <span>@Loc["Settings"]</span>
             </a>
         </MudTooltip>
     </nav>
 
-    <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
-        @switch (Current)
-        {
-            case "activity":
+    @if (ShowGettingStarted && Current == "balances")
+    {
+        <section class="gs-card gs-start" aria-labelledby="gs-start-title">
+            <div class="gs-start-head">
+                <div><h2 id="gs-start-title">@Loc["Let’s get {0} started", group.Name]</h2>
+                    <p>@Loc["A few steps will help you see where everyone stands."]</p></div>
+                <MudIconButton Icon="@Icons.Material.Rounded.Close" aria-label="@Loc["Dismiss getting started"]" OnClick="DismissChecklistAsync" />
+            </div>
+            <div class="gs-start-progress" role="progressbar" aria-label="@Loc["Getting started progress"]" aria-valuemin="0" aria-valuemax="3" aria-valuenow="@CompletedSteps"><span style="width: @(CompletedSteps * 100 / 3)%"></span></div>
+            <div class="gs-muted">@Loc["{0} of 3 complete", CompletedSteps]</div>
+            <div class="gs-start-row"><span class="gs-start-number is-done">✓</span><div><strong>@Loc["Create your group"]</strong><small>@Loc["Your group is ready to share."]</small></div></div>
+            <div class="gs-start-row"><span class="gs-start-number @(HasPeople ? "is-done" : "")">@(HasPeople ? "✓" : "2")</span><div><strong>@Loc["Add the people you share with"]</strong><small>@Loc["Invite them or add them as guests."]</small></div><MudButton Href="@Href("people")" Color="Color.Primary">@Loc["Add people"]</MudButton></div>
+            <div class="gs-start-row"><span class="gs-start-number @(HasExpense ? "is-done" : "")">@(HasExpense ? "✓" : "3")</span><div><strong>@Loc["Add your first expense"]</strong><small>@Loc["We’ll help you choose how to split it."]</small></div><MudButton OnClick="AddExpenseAsync" Color="Color.Primary">@Loc["Add expense"]</MudButton></div>
+        </section>
+    }
+
+    @if (Current is "settings" or "people")
+    {
+        <div class="gs-settings-content @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Tab}")">
+            @if (Current == "settings" && SettingsSection == "overview")
+            {
+                <section class="gs-group-settings-overview" aria-labelledby="group-settings-title">
+                    <div class="gs-settings-heading"><h2 id="group-settings-title">@Loc["Group settings"]</h2></div>
+                    <nav class="gs-group-settings-choices" aria-label="@Loc["Settings sections"]">
+                        <a href="@Href("details")"><MudIcon Icon="@Icons.Material.Rounded.Home" /><span><strong>@Loc["Group details"]</strong><small>@Loc["Name, description and defaults"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        @if (!group.IsPersonal)
+                        {
+                            <a href="@Href("people")"><MudIcon Icon="@Icons.Material.Rounded.People" /><span><strong>@Loc["People"]</strong><small>@Loc["Members, guests and invitations"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        }
+                        <a href="@Href("categories")"><MudIcon Icon="@Icons.Material.Rounded.LocalOffer" /><span><strong>@Loc["Categories"]</strong><small>@Loc["Organise expenses"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        @if (!group.IsPersonal)
+                        {
+                            <a href="@Href("rules")"><MudIcon Icon="@Icons.Material.Rounded.PieChart" /><span><strong>@Loc["Split rules"]</strong><small>@Loc["Choose how expenses are shared"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
+                        }
+                    </nav>
+                </section>
+            }
+            else
+            {
+                <div><a class="gs-settings-back" href="@Href("settings")"><MudIcon Icon="@Icons.Material.Rounded.ArrowBack" />@Loc["Back to group settings"]</a></div>
+                @if (Current == "people")
+                {
+                    <section class="gs-settings-section" aria-labelledby="group-people-title">
+                        <div class="gs-settings-heading"><h2 id="group-people-title">@Loc["People"]</h2></div>
+                        <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
+                    </section>
+                }
+                else
+                {
+                    <GroupSettingsTab Group="@group" Section="@SettingsSection" />
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <div class="gs-stack @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Current}")">
+            @if (Current == "activity")
+            {
                 <GroupLedgerTab GroupId="@group.Id" Personal="@group.IsPersonal" DefaultPeriod="@group.DefaultPeriod"
                                 Kind="@LedgerKind" QueryChanged="OnLedgerQueryChanged" />
-                break;
-
-            case "people":
-                <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
-                break;
-
-            case "settings":
-                <GroupSettingsTab Group="@group" />
-                break;
-
-            default:
-                <GroupOverviewTab GroupId="@group.Id"
-                                  GroupName="@group.Name"
-                                  UserId="@UserInfo?.Id"
-                                  OnSettle="OnSettleAsync"
-                                  OnRequestPayment="RequestPaymentAsync" />
-                break;
-        }
-    </div>
+            }
+            else
+            {
+                <GroupOverviewTab GroupId="@group.Id" GroupName="@group.Name" UserId="@UserInfo?.Id"
+                                  OnSettle="OnSettleAsync" OnRequestPayment="RequestPaymentAsync" />
+            }
+        </div>
+    }
 
     @if (!group.IsArchive)
     {
@@ -116,6 +172,36 @@ else if (NotFound)
 </LoadView>
 
 @code {
+    private bool _archiveBusy;
+    private bool _checklistDismissed;
+    private bool _checklistSaving;
+    private bool HasPeople => GroupsService.Balance?.NetBalances.Count() > 1;
+    private bool HasExpense => GroupsService.Transactions?.TotalCount > 0;
+    private int CompletedSteps => 1 + (HasPeople ? 1 : 0) + (HasExpense ? 1 : 0);
+    private bool ShowGettingStarted => UserInfo?.Onboarding.GroupId == GroupId &&
+        !UserInfo.Onboarding.ChecklistDismissed && !_checklistDismissed && CompletedSteps < 3;
+
+    private async Task DismissChecklistAsync()
+    {
+        if (await Errors.TryAsync(() => Users.DismissOnboardingAsync("checklist"), Loc["Could not save your preference."].Value))
+        {
+            _checklistDismissed = true;
+            await Login.RefreshLoginAsync();
+        }
+    }
+
+    private async Task ToggleArchiveAsync()
+    {
+        if (_archiveBusy || Group is not { IsPersonal: false } group) return;
+        _archiveBusy = true;
+        try
+        {
+            if (group.IsArchive) await GroupsService.UnarchiveGroupAsync();
+            else await GroupsService.ArchiveGroupAsync();
+        }
+        finally { _archiveBusy = false; }
+    }
+
     [Parameter] public Guid GroupId { get; set; }
 
     /// <summary>Which section is open, from the URL, so a tab is a place rather than a mode.</summary>
@@ -136,8 +222,7 @@ else if (NotFound)
     private (string Key, string Label)[] Sections =>
     [
         ("balances", Loc["Balances"].Value),
-        ("activity", Loc["Activity"].Value),
-        ("people", Loc["People"].Value)
+        ("activity", Loc["Activity"].Value)
     ];
 
     /// <summary>
@@ -162,7 +247,7 @@ else if (NotFound)
     /// Which section the URL asks for. The retired names remain aliases: a bookmark to a
     /// group's expenses, members, categories or overview still lands in the same place.
     /// </summary>
-    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "rules" or "splits" or "categories")
+    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "details" or "rules" or "splits" or "categories")
         ? "activity"
         : Tab?.ToLowerInvariant() switch
     {
@@ -171,7 +256,7 @@ else if (NotFound)
         // The older URLs remain useful links. Rules and categories are part of the group's
         // Settings now, under the group's own name and default, rather than a peer of its
         // day-to-day views.
-        "rules" or "splits" or "categories" or "settings" => "settings",
+        "rules" or "splits" or "categories" or "details" or "settings" => "settings",
         _ => "balances"
     };
 
@@ -197,6 +282,14 @@ else if (NotFound)
     private void OnLedgerQueryChanged(IReadOnlyDictionary<string, object?> query) =>
         Nav.NavigateTo(Nav.GetUriWithQueryParameters(Nav.ToAbsoluteUri(Href("activity")).ToString(), query),
             replace: true);
+
+    private string SettingsSection => Tab?.ToLowerInvariant() switch
+    {
+        "categories" => "categories",
+        "rules" or "splits" when Group is not { IsPersonal: true } => "rules",
+        "details" => "details",
+        _ => "overview"
+    };
 
     private string Href(string key) => key == "balances" || (key == "activity" && Group is { IsPersonal: true })
         ? $"/groups/{GroupId}"
@@ -256,7 +349,22 @@ else if (NotFound)
     private CancellationTokenSource? _loadCts;
     private CancellationToken CancellationToken => _loadCts?.Token ?? CancellationToken.None;
 
-    private void ReRender() => InvokeAsync(StateHasChanged);
+    private void ReRender() => _ = InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        await CompleteChecklistIfDoneAsync();
+    });
+
+    private async Task CompleteChecklistIfDoneAsync()
+    {
+        if (_initializing || _checklistSaving || _checklistDismissed || Group is null ||
+            UserInfo?.Onboarding.GroupId != GroupId || UserInfo.Onboarding.ChecklistDismissed || CompletedSteps < 3)
+            return;
+
+        _checklistSaving = true;
+        try { await DismissChecklistAsync(); }
+        finally { _checklistSaving = false; }
+    }
 
     protected override void OnInitialized()
     {
@@ -305,7 +413,11 @@ else if (NotFound)
         if (GroupsService.SelectedGroup?.Id == GroupId)
             await GroupsService.EnsureSelectedLoadedAsync();
 
-        if (version == _initializationVersion) _initializing = false;
+        if (version == _initializationVersion)
+        {
+            _initializing = false;
+            await CompleteChecklistIfDoneAsync();
+        }
     }
 
     private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
@@ -341,7 +453,8 @@ else if (NotFound)
         {
             { x => x.SelectedGroupId, GroupId },
             { x => x.SelectedGroupName, Group?.Name },
-            { x => x.SelectedGroupCurrency, Group?.Currency }
+            { x => x.SelectedGroupCurrency, Group?.Currency },
+            { x => x.ShowFirstExpenseGuide, UserInfo?.Onboarding.GroupId == GroupId && !UserInfo.Onboarding.ExpenseDismissed && !HasExpense }
         };
 
         var dialog = await DialogService.ShowAsync<CreateTransactionDialog>(Loc["Add an expense"].Value, parameters, options);

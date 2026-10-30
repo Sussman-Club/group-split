@@ -103,6 +103,7 @@ public static class DomainServiceExtensions
             routes.MapMerchantsApi();
             routes.MapBankConnectionsApi();
             routes.MapInboxApi();
+            routes.MapSupportReportsApi();
             routes.MapWebhooksApi();
 
             return routes;

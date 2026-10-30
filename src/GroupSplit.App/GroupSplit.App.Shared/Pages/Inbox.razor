@@ -8,6 +8,8 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
 @inject IInboxStateService State
+@inject IUsersClient UsersClient
+@inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject IBankCommands Bank
 @inject IReceiptCommands Receipts
 @inject IDialogService DialogService
@@ -200,7 +202,7 @@
                                 }
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
                                            Disabled="@(_busy is not null || _bulkBusy)"
-                                           OnClick="@(() => ConfirmBundleAsync(bundle))">Confirm @bundle.Rows.Count in @bundle.Suggestion.Destination</MudButton>
+                                           OnClick="@(() => ConfirmBundleAsync(bundle))">@Loc["Confirm {0} in {1}", bundle.Rows.Count, bundle.Suggestion.Destination]</MudButton>
                             </details>
                         }
                         continue;
@@ -905,6 +907,7 @@
         {
             var expense = await AttachAsync(row, transactionId);
             await SaveReceiptAsync(expense, answer.Receipt);
+            if (expense is not null) await CompleteBankGuideAsync();
             return;
         }
 
@@ -912,7 +915,15 @@
         {
             var expense = await FileAsync(row, request, answer.Destination);
             await SaveReceiptAsync(expense, answer.Receipt);
+            if (expense is not null) await CompleteBankGuideAsync();
         }
+    }
+
+    private async Task CompleteBankGuideAsync()
+    {
+        if (Login.User is not { Onboarding.BankDismissed: false }) return;
+        if (await Errors.TryAsync(() => UsersClient.DismissOnboardingAsync("bank"), Loc["Could not save your preference."].Value))
+            await Login.RefreshLoginAsync();
     }
 
     private async Task<TransactionResponse?> FileAsync(BankTransactionResponse row, FileBankTransactionRequest request,
