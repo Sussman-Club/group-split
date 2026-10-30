@@ -44,7 +44,8 @@ recover jobs committed while disconnected. Install the migration before the new 
 
 A once-a-minute safety scan recovers missed notifications, future-dated retries, and
 expired leases. Such work may be picked up up to a minute after it becomes due.
-Idle scans fall from about 43,200 to 1,440 per day per API instance. The listener
+Idle safety scans run about 1,440 times per day per API instance, half the former
+30-second polling rate (and 97% below the original two-second rate). The listener
 uses one additional PostgreSQL connection per instance and reconnects with bounded
 backoff. Notifications are hints: the durable table, leases, and fencing remain
 authoritative, and multiple instances can receive the same hint safely.

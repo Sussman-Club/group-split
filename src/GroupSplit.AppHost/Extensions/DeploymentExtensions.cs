@@ -155,6 +155,9 @@ public static class DeploymentExtensions
                 .WithForwardedHeaders(enabled: true)
                 .WithEnvironment("Dashboard__Frontend__AuthMode", "BrowserToken")
                 .WithEnvironment("Dashboard__Frontend__BrowserToken", token)
+                .WithEnvironment("Dashboard__TelemetryLimits__MaxLogCount", "10000")
+                .WithEnvironment("Dashboard__TelemetryLimits__MaxTraceCount", "10000")
+                .WithEnvironment("Dashboard__TelemetryLimits__MaxMetricsCount", "1000")
                 // WithHostPort has no way to name an interface, so the mapping it writes is
                 // rewritten here, where the service is final. Every mapping, not just this
                 // one, so a port a later Aspire version adds cannot land on 0.0.0.0 either.
