@@ -54,7 +54,7 @@ else
             <a href="@SectionHref("settings-profile")" @onclick='() => ScrollToSectionAsync("settings-profile")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.PersonOutline" />@Loc["Profile & security"]</a>
             <a href="@SectionHref("settings-preferences")" @onclick='() => ScrollToSectionAsync("settings-preferences")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.Tune" />@Loc["Preferences"]</a>
             <a href="@SectionHref("settings-banks")" @onclick='() => ScrollToSectionAsync("settings-banks")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" />@Loc["Connected banks"]</a>
-            <a href="/help"><MudIcon Icon="@Icons.Material.Rounded.HelpOutline" />@Loc["Help & feedback"]</a>
+            <a href="@SectionHref("settings-help")" @onclick='() => ScrollToSectionAsync("settings-help")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.HelpOutline" />@Loc["Help & feedback"]</a>
             <a href="@SectionHref("settings-data")" @onclick='() => ScrollToSectionAsync("settings-data")' @onclick:preventDefault><MudIcon Icon="@Icons.Material.Rounded.FolderOpen" />@Loc["Data & privacy"]</a>
         </nav>
         <div class="gs-settings-content">
@@ -102,7 +102,7 @@ else
             <LinkedBanksCard />
         </section>
 
-        <section class="gs-settings-section" aria-labelledby="settings-help-title">
+        <section id="settings-help" class="gs-settings-section" aria-labelledby="settings-help-title">
             <div class="gs-settings-heading"><h2 id="settings-help-title">@Loc["Help & feedback"]</h2><p>@Loc["Report a problem, suggest an improvement, or check your reports."]</p></div>
             <div class="gs-card gs-card-pad"><MudButton Href="/help" Variant="Variant.Outlined" Class="gs-account-action" StartIcon="@Icons.Material.Rounded.HelpOutline">@Loc["Help & feedback"]</MudButton></div>
         </section>
