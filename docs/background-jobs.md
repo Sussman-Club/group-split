@@ -2,10 +2,11 @@
 
 `BackgroundJob` is the PostgreSQL outbox for work that must survive an API restart.
 The existing `GroupSplit.Jobs` dispatcher and scheduler remain in memory. Persistence
-is opt-in through `IBackgroundJobQueue`. A recurring `ProcessBackgroundJobs` job runs
+is opt-in through `IBackgroundJobQueue`. A `ProcessBackgroundJobs` job runs
 through the existing scheduler, dispatcher and worker. It claims a bounded batch and
 invokes registered scoped handlers through `IJobExecutor`. There is no separate
-hosted worker, polling loop, scheduler or public job-management endpoint.
+job executor, scheduler or public job-management endpoint. A PostgreSQL notification
+listener wakes this same pipeline when committed jobs become pending.
 
 ## Register and enqueue
 
@@ -15,6 +16,7 @@ Register its stable wire name and version in the singleton `BackgroundJobRegistr
 ```csharp
 services.AddSingleton(new BackgroundJobRegistry().Add<DeleteFile>("delete-file", 1));
 services.AddBackgroundJobs();
+services.AddBackgroundJobNotifications(); // PostgreSQL host only; apply the wakeup migration first.
 ```
 
 Configure the registry before starting the host. Only explicitly registered types can
@@ -34,7 +36,22 @@ the registry translates between it and typed jobs.
 
 ## Execution and failures
 
-The scheduled job runs every two seconds and processes up to ten invocations per run,
+PostgreSQL triggers send a payload-free `NOTIFY` after a pending job is inserted or
+rescheduled. Notifications arrive only after commit; rollbacks do not wake the worker.
+The API subscribes with a dedicated connection, coalesces bursts, and dispatches
+through the existing executor. It scans once after subscribing or reconnecting to
+recover jobs committed while disconnected. Install the migration before the new API.
+
+A once-a-minute safety scan recovers missed notifications, future-dated retries, and
+expired leases. Such work may be picked up up to a minute after it becomes due.
+Idle scans fall from about 43,200 to 1,440 per day per API instance. The listener
+uses one additional PostgreSQL connection per instance and reconnects with bounded
+backoff. Notifications are hints: the durable table, leases, and fencing remain
+authoritative, and multiple instances can receive the same hint safely.
+
+Each invocation processes up to ten jobs, then immediately dispatches a continuation
+if the batch was full. This yields to other in-memory work without slowing backlog
+draining to ten jobs per safety scan. Each invocation proceeds by
 claiming one row at a time with LINQ and a conditional `ExecuteUpdateAsync`. The update
 compares the candidate's observed status, attempt count, lease and availability; only
 one competing worker can change that state. Losers select again, up to sixteen

@@ -15,12 +15,19 @@ public static class BackgroundJobExtensions
         services.AddJobs()
             .Handlers.AddJobHandler<ProcessBackgroundJobs, ProcessBackgroundJobsHandler>()
             .JobsBuilder.Scheduler.Add(new ProcessBackgroundJobs(),
-                JobSchedule.Every(TimeSpan.FromSeconds(2), DateTimeOffset.UtcNow));
+                JobSchedule.Every(TimeSpan.FromMinutes(1), DateTimeOffset.UtcNow));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<BackgroundJobRegistry>();
         services.TryAddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
         services.TryAddScoped<IBackgroundJobStore, BackgroundJobStore>();
         services.TryAddScoped<IBackgroundJobProcessor, BackgroundJobProcessor>();
+        return services;
+    }
+
+    /// <summary>Adds PostgreSQL commit notifications beside the existing executor and safety scan.</summary>
+    public static IServiceCollection AddBackgroundJobNotifications(this IServiceCollection services)
+    {
+        services.AddHostedService<BackgroundJobNotificationListener>();
         return services;
     }
 
