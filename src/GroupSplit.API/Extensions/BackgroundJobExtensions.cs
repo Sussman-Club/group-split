@@ -15,7 +15,7 @@ public static class BackgroundJobExtensions
         services.AddJobs()
             .Handlers.AddJobHandler<ProcessBackgroundJobs, ProcessBackgroundJobsHandler>()
             .JobsBuilder.Scheduler.Add(new ProcessBackgroundJobs(),
-                JobSchedule.Every(TimeSpan.FromSeconds(2), DateTimeOffset.UtcNow));
+                JobSchedule.Every(TimeSpan.FromSeconds(30), DateTimeOffset.UtcNow));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<BackgroundJobRegistry>();
         services.TryAddScoped<IBackgroundJobQueue, BackgroundJobQueue>();
