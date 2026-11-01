@@ -17,41 +17,11 @@ namespace GroupSplit.App.Web;
 
 public static class AuthenticationExtensions
 {
-    /// <summary>
-    /// How long a session lasts once "Keep me signed in" was ticked: thirty days from the
-    /// sign-in, absolute.
-    /// </summary>
-    /// <remarks>
-    /// The same thirty days is what the realm's <c>ssoSessionIdleTimeout</c> and
-    /// <c>ssoSessionMaxLifespan</c> are set to, and they have to move together. Shorten one
-    /// and the other keeps handing out a session it can no longer refresh; lengthen one and
-    /// the cookie outlives the Keycloak session behind it. Absolute rather than sliding for
-    /// the same reason -- two sliding windows advancing on different events is the shape in
-    /// which the two silently drift apart.
-    /// </remarks>
+    /// <summary>Maximum token retention, aligned with Keycloak's remembered SSO session.</summary>
     public static readonly TimeSpan RememberedSessionLifetime = TimeSpan.FromDays(30);
 
-    /// <summary>
-    /// How long a session lasts without the tick. The cookie is not persisted either, so
-    /// this is only the cap on a tab left open and walked away from -- closing the browser
-    /// ends the session whatever is left of it.
-    /// </summary>
+    /// <summary>Temporary app cookie; Keycloak owns remembered SSO and subsequent sign-in.</summary>
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
-
-    /// <summary>
-    /// Carries the tick from <c>/auth/login</c> to the sign-in that comes back from
-    /// Keycloak. It rides in <see cref="AuthenticationProperties.Items"/>, which the
-    /// handler round-trips through the protected <c>state</c> parameter.
-    /// </summary>
-    /// <remarks>
-    /// The app asks the question rather than Keycloak, which offers a "Remember Me" of its
-    /// own, because Keycloak keeps the answer to itself: the flag is read into
-    /// <c>UserSessionModel</c> and never written anywhere a token or a claim can reach, so
-    /// an app federated to it cannot find out which was chosen. It is also dropped on the
-    /// way to a social provider, so the realm's own checkbox does nothing for a Google
-    /// sign-in. The realm's <c>rememberMe</c> is therefore off; this is the one checkbox.
-    /// </remarks>
-    internal const string RememberMeItem = "group-split:remember-me";
 
     /// <summary>
     /// The Duende logger whose Error-level output this app replaces with its own, as a
@@ -131,9 +101,8 @@ public static class AuthenticationExtensions
                         ? CookieSecurePolicy.SameAsRequest
                         : CookieSecurePolicy.Always;
 
-                    // An unticked sign-in only ever gets a session cookie, so this is the
-                    // cap on an open tab rather than on being signed in. A ticked one
-                    // overrides both of these per ticket -- see RememberSession.
+                    // The app always uses a temporary cookie. Once it expires, a fresh
+                    // OIDC challenge can reuse Keycloak's remembered SSO session.
                     options.ExpireTimeSpan = SessionLifetime;
                     options.SlidingExpiration = true;
 
@@ -265,49 +234,8 @@ public static class AuthenticationExtensions
                         await validated(context);
                         await StoreTokensOnSignIn(context);
                     };
-
-                    var received = options.Events.OnTicketReceived;
-
-                    options.Events.OnTicketReceived = async context =>
-                    {
-                        await received(context);
-
-                        if (context.Properties is not null)
-                        {
-                            RememberSession(context.Properties, context.Options.TimeProvider ?? TimeProvider.System);
-                        }
-                    };
                 });
         }
-    }
-
-    /// <summary>
-    /// Turns the tick into the two things a browser and a ticket store need to honour it:
-    /// a cookie the browser writes to disk, and an expiry thirty days out.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>AllowRefresh</c> is off because the cookie handler's sliding expiration would
-    /// otherwise push the ticket past the Keycloak session it is refreshed against, and the
-    /// session would end thirty days after the sign-in regardless -- from inside the app
-    /// that looks like being signed out at random rather than at a time it announced.
-    /// </para>
-    /// <para>
-    /// Nothing happens without the tick: no <c>ExpiresUtc</c> leaves the cookie handler to
-    /// apply <see cref="SessionLifetime"/>, and no <c>IsPersistent</c> leaves the browser to
-    /// drop the cookie when it closes.
-    /// </para>
-    /// </remarks>
-    internal static void RememberSession(AuthenticationProperties properties, TimeProvider time)
-    {
-        if (!properties.Items.TryGetValue(RememberMeItem, out var ticked) || ticked != bool.TrueString)
-        {
-            return;
-        }
-
-        properties.IsPersistent = true;
-        properties.AllowRefresh = false;
-        properties.ExpiresUtc = time.GetUtcNow().Add(RememberedSessionLifetime);
     }
 
     /// <summary>

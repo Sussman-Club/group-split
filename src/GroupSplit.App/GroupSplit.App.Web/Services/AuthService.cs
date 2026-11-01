@@ -9,7 +9,7 @@ public class AuthService(NavigationManager nav, IJSRuntime js, AntiforgeryStateP
 {
     public Task Login(string? returnUrl, bool remember, CancellationToken ct)
     {
-        nav.NavigateTo(AuthRoutes.Login(returnUrl, remember), forceLoad: true);
+        nav.NavigateTo(AuthRoutes.Login(returnUrl), forceLoad: true);
         return Task.CompletedTask;
     }
 

@@ -551,45 +551,29 @@ session is ending and answers with a confirmation page instead of ending it.
 
 ## How long a session lasts
 
-Two answers, and the sign-in page asks which one applies.
+Keycloak owns the browser's remember-me choice. Web sign-in goes straight to the branded
+Keycloak page, with the native checkbox beside the credential form.
 
-**Unticked: the session ends when the browser does.** The ticket cookie is written without
-`Expires`, so the browser drops it on close, and thirty minutes of sliding expiry caps a tab
-left open and walked away from. Keycloak's own identity cookie is a session cookie too, so
-reopening the browser reaches the login form rather than being waved through by SSO.
+The app cookie is always temporary, with a 30-minute sliding ticket lifetime. Once it
+expires or is lost on browser close, `/login` starts a new OIDC challenge; an existing
+Keycloak SSO cookie can complete that challenge without another credential prompt.
+Browser session restore can preserve session cookies, so use **Sign out** on shared devices.
 
-**"Keep me signed in": thirty days from that sign-in, absolute.** The cookie is persisted
-with that expiry, and the realm's `ssoSessionIdleTimeout` and `ssoSessionMaxLifespan` are
-the same thirty days so the refresh token behind it stays exchangeable for exactly as long.
-Absolute rather than sliding, and `AllowRefresh` is turned off on the ticket to keep it that
-way: the cookie slides on page loads and the Keycloak session slides on refreshes, and two
-windows advancing on different events is how one layer comes to expire a session the other
-still considers live. The period is stated on the sign-in page, so it has to be a number the
-app is willing to say out loud.
+Ordinary Keycloak SSO has a 30-minute idle timeout and 12-hour maximum. Selecting **Remember
+me** makes the Keycloak cookie persistent and uses `ssoSessionIdleTimeoutRememberMe` and
+`ssoSessionMaxLifespanRememberMe`, both 30 days. These remembered values match the maximum
+server-side token retention (`RememberedSessionLifetime`), not an app-cookie expiry.
+`RememberMeTest` checks that configuration; the realm worker manages both remembered settings
+for existing realms. Changing session policy affects native and CLI token sessions too.
+Native secure device storage remains a separate choice; it cannot extend a Keycloak session.
 
-The three settings move together or not at all: `RememberedSessionLifetime` in
-`AuthenticationExtensions`, and the two realm timeouts in `realms.json`. `RememberMeTest`
-reads the realm file and fails if they disagree.
+Keycloak's native checkbox applies to the credential form. Following a Google sign-in link
+does not submit that form, so its checkbox must not be advertised as a Google persistence
+control. Google can still recognize its own browser session. Making explicit remember-me
+uniform across brokered providers would require a Keycloak authentication-flow extension.
 
-A fourth follows them: `ServerSideTokenStore` holds the tokens beside the ticket rather than
-inside it, so the two expire separately and the shorter one decides. It was twelve hours,
-which was longer than the cookie when the cookie was thirty minutes. Tokens going first is
-the worse way round: the cookie and the ticket are both still good, so the app believes
-the person is signed in while every call it makes on their behalf has nothing to make it
-with. The store keeps them for the remembered lifetime too.
-
-The checkbox is on the app's own hand-off page rather than Keycloak's, which is why that
-page waits for a click instead of redirecting by itself. Keycloak has a "Remember Me" of its
-own and keeps the answer: the flag is read into `UserSessionModel` and never written to a
-session note, a claim or a token, so an app federated to it cannot find out which was
-chosen. It is also dropped on the way to a social provider, so the realm's checkbox would do
-nothing at all for a Google sign-in. The realm's `rememberMe` is therefore off, and there is
-one checkbox rather than two that disagree.
-
-What this costs: an unticked sign-in still leaves a user session at Keycloak that idles out
-on the same thirty days, because the realm has no way to tell the two apart any more. It
-grants nothing (both cookies that could reach it are gone with the browser), but it is
-rows in the session table for longer than they are worth.
+Existing persistent app tickets issued before this change retain their original expiry until
+they expire or the person signs out. New sign-ins always issue temporary app cookies.
 
 Realm import only creates a realm that does not exist yet. The `realm-settings` worker
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
@@ -606,10 +590,8 @@ See [Applying this to a realm that already exists](keycloak.md#applying-this-to-
 It leaves SMTP configuration, the rest of each client and provider, other protocol mappers,
 the built-in authentication flows, roles, and users alone. Use the local **Reset local
 Keycloak realm** command to delete the realm and restart Keycloak when a complete re-import
-is needed. Turning `rememberMe` off is not retroactive either: sessions created while it was
-on keep their extended lifetime until they expire
-([CVE-2025-11429](https://advisories.gitlab.com/pkg/maven/org.keycloak/keycloak-services/CVE-2025-11429/)),
-so on a realm that had it on, existing sessions have to be ended rather than waited out.
+is needed. To revoke existing sessions deliberately, end them in Keycloak rather than
+using a configuration toggle as a substitute for revocation.
 
 ## Sessions across a deploy
 

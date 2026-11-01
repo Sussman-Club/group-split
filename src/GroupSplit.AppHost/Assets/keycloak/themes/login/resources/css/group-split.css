@@ -170,13 +170,23 @@ body::before {
    and would otherwise paint over the card. */
 .pf-v5-c-login {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
     z-index: 1;
     background: transparent;
     padding-block: clamp(1.5rem, 6vh, 4rem);
 }
 
 .pf-v5-c-login__container {
-    max-width: 27rem;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 30rem;
+    padding: 0;
+    margin-inline: auto;
     gap: 1.5rem;
 }
 
@@ -192,10 +202,10 @@ body::before {
     flex-direction: column;
     align-items: center;
     gap: 0.75rem;
+    margin: 0;
 }
 
-/* Brand mark, at the size the app's own hand-off card uses (.gs-auth-mark).
-   Sits above the realm name Keycloak renders from displayNameHtml. */
+/* The standalone brand mark matches the app's auth screens. */
 .pf-v5-c-login__header::before {
     content: "";
     display: block;
@@ -208,22 +218,111 @@ body::before {
     animation: gs-mark-in 900ms var(--gs-ease-spring) both;
 }
 
-/* The eyebrow above the title, matching .gs-eyebrow in the app. */
-#kc-header-wrapper,
-.gs-realm-name {
-    font-family: var(--gs-font-body);
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--gs-teal);
-    text-align: center;
+/* Keep the product name available to assistive technology without a small
+   duplicate wordmark beneath the logo. */
+#kc-header-wrapper {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* ---------------------------------------------------------------- card ---- */
 
+/* One compact language control. The wrapper owns the border and icons;
+   the native select owns interaction, focus and the option menu. */
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control {
+    position: relative;
+    display: inline-flex;
+    width: 9rem;
+    padding: 0;
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: transparent;
+    color: var(--gs-muted);
+    box-shadow: none;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::before {
+    content: "";
+    position: absolute;
+    inset: auto;
+    top: 50%;
+    left: .75rem;
+    width: 1rem;
+    height: 1rem;
+    border: 0;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cellipse cx='12' cy='12' rx='4' ry='9'/%3E%3Cpath d='M3 12h18'/%3E%3C/svg%3E") center / contain no-repeat;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::after {
+    content: "";
+    position: absolute;
+    inset: auto;
+    top: calc(50% - .2rem);
+    right: .875rem;
+    width: .4rem;
+    height: .4rem;
+    border: 0;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control__utilities {
+    display: none;
+}
+
+#login-select-toggle {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.5rem;
+    padding: .5rem 2rem .5rem 2.25rem;
+    font-family: var(--gs-font-body);
+    font-size: .8125rem;
+    font-weight: 600;
+    line-height: 1.5;
+    border: 0;
+    border-radius: var(--gs-radius-sm);
+    color: var(--gs-ink);
+    background: transparent;
+    cursor: pointer;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control:hover {
+    border-color: var(--gs-teal);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+}
+
+#login-select-toggle option {
+    color: var(--gs-ink);
+    background: var(--gs-surface-2);
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control:focus-within {
+    border-color: var(--gs-teal);
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 3px;
+    box-shadow: none;
+}
+
 .pf-v5-c-login__main {
     position: relative;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
     overflow: hidden;
     background: var(--gs-surface);
     border: 1px solid var(--gs-line);
@@ -251,7 +350,18 @@ body::before {
 }
 
 .pf-v5-c-login__main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
     padding-block-start: 2rem;
+}
+
+.pf-v5-c-login__main-header-utilities {
+    position: static;
+    width: auto;
+    margin: 0;
+    flex: 0 0 auto;
 }
 
 .pf-v5-c-login__main-body {
@@ -259,7 +369,11 @@ body::before {
 }
 
 .pf-v5-c-login__main-footer {
-    padding-block-end: 2rem;
+    padding-block-end: 0;
+}
+
+.pf-v5-c-login__main-footer:has(> *) {
+    padding-block-end: 1.25rem;
 }
 
 #kc-page-title {
@@ -344,6 +458,10 @@ body::before {
 
 .pf-v5-c-form-control::after {
     border-bottom-width: 0;
+}
+
+.pf-v5-c-form-control::before {
+    border: 0;
 }
 
 /* A password field arrives as an input group: the field in one item, the reveal
@@ -703,4 +821,45 @@ a:hover {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Shared treatment for login, reset, verification and required-action pages. */
+#kc-form-options .pf-v5-c-check {
+    min-height: 2.75rem;
+    align-items: center;
+    column-gap: .625rem;
+}
+
+#kc-form-options .pf-v5-c-check__label {
+    color: var(--gs-ink);
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#kc-form-options input[type="checkbox"] {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.pf-v5-c-alert {
+    border-radius: var(--gs-radius-sm);
+    overflow-wrap: anywhere;
+}
+
+.pf-v5-c-button:focus-visible,
+input[type="checkbox"]:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+    .pf-v5-c-login { padding-inline: 1rem; }
+    .pf-v5-c-login__container { width: 100%; }
+    .pf-v5-c-login__main-header,
+    .pf-v5-c-login__main-body,
+    .pf-v5-c-login__main-footer { padding-inline: 1.25rem; }
+    .pf-v5-c-login__main-header { gap: .75rem; flex-wrap: wrap; }
+    #kc-page-title { font-size: 1.5rem; }
 }

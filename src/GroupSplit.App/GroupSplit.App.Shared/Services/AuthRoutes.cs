@@ -24,17 +24,8 @@ public static class AuthRoutes
     /// </summary>
     public const string HandoffPath = "/login";
 
-    /// <param name="remember">
-    /// Whether "Keep me signed in" was ticked. Passed rather than remembered client-side:
-    /// the cookie it decides is written by the server, at the end of a round trip through
-    /// Keycloak that this page does not survive.
-    /// </param>
-    public static string Login(string? returnUrl = null, bool remember = false)
-    {
-        var login = WithReturnUrl("/auth/login", returnUrl);
-
-        return remember ? Append(login, "remember=true") : login;
-    }
+    /// <summary>Starts web sign-in. Keycloak owns the remember-me preference.</summary>
+    public static string Login(string? returnUrl = null) => WithReturnUrl("/auth/login", returnUrl);
 
     /// <summary>
     /// Where to send somebody whose session has ended: the hand-off page, told why it is
@@ -45,8 +36,7 @@ public static class AuthRoutes
     /// wrong answer to a session that has just ended: it sends the person through Keycloak,
     /// signs them back in, and only then lands them on a page telling them their session
     /// expired -- so they sign in twice and are told the opposite of what just happened.
-    /// The hand-off is a page. It explains itself and asks the "Keep me signed in" question
-    /// before the round trip rather than after it.
+    /// The hand-off explains the expired session before the person starts a new sign-in.
     /// </remarks>
     /// <param name="reason">One of <see cref="HandoffReason"/>.</param>
     public static string Handoff(string reason, string? returnUrl = null) =>

@@ -32,6 +32,27 @@ public sealed class RealmSettingsReconcilerTests
 
     private const string Origin = "https://groupsplit.example";
 
+    [Fact]
+    public async Task Existing_realms_receive_remember_me_timeouts_and_the_account_return_link()
+    {
+        var current = Imported();
+        current["rememberMe"] = false;
+        current.Remove("ssoSessionIdleTimeoutRememberMe");
+        current.Remove("ssoSessionMaxLifespanRememberMe");
+        var web = KeycloakRealmDefinition.Client(current, "web-app")!;
+        web.Remove("baseUrl");
+        web.Remove("name");
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.True(admin.RealmData["rememberMe"]!.GetValue<bool>());
+        Assert.Equal(2592000, admin.RealmData["ssoSessionIdleTimeoutRememberMe"]!.GetValue<int>());
+        Assert.Equal(2592000, admin.RealmData["ssoSessionMaxLifespanRememberMe"]!.GetValue<int>());
+        Assert.Equal($"{Origin}/account", admin.Clients["web-app"]["baseUrl"]!.GetValue<string>());
+        Assert.Equal("Group Split", admin.Clients["web-app"]["name"]!.GetValue<string>());
+    }
+
     private const string DeletionSecret = "the-deploy-secret";
 
     private const string SecretVariable = "KEYCLOAK_ACCOUNT_DELETION_SECRET";

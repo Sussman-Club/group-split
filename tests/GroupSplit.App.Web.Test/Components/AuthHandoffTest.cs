@@ -9,8 +9,8 @@ using Moq;
 namespace GroupSplit.App.Web.Test.Components;
 
 /// <summary>
-/// The sign-in hand-off. It collects one thing -- whether to stay signed in -- and that is
-/// the whole reason it waits for a click instead of redirecting by itself.
+/// Web sign-in starts directly; invitations and session notices remain explicit.
+/// Native device storage keeps its separate persistence preference.
 /// </summary>
 public class AuthHandoffTest : ComponentTest
 {
@@ -67,6 +67,7 @@ public class AuthHandoffTest : ComponentTest
     [Fact]
     public void The_tick_travels_with_the_sign_in()
     {
+        Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example")));
         var page = Render();
 
         page.Find("input[type=checkbox]").Change(true);
@@ -90,10 +91,31 @@ public class AuthHandoffTest : ComponentTest
     [Fact]
     public void The_page_says_how_long_being_remembered_lasts()
     {
+        Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example")));
         Assert.Contains(
             $"{(int)AuthenticationExtensions.RememberedSessionLifetime.TotalDays} days",
             Render().Markup,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ordinary_web_login_starts_without_a_second_form()
+    {
+        var page = Render<AuthHandoff>(parameters => parameters
+            .Add(value => value.AutoStart, true));
+
+        _auth.Verify(service => service.Login(null, false, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
+    }
+
+    [Fact]
+    public void Session_expiry_does_not_automatically_sign_the_user_back_in()
+    {
+        GoTo(AuthRoutes.Handoff(HandoffReason.SessionExpired, "/groups"));
+        var page = Render<AuthHandoff>(parameters => parameters.Add(value => value.AutoStart, true));
+
+        Assert.Contains(ErrorMessages.SessionExpired, page.Markup);
+        _auth.Verify(service => service.Login(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     /// <summary>

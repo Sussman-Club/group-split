@@ -7,11 +7,9 @@
     keeps SSO, MFA, password policy and brute-force protection working; this
     component only explains where the user is going and gets them there.
 
-    The one thing it does collect is "Keep me signed in", and that is why the
-    hand-off waits for a click rather than redirecting by itself: Keycloak has a
-    checkbox of its own but keeps the answer, so an app federated to it cannot
-    find out which was chosen, and the answer has to be given on this side of the
-    redirect or not at all.
+    Web login starts automatically; invitations and session notices wait for a
+    click. Keycloak owns the web remember-me choice. Native login
+    retains its choice here because it controls device credential storage.
 *@
 
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
@@ -42,7 +40,10 @@
                 </MudAlert>
             }
 
-            <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
+            @if (Links.IsNative)
+            {
+                <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
+            }
 
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
@@ -63,16 +64,27 @@
 @code {
     [Inject] private IAuthService AuthService { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private AppLinks Links { get; set; } = new();
 
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
     [Parameter] public string? ReturnUrl { get; set; }
+    [Parameter] public bool AutoStart { get; set; }
 
     private bool _redirecting;
     private bool _remember;
     private bool _notice;
     private string? Error { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AutoStart && !Links.IsNative && Error is null)
+        {
+            await GoAsync();
+            StateHasChanged();
+        }
+    }
 
     protected override void OnInitialized()
     {

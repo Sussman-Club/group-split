@@ -172,6 +172,39 @@ h1, h2, h3,
     color: var(--gs-ink);
 }
 
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-link {
+    color: var(--gs-teal);
+}
+
+/* Route styles load after the theme. Scope to the page so those late defaults
+   cannot restore the stock filled locale selector or square field borders. */
+.pf-v5-c-page .pf-v5-c-form-control {
+    background: transparent;
+    color: var(--gs-ink);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+}
+
+.pf-v5-c-page .pf-v5-c-form-control::before {
+    border: 0;
+}
+
+.pf-v5-c-page select.pf-v5-c-form-control {
+    min-height: 2.75rem;
+    padding-inline: .75rem;
+    font-family: var(--gs-font-body);
+}
+
+.pf-v5-c-page select option {
+    color: var(--gs-ink);
+    background: var(--gs-surface-2);
+}
+
+.pf-v5-c-page .pf-v5-c-form-control.pf-m-disabled {
+    background: var(--gs-surface-3);
+    color: var(--gs-muted);
+}
+
 .pf-v5-c-masthead .pf-v5-c-button.pf-m-plain:hover,
 .pf-v5-c-masthead .pf-v5-c-menu-toggle:hover {
     color: var(--gs-ink);
@@ -721,4 +754,46 @@ a:hover {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Account settings use the same calm surfaces, language capsule and focus ring as the app. */
+.keycloak__loading-container {
+    background: var(--gs-bg);
+    color: var(--gs-ink);
+    font-family: var(--gs-font-body);
+}
+
+.pf-v5-c-masthead .pf-v5-c-menu-toggle {
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-pill);
+    background: var(--gs-surface-2);
+}
+
+.pf-v5-c-menu,
+.pf-v5-c-dropdown__menu {
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-sm);
+    background: var(--gs-surface-2);
+    color: var(--gs-ink);
+    box-shadow: var(--gs-shadow-md);
+}
+
+.pf-v5-c-button:focus-visible,
+.pf-v5-c-menu-toggle:focus-visible,
+.pf-v5-c-nav__link:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--gs-teal);
+    outline-offset: 3px;
+}
+
+.pf-v5-c-modal-box {
+    background: var(--gs-surface);
+    color: var(--gs-ink);
+    border: 1px solid var(--gs-line);
+    border-radius: var(--gs-radius-lg);
+}
+
+@media (max-width: 600px) {
+    .pf-v5-c-page__main-section { padding: 1.25rem; }
+    .pf-v5-c-card__body { padding-inline: 1.25rem; }
 }
