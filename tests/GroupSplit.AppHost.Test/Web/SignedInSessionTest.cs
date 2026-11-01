@@ -95,7 +95,16 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     [Fact(Timeout = 240_000)]
     public async Task Account_return_link_and_confirmation_buttons_use_the_app_theme()
     {
-        await SignInAsync();
+        var email = await SignInAsync();
+        // Keycloak shows "Sign out all devices" only when another session exists.
+        await using var otherDevice = await Browser.NewContextAsync(ContextOptions());
+        var otherPage = await otherDevice.NewPageAsync();
+        await otherPage.GotoAsync(Url("auth/login?returnUrl=/groups"));
+        await otherPage.Locator("#username").FillAsync(email);
+        await otherPage.Locator("#password").FillAsync(KeycloakAdmin.AccountPassword);
+        await otherPage.Locator("#kc-login").ClickAsync();
+        await Expect(otherPage.GetByRole(AriaRole.Link, new() { Name = "Groups", Exact = true })
+            .Filter(new() { Visible = true }).First).ToBeVisibleAsync(Visible);
         await Page.GotoAsync(Url("/account"), new PageGotoOptions { Timeout = OperationTimeoutMs });
         await Page.GetByRole(AriaRole.Button, new() { Name = "Manage account", Exact = true }).ClickAsync();
         var back = Page.GetByRole(AriaRole.Link, new() { NameRegex = new Regex("Back to Group Split") });
@@ -304,7 +313,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// Signs in as an account made for this test, through Keycloak's own form, and waits
     /// until the page it was sent back to has rendered.
     /// </summary>
-    private async Task SignInAsync()
+    private async Task<string> SignInAsync()
     {
         var email = await _appHost.Keycloak.CreateAccountAsync(TestContext.Current.CancellationToken);
         await Page.GotoAsync(Url("auth/login?returnUrl=/groups"),
@@ -320,5 +329,6 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         // The app, not the realm: proof the callback was accepted and a session exists.
         // The signed-in nav only renders once the API has returned a user record.
         await Expect(NavLink("Groups")).ToBeVisibleAsync(Visible);
+        return email;
     }
 }
