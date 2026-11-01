@@ -17,11 +17,10 @@ namespace GroupSplit.App.Web;
 
 public static class AuthenticationExtensions
 {
-    /// <summary>Maximum token retention, aligned with Keycloak's remembered SSO session.</summary>
-    public static readonly TimeSpan RememberedSessionLifetime = TimeSpan.FromDays(30);
-
-    /// <summary>Temporary app cookie; Keycloak owns remembered SSO and subsequent sign-in.</summary>
-    public static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
+    /// <summary>Sliding inactivity window shared by the app ticket, token store and realm.</summary>
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(15);
+    public static readonly TimeSpan MaximumSessionLifetime = TimeSpan.FromDays(90);
+    internal const string SessionDeadlineItem = "group-split:session-deadline";
 
     /// <summary>
     /// The Duende logger whose Error-level output this app replaces with its own, as a
@@ -101,8 +100,8 @@ public static class AuthenticationExtensions
                         ? CookieSecurePolicy.SameAsRequest
                         : CookieSecurePolicy.Always;
 
-                    // The app always uses a temporary cookie. Once it expires, a fresh
-                    // OIDC challenge can reuse Keycloak's remembered SSO session.
+                    // Renew on authenticated browser activity, with a separate absolute
+                    // deadline so sliding never bypasses the realm's maximum.
                     options.ExpireTimeSpan = SessionLifetime;
                     options.SlidingExpiration = true;
 
@@ -111,6 +110,14 @@ public static class AuthenticationExtensions
                     // confined to this point in a request. Sign-out still has to reach
                     // them, or a refresh token outlives its session.
                     options.Events.OnSigningOut = OnSigningOut;
+                    options.Events.OnCheckSlidingExpiration = context =>
+                    {
+                        // RenewSession owns renewal so the default halfway rule
+                        // cannot renew background traffic or exceed the 90-day cap.
+                        context.ShouldRenew = false;
+                        return Task.CompletedTask;
+                    };
+                    options.Events.OnValidatePrincipal = RenewSession;
 
                     options.ConfigureOptions();
                 })
@@ -234,8 +241,76 @@ public static class AuthenticationExtensions
                         await validated(context);
                         await StoreTokensOnSignIn(context);
                     };
+
+                    var received = options.Events.OnTicketReceived;
+                    options.Events.OnTicketReceived = async context =>
+                    {
+                        await received(context);
+                        if (context.Properties is not null)
+                        {
+                            PersistSession(context.Properties, context.Options.TimeProvider ?? TimeProvider.System);
+                        }
+                    };
                 });
         }
+    }
+
+    internal static void PersistSession(AuthenticationProperties properties, TimeProvider time)
+    {
+        properties.IsPersistent = true;
+        properties.AllowRefresh = true;
+        var now = time.GetUtcNow();
+        properties.IssuedUtc = now;
+        properties.ExpiresUtc = now.Add(SessionLifetime);
+        properties.Items[SessionDeadlineItem] = now.Add(MaximumSessionLifetime).ToString("O");
+    }
+
+    internal static async Task RenewSession(CookieValidatePrincipalContext context)
+    {
+        var now = (context.Options.TimeProvider ?? TimeProvider.System).GetUtcNow();
+        var properties = context.Properties;
+        // Older tickets have no separate maximum. Anchor their migration to the
+        // original issue time, rather than granting another 90 days on each read.
+        var deadline = SessionDeadline(properties, now);
+        if (now >= deadline)
+        {
+            if (context.Principal is not null)
+            {
+                await context.HttpContext.RequestServices.GetRequiredService<IUserTokenStore>()
+                    .ClearTokenAsync(context.Principal);
+            }
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return;
+        }
+
+        if (!HttpMethods.IsGet(context.Request.Method)
+                || context.Request.Path.StartsWithSegments("/_blazor")
+                || context.Request.Path.StartsWithSegments("/api")) return;
+
+        SlideSession(properties, context.Options.TimeProvider ?? TimeProvider.System);
+        // The default handler renews only halfway through the window. Renew here
+        // so each authenticated page visit measures inactivity from that visit.
+        context.ShouldRenew = true;
+    }
+
+    private static DateTimeOffset SessionDeadline(AuthenticationProperties properties, DateTimeOffset now) =>
+        properties.Items.TryGetValue(SessionDeadlineItem, out var saved)
+            && DateTimeOffset.TryParseExact(saved, "O", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed)
+            ? parsed : (properties.IssuedUtc ?? now).Add(MaximumSessionLifetime);
+
+    internal static bool SlideSession(AuthenticationProperties properties, TimeProvider time)
+    {
+        var now = time.GetUtcNow();
+        var deadline = SessionDeadline(properties, now);
+        if (now >= deadline) return false;
+        properties.Items[SessionDeadlineItem] = deadline.ToString("O");
+        properties.IsPersistent = true;
+        properties.AllowRefresh = true;
+        properties.IssuedUtc = now;
+        properties.ExpiresUtc = now.Add(SessionLifetime) < deadline ? now.Add(SessionLifetime) : deadline;
+        return true;
     }
 
     /// <summary>
@@ -312,7 +387,7 @@ public static class AuthenticationExtensions
     {
         context.ProtocolMessage.UiLocales = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         // The client-side app cannot follow a redirect to Keycloak.
-        if (context.Request.Path.StartsWithSegments("/api"))
+        if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path == "/auth/session")
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.HandleResponse();

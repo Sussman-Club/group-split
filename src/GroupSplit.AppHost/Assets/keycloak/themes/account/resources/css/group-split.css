@@ -176,6 +176,44 @@ h1, h2, h3,
     color: var(--gs-teal);
 }
 
+/* The referrer link is the route back to the product, not a quiet footer link. */
+.pf-v5-c-masthead a.pf-v5-c-button.pf-m-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: 44px;
+    padding: .625rem .875rem;
+    border: 1px solid var(--gs-line-strong);
+    border-radius: var(--gs-button-radius);
+    background: var(--gs-teal-soft);
+    color: var(--gs-teal);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.pf-v5-c-masthead a.pf-v5-c-button.pf-m-link::before {
+    content: "";
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 5-7 7 7 7M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.pf-v5-c-masthead a.pf-v5-c-button.pf-m-link::after {
+    border: 0;
+}
+
+.pf-v5-c-masthead a.pf-v5-c-button.pf-m-link svg {
+    display: none;
+}
+
+.pf-v5-c-masthead a.pf-v5-c-button.pf-m-link:hover {
+    border-color: var(--gs-teal);
+    background: var(--gs-surface-2);
+    color: var(--gs-teal-deep);
+}
+
 /* Route styles load after the theme. Scope to the page so those late defaults
    cannot restore the stock filled locale selector or square field borders. */
 .pf-v5-c-page .pf-v5-c-form-control {
@@ -530,6 +568,15 @@ input[type="radio"] {
     background: var(--gs-teal-soft);
 }
 
+/* Outlined buttons already have a real border. PatternFly adds a second
+   square pseudo-border unless it is explicitly removed. */
+.pf-v5-c-button.pf-m-secondary::after,
+.pf-v5-c-button.pf-m-tertiary::after,
+.pf-v5-c-button.pf-m-control::after {
+    border: 0;
+    border-radius: inherit;
+}
+
 .pf-v5-c-button.pf-m-danger {
     background: var(--gs-danger);
     color: #fff;
@@ -786,7 +833,7 @@ a:focus-visible {
     outline-offset: 3px;
 }
 
-.pf-v5-c-modal-box {
+.pf-v5-c-backdrop .pf-v5-c-modal-box {
     background: var(--gs-surface);
     color: var(--gs-ink);
     border: 1px solid var(--gs-line);

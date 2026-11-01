@@ -224,8 +224,6 @@ public static class KeycloakRealmDefinition
         "accessTokenLifespan",
         "ssoSessionIdleTimeout",
         "ssoSessionMaxLifespan",
-        "ssoSessionIdleTimeoutRememberMe",
-        "ssoSessionMaxLifespanRememberMe",
         "accessCodeLifespan",
         "actionTokenGeneratedByUserLifespan",
         "browserFlow",

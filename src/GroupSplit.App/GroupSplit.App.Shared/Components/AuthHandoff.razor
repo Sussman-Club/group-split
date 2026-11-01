@@ -7,9 +7,8 @@
     keeps SSO, MFA, password policy and brute-force protection working; this
     component only explains where the user is going and gets them there.
 
-    Web login starts automatically; invitations and session notices wait for a
-    click. Keycloak owns the web remember-me choice. Native login
-    retains its choice here because it controls device credential storage.
+    Web login and expired-session recovery start automatically. Invitations and
+    account-deletion notices remain explicit. Every provider uses the same session policy.
 *@
 
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
@@ -40,11 +39,6 @@
                 </MudAlert>
             }
 
-            @if (Links.IsNative)
-            {
-                <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
-            }
-
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
                        FullWidth
@@ -73,13 +67,12 @@
     [Parameter] public bool AutoStart { get; set; }
 
     private bool _redirecting;
-    private bool _remember;
     private bool _notice;
     private string? Error { get; set; }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && AutoStart && !Links.IsNative && Error is null)
+        if (firstRender && AutoStart && !Links.IsNative && (Error is null || ReadQueryValue("reason") == HandoffReason.SessionExpired))
         {
             await GoAsync();
             StateHasChanged();
@@ -110,7 +103,7 @@
 
         try
         {
-            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"), _remember);
+            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"));
         }
         catch (OperationCanceledException)
         {

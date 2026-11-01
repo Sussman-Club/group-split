@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Duende.AccessTokenManagement.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 
 namespace GroupSplit.App.Web;
 
@@ -18,8 +20,46 @@ public static class IdentityApi
         group.MapLogout();
         group.MapAccountDeleted();
         group.MapAccountConsole();
+        group.MapSessionActivity();
 
         return group;
+    }
+
+    private static void MapSessionActivity(this RouteGroupBuilder group)
+    {
+        group.MapPost("/session", async (HttpContext context, IUserTokenManager tokens,
+            IOptionsMonitor<CookieAuthenticationOptions> options) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            if (context.Features.Get<IAntiforgeryValidationFeature>() is not { IsValid: true })
+                return Results.BadRequest();
+
+            // User activity refreshes Keycloak as well as the local cookie. No
+            // background timer calls this endpoint while the browser is idle.
+            var result = await tokens.GetAccessTokenAsync(context.User, ct: context.RequestAborted);
+            if (result.WasSuccessful(out _, out var failure))
+            {
+                var ticket = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                var time = options.Get(CookieAuthenticationDefaults.AuthenticationScheme).TimeProvider ?? TimeProvider.System;
+                if (ticket.Properties is null || !AuthenticationExtensions.SlideSession(ticket.Properties, time))
+                    return Results.Unauthorized();
+                // Only a valid antiforgery request with usable tokens renews the
+                // session. Rejected POSTs cannot extend an authenticated ticket.
+                await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                    context.User, ticket.Properties);
+                return Results.NoContent();
+            }
+            if (!string.Equals(failure.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Unauthorized();
+        })
+        .RequireAuthorization(new AuthorizeAttribute
+        {
+            AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme
+        })
+        .WithMetadata(new RequireAntiforgeryTokenAttribute());
     }
 
     private static void MapLogin(this RouteGroupBuilder group)

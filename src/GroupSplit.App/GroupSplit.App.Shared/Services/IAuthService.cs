@@ -6,8 +6,7 @@ namespace GroupSplit.App.Shared.Services;
 public interface IAuthService
 {
     /// <param name="returnUrl">Local path to land on afterwards.</param>
-    /// <param name="remember">Native device-storage preference. Web persistence is chosen on Keycloak.</param>
-    Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default);
+    Task Login(string? returnUrl = null, CancellationToken ct = default);
 
     Task Logout(CancellationToken ct = default);
 

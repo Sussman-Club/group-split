@@ -45,13 +45,11 @@ internal sealed class ServerSideTokenStore(
     /// As long as the longest session a cookie can name, so tokens never end one.
     /// </summary>
     /// <remarks>
-    /// Sliding, and taken from the remembered lifetime rather than the ordinary one: a
-    /// remembered session is thirty days and its ticket is not stored here. Set shorter,
-    /// the failure is worse than being signed out -- the cookie and the ticket are both
-    /// still good, so the app believes the person is signed in while every call it makes
-    /// on their behalf has no token to make it with.
+    /// Sliding retention follows the inactivity window. Browser activity also
+    /// touches token management, so an active Blazor circuit keeps the cache and
+    /// Keycloak session alive without a background keep-alive timer.
     /// </remarks>
-    private static readonly TimeSpan Lifetime = AuthenticationExtensions.RememberedSessionLifetime;
+    private static readonly TimeSpan Lifetime = AuthenticationExtensions.SessionLifetime;
 
     public async Task<TokenResult<TokenForParameters>> GetTokenAsync(
         ClaimsPrincipal user,

@@ -10,12 +10,13 @@ deployed is in [deployment.md](deployment.md).
 
 Keycloak hosts the sign-in page, password reset, email verification, the Google link and the
 account console. Keeping the forms there keeps SSO, the password policy and brute-force
-protection in one place. Web `/login` starts `/auth/login` automatically, so credentials
-and Keycloak's native "Remember me" appear together on one branded page. Invitations and
-session-expiry notices still wait for a click before starting authorization code + PKCE.
-The app always uses a temporary 30-minute sliding cookie; Keycloak owns remembered SSO
-(up to 30 days) and can sign the browser back into the app without another credential prompt.
-Native device credential storage is separate from Keycloak's browser SSO preference.
+protection in one place. Web `/login` starts authorization code + PKCE automatically.
+There is no remember-me checkbox: password, Google and other configured providers all
+receive the same persistent app session, renewed for 15 days on activity, with a 90-day
+absolute maximum. Tokens stay on the server; the browser holds only the protected, HttpOnly
+session cookie. Native sign-in saves tokens in secure device storage by default,
+subject to the same realm limit. Expired local web sessions recover through OIDC without
+an extra Continue click. Invitations and account-deletion notices remain explicit.
 See [How long a session lasts](deployment.md#how-long-a-session-lasts).
 
 "Manage account" opens the realm's account console with `referrer=web-app`. That client's
@@ -577,16 +578,15 @@ real Keycloak. How to run each is in [testing.md](testing.md).
 - Keep Keycloak-hosted credential forms and authorization code with S256 PKCE. Do not replace
   them with app-owned password collection or Direct Grant; the
   [Keycloak OIDC guide](https://www.keycloak.org/securing-apps/oidc-layers) advises against that grant.
-- Use Keycloak's native remember-me settings, rather than duplicating persistence in the app.
-  Ordinary SSO uses a 30-minute idle timeout and 12-hour maximum; remembered SSO uses 30 days
-  for both. The realm worker reconciles all four values on existing realms.
+- Use one provider-independent session policy: a persistent app ticket with a 15-day
+  sliding inactivity window and a 90-day absolute maximum. Match the realm's idle/max limits
+  to those values. Disable Keycloak's optional remember-me checkbox; the realm worker
+  reconciles the common settings on existing realms.
 - Keep the existing antiforgery-protected POST sign-out, OIDC end-session redirect with an
   ID-token hint, and server-side token cleanup. This follows Keycloak's recommended standard
   logout flow. Logging out of Google itself is a separate provider session.
-- Google is a brokered flow. The password form's remember-me checkbox is not submitted when
-  a social-provider link is followed; do not promise that it applies to Google. Upstream SSO
-  may still recognize the browser. A uniform explicit preference across brokered providers
-  would require a separate Keycloak authentication-flow extension; no such extension is added.
+- Google and other brokered providers receive the same persistent app ticket at the OIDC
+  callback, without a custom Keycloak authenticator, theme script, or preference cookie.
 - Public sign-up remains disabled, including the existing Google link-only first-login flow.
   If opening registration later, use Keycloak's registration form, enable verified email,
   review abuse controls and explicitly decide whether Google may create users. Do not create
@@ -605,3 +605,37 @@ Sources: [Keycloak session settings and Remember Me](https://www.keycloak.org/do
 [OIDC endpoints and logout](https://www.keycloak.org/securing-apps/oidc-layers),
 [OAuth security BCP](https://www.rfc-editor.org/rfc/rfc9700.html), and
 [Keycloak theme development](https://www.keycloak.org/docs/latest/server_development/).
+
+### Persistence policy and standards
+
+Default persistence is a deliberate Group Split usability policy, not a requirement of OAuth
+or NIST. [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2) recommends expiring
+refresh tokens after inactivity and leaves durations to the authorization server. The realm
+uses a 15-day idle limit and a 90-day maximum. Authenticated page visits and user activity
+renew the app cookie for 15 days, without passing its original 90-day deadline. Renewal is
+not left to the cookie handler's default halfway-through-the-window rule.
+
+For long-lived Blazor circuits, an antiforgery-protected `/auth/session` POST touches token
+management and renews the cookie in response to visible-page interaction or focus. Reports
+are throttled to one per five minutes; they are not sent on a timer. An abandoned tab or a
+SignalR reconnect does not continually renew the cookie. Token-store sliding retention uses
+the same 15-day window. At the absolute deadline the app rejects the ticket and removes its
+stored tokens. Authority revocation is still detected on token refresh, not instantly via
+back-channel logout.
+
+[NIST session guidance](https://pages.nist.gov/800-63-4/sp800-63b/session/) recommends against
+persistent bearer session secrets. This convenience policy, including the selected 90-day
+maximum, should not be described as strict NIST session-management conformance.
+
+The stock Keycloak image remains in use. Keycloak's browser SSO cookie is separate from the
+app cookie and can end when the browser closes. After restoring a browser, Group Split can
+still open using its persistent cookie, while **Manage account** may require a new Keycloak
+sign-in. This extra authentication was intentionally retained; no cookie-provider extension
+or custom image is installed. Sensitive account changes remain subject to Keycloak's own
+authentication/required-action controls.
+
+Sign-out clears the local ticket and stored tokens and invokes OIDC logout. Existing tickets
+without an explicit maximum inherit one anchored to their original issue time. Their next
+authenticated visit adopts the new sliding policy. Disabling Keycloak remember-me can
+invalidate sessions previously created with that flag; those users may need to sign in once
+after deployment.

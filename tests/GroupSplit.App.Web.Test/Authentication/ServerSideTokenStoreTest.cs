@@ -139,7 +139,7 @@ public class ServerSideTokenStoreTest
         var written = Assert.IsType<DistributedCacheEntryOptions>(cache.LastOptions);
 
         Assert.True(
-            written.SlidingExpiration >= AuthenticationExtensions.RememberedSessionLifetime,
+            written.SlidingExpiration >= AuthenticationExtensions.SessionLifetime,
             $"tokens are kept {written.SlidingExpiration}, less than a remembered session");
     }
 

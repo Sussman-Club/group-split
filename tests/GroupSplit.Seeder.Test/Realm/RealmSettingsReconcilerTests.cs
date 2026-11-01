@@ -33,12 +33,12 @@ public sealed class RealmSettingsReconcilerTests
     private const string Origin = "https://groupsplit.example";
 
     [Fact]
-    public async Task Existing_realms_receive_remember_me_timeouts_and_the_account_return_link()
+    public async Task Existing_realms_receive_uniform_session_timeouts_and_the_account_return_link()
     {
         var current = Imported();
-        current["rememberMe"] = false;
-        current.Remove("ssoSessionIdleTimeoutRememberMe");
-        current.Remove("ssoSessionMaxLifespanRememberMe");
+        current["rememberMe"] = true;
+        current["ssoSessionIdleTimeout"] = 1800;
+        current["ssoSessionMaxLifespan"] = 43200;
         var web = KeycloakRealmDefinition.Client(current, "web-app")!;
         web.Remove("baseUrl");
         web.Remove("name");
@@ -46,9 +46,9 @@ public sealed class RealmSettingsReconcilerTests
 
         await Reconcile(admin);
 
-        Assert.True(admin.RealmData["rememberMe"]!.GetValue<bool>());
-        Assert.Equal(2592000, admin.RealmData["ssoSessionIdleTimeoutRememberMe"]!.GetValue<int>());
-        Assert.Equal(2592000, admin.RealmData["ssoSessionMaxLifespanRememberMe"]!.GetValue<int>());
+        Assert.False(admin.RealmData["rememberMe"]!.GetValue<bool>());
+        Assert.Equal(1296000, admin.RealmData["ssoSessionIdleTimeout"]!.GetValue<int>());
+        Assert.Equal(7776000, admin.RealmData["ssoSessionMaxLifespan"]!.GetValue<int>());
         Assert.Equal($"{Origin}/account", admin.Clients["web-app"]["baseUrl"]!.GetValue<string>());
         Assert.Equal("Group Split", admin.Clients["web-app"]["name"]!.GetValue<string>());
     }

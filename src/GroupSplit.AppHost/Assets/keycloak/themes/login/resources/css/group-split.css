@@ -596,6 +596,13 @@ input[type="radio"] {
 }
 
 /* Social / identity-provider buttons. */
+.pf-v5-c-button.pf-m-secondary::after,
+.pf-v5-c-button.pf-m-tertiary::after,
+.pf-v5-c-button.pf-m-control::after {
+    border: 0;
+    border-radius: inherit;
+}
+
 .pf-v5-c-button.pf-m-control,
 #kc-social-providers .pf-v5-c-button {
     background: var(--gs-surface-2);

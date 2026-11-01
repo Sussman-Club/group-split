@@ -101,6 +101,9 @@ public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost
         await CreateStandInPersonAsync(account.Email, emailVerified: true);
 
         Assert.Equal(Outcome.SignedIn, await SignInWithGoogleAsync(account.Email));
+        var ticket = Assert.Single(await Context.CookiesAsync(), cookie => cookie.Name == "GroupSplit.Auth");
+        Assert.InRange(ticket.Expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            TimeSpan.FromDays(14).TotalSeconds, TimeSpan.FromDays(15).TotalSeconds + 60);
         Assert.Equal([_standIn], await LinksAsync(account.Id));
     }
 
@@ -160,6 +163,7 @@ public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost
         await Page.GotoAsync(Url("login?returnUrl=/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
         var provider = Page.Locator($"#social-{_standIn}");
         await Expect(provider).ToBeVisibleAsync(Visible);
+        await Expect(Page.Locator("input[name=rememberMe]")).ToHaveCountAsync(0);
         await provider.ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // Only ever typed on the stand-in's own page. Anywhere else would be signing in to the

@@ -24,7 +24,7 @@ public static class AuthRoutes
     /// </summary>
     public const string HandoffPath = "/login";
 
-    /// <summary>Starts web sign-in. Keycloak owns the remember-me preference.</summary>
+    /// <summary>Starts web sign-in using the common session policy.</summary>
     public static string Login(string? returnUrl = null) => WithReturnUrl("/auth/login", returnUrl);
 
     /// <summary>
@@ -32,11 +32,8 @@ public static class AuthRoutes
     /// being shown and where to put them back afterwards.
     /// </summary>
     /// <remarks>
-    /// Deliberately not <see cref="Login"/>. That is a challenge, and a challenge is the
-    /// wrong answer to a session that has just ended: it sends the person through Keycloak,
-    /// signs them back in, and only then lands them on a page telling them their session
-    /// expired -- so they sign in twice and are told the opposite of what just happened.
-    /// The hand-off explains the expired session before the person starts a new sign-in.
+    /// Web expiry recovery starts a fresh OIDC challenge automatically. Native login
+    /// and account-deletion notices stay explicit; the local destination survives both.
     /// </remarks>
     /// <param name="reason">One of <see cref="HandoffReason"/>.</param>
     public static string Handoff(string reason, string? returnUrl = null) =>

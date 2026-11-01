@@ -13,6 +13,17 @@ public class IdentityEndpointTest
     private const string Authority = "http://keycloak.test/realms/group-split";
 
     [Fact]
+    public async Task An_expired_activity_request_returns_401_without_starting_oidc_in_a_fetch()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+        using var response = await host.Client.PostAsync("/auth/session", new FormUrlEncodedContent([]),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(SignInHost.HandshakeCookies(response));
+    }
+
+    [Fact]
     public async Task Account_management_identifies_the_app_so_keycloak_can_offer_its_return_link()
     {
         var app = SignInHost.Build(Authority);

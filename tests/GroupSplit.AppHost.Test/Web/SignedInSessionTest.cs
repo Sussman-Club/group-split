@@ -45,34 +45,92 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     private static readonly TimeSpan PastTokenExpiry =
         TimeSpan.FromSeconds(KeycloakAdmin.AccessTokenLifespanSeconds + 15);
 
-    /// <summary>
-    /// The reported bug, from the browser's side: ticking "Keep me signed in" changed
-    /// nothing, because the ticket cookie was never marked to persist and the browser threw
-    /// it away when it closed, whatever had been ticked. Playwright reports a cookie with no
-    /// expiry -- one that dies with the browser -- as -1.
-    /// </summary>
     [Fact(Timeout = 240_000)]
-    public async Task Being_kept_signed_in_writes_a_cookie_the_browser_keeps()
-    {
-        await SignInAsync(remember: true);
-
-        var ticket = await TicketCookieAsync();
-
-        Assert.True(
-            ticket.Expires > 0,
-            "the ticket cookie has no expiry, so the browser drops it on close");
-    }
-
-    /// <summary>
-    /// The other half of the promise, and the easier one to break while fixing the first:
-    /// unticked, the session still has to end with the browser.
-    /// </summary>
-    [Fact(Timeout = 240_000)]
-    public async Task Without_the_tick_the_cookie_still_dies_with_the_browser()
+    public async Task Session_activity_requires_the_antiforgery_token()
     {
         await SignInAsync();
+        var statuses = await Page.EvaluateAsync<int[]>("""
+            async () => {
+                const form = document.getElementById('gs-session-activity');
+                const valid = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+                const invalid = await fetch(form.action, { method: 'POST', body: new FormData() });
+                return [valid.status, invalid.status];
+            }
+            """);
+        Assert.Equal(new[] { 204, 400 }, statuses);
+    }
 
-        Assert.Equal(-1, (await TicketCookieAsync()).Expires);
+    [Fact(Timeout = 240_000)]
+    public async Task Every_sign_in_writes_a_persistent_cookie_with_a_fifteen_day_window()
+    {
+        await SignInAsync();
+        var ticket = await TicketCookieAsync();
+        Assert.InRange(ticket.Expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            TimeSpan.FromDays(14).TotalSeconds, TimeSpan.FromDays(15).TotalSeconds + 60);
+    }
+
+    [Fact(Timeout = 240_000)]
+    public async Task Persistent_sign_in_survives_a_browser_restart_without_another_click()
+    {
+        await SignInAsync();
+        // A fresh browser keeps only cookies with an expiry, not session cookies.
+        var saved = (await Context.CookiesAsync()).Where(cookie => cookie.Expires > 0);
+        await using var reopened = await Browser.NewContextAsync(ContextOptions());
+        await reopened.AddCookiesAsync(saved.Select(cookie => new Cookie
+        {
+            Name = cookie.Name, Value = cookie.Value, Domain = cookie.Domain, Path = cookie.Path,
+            Expires = cookie.Expires, HttpOnly = cookie.HttpOnly, Secure = cookie.Secure, SameSite = cookie.SameSite
+        }));
+        var page = await reopened.NewPageAsync();
+        await page.GotoAsync(Url("/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await Expect(page.GetByRole(AriaRole.Link, new() { Name = "Groups", Exact = true })
+            .Filter(new LocatorFilterOptions { Visible = true }).First).ToBeVisibleAsync(Visible);
+        Assert.Empty(await page.Locator("#password").AllAsync());
+        // The stock Keycloak cookie was session-only and was not restored.
+        // The app stays signed in; account management can require verification.
+        await page.GotoAsync(Url("auth/account"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await Expect(page.Locator("#password")).ToBeVisibleAsync(Visible);
+    }
+
+    [Fact(Timeout = 240_000)]
+    public async Task Account_return_link_and_confirmation_buttons_use_the_app_theme()
+    {
+        await SignInAsync();
+        await Page.GotoAsync(Url("/account"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Manage account", Exact = true }).ClickAsync();
+        var back = Page.GetByRole(AriaRole.Link, new() { NameRegex = new Regex("Back to Group Split") });
+        await Expect(back).ToBeVisibleAsync(Visible);
+        Assert.Equal(Url("/account"), await back.GetAttributeAsync("href"));
+        Assert.True(await back.EvaluateAsync<bool>("el => el.getBoundingClientRect().height >= 44"));
+
+        var devices = Page.GetByRole(AriaRole.Link, new() { Name = "Device activity", Exact = true });
+        if (!await devices.IsVisibleAsync())
+            await Page.Locator(".pf-v5-c-masthead__toggle button").ClickAsync();
+        await devices.ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { NameRegex = new Regex("Sign out all") }).ClickAsync();
+        await Page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
+        await Expect(Page.Locator("html")).ToHaveClassAsync(new Regex("pf-v5-theme-dark"));
+        var cancel = Page.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true });
+        await Expect(cancel).ToBeVisibleAsync(Visible);
+        Assert.Equal("0px", await cancel.EvaluateAsync<string>("el => getComputedStyle(el, '::after').borderTopWidth"));
+        Assert.Equal("14px", await cancel.EvaluateAsync<string>("el => getComputedStyle(el).borderRadius"));
+        var dialog = Page.GetByRole(AriaRole.Dialog);
+        Assert.True(await dialog.EvaluateAsync<bool>("el => { const probe = document.createElement('div'); probe.style.backgroundColor = 'var(--gs-surface)'; el.append(probe); const expected = getComputedStyle(probe).backgroundColor; probe.remove(); return getComputedStyle(el).backgroundColor === expected; }"));
+        await cancel.ClickAsync();
+        await back.ClickAsync();
+        await Expect(Page).ToHaveURLAsync(new Regex($"^{Regex.Escape(Url("/account"))}$"));
+    }
+
+    [Fact(Timeout = 240_000)]
+    public async Task Expired_local_session_recovers_through_sso_without_a_continue_click()
+    {
+        await SignInAsync();
+        await Context.ClearCookiesAsync(new BrowserContextClearCookiesOptions { Name = "GroupSplit.Auth" });
+        await Page.GotoAsync(Url("login?reason=session-expired&returnUrl=%2Fgroups"),
+            new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await Expect(NavLink("Groups")).ToBeVisibleAsync(Visible);
+        await Expect(Page).ToHaveURLAsync(new Regex($"^{Regex.Escape(Url("/groups"))}$"),
+            new PageAssertionsToHaveURLOptions { Timeout = OperationTimeoutMs });
     }
 
     /// <summary>
@@ -241,20 +299,12 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
     /// Signs in as an account made for this test, through Keycloak's own form, and waits
     /// until the page it was sent back to has rendered.
     /// </summary>
-    /// <param name="remember">
-    /// What the checkbox on the app's sign-in page sets. Passed on the query string rather
-    /// than ticked, because what these tests are for is the cookie that comes back -- the
-    /// checkbox reaching this parameter is covered by <c>AuthHandoffTest</c>.
-    /// </param>
-    private async Task SignInAsync(bool remember = false)
+    private async Task SignInAsync()
     {
         var email = await _appHost.Keycloak.CreateAccountAsync(TestContext.Current.CancellationToken);
-
-        // Straight at the challenge rather than through the app's own sign-in page, which
-        // has nothing to add here beyond the parameter above.
-        await Page.GotoAsync(
-            Url($"auth/login?returnUrl=/groups{(remember ? "&remember=true" : string.Empty)}"),
+        await Page.GotoAsync(Url("auth/login?returnUrl=/groups"),
             new PageGotoOptions { Timeout = OperationTimeoutMs });
+        await Expect(Page.Locator("input[name=rememberMe]")).ToHaveCountAsync(0);
 
         await Page.FillAsync("#username", email, new PageFillOptions { Timeout = OperationTimeoutMs });
         await Page.FillAsync(
