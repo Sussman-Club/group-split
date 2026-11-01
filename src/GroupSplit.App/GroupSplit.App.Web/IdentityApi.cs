@@ -32,7 +32,7 @@ public static class IdentityApi
         {
             context.Response.Headers.CacheControl = "no-store";
             if (context.Features.Get<IAntiforgeryValidationFeature>() is not { IsValid: true })
-                return Results.BadRequest();
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest);
 
             // User activity refreshes Keycloak as well as the local cookie. No
             // background timer calls this endpoint while the browser is idle.

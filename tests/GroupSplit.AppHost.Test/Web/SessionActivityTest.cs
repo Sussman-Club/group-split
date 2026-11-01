@@ -13,6 +13,15 @@ public class SessionActivityTest : PageTest
         var requests = 0;
         string? body = null;
         await Page.Clock.InstallAsync(new() { TimeDate = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc) });
+        await Page.AddInitScriptAsync("""
+            window.sessionActivityResponses = 0;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = async (...args) => {
+                const response = await originalFetch(...args);
+                window.sessionActivityResponses++;
+                return response;
+            };
+            """);
         await Page.RouteAsync("https://session.test/**", async route =>
         {
             if (route.Request.Method == "POST")
@@ -35,20 +44,24 @@ public class SessionActivityTest : PageTest
         await Page.AddScriptTagAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "session-activity.js") });
         await Page.Clock.FastForwardAsync((long)TimeSpan.FromDays(16).TotalMilliseconds);
         Assert.Equal(0, requests);
-        var first = await Page.RunAndWaitForResponseAsync(
+        await Page.RunAndWaitForResponseAsync(
             () => Page.GetByRole(AriaRole.Button, new() { Name = "Use app" }).ClickAsync(),
-            response => response.Url.EndsWith("/auth/session") && response.Status == 204);
-        await first.FinishedAsync();
+            response => response.Url.EndsWith("/auth/session") && response.Status == 204,
+            new() { Timeout = 10_000 });
+        // Observe the browser consuming the fetch, rather than waiting for the
+        // routed 204 response's body-finished event (there is no response body).
+        await Page.WaitForFunctionAsync("window.sessionActivityResponses === 1", null, new() { Timeout = 10_000 });
         Assert.Equal(1, requests);
         Assert.Contains("test-antiforgery-value", body);
         await Page.GetByRole(AriaRole.Button, new() { Name = "Use app" }).ClickAsync();
         Assert.Equal(1, requests);
         await Page.Clock.FastForwardAsync(6 * 60 * 1000);
         Assert.Equal(1, requests);
-        var second = await Page.RunAndWaitForResponseAsync(
+        await Page.RunAndWaitForResponseAsync(
             () => Page.GetByRole(AriaRole.Button, new() { Name = "Use app" }).ClickAsync(),
-            response => response.Url.EndsWith("/auth/session") && response.Status == 204);
-        await second.FinishedAsync();
+            response => response.Url.EndsWith("/auth/session") && response.Status == 204,
+            new() { Timeout = 10_000 });
+        await Page.WaitForFunctionAsync("window.sessionActivityResponses === 2", null, new() { Timeout = 10_000 });
         Assert.Equal(2, requests);
     }
 }

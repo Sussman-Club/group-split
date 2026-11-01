@@ -105,7 +105,12 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         var devices = Page.GetByRole(AriaRole.Link, new() { Name = "Device activity", Exact = true });
         if (!await devices.IsVisibleAsync())
-            await Page.Locator(".pf-v5-c-masthead__toggle button").ClickAsync();
+        {
+            var security = Page.GetByRole(AriaRole.Button, new() { Name = "Account security", Exact = true });
+            if (!await security.IsVisibleAsync())
+                await Page.Locator(".pf-v5-c-masthead__toggle button").ClickAsync();
+            await security.ClickAsync();
+        }
         await devices.ClickAsync();
         await Page.GetByRole(AriaRole.Button, new() { NameRegex = new Regex("Sign out all") }).ClickAsync();
         await Page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
