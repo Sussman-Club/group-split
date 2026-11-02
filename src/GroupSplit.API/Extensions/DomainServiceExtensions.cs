@@ -80,6 +80,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IReceiptFiles, ReceiptFiles>();
             services.AddScoped<IReceiptAttachmentService, ReceiptAttachmentService>();
             services.AddBankingServices();
+            services.AddScoped<SupportReportClassifier>();
 
             return services;
         }

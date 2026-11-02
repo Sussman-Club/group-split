@@ -1072,6 +1072,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<bool>("ClassificationNeedsReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTimeOffset?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1138,6 +1143,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClassificationNeedsReview");
 
                     b.HasIndex("DuplicateOfTicketId");
 

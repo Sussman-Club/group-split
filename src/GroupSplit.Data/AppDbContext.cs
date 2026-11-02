@@ -39,6 +39,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(x => x.Priority).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.ClassificationNeedsReview).HasDefaultValue(true);
+            entity.HasIndex(x => x.ClassificationNeedsReview);
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(10000).IsRequired();
             entity.Property(x => x.ReproductionSteps).HasMaxLength(10000);

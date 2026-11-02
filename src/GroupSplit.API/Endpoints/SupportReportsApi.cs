@@ -22,10 +22,10 @@ public static class SupportReportsApi
         }).WithName("ListSupportReports");
 
         group.MapPost("/", async Task<IResult> (CreateSupportReportRequest request, ICurrentUser current,
-            AppDbContext db, CancellationToken ct) =>
+            AppDbContext db, SupportReportClassifier classifier, CancellationToken ct) =>
         {
-            if (!Enum.TryParse<SupportTicketType>(request.Type, false, out var type)
-                || !Enum.IsDefined(type) || request.Title?.Length > 200 || string.IsNullOrWhiteSpace(request.Description)
+            if ((request.Type is not null && (!Enum.TryParse<SupportTicketType>(request.Type, false, out var type)
+                || !Enum.IsDefined(type))) || request.Title?.Length > 200 || string.IsNullOrWhiteSpace(request.Description)
                 || request.Description.Length > 10000 || request.ReproductionSteps?.Length > 10000)
                 return Results.BadRequest();
             var description = request.Description.Trim();
@@ -36,8 +36,9 @@ public static class SupportReportsApi
                 summary = summary[..end].TrimEnd() + "…";
             }
             var title = string.IsNullOrWhiteSpace(request.Title) ? summary : request.Title.Trim();
+            var classification = await classifier.ClassifyAsync(description, ct);
             var now = DateTimeOffset.UtcNow;
-            var ticket = new SupportTicket { ReporterUserId = current.User.Id, Type = type,
+            var ticket = new SupportTicket { ReporterUserId = current.User.Id, Type = classification.Type, Priority = classification.Priority, ClassificationNeedsReview = classification.NeedsReview,
                 Title = title, Description = description,
                 ReproductionSteps = string.IsNullOrWhiteSpace(request.ReproductionSteps) ? null : request.ReproductionSteps.Trim(),
                 CreatedAt = now, UpdatedAt = now };
