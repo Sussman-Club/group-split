@@ -1,3 +1,5 @@
+using GroupSplit.API.Services.Banking.Suggestions;
+using Moq;
 using System.Net;
 using System.Net.Http.Json;
 using GroupSplit.API.Test.Base;
@@ -45,6 +47,55 @@ public class SupportReportsEndpointTest : IAsyncLifetime
         Assert.Equal("The app stops responding", report.Title);
     }
 
+    [Theory]
+    [InlineData("FeatureRequest", "High")]
+    [InlineData("Bug", "Urgent")]
+    [InlineData("Support", "Low")]
+    public async Task Description_only_reports_store_classified_type_and_priority(string type, string priority)
+    {
+        var decisions = new Mock<IDecisionClient>();
+        decisions.SetupSequence(x => x.ChooseAsync(It.IsAny<object>(), It.IsAny<string>(),
+                It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DecisionAnswer(type, 0.95))
+            .ReturnsAsync(new DecisionAnswer(priority, 0.95));
+        await using var host = await ApiEndpointHost.StartAsync(services =>
+        {
+            services.AddSingleton(decisions.Object);
+            services.Configure<FilingSuggestionOptions>(o =>
+            {
+                o.Endpoint = new Uri("https://classifier.example/");
+                o.Key = "test";
+                o.Deployment = "test";
+            });
+        });
+        var ct = TestContext.Current.CancellationToken;
+        var response = await host.Client.PostAsJsonAsync("/support-reports", new { Description = "My feedback" }, ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(ct))!;
+        Assert.Equal(type, report.Type);
+        using var scope = host.Services.CreateScope();
+        var ticket = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Set<SupportTicket>().SingleAsync(x => x.Id == report.Id, ct);
+        Assert.Equal(priority, ticket.Priority.ToString());
+        Assert.False(ticket.ClassificationNeedsReview);
+        decisions.Verify(x => x.ChooseAsync(It.IsAny<object>(), It.IsAny<string>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Unconfigured_classifier_accepts_description_only_with_safe_defaults()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var response = await _host.Client.PostAsJsonAsync("/support-reports", new { Description = "My feedback" }, ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(ct))!;
+        Assert.Equal("Support", report.Type);
+        using var scope = _host.Services.CreateScope();
+        var ticket = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .Set<SupportTicket>().SingleAsync(x => x.Id == report.Id, ct);
+        Assert.Equal(SupportTicketPriority.Normal, ticket.Priority);
+        Assert.True(ticket.ClassificationNeedsReview);
+    }
     [Theory]
     [InlineData("Bogus", "Title", "Details")]
         [InlineData("Bug", "Title", " ")]
