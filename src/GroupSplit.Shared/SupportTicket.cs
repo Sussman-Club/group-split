@@ -1,5 +1,13 @@
 namespace GroupSplit.Shared;
 
+public sealed record SupportTicketSummary(Guid Id, Guid ReporterUserId, Guid? AssignedUserId,
+    string Type, string Status, string Priority, bool ClassificationNeedsReview,
+    string Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt)
+{
+    public string? AssignedUserName { get; init; }
+    public string? ReporterName { get; init; }
+}
+
 public sealed record SupportTicketResponse(Guid Id, Guid ReporterUserId, Guid? AssignedUserId,
     string Type, string Status, string Priority, bool ClassificationNeedsReview,
     string Title, string Description, string? ReproductionSteps,

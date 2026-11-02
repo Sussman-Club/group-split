@@ -62,7 +62,7 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
     }
 
 
-    public Task<DirectoryPage<SupportTicketResponse>> ListAsync(string? search, string? status, string? priority, bool? needsReview, int? page, CancellationToken ct) =>
+    public Task<DirectoryPage<SupportTicketSummary>> ListAsync(string? search, string? status, string? priority, bool? needsReview, int? page, CancellationToken ct) =>
         ListAsync(new SupportTicketQuery { Search = search, Status = status, Priority = priority, NeedsReview = needsReview == true, Page = page ?? 0 }, ct);
 
     public async Task<SupportTicketResponse> UpdateAsync(Guid id, UpdateSupportTicketRequest request, Guid actorUserId, CancellationToken ct)

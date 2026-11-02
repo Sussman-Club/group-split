@@ -219,11 +219,106 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 SELECT "Id", "Id", "Name", "NormalizedName", "FirstSeenAt" FROM "Merchant";
 
                 """);
+
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicketStatusChange_From",
+                table: "SupportTicketStatusChange");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicketStatusChange_To",
+                table: "SupportTicketStatusChange");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicket_Status",
+                table: "SupportTicket");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicketStatusChange_From",
+                table: "SupportTicketStatusChange",
+                sql: "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicketStatusChange_To",
+                table: "SupportTicketStatusChange",
+                sql: "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicket_Status",
+                table: "SupportTicket",
+                sql: "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
+
+
+            migrationBuilder.Sql("""
+                INSERT INTO "StaffActivity" ("Id", "ActorUserId", "Resource", "ResourceId", "Action", "At", "ChangesJson")
+                SELECT h."Id", h."ChangedByUserId", 'Tickets', h."TicketId", 'Status changed', h."ChangedAt",
+                    json_build_array(json_build_object('Field', 'Status', 'Before', h."FromStatus", 'After', h."ToStatus"))::text
+                FROM "SupportTicketStatusChange" h
+                WHERE NOT EXISTS (SELECT 1 FROM "StaffActivity" a
+                    WHERE a."Resource" = 'Tickets' AND a."ResourceId" = h."TicketId" AND a."At" = h."ChangedAt")
+                ON CONFLICT ("Id") DO NOTHING;
+                """);
+
+
+        migrationBuilder.Sql("""
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+            CREATE INDEX "IX_SupportTicket_UpdatedAt_Id" ON "SupportTicket" ("UpdatedAt" DESC, "Id" DESC);
+            CREATE INDEX "IX_SupportTicket_Status_UpdatedAt_Id" ON "SupportTicket" ("Status", "UpdatedAt" DESC, "Id" DESC);
+            CREATE INDEX "IX_SupportTicket_Assigned_UpdatedAt_Id" ON "SupportTicket" ("AssignedUserId", "UpdatedAt" DESC, "Id" DESC);
+            CREATE INDEX "IX_SupportTicket_Title_Trgm" ON "SupportTicket" USING gin (lower("Title") gin_trgm_ops);
+            CREATE INDEX "IX_SupportTicket_Description_Trgm" ON "SupportTicket" USING gin (lower("Description") gin_trgm_ops);
+            CREATE INDEX "IX_Merchant_Name_Trgm" ON "Merchant" USING gin ("NormalizedName" gin_trgm_ops);
+            CREATE INDEX "IX_MerchantAlias_Name_Trgm" ON "MerchantAlias" USING gin ("NormalizedName" gin_trgm_ops);
+            CREATE INDEX "IX_User_Email_Trgm" ON "User" USING gin (lower("Email") gin_trgm_ops);
+            CREATE INDEX "IX_User_FullName_Trgm" ON "User" USING gin (lower(coalesce("FirstName", '') || ' ' || coalesce("LastName", '')) gin_trgm_ops);
+            """);
+
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+        migrationBuilder.Sql("""
+            DROP INDEX "IX_User_FullName_Trgm";
+            DROP INDEX "IX_User_Email_Trgm";
+            DROP INDEX "IX_MerchantAlias_Name_Trgm";
+            DROP INDEX "IX_Merchant_Name_Trgm";
+            DROP INDEX "IX_SupportTicket_Description_Trgm";
+            DROP INDEX "IX_SupportTicket_Title_Trgm";
+            DROP INDEX "IX_SupportTicket_Assigned_UpdatedAt_Id";
+            DROP INDEX "IX_SupportTicket_Status_UpdatedAt_Id";
+            DROP INDEX "IX_SupportTicket_UpdatedAt_Id";
+            """);
+
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicketStatusChange_From",
+                table: "SupportTicketStatusChange");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicketStatusChange_To",
+                table: "SupportTicketStatusChange");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_SupportTicket_Status",
+                table: "SupportTicket");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicketStatusChange_From",
+                table: "SupportTicketStatusChange",
+                sql: "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicketStatusChange_To",
+                table: "SupportTicketStatusChange",
+                sql: "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_SupportTicket_Status",
+                table: "SupportTicket",
+                sql: "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+
+
             migrationBuilder.DropTable(
                 name: "MerchantAlias");
 
@@ -245,6 +340,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             migrationBuilder.DropColumn(
                 name: "Version",
                 table: "Merchant");
+
         }
     }
 }

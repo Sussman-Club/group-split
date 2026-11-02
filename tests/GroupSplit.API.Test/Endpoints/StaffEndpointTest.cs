@@ -103,7 +103,7 @@ public class StaffEndpointTest : IAsyncLifetime
         submitted.EnsureSuccessStatusCode();
         var report = (await submitted.Content.ReadFromJsonAsync<SupportReportResponse>(Ct))!;
         using var staff = Staff();
-        var queue = await staff.GetFromJsonAsync<DirectoryPage<SupportTicketResponse>>("/staff/tickets?status=New", Ct);
+        var queue = await staff.GetFromJsonAsync<DirectoryPage<SupportTicketSummary>>("/staff/tickets?status=New", Ct);
         var ticket = Assert.Single(queue!.Items);
         Assert.Equal(ticket.Id, (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{ticket.Id}", Ct))!.Id);
         var edit = new UpdateSupportTicketRequest { Type = "Bug", Priority = "High", Status = "Resolved", AssignToMe = true, ExpectedUpdatedAt = ticket.UpdatedAt };

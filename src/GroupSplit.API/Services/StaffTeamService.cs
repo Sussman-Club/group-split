@@ -4,21 +4,29 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace GroupSplit.API.Services;
 
 /// <summary>Team presence is recorded by the authorization boundary; it never grants access.</summary>
-public sealed class StaffTeamService(AppDbContext db, TimeProvider clock)
+public sealed class StaffTeamService(AppDbContext db, TimeProvider clock, IMemoryCache cache)
 {
     public async Task RecordAccessAsync(Guid userId, bool active, CancellationToken ct)
     {
+        var cacheKey = (typeof(StaffTeamService), userId);
+        if (active && cache.TryGetValue(cacheKey, out _)) return;
+        if (!active) cache.Remove(cacheKey);
         var member = await db.Set<StaffMember>().SingleOrDefaultAsync(m => m.UserId == userId, ct);
         if (member is null && !active) return;
         var now = clock.GetUtcNow();
-        if (member is not null && member.Active == active && member.LastVerifiedAt > now.AddHours(-1)) return;
+        if (member is not null && member.Active == active && member.LastVerifiedAt > now.AddHours(-1))
+        {
+            if (active) cache.Set(cacheKey, true, TimeSpan.FromMinutes(1));
+            return;
+        }
         if (member is null) { member = new StaffMember { UserId = userId }; db.Add(member); }
         member.Active = active; member.LastVerifiedAt = now;
-        try { await db.SaveChangesAsync(ct); }
+        try { await db.SaveChangesAsync(ct); if (active) cache.Set(cacheKey, true, TimeSpan.FromMinutes(1)); }
         catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
         { db.Entry(member).State = EntityState.Detached; }
     }

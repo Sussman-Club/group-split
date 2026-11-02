@@ -71,6 +71,14 @@ public static class ErrorMessages
         [ErrorCodes.TransactionNotFound] = "That expense no longer exists.",
         [ErrorCodes.CategoryNotFound] = "That category no longer exists.",
         [ErrorCodes.MerchantNotFound] = "That merchant no longer exists.",
+        [ErrorCodes.InvalidMerchant] = "Check the merchant details and try again.",
+        [ErrorCodes.MerchantNameExists] = "A merchant with that name already exists.",
+        [ErrorCodes.MerchantImageInvalid] = "Choose a PNG image up to 512 by 512 pixels and 1 MB.",
+        [ErrorCodes.MerchantImageNotFound] = "That merchant image no longer exists.",
+        [ErrorCodes.InvalidSupportTicket] = "Check the ticket details and try again.",
+        [ErrorCodes.SupportTicketNotFound] = "That support ticket no longer exists.",
+        [ErrorCodes.SupportTicketChanged] = "This ticket changed. Refresh it before trying again.",
+        [ErrorCodes.InvalidSupportReport] = "Check your support report and try again.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
 
         // A bill is the exception rather than the rule, so this reads as a statement about

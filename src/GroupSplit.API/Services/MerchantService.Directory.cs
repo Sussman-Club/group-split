@@ -27,10 +27,24 @@ public partial class MerchantService
             var needle = search.Trim().ToLowerInvariant();
             query = query.Where(m => m.NormalizedName.Contains(needle) || dbContext.Set<MerchantAlias>().Any(a => a.MerchantId == m.Id && a.NormalizedName.Contains(needle)));
         }
+        if (sort == "usage")
+        {
+            // Aggregate once before sorting, instead of evaluating a correlated count
+            // separately for every merchant in the directory.
+            var counts = dbContext.Set<Transaction>().AsNoTracking().Where(t => t.MerchantId != null)
+                .GroupBy(t => t.MerchantId).Select(g => new { MerchantId = g.Key, Count = (int?)g.Count() });
+            var ranked = from merchant in query
+                join count in counts on (Guid?)merchant.Id equals count.MerchantId into joined
+                from count in joined.DefaultIfEmpty()
+                orderby (count.Count ?? 0) descending, merchant.Id
+                select new MerchantResponse(merchant.Id, merchant.Name, merchant.LogoUrl, merchant.FirstSeenAt,
+                    count.Count ?? 0) { Version = merchant.Version };
+            var pageRows = await ranked.Skip((page ?? 0) * DirectoryPageSize).Take(DirectoryPageSize + 1).ToListAsync(ct);
+            return new DirectoryPage<MerchantResponse>(pageRows.Take(DirectoryPageSize).ToList(), pageRows.Count > DirectoryPageSize);
+        }
         var ordered = sort switch
         {
             null or "" or "name" => query.OrderBy(m => m.Name).ThenBy(m => m.Id),
-            "usage" => query.OrderByDescending(m => m.Transactions.Count).ThenBy(m => m.Id),
             "newest" => query.OrderByDescending(m => m.FirstSeenAt).ThenBy(m => m.Id),
             _ => throw new ValidationException(ErrorCodes.BadRequest, "Choose a valid merchant sort.")
         };

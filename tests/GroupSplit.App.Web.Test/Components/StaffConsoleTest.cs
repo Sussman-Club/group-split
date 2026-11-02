@@ -54,7 +54,7 @@ public class StaffConsoleTest : ComponentTest
     {
         var tickets = StaffConsoleFixtures.Tickets();
         _staff.Setup(s => s.TicketsAsync("bank", "New", "High", true, 2))
-            .ReturnsAsync(new DirectoryPage<SupportTicketResponse>(tickets, true));
+            .ReturnsAsync(new DirectoryPage<SupportTicketSummary>(tickets.Select(StaffConsoleFixtures.Summary).ToList(), true));
         Navigation.NavigateTo("/staff/tickets?q=bank&status=New&priority=High&review=true&page=2");
         var page = Render<StaffTickets>();
         page.WaitForAssertion(() => Assert.Equal(tickets.Count, page.FindAll("tbody tr").Count));
@@ -143,7 +143,7 @@ public class StaffConsoleTest : ComponentTest
         var tickets = StaffConsoleFixtures.Tickets();
         var merchants = StaffConsoleFixtures.Merchants();
         _staff.Setup(s => s.HasAccessAsync()).ReturnsAsync(true);
-        _staff.Setup(s => s.TicketsAsync("", "New", "", false, 0)).ReturnsAsync(new DirectoryPage<SupportTicketResponse>(tickets, true));
+        _staff.Setup(s => s.TicketsAsync("", "New", "", false, 0)).ReturnsAsync(new DirectoryPage<SupportTicketSummary>(tickets.Select(StaffConsoleFixtures.Summary).ToList(), true));
         _staff.Setup(s => s.MerchantsAsync("", 0)).ReturnsAsync(new DirectoryPage<MerchantResponse>(merchants, false));
         _staff.Setup(s => s.TicketAsync(tickets[0].Id)).ReturnsAsync(tickets[0]);
         _staff.Setup(s => s.MerchantAsync(merchants[0].Id)).ReturnsAsync(merchants[0]);

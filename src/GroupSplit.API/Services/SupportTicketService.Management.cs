@@ -8,7 +8,7 @@ namespace GroupSplit.API.Services;
 
 public sealed partial class SupportTicketService
 {
-    public async Task<DirectoryPage<SupportTicketResponse>> ListAsync(SupportTicketQuery filter, CancellationToken ct)
+    public async Task<DirectoryPage<SupportTicketSummary>> ListAsync(SupportTicketQuery filter, CancellationToken ct)
     {
         if (filter.Page is < 0 or > 10000 || filter.Search?.Length > 200)
             throw new ValidationException(ErrorCodes.InvalidSupportTicket, "Check the ticket filters.");
@@ -43,9 +43,13 @@ public sealed partial class SupportTicketService
             "priority" => query.OrderBy(t => t.Priority == SupportTicketPriority.Urgent ? 0 : t.Priority == SupportTicketPriority.High ? 1 : t.Priority == SupportTicketPriority.Normal ? 2 : 3).ThenBy(t => t.CreatedAt).ThenBy(t => t.Id),
             _ => throw InvalidFields()
         };
-        var rows = await ordered.Skip(filter.Page * PageSize).Take(PageSize + 1).ToListAsync(ct);
+        var rows = await ordered.Skip(filter.Page * PageSize).Take(PageSize + 1)
+            .Select(t => new { t.Id, t.ReporterUserId, t.AssignedUserId, t.Type, t.Status, t.Priority,
+                t.ClassificationNeedsReview, t.Title, t.CreatedAt, t.UpdatedAt }).ToListAsync(ct);
         var names = await Names(rows.SelectMany(t => new[] { t.ReporterUserId, t.AssignedUserId ?? Guid.Empty }), ct);
-        return new(rows.Take(PageSize).Select(t => Describe(t) with
+        return new(rows.Take(PageSize).Select(t => new SupportTicketSummary(t.Id, t.ReporterUserId, t.AssignedUserId,
+            t.Type.ToString(), t.Status.ToString(), t.Priority.ToString(), t.ClassificationNeedsReview,
+            t.Title, t.CreatedAt, t.UpdatedAt)
         {
             AssignedUserName = t.AssignedUserId is { } user ? names.GetValueOrDefault(user, "Deleted account") : null,
             ReporterName = names.GetValueOrDefault(t.ReporterUserId, "Deleted account")

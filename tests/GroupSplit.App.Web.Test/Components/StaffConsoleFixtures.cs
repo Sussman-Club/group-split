@@ -14,6 +14,8 @@ internal static class StaffConsoleFixtures
             "Open Inbox, choose the linked bank, then refresh transactions.", now.AddHours(-i - 1), now.AddMinutes(-i * 21 - 8))).ToList();
     }
 
+    public static SupportTicketSummary Summary(SupportTicketResponse ticket) => new(ticket.Id, ticket.ReporterUserId, ticket.AssignedUserId, ticket.Type, ticket.Status, ticket.Priority, ticket.ClassificationNeedsReview, ticket.Title, ticket.CreatedAt, ticket.UpdatedAt) { ReporterName = ticket.ReporterName, AssignedUserName = ticket.AssignedUserName };
+
     public static List<MerchantResponse> Merchants() =>
     [
         new(Guid.NewGuid(), "Blue Bottle Coffee", MerchantLogos.BundledPath + "blue-bottle-coffee.svg", DateTimeOffset.UtcNow.AddMonths(-3), 42),

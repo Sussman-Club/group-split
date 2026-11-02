@@ -10,7 +10,7 @@ public partial interface IStaffClient
     Task<MerchantResponse> MerchantAsync(Guid id);
     Task SaveMerchantAsync(Guid? id, UpdateMerchantRequest request);
     Task SaveMerchantImageAsync(Guid? id, string name, byte[] png);
-    Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page);
+    Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page);
     Task<SupportTicketResponse> TicketAsync(Guid id);
     Task<SupportTicketResponse> SaveTicketAsync(Guid id, UpdateSupportTicketRequest request);
     Task<List<SupportNoteResponse>> NotesAsync(Guid id);
@@ -49,8 +49,8 @@ public sealed partial class StaffClient(HttpClient http) : IStaffClient
         using var response = await http.PostAsync("staff/merchant-images", form);
         await response.EnsureApiSuccessAsync();
     }
-    public async Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page) =>
-        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketResponse>>($"staff/tickets?search={Uri.EscapeDataString(search)}&status={Uri.EscapeDataString(status)}&priority={Uri.EscapeDataString(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}"))!;
+    public async Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page) =>
+        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketSummary>>($"staff/tickets?search={Uri.EscapeDataString(search)}&status={Uri.EscapeDataString(status)}&priority={Uri.EscapeDataString(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}"))!;
     public async Task<SupportTicketResponse> SaveTicketAsync(Guid id, UpdateSupportTicketRequest request)
     {
         using var response = await http.PutAsJsonAsync($"staff/tickets/{id}", request);

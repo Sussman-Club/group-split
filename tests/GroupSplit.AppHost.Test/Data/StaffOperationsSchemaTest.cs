@@ -42,6 +42,10 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var expense = new Expense { UserId = user.Id, Group = group, Amount = 12.34m, Currency = "USD", Name = "Purchase", DateTime = DateTimeOffset.UtcNow, MerchantId = source.Id };
             var row = new BankTransaction { Account = account, ProviderTransactionId = "verify-row", Date = DateOnly.FromDateTime(DateTime.UtcNow), Amount = 12.34m, Description = "Purchase", RawJson = "{}", ImportedAt = DateTimeOffset.UtcNow, MerchantId = source.Id };
             db.Add(expense); db.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            var ranked = await merchantService.ListDirectory(null, 0, "usage", default);
+            Assert.Equal(source.Id, ranked.Items[0].Id);
+            Assert.Equal(1, ranked.Items[0].TransactionCount);
+            Assert.Equal(0, ranked.Items.Single(m => m.Id == target.Id).TransactionCount);
             var preview = await merchantService.PreviewMerge(source.Id, target.Id, default);
             Check(preview.Transactions == 1 && preview.BankRows == 1 && preview.Aliases == 2, "Merge preview counts");
             await merchantService.Merge(source.Id, new(target.Id, preview.Source.Version, preview.Target.Version, preview.Transactions, preview.BankRows, preview.Aliases), user.Id, default);
@@ -54,7 +58,8 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var resolved = await new MerchantDirectory(db, TimeProvider.System).ResolveAsync("old shop #123", null);
             Check(resolved?.Id == target.Id, "Bank import alias resolves canonical merchant");
             await merchantService.ListDirectory("old", 0, "usage", default);
-            var team = new StaffTeamService(db, TimeProvider.System);
+            using var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+            var team = new StaffTeamService(db, TimeProvider.System, cache);
             await team.RecordAccessAsync(user.Id, true, default);
             Check((await team.ListAsync(default)).Count == 1, "Staff directory translates");
             var users = new SupportUserService(db);

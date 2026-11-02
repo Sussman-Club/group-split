@@ -15,7 +15,7 @@
     </div>
 </details>
 @code {
-    [Parameter] public List<SupportTicketResponse> Tickets { get; set; } = [];
+    [Parameter] public List<SupportTicketSummary> Tickets { get; set; } = [];
     [Parameter] public List<StaffPersonResponse> Team { get; set; } = [];
     [Parameter] public EventCallback OnSaved { get; set; }
     private HashSet<Guid> _selected = [];

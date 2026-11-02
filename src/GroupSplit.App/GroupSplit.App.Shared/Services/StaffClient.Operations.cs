@@ -17,8 +17,8 @@ public partial interface IStaffClient
     Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page);
     Task ReplyAsync(Guid id, CreateSupportMessageRequest request);
     Task BulkTicketsAsync(BulkTicketUpdateRequest request);
-    Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort);
-    Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort, string type);
+    Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort);
+    Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort, string type);
     Task<DirectoryPage<MerchantResponse>> MerchantsAsync(string search, int page, string sort);
     Task<List<MerchantAliasResponse>> AliasesAsync(Guid id);
     Task AddAliasAsync(Guid id, string name);
@@ -43,10 +43,10 @@ public sealed partial class StaffClient
     public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page) => await http.GetFromApiJsonAsync<List<SupportMessageResponse>>($"staff/tickets/{id}/messages?page={page}") ?? [];
     public Task ReplyAsync(Guid id, CreateSupportMessageRequest request) => SendAsync(HttpMethod.Post, $"staff/tickets/{id}/reply", request);
     public Task BulkTicketsAsync(BulkTicketUpdateRequest request) => SendAsync(HttpMethod.Post, "staff/tickets/bulk", request);
-    public async Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort) =>
-        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketResponse>>($"staff/tickets?search={Escape(search)}&status={Escape(status)}&priority={Escape(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}&assignee={Escape(assignee)}&sort={Escape(sort)}"))!;
-    public async Task<DirectoryPage<SupportTicketResponse>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort, string type) =>
-        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketResponse>>($"staff/tickets?search={Escape(search)}&status={Escape(status)}&priority={Escape(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}&assignee={Escape(assignee)}&sort={Escape(sort)}&type={Escape(type)}"))!;
+    public async Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort) =>
+        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketSummary>>($"staff/tickets?search={Escape(search)}&status={Escape(status)}&priority={Escape(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}&assignee={Escape(assignee)}&sort={Escape(sort)}"))!;
+    public async Task<DirectoryPage<SupportTicketSummary>> TicketsAsync(string search, string status, string priority, bool needsReview, int page, string assignee, string sort, string type) =>
+        (await http.GetFromApiJsonAsync<DirectoryPage<SupportTicketSummary>>($"staff/tickets?search={Escape(search)}&status={Escape(status)}&priority={Escape(priority)}&needsReview={needsReview.ToString().ToLowerInvariant()}&page={page}&assignee={Escape(assignee)}&sort={Escape(sort)}&type={Escape(type)}"))!;
     public async Task<DirectoryPage<MerchantResponse>> MerchantsAsync(string search, int page, string sort) =>
         (await http.GetFromApiJsonAsync<DirectoryPage<MerchantResponse>>($"staff/merchants?search={Escape(search)}&page={page}&sort={Escape(sort)}"))!;
     public async Task<List<MerchantAliasResponse>> AliasesAsync(Guid id) => await http.GetFromApiJsonAsync<List<MerchantAliasResponse>>($"staff/merchants/{id}/aliases") ?? [];

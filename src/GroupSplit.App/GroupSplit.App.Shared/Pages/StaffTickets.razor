@@ -82,7 +82,7 @@
     private List<StaffPersonResponse> _team = [];
     private string _search = "", _status = "New", _priority = "", _assignee = "", _sort = "updated", _type = "";
     private bool _review;
-    private DirectoryPage<SupportTicketResponse> _result = new([], false);
+    private DirectoryPage<SupportTicketSummary> _result = new([], false);
     private int SafePage => Math.Clamp(Page, 0, 10000);
     private string CurrentView => StaffLinks.Tickets(Search, Status, Priority, Review, SafePage, Assignee, Sort, Type);
     private string View(string status) => StaffLinks.Tickets(Search, status, Priority, Review, 0, null, Sort, Type);
@@ -98,12 +98,15 @@
 
     private Task RefreshAsync() => LoadAsync(async () =>
     {
-        _team = await Client.TeamAsync() ?? [];
-        return Type is not null
-            ? await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated", Type)
+        var teamTask = Client.TeamAsync();
+        var ticketsTask = Type is not null
+            ? Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated", Type)
             : Assignee is null && Sort is null
-            ? await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage)
-            : await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated");
+            ? Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage)
+            : Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated");
+        await Task.WhenAll(teamTask, ticketsTask);
+        _team = await teamTask ?? [];
+        return await ticketsTask;
     }, result => _result = result);
     private Task ApplyAsync()
     {

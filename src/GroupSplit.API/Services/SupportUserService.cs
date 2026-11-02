@@ -17,7 +17,6 @@ public sealed class SupportUserService(AppDbContext db)
             throw new ValidationException(ErrorCodes.BadRequest, "Search for at least two characters, up to two hundred.");
         return await Describe(db.Set<User>().Where(u => u.Kind == UserKind.Account
             && ((u.Email != null && u.Email.ToLower().Contains(needle))
-                || (u.FirstName != null && u.FirstName.ToLower().Contains(needle))
                 || ((u.FirstName ?? "") + " " + (u.LastName ?? "")).ToLower().Contains(needle))).OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id).Take(20)).ToListAsync(ct);
     }
 

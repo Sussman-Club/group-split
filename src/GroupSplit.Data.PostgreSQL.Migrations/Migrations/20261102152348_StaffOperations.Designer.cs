@@ -1353,7 +1353,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                             t.HasCheckConstraint("CK_SupportTicket_Priority", "\"Priority\" IN ('Low', 'Normal', 'High', 'Urgent')");
 
-                            t.HasCheckConstraint("CK_SupportTicket_Status", "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+                            t.HasCheckConstraint("CK_SupportTicket_Status", "\"Status\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
 
                             t.HasCheckConstraint("CK_SupportTicket_Type", "\"Type\" IN ('Bug', 'FeatureRequest', 'Support')");
                         });
@@ -1479,9 +1479,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.ToTable("SupportTicketStatusChange", t =>
                         {
-                            t.HasCheckConstraint("CK_SupportTicketStatusChange_From", "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+                            t.HasCheckConstraint("CK_SupportTicketStatusChange_From", "\"FromStatus\" IS NULL OR \"FromStatus\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
 
-                            t.HasCheckConstraint("CK_SupportTicketStatusChange_To", "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'Resolved', 'Closed')");
+                            t.HasCheckConstraint("CK_SupportTicketStatusChange_To", "\"ToStatus\" IN ('New', 'UnderReview', 'InProgress', 'WaitingForCustomer', 'Resolved', 'Closed')");
                         });
                 });
 

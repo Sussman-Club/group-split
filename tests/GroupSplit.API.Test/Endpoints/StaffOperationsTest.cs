@@ -100,7 +100,7 @@ public class StaffOperationsTest : IAsyncLifetime
         (await staff.PutAsJsonAsync($"/staff/tickets/{first.Id}", edit, Ct)).EnsureSuccessStatusCode();
         var assigned = (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{first.Id}", Ct))!;
         Assert.NotNull(assigned.AssignedUserName);
-        Assert.Single((await staff.GetFromJsonAsync<DirectoryPage<SupportTicketResponse>>($"/staff/tickets?assignee={team[0].Id}", Ct))!.Items);
+        Assert.Single((await staff.GetFromJsonAsync<DirectoryPage<SupportTicketSummary>>($"/staff/tickets?assignee={team[0].Id}", Ct))!.Items);
         var secondTicket = (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{second.Id}", Ct))!;
         var bulk = new BulkTicketUpdateRequest { Status = "Resolved", Tickets = [new(first.Id, ticket.UpdatedAt), new(second.Id, secondTicket.UpdatedAt)] };
         Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync("/staff/tickets/bulk", bulk, Ct)).StatusCode);
@@ -171,7 +171,7 @@ public class StaffOperationsTest : IAsyncLifetime
             await db.SaveChangesAsync(Ct);
         }
         using var staff = Staff();
-        var results = (await staff.GetFromJsonAsync<DirectoryPage<SupportTicketResponse>>("/staff/tickets?type=Bug", Ct))!;
+        var results = (await staff.GetFromJsonAsync<DirectoryPage<SupportTicketSummary>>("/staff/tickets?type=Bug", Ct))!;
         Assert.Equal("Bug", Assert.Single(results.Items).Type);
     }
 
@@ -196,6 +196,29 @@ public class StaffOperationsTest : IAsyncLifetime
         var filtered = (await staff.GetFromJsonAsync<DirectoryPage<SupportUserResponse>>("/staff/users/directory?search=directory17", Ct))!;
         Assert.Equal("directory17@example.test", Assert.Single(filtered.Items).Email);
         Assert.Equal(HttpStatusCode.Forbidden, (await _host.Client.GetAsync("/staff/users/directory", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ticket_queue_returns_summary_without_report_content()
+    {
+        (await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
+        { Title = "A report", Description = "Private description that belongs on the detail page" }, Ct)).EnsureSuccessStatusCode();
+        using var staff = Staff();
+        var response = await staff.GetAsync("/staff/tickets", Ct);
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync(Ct);
+        Assert.DoesNotContain("Private description that belongs on the detail page", json);
+        Assert.DoesNotContain("reproductionSteps", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Single((await response.Content.ReadFromJsonAsync<DirectoryPage<SupportTicketSummary>>(Ct))!.Items);
+    }
+
+    [Fact]
+    public async Task Merchant_usage_sort_includes_merchants_with_no_transactions()
+    {
+        using var staff = Staff();
+        await Merchant(staff, "Unused merchant");
+        var result = (await staff.GetFromJsonAsync<DirectoryPage<MerchantResponse>>("/staff/merchants?sort=usage", Ct))!;
+        Assert.Contains(result.Items, merchant => merchant.Name == "Unused merchant" && merchant.TransactionCount == 0);
     }
 
     [Fact]
