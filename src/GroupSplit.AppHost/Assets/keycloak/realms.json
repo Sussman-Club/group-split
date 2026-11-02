@@ -27,8 +27,8 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "accessTokenLifespan": 300,
-  "ssoSessionIdleTimeout": 2592000,
-  "ssoSessionMaxLifespan": 2592000,
+  "ssoSessionIdleTimeout": 1296000,
+  "ssoSessionMaxLifespan": 7776000,
   "accessCodeLifespan": 60,
   "actionTokenGeneratedByUserLifespan": 900,
   "browserFlow": "browser",
@@ -97,6 +97,11 @@
     "user": "${SMTP_USER}",
     "password": "${SMTP_PASSWORD}"
   },
+  "roles": {
+    "realm": [
+      { "name": "groupsplit-staff", "description": "Maintain merchants and triage support tickets in the staff console" }
+    ]
+  },
   "clients": [
     {
       "clientId": "native",
@@ -143,7 +148,8 @@
     },
     {
       "clientId": "web-app",
-      "name": "Web Application",
+      "name": "Group Split",
+      "baseUrl": "${WEB_HOSTNAME}/account",
       "description": "Blazor BFF. Authorization code + PKCE only.",
       "enabled": true,
       "publicClient": true,

@@ -31,6 +31,7 @@ public sealed class RealmSettingsReconciler(
         var desired = Desired();
 
         await ReconcileRealmAsync(desired, ct);
+        await keycloak.EnsureRealmRoleAsync("groupsplit-staff", ct);
 
         foreach (var managed in KeycloakRealmDefinition.ManagedClients)
         {

@@ -112,6 +112,8 @@ app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api")
                && !context.Request.Path.StartsWithSegments("/native")
                && !context.Request.Path.StartsWithSegments("/idp")
+               // The activity fetch consumes 400/401/503 directly, without an HTML error route.
+               && context.Request.Path != "/auth/session"
                // A provider reads the status code and retries on anything but a 2xx, so a
                // friendly 404 page in place of the API's answer would have it retrying a
                // webhook that was in fact refused on purpose.

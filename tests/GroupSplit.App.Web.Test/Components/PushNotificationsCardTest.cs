@@ -10,6 +10,19 @@ namespace GroupSplit.App.Web.Test.Components;
 public sealed class PushNotificationsCardTest : ComponentTest
 {
     [Fact]
+    public async Task Staff_alert_preference_is_separate_from_member_preferences()
+    {
+        var preferences = new Preferences();
+        Services.AddSingleton<IPushNotifications>(preferences);
+        var card = Render<PushNotificationsCard>(parameters => parameters.Add(c => c.StaffOnly, true));
+        var control = Assert.Single(card.FindComponents<MudSwitch<bool>>());
+        Assert.Contains("Support tickets", card.Markup);
+        await card.InvokeAsync(() => control.Instance.ValueChanged.InvokeAsync(true));
+        Assert.True(preferences.IsEnabled(PushNotificationKind.StaffTicketCreated));
+        Assert.False(preferences.IsEnabled(PushNotificationKind.ExpenseCreated));
+    }
+
+    [Fact]
     public async Task Updating_a_preference_disables_all_switches_until_it_finishes()
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -1,0 +1,13 @@
+@inject IStaffClient Staff
+@if (_allowed)
+{
+    <MudMenuItem Icon="@Icons.Material.Rounded.AdminPanelSettings" Label="@Loc["Staff console"]" Href="/staff/tickets" />
+}
+@code {
+    private bool _allowed;
+    protected override async Task OnInitializedAsync()
+    {
+        try { _allowed = await Staff.HasAccessAsync(); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+    }
+}

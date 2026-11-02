@@ -1,3 +1,4 @@
+@inject AppLinks MerchantImageLinks
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Services.Commands
 @namespace GroupSplit.App.Shared.Components
@@ -36,7 +37,7 @@
                  Placeholder="@Loc["Anywhere in particular?"]">
     <ItemTemplate Context="merchant">
         <div class="gs-inline" style="gap: 10px">
-            @if (MerchantLogos.Usable(merchant.LogoUrl) is { } logo)
+            @if (MerchantLogos.Resolve(merchant.LogoUrl, MerchantImageLinks.PublicOrigin) is { } logo)
             {
                 <img class="gs-mark-inline" src="@logo" alt="" width="20" height="20" loading="lazy"/>
             }

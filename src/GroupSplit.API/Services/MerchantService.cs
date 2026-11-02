@@ -9,6 +9,20 @@ namespace GroupSplit.API.Services;
 
 public interface IMerchantService
 {
+    /// <summary>Global directory operations. The caller must establish access at the boundary.</summary>
+    Task<DirectoryPage<MerchantResponse>> ListDirectory(string? search, int? page, CancellationToken ct = default);
+    Task<MerchantResponse> GetDirectory(Guid id, CancellationToken ct = default);
+    Task<MerchantResponse> CreateDirectory(CreateMerchantRequest request, CancellationToken ct = default);
+    Task<MerchantResponse> CreateDirectory(CreateMerchantRequest request, Guid? actorId, CancellationToken ct);
+    Task UpdateDirectory(Guid id, UpdateMerchantRequest request, Guid? actorId, CancellationToken ct);
+    Task<DirectoryPage<MerchantResponse>> ListDirectory(string? search, int? page, string? sort, CancellationToken ct);
+    Task<List<MerchantAliasResponse>> Aliases(Guid id, CancellationToken ct);
+    Task AddAlias(Guid id, string name, Guid actorId, CancellationToken ct);
+    Task RemoveAlias(Guid id, Guid aliasId, Guid actorId, CancellationToken ct);
+    Task<MerchantMergePreview> PreviewMerge(Guid sourceId, Guid targetId, CancellationToken ct);
+    Task<MerchantResponse> Merge(Guid sourceId, MergeMerchantsRequest request, Guid actorId, CancellationToken ct);
+    Task UpdateDirectory(Guid id, UpdateMerchantRequest request, CancellationToken ct = default);
+
     /// <summary>
     /// The caller's places whose name contains <paramref name="search"/>, alphabetically,
     /// at most <see cref="MerchantService.PageSize"/> of them.
@@ -38,16 +52,15 @@ public interface IMerchantService
 /// imported. Those are names their own ledger and inbox show them anyway, so the listing
 /// tells them nothing new.
 /// <para>
-/// Editing is refused outright. Renaming Lidl, changing its logo or deleting it changes what
-/// every group that has spent there sees on its own expenses, and nothing in the app says
-/// who would be entitled to decide that for them -- there are no roles, only members of
-/// groups. Until there is a curator, the endpoints stay and answer
+/// Member-facing edits are refused: a merchant is shared across groups. Directory
+/// maintenance uses separate service methods, authorized at the endpoint boundary.
+/// The member endpoints continue to answer
 /// <see cref="ErrorCodes.MerchantEditForbidden"/>, so a client is told why rather than
 /// meeting a missing route. Adding a place is still open, because a new row changes nothing
 /// anybody else sees; adding one that is already there hands back the one there is.
 /// </para>
 /// </remarks>
-public class MerchantService(ICurrentUser userContext, AppDbContext dbContext, TimeProvider clock)
+public partial class MerchantService(ICurrentUser userContext, AppDbContext dbContext, TimeProvider clock)
     : IMerchantService
 {
     /// <summary>
@@ -84,7 +97,8 @@ public class MerchantService(ICurrentUser userContext, AppDbContext dbContext, T
     }
 
     public async Task<MerchantResponse> Get(Guid id, CancellationToken ct = default) =>
-        await Describe(Mine().Where(merchant => merchant.Id == id)).FirstOrDefaultAsync(ct)
+        await Describe(Mine().Where(merchant => merchant.Id == id || dbContext.Set<MerchantRedirect>()
+            .Any(r => r.Id == id && r.MerchantId == merchant.Id))).FirstOrDefaultAsync(ct)
         // The same answer for a place that does not exist and one the caller has nothing
         // at: whether somebody else has spent there is not theirs to learn.
         ?? throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.");
@@ -100,8 +114,9 @@ public class MerchantService(ICurrentUser userContext, AppDbContext dbContext, T
         // avoided, and refusing would leave them unable to name it at all. Handing back the
         // row is what the sync's resolver does with the same name, and the logo asked for is
         // not applied to it: on a row other people share, that would be a relogo.
-        var merchant = await dbContext.Set<Merchant>()
-            .FirstOrDefaultAsync(existing => existing.NormalizedName == normalized, ct);
+        var merchant = await dbContext.Set<MerchantAlias>().Where(a => a.NormalizedName == normalized)
+            .Select(a => a.Merchant).FirstOrDefaultAsync(ct)
+            ?? await dbContext.Set<Merchant>().FirstOrDefaultAsync(existing => existing.NormalizedName == normalized, ct);
 
         if (merchant is null)
         {
@@ -223,8 +238,9 @@ public class MerchantService(ICurrentUser userContext, AppDbContext dbContext, T
 
         if (!MerchantLogos.IsAllowed(value))
             throw new ValidationException(ErrorCodes.MerchantLogoNotAllowed,
-                "A merchant's logo has to come from the bank provider's image hosts.");
+                "A merchant's logo must be an uploaded image, a bundled image, or a supported provider logo.");
 
         return value.Trim();
     }
+
 }

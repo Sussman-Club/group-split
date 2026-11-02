@@ -1,3 +1,4 @@
+@inject AppLinks MerchantImageLinks
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Models
@@ -112,7 +113,7 @@
                             <Mark>
                                 @if (HasUsableMerchantLogo)
                                 {
-                                    <img class="gs-mark-inline" src="@details.MerchantLogoUrl" alt=""
+                                    <img class="gs-mark-inline" src="@MerchantLogos.Resolve(details.MerchantLogoUrl, MerchantImageLinks.PublicOrigin)" alt=""
                                          width="20" height="20" loading="lazy" @onerror="HandleMerchantLogoError" />
                                 }
                                 else if (!string.IsNullOrWhiteSpace(details.MerchantName))
@@ -150,7 +151,7 @@
                             <dd class="gs-inline" style="gap: 8px; justify-content: flex-end">
                                 @if (HasUsableMerchantLogo)
                                 {
-                                    <img class="gs-mark-inline" src="@details.MerchantLogoUrl"
+                                    <img class="gs-mark-inline" src="@MerchantLogos.Resolve(details.MerchantLogoUrl, MerchantImageLinks.PublicOrigin)"
                                          alt="" width="20" height="20" loading="lazy"
                                          @onerror="HandleMerchantLogoError" />
                                 }

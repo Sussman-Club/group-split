@@ -17,41 +17,10 @@ namespace GroupSplit.App.Web;
 
 public static class AuthenticationExtensions
 {
-    /// <summary>
-    /// How long a session lasts once "Keep me signed in" was ticked: thirty days from the
-    /// sign-in, absolute.
-    /// </summary>
-    /// <remarks>
-    /// The same thirty days is what the realm's <c>ssoSessionIdleTimeout</c> and
-    /// <c>ssoSessionMaxLifespan</c> are set to, and they have to move together. Shorten one
-    /// and the other keeps handing out a session it can no longer refresh; lengthen one and
-    /// the cookie outlives the Keycloak session behind it. Absolute rather than sliding for
-    /// the same reason -- two sliding windows advancing on different events is the shape in
-    /// which the two silently drift apart.
-    /// </remarks>
-    public static readonly TimeSpan RememberedSessionLifetime = TimeSpan.FromDays(30);
-
-    /// <summary>
-    /// How long a session lasts without the tick. The cookie is not persisted either, so
-    /// this is only the cap on a tab left open and walked away from -- closing the browser
-    /// ends the session whatever is left of it.
-    /// </summary>
-    public static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
-
-    /// <summary>
-    /// Carries the tick from <c>/auth/login</c> to the sign-in that comes back from
-    /// Keycloak. It rides in <see cref="AuthenticationProperties.Items"/>, which the
-    /// handler round-trips through the protected <c>state</c> parameter.
-    /// </summary>
-    /// <remarks>
-    /// The app asks the question rather than Keycloak, which offers a "Remember Me" of its
-    /// own, because Keycloak keeps the answer to itself: the flag is read into
-    /// <c>UserSessionModel</c> and never written anywhere a token or a claim can reach, so
-    /// an app federated to it cannot find out which was chosen. It is also dropped on the
-    /// way to a social provider, so the realm's own checkbox does nothing for a Google
-    /// sign-in. The realm's <c>rememberMe</c> is therefore off; this is the one checkbox.
-    /// </remarks>
-    internal const string RememberMeItem = "group-split:remember-me";
+    /// <summary>Sliding inactivity window shared by the app ticket, token store and realm.</summary>
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(15);
+    public static readonly TimeSpan MaximumSessionLifetime = TimeSpan.FromDays(90);
+    internal const string SessionDeadlineItem = "group-split:session-deadline";
 
     /// <summary>
     /// The Duende logger whose Error-level output this app replaces with its own, as a
@@ -131,9 +100,8 @@ public static class AuthenticationExtensions
                         ? CookieSecurePolicy.SameAsRequest
                         : CookieSecurePolicy.Always;
 
-                    // An unticked sign-in only ever gets a session cookie, so this is the
-                    // cap on an open tab rather than on being signed in. A ticked one
-                    // overrides both of these per ticket -- see RememberSession.
+                    // Renew on authenticated browser activity, with a separate absolute
+                    // deadline so sliding never bypasses the realm's maximum.
                     options.ExpireTimeSpan = SessionLifetime;
                     options.SlidingExpiration = true;
 
@@ -142,6 +110,14 @@ public static class AuthenticationExtensions
                     // confined to this point in a request. Sign-out still has to reach
                     // them, or a refresh token outlives its session.
                     options.Events.OnSigningOut = OnSigningOut;
+                    options.Events.OnCheckSlidingExpiration = context =>
+                    {
+                        // RenewSession owns renewal so the default halfway rule
+                        // cannot renew background traffic or exceed the 90-day cap.
+                        context.ShouldRenew = false;
+                        return Task.CompletedTask;
+                    };
+                    options.Events.OnValidatePrincipal = RenewSession;
 
                     options.ConfigureOptions();
                 })
@@ -267,47 +243,74 @@ public static class AuthenticationExtensions
                     };
 
                     var received = options.Events.OnTicketReceived;
-
                     options.Events.OnTicketReceived = async context =>
                     {
                         await received(context);
-
                         if (context.Properties is not null)
                         {
-                            RememberSession(context.Properties, context.Options.TimeProvider ?? TimeProvider.System);
+                            PersistSession(context.Properties, context.Options.TimeProvider ?? TimeProvider.System);
                         }
                     };
                 });
         }
     }
 
-    /// <summary>
-    /// Turns the tick into the two things a browser and a ticket store need to honour it:
-    /// a cookie the browser writes to disk, and an expiry thirty days out.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>AllowRefresh</c> is off because the cookie handler's sliding expiration would
-    /// otherwise push the ticket past the Keycloak session it is refreshed against, and the
-    /// session would end thirty days after the sign-in regardless -- from inside the app
-    /// that looks like being signed out at random rather than at a time it announced.
-    /// </para>
-    /// <para>
-    /// Nothing happens without the tick: no <c>ExpiresUtc</c> leaves the cookie handler to
-    /// apply <see cref="SessionLifetime"/>, and no <c>IsPersistent</c> leaves the browser to
-    /// drop the cookie when it closes.
-    /// </para>
-    /// </remarks>
-    internal static void RememberSession(AuthenticationProperties properties, TimeProvider time)
+    internal static void PersistSession(AuthenticationProperties properties, TimeProvider time)
     {
-        if (!properties.Items.TryGetValue(RememberMeItem, out var ticked) || ticked != bool.TrueString)
+        properties.IsPersistent = true;
+        properties.AllowRefresh = true;
+        var now = time.GetUtcNow();
+        properties.IssuedUtc = now;
+        properties.ExpiresUtc = now.Add(SessionLifetime);
+        properties.Items[SessionDeadlineItem] = now.Add(MaximumSessionLifetime).ToString("O");
+    }
+
+    internal static async Task RenewSession(CookieValidatePrincipalContext context)
+    {
+        var now = (context.Options.TimeProvider ?? TimeProvider.System).GetUtcNow();
+        var properties = context.Properties;
+        // Older tickets have no separate maximum. Anchor their migration to the
+        // original issue time, rather than granting another 90 days on each read.
+        var deadline = SessionDeadline(properties, now);
+        if (now >= deadline)
         {
+            if (context.Principal is not null)
+            {
+                await context.HttpContext.RequestServices.GetRequiredService<IUserTokenStore>()
+                    .ClearTokenAsync(context.Principal);
+            }
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return;
         }
 
+        if (!HttpMethods.IsGet(context.Request.Method)
+                || context.Request.Path.StartsWithSegments("/_blazor")
+                || context.Request.Path.StartsWithSegments("/api")) return;
+
+        SlideSession(properties, context.Options.TimeProvider ?? TimeProvider.System);
+        // The default handler renews only halfway through the window. Renew here
+        // so each authenticated page visit measures inactivity from that visit.
+        context.ShouldRenew = true;
+    }
+
+    private static DateTimeOffset SessionDeadline(AuthenticationProperties properties, DateTimeOffset now) =>
+        properties.Items.TryGetValue(SessionDeadlineItem, out var saved)
+            && DateTimeOffset.TryParseExact(saved, "O", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed)
+            ? parsed : (properties.IssuedUtc ?? now).Add(MaximumSessionLifetime);
+
+    internal static bool SlideSession(AuthenticationProperties properties, TimeProvider time)
+    {
+        var now = time.GetUtcNow();
+        var deadline = SessionDeadline(properties, now);
+        if (now >= deadline) return false;
+        properties.Items[SessionDeadlineItem] = deadline.ToString("O");
         properties.IsPersistent = true;
-        properties.AllowRefresh = false;
-        properties.ExpiresUtc = time.GetUtcNow().Add(RememberedSessionLifetime);
+        properties.AllowRefresh = true;
+        properties.IssuedUtc = now;
+        properties.ExpiresUtc = now.Add(SessionLifetime) < deadline ? now.Add(SessionLifetime) : deadline;
+        return true;
     }
 
     /// <summary>
@@ -384,7 +387,7 @@ public static class AuthenticationExtensions
     {
         context.ProtocolMessage.UiLocales = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         // The client-side app cannot follow a redirect to Keycloak.
-        if (context.Request.Path.StartsWithSegments("/api"))
+        if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path == "/auth/session")
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.HandleResponse();

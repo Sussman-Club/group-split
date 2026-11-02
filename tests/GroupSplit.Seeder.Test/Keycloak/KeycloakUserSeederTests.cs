@@ -275,6 +275,9 @@ public class KeycloakUserSeederTests
             return Task.FromResult(_users.GetValueOrDefault(id));
         }
 
+        public Task<bool> HasRealmRoleAsync(string id, string role, CancellationToken ct = default) =>
+            Task.FromResult(false);
+
         public Task<KeycloakUserSummary?> FindByEmailAsync(string email, CancellationToken ct = default)
         {
             Calls.Add($"FindByEmail:{email}");

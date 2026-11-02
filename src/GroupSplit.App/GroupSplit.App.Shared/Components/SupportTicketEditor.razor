@@ -1,0 +1,110 @@
+@using GroupSplit.Shared
+@inherits StaffEditorBase
+
+<NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="BeforeNavigationAsync" />
+<div class="staff-ticket-detail">
+    <div class="staff-ticket-content">
+        <section class="gs-card staff-report" aria-labelledby="ticket-heading">
+            <h2 id="ticket-heading" tabindex="-1" @ref="Heading">@Loc["Report"]</h2>
+            <p class="staff-description">@Ticket.Description</p>
+            @if (!string.IsNullOrWhiteSpace(Ticket.ReproductionSteps))
+            {
+                <h3>@Loc["Reproduction steps"]</h3>
+                <p class="staff-description">@Ticket.ReproductionSteps</p>
+            }
+            <details class="staff-record-details"><summary>@Loc["Report details"]</summary>
+                <dl><dt>@Loc["Report ID"]</dt><dd>@Ticket.Id</dd><dt>@Loc["Reporter"]</dt><dd>@Ticket.ReporterUserId</dd><dt>@Loc["Assigned to"]</dt><dd>@(Ticket.AssignedUserId?.ToString() ?? Loc["Unassigned"].Value)</dd></dl>
+            </details>
+        </section>
+        <SupportConversation @ref="_conversation" TicketId="Ticket.Id" ExpectedUpdatedAt="Ticket.UpdatedAt" CanPost="@(!ManagementDirty)" OnPosted="MessagePostedAsync" />
+        <StaffActivityFeed Resource="Tickets" ResourceId="Ticket.Id" RefreshKey="@Ticket.UpdatedAt.ToString("O")" />
+    </div>
+    <div class="staff-ticket-aside">
+    <aside class="gs-card staff-triage" aria-labelledby="staff-triage-heading">
+        <h2 id="staff-triage-heading">@Loc["Ticket management"]</h2>
+        <p class="gs-muted">@Loc["Review the classification and choose the next status."]</p>
+        @if (!_notesAction && Error is not null) { <div class="staff-alert" role="alert">@Error</div> }
+        @if (!_notesAction && Success is not null) { <p class="staff-success" role="status"><MudIcon Icon="@Icons.Material.Rounded.CheckCircleOutline" Size="Size.Small" />@Success</p> }
+        <EditForm Model="_edit" OnValidSubmit="SaveAsync">
+            <div class="staff-triage-fields">
+                <MudSelect T="string" @bind-Value="_edit.Status" Label="@Loc["Status"]" Class="staff-select"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="@Saving">
+                    @foreach (var status in SupportTicketLabels.Statuses)
+                    {
+                        <MudSelectItem T="string" Value="@status">@Label(status)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="_edit.Priority" Label="@Loc["Priority"]" Class="staff-select"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="@Saving">
+                    @foreach (var priority in SupportTicketLabels.Priorities)
+                    {
+                        <MudSelectItem T="string" Value="@priority">@Label(priority)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="_edit.Type" Label="@Loc["Type"]" Class="staff-select"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="@Saving">
+                    @foreach (var type in SupportTicketLabels.Types)
+                    {
+                        <MudSelectItem T="string" Value="@type">@Label(type)</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <label class="staff-check"><InputCheckbox @bind-Value="_edit.ClassificationNeedsReview" disabled="@Saving" />@Loc["Classification needs review"]</label>
+            <MudSelect T="Guid?" @bind-Value="_edit.AssignedUserId" Label="@Loc["Assigned to"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="@Saving">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">@Loc["Unassigned"]</MudSelectItem>
+                @foreach (var person in _team) { <MudSelectItem T="Guid?" Value="@((Guid?)person.Id)">@person.Name</MudSelectItem> }
+                @if (_edit.AssignedUserId is { } existing && !_team.Any(p => p.Id == existing)) { <MudSelectItem T="Guid?" Value="@((Guid?)existing)" Disabled="true">@(Ticket.AssignedUserName ?? Loc["Unavailable staff member"].Value)</MudSelectItem> }
+            </MudSelect>
+            @if (CurrentUser is not null) { <button type="button" class="staff-back-control" disabled="@Saving" @onclick="() => _edit.AssignedUserId = CurrentUser.Id">@Loc["Assign to me"]</button> }
+            <div class="staff-form-actions"><button class="staff-button staff-primary" type="submit" disabled="@Saving">@(Saving ? Loc["Saving…"] : Loc["Save changes"])</button></div>
+        </EditForm>
+        <button class="staff-back-control" type="button" disabled="@Saving" @onclick="CloseAsync">@Loc["Back to tickets"]</button>
+    </aside>
+    <SupportUserCard UserId="Ticket.ReporterUserId" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SupportTicketResponse Ticket { get; set; } = null!;
+    [Parameter] public EventCallback<SupportTicketResponse> OnSaved { get; set; }
+    private UpdateSupportTicketRequest _edit = new();
+    [CascadingParameter] public UserInfo? CurrentUser { get; set; }
+    private List<StaffPersonResponse> _team = [];
+    private SupportConversation? _conversation;
+    private bool _notesAction;
+    private bool ManagementDirty => _edit.Type != Ticket.Type || _edit.Status != Ticket.Status
+        || _edit.Priority != Ticket.Priority || _edit.AssignedUserId != Ticket.AssignedUserId
+        || _edit.ClassificationNeedsReview != Ticket.ClassificationNeedsReview;
+    public override bool HasUnsavedChanges => ManagementDirty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ResetEdit(Ticket);
+        await ExecuteAsync(async () => _team = await Client.TeamAsync() ?? []);
+    }
+
+    private string Label(string value) => Loc[SupportTicketLabels.Key(value)];
+
+    private void ResetEdit(SupportTicketResponse ticket) => _edit = new()
+    {
+        Type = ticket.Type, Status = ticket.Status, Priority = ticket.Priority,
+        ClassificationNeedsReview = ticket.ClassificationNeedsReview, ExpectedUpdatedAt = ticket.UpdatedAt, AssignedUserId = ticket.AssignedUserId
+    };
+
+    private Task SaveAsync() => ExecuteAsync(async () =>
+    {
+        _notesAction = false;
+        _edit.ChangeAssignment = _edit.AssignedUserId != Ticket.AssignedUserId;
+        var saved = await Client.SaveTicketAsync(Ticket.Id, _edit);
+        ResetEdit(saved);
+        await OnSaved.InvokeAsync(saved);
+        Success = Loc["Ticket saved."];
+    });
+
+    private async Task MessagePostedAsync()
+    {
+        var refreshed = await Client.TicketAsync(Ticket.Id);
+        ResetEdit(refreshed);
+        await OnSaved.InvokeAsync(refreshed);
+    }
+}

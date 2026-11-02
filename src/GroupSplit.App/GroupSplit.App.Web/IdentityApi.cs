@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Duende.AccessTokenManagement.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 
 namespace GroupSplit.App.Web;
 
@@ -18,15 +20,53 @@ public static class IdentityApi
         group.MapLogout();
         group.MapAccountDeleted();
         group.MapAccountConsole();
+        group.MapSessionActivity();
 
         return group;
     }
 
+    private static void MapSessionActivity(this RouteGroupBuilder group)
+    {
+        group.MapPost("/session", async (HttpContext context, IUserTokenManager tokens,
+            IOptionsMonitor<CookieAuthenticationOptions> options) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            if (context.Features.Get<IAntiforgeryValidationFeature>() is not { IsValid: true })
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest);
+
+            // User activity refreshes Keycloak as well as the local cookie. No
+            // background timer calls this endpoint while the browser is idle.
+            var result = await tokens.GetAccessTokenAsync(context.User, ct: context.RequestAborted);
+            if (result.WasSuccessful(out _, out var failure))
+            {
+                var ticket = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                var time = options.Get(CookieAuthenticationDefaults.AuthenticationScheme).TimeProvider ?? TimeProvider.System;
+                if (ticket.Properties is null || !AuthenticationExtensions.SlideSession(ticket.Properties, time))
+                    return Results.Unauthorized();
+                // Only a valid antiforgery request with usable tokens renews the
+                // session. Rejected POSTs cannot extend an authenticated ticket.
+                await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                    context.User, ticket.Properties);
+                return Results.NoContent();
+            }
+            if (!string.Equals(failure.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Unauthorized();
+        })
+        .RequireAuthorization(new AuthorizeAttribute
+        {
+            AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme
+        })
+        .WithMetadata(new RequireAntiforgeryTokenAttribute());
+    }
+
     private static void MapLogin(this RouteGroupBuilder group)
     {
-        group.MapGet("/login", ([FromQuery] string? returnUrl, [FromQuery] bool? remember) =>
+        group.MapGet("/login", ([FromQuery] string? returnUrl) =>
             Results.Challenge(
-                ChallengeProperties(returnUrl, remember ?? false),
+                ChallengeProperties(returnUrl),
                 [OpenIdConnectDefaults.AuthenticationScheme]));
     }
 
@@ -100,32 +140,14 @@ public static class IdentityApi
 
             return string.IsNullOrWhiteSpace(issuer)
                 ? Results.NotFound()
-                : Results.Redirect($"{issuer.TrimEnd('/')}/account");
+                : Results.Redirect($"{issuer.TrimEnd('/')}/account/?referrer=web-app");
         })
         .RequireAuthorization();
     }
 
-    /// <summary>
-    /// What the sign-in carries across to Keycloak and back: where to land afterwards, and
-    /// whether the person asked to stay signed in.
-    /// </summary>
-    /// <remarks>
-    /// The tick is only recorded here. What it comes to mean is
-    /// <see cref="AuthenticationExtensions.RememberSession"/>, on the way back in -- the
-    /// cookie being written is the far side of this round trip, and nothing in between can
-    /// be trusted to still hold the answer.
-    /// </remarks>
-    internal static AuthenticationProperties ChallengeProperties(string? returnUrl, bool remember)
-    {
-        var properties = new AuthenticationProperties { RedirectUri = ResolveReturnUrl(returnUrl) };
-
-        if (remember)
-        {
-            properties.Items[AuthenticationExtensions.RememberMeItem] = bool.TrueString;
-        }
-
-        return properties;
-    }
+    /// <summary>Only a validated local destination crosses the OIDC round trip.</summary>
+    internal static AuthenticationProperties ChallengeProperties(string? returnUrl) =>
+        new() { RedirectUri = ResolveReturnUrl(returnUrl) };
 
     /// <summary>
     /// Reduces a caller-supplied return URL to a safe local path: anything else here

@@ -1,0 +1,14 @@
+@if (Loading)
+{
+    <div class="staff-state" role="status"><MudProgressCircular Indeterminate="true" Size="Size.Small" /><span>@Loc["Loading…"]</span></div>
+}
+else if (Error is not null)
+{
+    <div class="staff-state"><p role="alert">@Error</p><button class="staff-button" @onclick="OnRetry">@Loc["Try again"]</button></div>
+}
+
+@code {
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

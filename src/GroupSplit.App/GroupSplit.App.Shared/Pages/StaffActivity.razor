@@ -1,0 +1,10 @@
+@page "/staff/activity"
+@layout StaffLayout
+@using GroupSplit.App.Shared.Components
+<PageTitle>@Loc["Activity - Staff - Group Split"]</PageTitle>
+<header class="staff-page-header"><div><h1>@Loc["Activity"]</h1><p>@Loc["A shared record of support and directory changes."]</p></div></header>
+<nav class="staff-view-tabs" aria-label="@Loc["Activity filters"]">
+    @foreach (var resource in new[] { "", "Tickets", "Merchants" }) { <a class="@(Resource == resource || Resource is null && resource == "" ? "active" : "")" href="@($"/staff/activity?resource={resource}")">@Loc[resource == "" ? "All activity" : resource]</a> }
+</nav>
+<StaffActivityFeed Resource="@(Resource ?? "")" />
+@code { [SupplyParameterFromQuery(Name="resource")] public string? Resource { get; set; } }

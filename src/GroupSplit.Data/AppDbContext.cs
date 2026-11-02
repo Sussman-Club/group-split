@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Data;
 
-public class AppDbContext : DbContext, IDataProtectionKeyContext
+public partial class AppDbContext : DbContext, IDataProtectionKeyContext
 {
     /// <summary>
     /// Constructor for derived classes.
@@ -36,9 +36,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     {
         modelBuilder.Entity<SupportTicket>(entity =>
         {
+            entity.Property(x => x.UpdatedAt).IsConcurrencyToken();
             entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(x => x.Priority).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.ClassificationNeedsReview).HasDefaultValue(true);
+            entity.HasIndex(x => x.ClassificationNeedsReview);
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(10000).IsRequired();
             entity.Property(x => x.ReproductionSteps).HasMaxLength(10000);
@@ -933,11 +936,13 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             builder.HasKey("Id");
         }
 
+        ConfigureStaffOperations(modelBuilder);
         base.OnModelCreating(modelBuilder);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        var names = RecordMerchantNames();
         var recorded = RecordMembershipEvents();
 
         try
@@ -947,6 +952,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         catch
         {
             Forget(recorded);
+            foreach (var name in names) Entry(name).State = EntityState.Detached;
             throw;
         }
     }
@@ -954,6 +960,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
+        var names = await RecordMerchantNamesAsync(cancellationToken);
         var recorded = RecordMembershipEvents();
 
         try
@@ -963,6 +970,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         catch
         {
             Forget(recorded);
+            foreach (var name in names) Entry(name).State = EntityState.Detached;
             throw;
         }
     }

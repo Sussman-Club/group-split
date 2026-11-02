@@ -8,6 +8,15 @@ namespace GroupSplit.Seeder.Test.Realm;
 public sealed class RealmSettingsReconcilerTests
 {
     [Fact]
+    public async Task Existing_realm_gets_the_staff_role_without_user_assignments()
+    {
+        var admin = new StubRealmAdmin(Imported());
+        await Reconcile(admin);
+        await Reconcile(admin);
+        Assert.Equal("groupsplit-staff", Assert.Single(admin.RealmRoles));
+    }
+
+    [Fact]
     public async Task Native_is_created_on_existing_realms_and_its_security_drift_is_repaired()
     {
         var current = Imported();
@@ -31,6 +40,27 @@ public sealed class RealmSettingsReconcilerTests
     }
 
     private const string Origin = "https://groupsplit.example";
+
+    [Fact]
+    public async Task Existing_realms_receive_uniform_session_timeouts_and_the_account_return_link()
+    {
+        var current = Imported();
+        current["rememberMe"] = true;
+        current["ssoSessionIdleTimeout"] = 1800;
+        current["ssoSessionMaxLifespan"] = 43200;
+        var web = KeycloakRealmDefinition.Client(current, "web-app")!;
+        web.Remove("baseUrl");
+        web.Remove("name");
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.False(admin.RealmData["rememberMe"]!.GetValue<bool>());
+        Assert.Equal(1296000, admin.RealmData["ssoSessionIdleTimeout"]!.GetValue<int>());
+        Assert.Equal(7776000, admin.RealmData["ssoSessionMaxLifespan"]!.GetValue<int>());
+        Assert.Equal($"{Origin}/account", admin.Clients["web-app"]["baseUrl"]!.GetValue<string>());
+        Assert.Equal("Group Split", admin.Clients["web-app"]["name"]!.GetValue<string>());
+    }
 
     private const string DeletionSecret = "the-deploy-secret";
 
@@ -978,6 +1008,13 @@ public sealed class RealmSettingsReconcilerTests
         public int ClientUpdates { get; private set; }
 
         public Task SignInAsync(CancellationToken ct = default) => throw new NotSupportedException();
+
+        public HashSet<string> RealmRoles { get; } = [];
+        public Task EnsureRealmRoleAsync(string name, CancellationToken ct = default)
+        {
+            RealmRoles.Add(name);
+            return Task.CompletedTask;
+        }
 
         public Task<JsonObject> GetRealmAsync(CancellationToken ct = default)
             => Task.FromResult((JsonObject)RealmData.DeepClone());

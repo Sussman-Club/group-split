@@ -78,6 +78,7 @@ public static class ServiceExtensions
 
             services.AddApiClient<IUsersClient, UsersClient>();
             services.AddApiClient<ISupportReportsClient, SupportReportsClient>();
+            services.AddApiClient<IStaffClient, StaffClient>();
             services.AddApiClient<ISettlement_requestsClient, Settlement_requestsClient>();
             services.AddApiClient<IGroupsClient, GroupsClient>();
             services.AddApiClient<ITransactionsClient, TransactionsClient>();

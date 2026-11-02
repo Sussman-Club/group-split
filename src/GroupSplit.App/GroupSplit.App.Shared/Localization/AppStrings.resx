@@ -4724,4 +4724,5 @@
   <data name="Choose where it belongs" xml:space="preserve"><value>Choose where it belongs</value></data>
   <data name="If you already recorded this payment, attach it to that expense to avoid counting it twice." xml:space="preserve"><value>If you already recorded this payment, attach it to that expense to avoid counting it twice.</value></data>
   <data name="For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it." xml:space="preserve"><value>For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it.</value></data>
+  <data name="Describe what happened, your suggestion, or your question. If something went wrong, include what you did before it happened." xml:space="preserve"><value>Describe what happened, your suggestion, or your question. If something went wrong, include what you did before it happened.</value></data>
 </root>

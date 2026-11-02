@@ -1,0 +1,61 @@
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.Shared
+@inherits LayoutComponentBase
+@inject IStaffClient Staff
+
+<AppThemeProvider />
+<div class="staff-shell">
+    <aside class="staff-sidebar">
+        <a class="gs-brand staff-brand" href="/staff/tickets">
+            <BrandMark Size="32" />
+            <span class="gs-brand-name">@Loc["Group Split"]<small>@Loc["Staff workspace"]</small></span>
+        </a>
+        <StaffNavMenu />
+        <div class="staff-sidebar-footer">
+            <a href="/" class="staff-return"><span class="staff-return-icon"><MudIcon Icon="@Icons.Material.Rounded.ArrowBack" Size="Size.Small" /></span><span>@Loc["Back to app"]</span></a>
+            <p>@Loc["Merchant maintenance and customer support"]</p>
+        </div>
+    </aside>
+    <div class="staff-main" @key="Body">
+        <header class="staff-topbar">
+            <span class="staff-workspace-label"><MudIcon Icon="@Icons.Material.Rounded.AdminPanelSettings" Size="Size.Small" />@Loc["Staff workspace"]</span>
+            <div class="staff-topbar-actions"><a class="staff-mobile-return" href="/">@Loc["Back to app"]</a><ThemeModeMenu /></div>
+        </header>
+        <div class="staff-mobile-navigation"><StaffNavMenu /></div>
+        <main class="staff-content staff-console" id="staff-content">
+            @if (_checking)
+            {
+                <p role="status">@Loc["Checking staff access…"]</p>
+            }
+            else if (_failed)
+            {
+                <section class="staff-state gs-card"><h1>@Loc["Could not check access"]</h1><p>@Loc["Check your connection and try again."]</p><button class="staff-button" @onclick="CheckAccessAsync">@Loc["Try again"]</button></section>
+            }
+            else if (!_allowed)
+            {
+                <section class="staff-state gs-card"><h1>@Loc["Staff access required"]</h1><p>@Loc["This workspace is available to authorized staff only."]</p><a href="/">@Loc["Back to home"]</a></section>
+            }
+            else
+            {
+                <ErrorBoundary @key="Body">
+                    <ChildContent>@Body</ChildContent>
+                    <ErrorContent><section class="staff-state gs-card"><h1>@Loc["Something went wrong"]</h1><p>@Loc["Reload this page to try again."]</p></section></ErrorContent>
+                </ErrorBoundary>
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool _checking = true, _allowed, _failed;
+    protected override Task OnInitializedAsync() => CheckAccessAsync();
+
+    private async Task CheckAccessAsync()
+    {
+        _checking = true;
+        _failed = false;
+        try { _allowed = await Staff.HasAccessAsync(); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _failed = true; }
+        finally { _checking = false; }
+    }
+}

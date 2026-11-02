@@ -199,22 +199,21 @@ public class JoinTest : ComponentTest
 
         await Button(page, "Continue").ClickAsync(new());
 
-        _auth.Verify(auth => auth.Login($"/join/{Token}", false, It.IsAny<CancellationToken>()), Times.Once);
+        _auth.Verify(auth => auth.Login($"/join/{Token}", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
-    /// "Keep me signed in" means the same here as on the sign-in page: an invite link is a
-    /// way into the app like any other.
+    /// An invitation uses the same persistent sign-in policy as the login page.
     /// </summary>
     [Fact]
-    public async Task Keep_me_signed_in_goes_with_the_sign_in()
+    public async Task Invitation_sign_in_has_no_separate_persistence_choice()
     {
         var page = await Open();
 
-        await page.Find("input[type=checkbox]").ChangeAsync(new ChangeEventArgs { Value = true });
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
         await Button(page, "Continue").ClickAsync(new());
 
-        _auth.Verify(auth => auth.Login($"/join/{Token}", true, It.IsAny<CancellationToken>()), Times.Once);
+        _auth.Verify(auth => auth.Login($"/join/{Token}", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>

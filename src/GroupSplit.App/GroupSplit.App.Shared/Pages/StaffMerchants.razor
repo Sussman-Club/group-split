@@ -1,0 +1,63 @@
+@page "/staff/merchants"
+@layout StaffLayout
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@inherits StaffPageBase
+
+<PageTitle>@Loc["Merchants - Staff - Group Split"]</PageTitle>
+<header class="staff-page-header">
+    <div><h1>@Loc["Merchants"]</h1><p>@Loc["Keep the shared directory accurate for every group."]</p></div>
+    <a class="staff-button staff-primary" href="@StaffLinks.Detail("/staff/merchants/new", CurrentView)"><MudIcon Icon="@Icons.Material.Rounded.Add" Size="Size.Small" />@Loc["Add merchant"]</a>
+</header>
+<StaffSavedViews Resource="Merchants" CurrentUrl="@CurrentView" />
+<section class="staff-panel gs-card" aria-label="@Loc["Merchant directory"]">
+    <form class="staff-filter-bar staff-merchant-search" @onsubmit="ApplyAsync" @onsubmit:preventDefault>
+        <MudTextField T="string" @bind-Value="_search" Label="@Loc["Search merchants"]" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Class="staff-search-control" Disabled="@Loading" />
+        <MudSelect T="string" @bind-Value="_sort" Label="@Loc["Sort by"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select"><MudSelectItem Value='@("name")'>@Loc["Name"]</MudSelectItem><MudSelectItem Value='@("usage")'>@Loc["Most used"]</MudSelectItem><MudSelectItem Value='@("newest")'>@Loc["Newest"]</MudSelectItem></MudSelect>
+        <button class="staff-button" type="submit" disabled="@Loading">@Loc["Search"]</button>
+        <button class="staff-icon-button" type="button" disabled="@Loading" @onclick="RefreshAsync" aria-label="@Loc["Refresh merchants"]"><MudIcon Icon="@Icons.Material.Rounded.Refresh" /></button>
+        @if (!string.IsNullOrEmpty(Search)) { <a class="staff-clear" href="/staff/merchants">@Loc["Clear search"]</a> }
+    </form>
+    <p class="staff-directory-notice"><MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" />@Loc["Edits update the merchant across all groups. Review usage before making a change."]</p>
+    <StaffLoadState Loading="Loading" Error="@LoadError" OnRetry="RefreshAsync" />
+    @if (!Loading && LoadError is null)
+    {
+        @if (_result.Items.Count == 0)
+        { <div class="staff-empty"><MudIcon Icon="@Icons.Material.Rounded.Storefront" /><h2>@Loc["No merchants found"]</h2><p>@Loc["Try another name or add a merchant to the directory."]</p></div> }
+        else
+        {
+            <div class="staff-table-scroll">
+                <table class="staff-table staff-merchant-table">
+                    <thead><tr><th scope="col">@Loc["Merchant"]</th><th scope="col">@Loc["Usage"]</th><th scope="col">@Loc["Added"]</th><th scope="col"><span class="staff-sr-only">@Loc["Actions"]</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var merchant in _result.Items)
+                    {
+                        var href = StaffLinks.Detail($"/staff/merchants/{merchant.Id}", CurrentView);
+                        <tr @key="merchant.Id">
+                            <td><div class="staff-merchant-name"><MerchantMark MerchantName="@merchant.Name" MerchantLogoUrl="@merchant.LogoUrl" /><div><a class="staff-record-link" href="@href">@merchant.Name</a><span class="staff-row-meta">@(string.IsNullOrWhiteSpace(merchant.LogoUrl) ? Loc["Initials shown"] : Loc["Logo configured"])</span></div></div></td>
+                            <td><strong>@merchant.TransactionCount.ToString("N0")</strong><span class="staff-row-meta">@Loc["transactions"]</span></td>
+                            <td class="staff-date">@merchant.FirstSeenAt.ToLocalTime().ToString("d")</td>
+                            <td class="staff-table-action"><a class="staff-edit-link" href="@href" aria-label="@Loc["Edit {0}", merchant.Name]">@Loc["Edit"]<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" /></a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <StaffPagination Page="SafePage" Count="_result.Items.Count" HasMore="_result.HasMore" Previous="@PageUrl(SafePage - 1)" Next="@PageUrl(SafePage + 1)" />
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int Page { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    private string _search = "", _sort = "name";
+    private DirectoryPage<MerchantResponse> _result = new([], false);
+    private int SafePage => Math.Clamp(Page, 0, 10000);
+    private string CurrentView => StaffLinks.Merchants(Search, SafePage, Sort);
+    private string PageUrl(int page) => StaffLinks.Merchants(Search, Math.Max(page, 0), Sort);
+    protected override Task OnParametersSetAsync() { _search = Search ?? ""; _sort = Sort ?? "name"; return RefreshAsync(); }
+    private Task RefreshAsync() => LoadAsync(() => Sort is null ? Client.MerchantsAsync(Search ?? "", SafePage) : Client.MerchantsAsync(Search ?? "", SafePage, Sort), result => _result = result);
+    private Task ApplyAsync() { Navigation.NavigateTo(StaffLinks.Merchants(_search.Trim(), 0, _sort)); return Task.CompletedTask; }
+}

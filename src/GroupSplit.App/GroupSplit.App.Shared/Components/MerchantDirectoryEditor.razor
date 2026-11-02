@@ -1,0 +1,53 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Models
+@inherits StaffEditorBase
+
+<NavigationLock ConfirmExternalNavigation="@HasUnsavedChanges" OnBeforeInternalNavigation="BeforeNavigationAsync" />
+<section class="gs-card gs-card-pad staff-editor staff-merchant-form" aria-labelledby="merchant-edit">
+    <h2 id="merchant-edit" tabindex="-1" @ref="Heading">@Loc["Merchant information"]</h2>
+    <p class="gs-muted">@Loc["Use a clear name people recognize on their expenses."]</p>
+    @if (Error is not null) { <div class="staff-alert" role="alert">@Error</div> }
+    <EditForm Model="_edit" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator /><ValidationSummary />
+        <label class="staff-field">@Loc["Name"]<InputText @bind-Value="_edit.Name" maxlength="128" disabled="@Saving" /></label>
+        <MerchantLogoPicker Name="@_edit.Name" @bind-Value="_logo" Disabled="Saving" ProcessingChanged="value => _preparingImage = value" />
+        <div class="staff-form-actions">
+        <button class="staff-button staff-primary" type="submit" disabled="@(Saving || _preparingImage || !ValidLogo)">@(Saving ? Loc["Saving…"] : Loc["Save merchant"])</button>
+        <button class="staff-button" type="button" disabled="@(Saving || _preparingImage)" @onclick="CloseAsync">@Loc["Cancel"]</button>
+        </div>
+    </EditForm>
+</section>
+
+@code {
+    [Parameter] public MerchantResponse? Merchant { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    private UpdateMerchantRequest _edit = new() { Name = "" };
+    private MerchantLogoSelection _logo = new(null);
+    private bool _preparingImage;
+    private bool ValidLogo => string.IsNullOrWhiteSpace(_logo.Url) || MerchantLogos.IsAllowed(_logo.Url);
+    public override bool HasUnsavedChanges => !NavigatingAfterSave
+        && (_preparingImage || _logo.UploadedPng is not null || _edit.Name != (Merchant?.Name ?? "") || _logo.Url != Merchant?.LogoUrl);
+
+    protected override void OnInitialized()
+    {
+        _edit = new() { Name = Merchant?.Name ?? "", LogoUrl = Merchant?.LogoUrl };
+        _logo = new(Merchant?.LogoUrl);
+    }
+
+    public void DiscardDraft() { OnInitialized(); NavigatingAfterSave = false; }
+
+    private Task SaveAsync() => ExecuteAsync(async () =>
+    {
+        if (_preparingImage || !ValidLogo) return;
+        if (_logo.UploadedPng is { } png)
+        {
+            if (Merchant is not null)
+                await Client.SaveMerchantImageAsync(Merchant.Id, _edit.Name, png, Merchant.Version);
+            else await Client.SaveMerchantImageAsync(Merchant?.Id, _edit.Name, png);
+        }
+        else
+            await Client.SaveMerchantAsync(Merchant?.Id, new UpdateMerchantRequest { Name = _edit.Name, LogoUrl = _logo.Url, ExpectedVersion = Merchant?.Version });
+        NavigatingAfterSave = true;
+        await OnSaved.InvokeAsync();
+    });
+}

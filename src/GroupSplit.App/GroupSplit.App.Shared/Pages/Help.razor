@@ -9,24 +9,10 @@
 <div class="support-layout">
     <section class="gs-card gs-card-pad support-compose" aria-labelledby="report-heading">
         <h2 id="report-heading">@Loc["Send a report"]</h2>
-        <p class="support-intro">@Loc["Share a few details so we can understand your request."]</p>
+        <p class="support-intro">@Loc["Describe what happened, your suggestion, or your question. If something went wrong, include what you did before it happened."]</p>
         <div class="support-form">
-            <label for="report-type">@Loc["What can we help with?"]</label>
-            <div class="support-select">
-            <select id="report-type" @bind="_report.Type">
-                <option value="Bug">@Loc["Something isn't working"]</option>
-                <option value="FeatureRequest">@Loc["Suggest an improvement"]</option>
-                <option value="Support">@Loc["I need help"]</option>
-            </select>
-            <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Class="support-select-icon" aria-hidden="true" />
-            </div>
             <label for="report-description">@Loc["What happened?"]</label>
             <textarea id="report-description" @bind="_report.Description" maxlength="10000" rows="5" placeholder="@Loc["Describe the problem, suggestion, or question"]"></textarea>
-            @if (_report.Type == "Bug")
-            {
-                <label for="report-steps">@Loc["Steps to reproduce (optional)"]</label>
-                <textarea id="report-steps" @bind="_report.ReproductionSteps" maxlength="10000" rows="3" placeholder="@Loc["What did you do before the problem appeared?"]"></textarea>
-            }
             <div class="support-privacy"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" /><span>@Loc["Please leave out passwords and payment details. Device details and diagnostics are not collected."]</span></div>
             @if (_error is not null) { <div role="alert" class="support-error">@_error</div> }
             @if (_sent) { <div role="status" class="support-success">@Loc["Report sent. You can follow its status below."]</div> }
@@ -47,8 +33,9 @@
                     <details class="support-report" @key="report.Id">
                         <summary><span><strong>@report.Title</strong><small>@TypeLabel(report.Type) · @report.CreatedAt.ToLocalTime().ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
                         <p class="support-description">@report.Description</p>
-                        @if (!string.IsNullOrWhiteSpace(report.ReproductionSteps)) { <h3>@Loc["Steps to reproduce"]</h3><p class="support-description">@report.ReproductionSteps</p> }
                         <small class="gs-muted">@Loc["Report ID"]: @report.Id</small>
+                        <button class="staff-button" type="button" @onclick="() => _opened = report.Id">@Loc["Open conversation"]</button>
+                        @if (_opened == report.Id) { <SupportConversation TicketId="report.Id" ForReporter="true" OnPosted="LoadAsync" /> }
                     </details>
                 }
             </div>
@@ -57,6 +44,7 @@
 </div>
 
 @code {
+    private Guid? _opened;
     private CreateSupportReportRequest _report = new();
     private List<SupportReportResponse> _reports = [];
     private bool _loading = true, _loadFailed, _saving, _sent;
@@ -78,7 +66,6 @@
         _saving = true; _error = null;
         try
         {
-            if (_report.Type != "Bug") _report.ReproductionSteps = null;
             await Reports.CreateAsync(_report);
             _report = new(); _sent = true;
             await LoadAsync();
@@ -88,5 +75,5 @@
         finally { _saving = false; }
     }
     private string TypeLabel(string type) => type switch { "Bug" => Loc["Problem"], "FeatureRequest" => Loc["Suggestion"], _ => Loc["Help"] };
-    private string StatusLabel(string status) => status switch { "New" => Loc["New"], "UnderReview" => Loc["Under review"], "InProgress" => Loc["In progress"], "Resolved" => Loc["Resolved"], "Closed" => Loc["Closed"], _ => status };
+    private string StatusLabel(string status) => status switch { "New" => Loc["New"], "UnderReview" => Loc["Under review"], "InProgress" => Loc["In progress"], "WaitingForCustomer" => Loc["Waiting for your reply"], "Resolved" => Loc["Resolved"], "Closed" => Loc["Closed"], _ => status };
 }

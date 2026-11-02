@@ -155,6 +155,26 @@ public sealed class AccountService(
         context.RemoveRange(await context.Set<PushDevice>()
             .Where(device => device.UserId == user.Id).ToListAsync(cancellationToken));
 
+        context.RemoveRange(await context.Set<StaffSavedView>().Where(v => v.UserId == user.Id).ToListAsync(cancellationToken));
+        // Support conversations can contain free-form personal data, including in replies
+        // from staff. Scrub the entire conversation for this reporter and messages authored
+        // by this account on other tickets, while keeping operational history intact.
+        var reportedTickets = await context.Set<SupportTicket>().Where(t => t.ReporterUserId == user.Id).ToListAsync(cancellationToken);
+        var reportedIds = reportedTickets.Select(t => t.Id).ToArray();
+        foreach (var ticket in reportedTickets)
+        {
+            ticket.Title = "Deleted account report";
+            ticket.Description = "Content removed after account deletion.";
+            ticket.ReproductionSteps = null;
+            ticket.Platform = ticket.OperatingSystemVersion = ticket.BrowserVersion = ticket.AppVersion = null;
+            ticket.DiagnosticsConsent = false;
+        }
+        var messages = await context.Set<SupportTicketMessage>()
+            .Where(m => reportedIds.Contains(m.TicketId) || m.AuthorUserId == user.Id).ToListAsync(cancellationToken);
+        foreach (var message in messages) message.Body = "Content removed after account deletion.";
+        var staffMembership = await context.Set<StaffMember>().SingleOrDefaultAsync(s => s.UserId == user.Id, cancellationToken);
+        if (staffMembership is not null) staffMembership.Active = false;
+
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states -- and the login deletion is never
         // owed without the account having gone, or the other way round.

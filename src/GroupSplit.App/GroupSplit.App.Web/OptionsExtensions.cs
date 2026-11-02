@@ -11,7 +11,7 @@ public static class OptionsExtensions
             // Prevent redirect on 401
             options.Events.OnRedirectToLogin = ctx =>
             {
-                if (ctx.Request.Path.StartsWithSegments("/api"))
+                if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path == "/auth/session")
                 {
                     ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return Task.CompletedTask;

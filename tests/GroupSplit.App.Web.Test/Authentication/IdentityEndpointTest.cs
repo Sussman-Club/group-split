@@ -1,4 +1,9 @@
 using System.Net;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 
 namespace GroupSplit.App.Web.Test.Authentication;
 
@@ -6,6 +11,38 @@ namespace GroupSplit.App.Web.Test.Authentication;
 public class IdentityEndpointTest
 {
     private const string Authority = "http://keycloak.test/realms/group-split";
+
+    [Fact]
+    public async Task An_expired_activity_request_returns_401_without_starting_oidc_in_a_fetch()
+    {
+        await using var host = await SignInHost.StartAsync(Authority);
+        using var response = await host.Client.PostAsync("/auth/session", new FormUrlEncodedContent([]),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(SignInHost.HandshakeCookies(response));
+    }
+
+    [Fact]
+    public async Task Account_management_identifies_the_app_so_keycloak_can_offer_its_return_link()
+    {
+        var app = SignInHost.Build(Authority);
+        app.MapGet("/test/sign-in", async (HttpContext context) =>
+        {
+            var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "account-test")], "test"));
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, user);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        await using var host = new SignInHost(app);
+        using var signedIn = await host.Client.GetAsync("/test/sign-in", TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/auth/account");
+        request.Headers.Add("Cookie", signedIn.Headers.GetValues("Set-Cookie").Select(cookie => cookie.Split(';')[0]));
+
+        using var response = await host.Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"{Authority}/account/?referrer=web-app", response.Headers.Location?.AbsoluteUri);
+    }
 
     [Fact]
     public async Task Register_is_not_routed_now_that_only_an_admin_creates_users()

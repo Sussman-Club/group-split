@@ -83,10 +83,8 @@ public sealed class ApiErrorPresenter(NavigationManager nav, ISnackbar snackbar)
     /// sign-in can, and it brings the person back to where they were.
     /// </summary>
     /// <remarks>
-    /// To the hand-off page, not straight to the challenge: this is the one moment the
-    /// person is owed an explanation, and a challenge gives them none -- it signs them back
-    /// in first and leaves the message to be read by somebody who no longer needs it. See
-    /// <see cref="AuthRoutes.Handoff"/>.
+    /// Web recovery continues to Keycloak automatically, preserving the local page.
+    /// Native recovery can show the notice before opening its system browser.
     /// </remarks>
     private void SignInAgain()
     {

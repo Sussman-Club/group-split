@@ -2,7 +2,7 @@ namespace GroupSplit.Shared;
 
 public sealed class CreateSupportReportRequest
 {
-    public string Type { get; set; } = "Bug";
+    public string? Type { get; set; }
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public string? ReproductionSteps { get; set; }

@@ -52,6 +52,8 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(new LocalClock(Mock.Of<IJSRuntime>()));
 
         Services.AddSingleton(Mock.Of<IAuthService>());
+        Services.AddSingleton(Mock.Of<IStaffClient>());
+        Services.AddSingleton(Mock.Of<ISupportReportsClient>());
         Services.AddSingleton(new AppLinks());
 
         // Who is reading, which several screens ask so they can mark the reader's own row.

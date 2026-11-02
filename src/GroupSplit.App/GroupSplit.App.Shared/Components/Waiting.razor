@@ -19,9 +19,7 @@
    heading against one edge, count against the other. Two unrelated senses of "waiting",
    one class name. *@
 
-<div class="gs-list gs-placeholder" aria-busy="true" aria-live="polite">
-    <span class="gs-sr-only">@Loc["Loading"]</span>
-
+<div class="gs-list gs-placeholder" role="status" aria-label="@Loc["Loading"]" aria-busy="true" aria-live="polite">
     @for (var row = 0; row < Rows; row++)
     {
         <div class="gs-placeholder-row" @key="row" aria-hidden="true"></div>

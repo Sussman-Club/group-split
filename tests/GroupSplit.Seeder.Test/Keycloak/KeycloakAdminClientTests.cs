@@ -44,6 +44,18 @@ public class KeycloakAdminClientTests
     };
 
     [Fact]
+    public async Task Effective_staff_role_is_checked_using_current_realm_mappings()
+    {
+        var handler = new StubHandler();
+        handler.Respond("/realms/master/protocol/openid-connect/token", """{"access_token":"a-token"}""");
+        handler.Respond($"/admin/realms/group-split/users/{SeededId}/role-mappings/realm/composite",
+            """[{"id":"role-id","name":"groupsplit-staff"}]""");
+        var client = ClientFor(handler);
+        Assert.True(await client.HasRealmRoleAsync(SeededId, "groupsplit-staff", TestContext.Current.CancellationToken));
+        Assert.False(await client.HasRealmRoleAsync(SeededId, "other-role", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Signing_in_uses_the_password_grant_against_the_admin_realm()
     {
         var handler = new StubHandler();

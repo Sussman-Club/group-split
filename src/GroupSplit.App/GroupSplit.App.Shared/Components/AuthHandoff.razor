@@ -7,11 +7,8 @@
     keeps SSO, MFA, password policy and brute-force protection working; this
     component only explains where the user is going and gets them there.
 
-    The one thing it does collect is "Keep me signed in", and that is why the
-    hand-off waits for a click rather than redirecting by itself: Keycloak has a
-    checkbox of its own but keeps the answer, so an app federated to it cannot
-    find out which was chosen, and the answer has to be given on this side of the
-    redirect or not at all.
+    Web login and expired-session recovery start automatically. Invitations and
+    account-deletion notices remain explicit. Every provider uses the same session policy.
 *@
 
 <div style="flex: 1; display: flex; align-items: center; justify-content: center">
@@ -42,8 +39,6 @@
                 </MudAlert>
             }
 
-            <RememberMeChoice @bind-Value="_remember" Disabled="_redirecting" />
-
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
                        FullWidth
@@ -63,16 +58,26 @@
 @code {
     [Inject] private IAuthService AuthService { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private AppLinks Links { get; set; } = new();
 
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Subtitle { get; set; } = "";
     [Parameter, EditorRequired] public string ActionLabel { get; set; } = "";
     [Parameter] public string? ReturnUrl { get; set; }
+    [Parameter] public bool AutoStart { get; set; }
 
     private bool _redirecting;
-    private bool _remember;
     private bool _notice;
     private string? Error { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AutoStart && !Links.IsNative && (Error is null || ReadQueryValue("reason") == HandoffReason.SessionExpired))
+        {
+            await GoAsync();
+            StateHasChanged();
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -98,7 +103,7 @@
 
         try
         {
-            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"), _remember);
+            await AuthService.Login(ReturnUrl ?? ReadQueryValue("returnUrl"));
         }
         catch (OperationCanceledException)
         {

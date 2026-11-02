@@ -1,0 +1,23 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+<section class="gs-card staff-user-card">
+    <h2>@Loc[Title]</h2>
+    @if (_user is not null)
+    {
+        <strong>@_user.Name</strong><p>@_user.Email</p>
+        <dl><div><dt>@Loc["Groups"]</dt><dd>@_user.Groups</dd></div><div><dt>@Loc["Open tickets"]</dt><dd>@_user.OpenTickets</dd></div></dl>
+        @if (ShowLink) { <a href="@($"/staff/users/{_user.Id}")">@Loc["View support context"]</a> }
+    }
+    else { <p class="gs-muted">@Loc["Account details are unavailable."]</p> }
+</section>
+@code {
+    [Parameter] public bool ShowLink { get; set; } = true;
+    [Parameter] public string Title { get; set; } = "Reporter";
+    [Parameter] public Guid UserId { get; set; }
+    private SupportUserResponse? _user;
+    protected override async Task OnInitializedAsync()
+    {
+        try { _user = await Staff.UserAsync(UserId); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+    }
+}

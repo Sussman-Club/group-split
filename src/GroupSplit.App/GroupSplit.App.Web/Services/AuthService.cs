@@ -7,9 +7,9 @@ namespace GroupSplit.App.Web.Services;
 
 public class AuthService(NavigationManager nav, IJSRuntime js, AntiforgeryStateProvider antiforgery) : IAuthService
 {
-    public Task Login(string? returnUrl, bool remember, CancellationToken ct)
+    public Task Login(string? returnUrl, CancellationToken ct)
     {
-        nav.NavigateTo(AuthRoutes.Login(returnUrl, remember), forceLoad: true);
+        nav.NavigateTo(AuthRoutes.Login(returnUrl), forceLoad: true);
         return Task.CompletedTask;
     }
 

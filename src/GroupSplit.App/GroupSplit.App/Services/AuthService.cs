@@ -8,9 +8,9 @@ namespace GroupSplit.App.Services;
 public sealed class AuthService(NativeSession session, IUserLogin user, NavigationManager navigation,
     ISnackbar snackbar, IPushNotifications? push = null) : IAuthService
 {
-    public async Task Login(string? returnUrl = null, bool remember = false, CancellationToken ct = default)
+    public async Task Login(string? returnUrl = null, CancellationToken ct = default)
     {
-        await session.LoginAsync(remember, ct);
+        await session.LoginAsync(remember: true, ct);
         await user.RefreshLoginAsync();
         navigation.NavigateTo(LocalUrl.IsLocal(returnUrl) ? returnUrl : "/");
     }

@@ -53,6 +53,16 @@ public sealed class KeycloakAdminClient(
     public Task UpdateAdminRealmAsync(JsonObject realm, CancellationToken ct = default) =>
         WriteRealmAsync(AdminRealm, realm, ct);
 
+    public async Task EnsureRealmRoleAsync(string name, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Post, $"admin/realms/{Realm}/roles", ct);
+        request.Content = JsonContent.Create(new JsonObject { ["name"] = name }, options: Json);
+        using var response = await http.SendAsync(request, ct);
+        // Another worker may create it concurrently; an existing role is already correct.
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict) return;
+        await ThrowOnFailure(response, $"create realm role {name} on realm {Realm}", ct);
+    }
+
     public async Task<JsonObject?> GetClientAsync(string clientId, CancellationToken ct = default)
     {
         var query = $"admin/realms/{Realm}/clients?clientId={Uri.EscapeDataString(clientId)}";
@@ -323,6 +333,17 @@ public sealed class KeycloakAdminClient(
         await ThrowOnFailure(response, $"look up user {id}", ct);
 
         return await response.Content.ReadFromJsonAsync<KeycloakUserSummary>(Json, ct);
+    }
+
+    public async Task<bool> HasRealmRoleAsync(string id, string role, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get,
+            $"admin/realms/{Realm}/users/{Uri.EscapeDataString(id)}/role-mappings/realm/composite", ct);
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        await ThrowOnFailure(response, $"read the roles of user {id}", ct);
+        var roles = await response.Content.ReadFromJsonAsync<List<KeycloakRole>>(Json, ct) ?? [];
+        return roles.Any(item => string.Equals(item.Name, role, StringComparison.Ordinal));
     }
 
     /// <summary>

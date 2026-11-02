@@ -63,9 +63,6 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
     public async Task A_crafted_return_url_through_the_sign_in_page_lands_on_groups_for_a_new_account()
     {
         await Page.GotoAsync(Url("login?returnUrl=%2F%09%2Fevil.example"), new PageGotoOptions { Timeout = OperationTimeoutMs });
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue to sign in" })
-            .ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
-
         await SignInAtKeycloakAsync();
 
         await AssertLandedOnAsync("/groups");

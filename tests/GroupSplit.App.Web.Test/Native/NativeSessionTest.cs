@@ -216,9 +216,11 @@ public sealed class NativeSessionTest
         using var context = new Bunit.BunitContext();
         var navigation = context.Services.GetRequiredService<NavigationManager>();
         var user = new Mock<IUserLogin>();
-        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), new Store());
+        var store = new Store();
+        var session = new NativeSession(Options, new ClientFactory(new Transport()), new Browser(), store);
         var auth = new AuthService(session, user.Object, navigation, Mock.Of<ISnackbar>());
         await auth.Login(destination, ct: TestContext.Current.CancellationToken);
+        Assert.NotNull(store.Value);
         user.Verify(value => value.RefreshLoginAsync(), Times.Once);
         Assert.Equal(expected, new Uri(navigation.Uri).AbsolutePath);
     }
