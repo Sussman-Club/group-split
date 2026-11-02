@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using GroupSplit.API.Test.Base;
+using GroupSplit.API.Services.Push;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -35,28 +36,47 @@ public class StaffOperationsTest : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Public_replies_notify_the_reporter_but_notes_and_other_users_tickets_stay_private()
+    public async Task Android_staff_alerts_are_opt_in_and_created_for_reports_and_customer_replies()
+    {
+        using var staff = Staff();
+        (await staff.GetAsync("/staff/access", Ct)).EnsureSuccessStatusCode();
+        var staffDevice = Guid.NewGuid();
+        var otherDevice = Guid.NewGuid();
+        (await staff.PutAsJsonAsync($"/users/me/push-devices/{staffDevice}", new PushDeviceRequest("staff-token", false, StaffSupportEnabled: true), Ct)).EnsureSuccessStatusCode();
+        (await _host.Client.PutAsJsonAsync($"/users/me/push-devices/{otherDevice}", new PushDeviceRequest("other-token", false, StaffSupportEnabled: true), Ct)).EnsureSuccessStatusCode();
+        var report = await Report();
+        (await _host.Client.PostAsJsonAsync($"/support-reports/{report.Id}/messages", new CreateSupportMessageRequest { Body = "An update" }, Ct)).EnsureSuccessStatusCode();
+        (await staff.PostAsJsonAsync($"/staff/tickets/{report.Id}/notes", new CreateSupportNoteRequest("Internal note"), Ct)).EnsureSuccessStatusCode();
+        using var scope = _host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False((await db.Set<PushDevice>().FindAsync([otherDevice], Ct))!.StaffSupportEnabled);
+        var jobs = await db.Set<BackgroundJob>().Where(j => j.Type == SendPushNotification.Name).ToListAsync(Ct);
+        var events = jobs.Select(j => System.Text.Json.JsonSerializer.Deserialize<SendPushNotification>(j.Payload)!).ToList();
+        Assert.Equal(2, events.Count);
+        Assert.All(events, job => Assert.Equal(staffDevice, job.DeviceId));
+        Assert.Contains(events, job => job.Kind == PushNotificationKind.StaffTicketCreated);
+        Assert.Contains(events, job => job.Kind == PushNotificationKind.StaffCustomerReplied);
+        Assert.DoesNotContain(jobs, job => job.Payload.Contains("An update", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Public_replies_are_visible_to_the_reporter_but_notes_and_other_users_tickets_stay_private()
     {
         var report = await Report();
         using var staff = Staff();
         (await staff.PostAsJsonAsync($"/staff/tickets/{report.Id}/notes", new CreateSupportNoteRequest("Private investigation"), Ct)).EnsureSuccessStatusCode();
-        Assert.Equal(0, await _host.Client.GetFromJsonAsync<int>("/support-reports/notifications", Ct));
         var ticket = (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{report.Id}", Ct))!;
         var reply = new CreateSupportMessageRequest { Body = "Please try the new invitation link.", ExpectedUpdatedAt = ticket.UpdatedAt };
         (await staff.PostAsJsonAsync($"/staff/tickets/{report.Id}/reply", reply, Ct)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync($"/staff/tickets/{report.Id}/reply", reply, Ct)).StatusCode);
         Assert.Equal("WaitingForCustomer", (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{report.Id}", Ct))!.Status);
-        Assert.Equal(1, await _host.Client.GetFromJsonAsync<int>("/support-reports/notifications", Ct));
-        Assert.True(Assert.Single((await _host.Client.GetFromJsonAsync<List<SupportReportResponse>>("/support-reports", Ct))!).HasUnreadReplies);
         var messages = (await _host.Client.GetFromJsonAsync<List<SupportMessageResponse>>($"/support-reports/{report.Id}/messages", Ct))!;
         Assert.Equal(reply.Body, Assert.Single(messages).Body);
         Assert.Equal("Public", messages[0].Visibility);
         using var other = _host.ClientForAnotherUser();
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/support-reports/{report.Id}/messages", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"/support-reports/{report.Id}/messages", new CreateSupportMessageRequest { Body = "intrusion" }, Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/support-reports/{report.Id}/read", null, Ct)).StatusCode);
         (await _host.Client.PostAsJsonAsync($"/support-reports/{report.Id}/messages", new CreateSupportMessageRequest { Body = "That worked, thanks" }, Ct)).EnsureSuccessStatusCode();
-        Assert.Equal(0, await _host.Client.GetFromJsonAsync<int>("/support-reports/notifications", Ct));
         Assert.Equal(3, (await staff.GetFromJsonAsync<List<SupportMessageResponse>>($"/staff/tickets/{report.Id}/messages", Ct))!.Count);
         Assert.Equal("New", (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{report.Id}", Ct))!.Status);
         var audit = (await staff.GetFromJsonAsync<DirectoryPage<StaffActivityResponse>>($"/staff/activity?resource=Tickets&resourceId={report.Id}", Ct))!;

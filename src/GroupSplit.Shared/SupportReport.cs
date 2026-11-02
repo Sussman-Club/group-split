@@ -9,7 +9,4 @@ public sealed class CreateSupportReportRequest
 }
 
 public sealed record SupportReportResponse(Guid Id, string Type, string Status, string Title,
-    string Description, string? ReproductionSteps, DateTimeOffset CreatedAt)
-{
-    public bool HasUnreadReplies { get; init; }
-}
+    string Description, string? ReproductionSteps, DateTimeOffset CreatedAt);

@@ -14,6 +14,35 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    [Fact]
+    public async Task Staff_delivery_rechecks_the_current_realm_role_and_device_preference()
+    {
+        var user = GetService<ICurrentUser>().User;
+        await DbContext.Entry(user).Reference(u => u.Identity).LoadAsync(Ct);
+        var subject = user.Identity.IdentityId;
+        var staff = new StaffMember { UserId = user.Id, Active = true, LastVerifiedAt = DateTimeOffset.UtcNow };
+        var device = new PushDevice { UserId = user.Id, Token = "staff-token", StaffSupportEnabled = true, UpdatedAt = DateTimeOffset.UtcNow };
+        var ticket = new SupportTicket { ReporterUserId = user.Id, Title = "Report", Description = "Private" };
+        DbContext.AddRange(staff, device, ticket);
+        await DbContext.SaveChangesAsync(Ct);
+        var job = new SendPushNotification(device.Id, user.Id, Guid.Empty, Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1), PushNotificationKind.StaffTicketCreated, ticket.Id);
+        var roles = new Mock<GroupSplit.Keycloak.IKeycloakAdminClient>();
+        roles.Setup(r => r.HasRealmRoleAsync(subject, StaffAccess.Role, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var sender = new Mock<IPushSender>();
+        sender.Setup(s => s.SendAsync("staff-token", Guid.Empty, "", job.DeliveryId, It.IsAny<CancellationToken>(), job.Kind, null)).ReturnsAsync(true);
+        var handler = new SendPushNotificationHandler(DbContext, sender.Object, TimeProvider.System, roles.Object);
+        await handler.HandleAsync(job, Ct);
+        sender.Verify(s => s.SendAsync("staff-token", Guid.Empty, "", job.DeliveryId, It.IsAny<CancellationToken>(), job.Kind, null), Times.Once);
+        sender.Invocations.Clear();
+        roles.Setup(r => r.HasRealmRoleAsync(subject, StaffAccess.Role, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        await handler.HandleAsync(job, Ct);
+        sender.VerifyNoOtherCalls();
+        device.StaffSupportEnabled = false;
+        await DbContext.SaveChangesAsync(Ct);
+        await handler.HandleAsync(job, Ct);
+        sender.VerifyNoOtherCalls();
+    }
+
     [Theory]
     [InlineData(PushNotificationKind.ExpenseChanged)]
     [InlineData(PushNotificationKind.Settlement)]

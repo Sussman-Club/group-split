@@ -3,12 +3,13 @@ using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
+using GroupSplit.API.Services.Push;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Services;
 
 /// <summary>Ticket operations; callers establish authorization before invoking this service.</summary>
-public sealed partial class SupportTicketService(AppDbContext db, TimeProvider clock, SupportReportClassifier classifier, StaffTeamService team)
+public sealed partial class SupportTicketService(AppDbContext db, TimeProvider clock, SupportReportClassifier classifier, StaffTeamService team, PushNotificationQueue push)
 {
     private const int PageSize = 30;
 
@@ -25,11 +26,8 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
             .Where(t => t.ReporterUserId == reporterUserId)
             .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
             .Take(100).ToListAsync(ct);
-        var ids = tickets.Select(t => t.Id).ToArray();
-        var unread = await db.Set<SupportNotification>().Where(n => n.UserId == reporterUserId && n.ReadAt == null && ids.Contains(n.TicketId))
-            .Select(n => n.TicketId).Distinct().ToListAsync(ct);
         return tickets.Select(t => new SupportReportResponse(t.Id, t.Type.ToString(), t.Status.ToString(),
-            t.Title, t.Description, t.ReproductionSteps, t.CreatedAt) { HasUnreadReplies = unread.Contains(t.Id) }).ToList();
+            t.Title, t.Description, t.ReproductionSteps, t.CreatedAt)).ToList();
     }
 
     public async Task<SupportReportResponse> CreateAsync(CreateSupportReportRequest request, Guid reporterUserId, CancellationToken ct)
@@ -56,6 +54,7 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
         db.Add(new SupportTicketStatusChange { TicketId = ticket.Id, ChangedByUserId = reporterUserId,
             ToStatus = SupportTicketStatus.New, ChangedAt = now });
         StaffActivityService.Record(db, reporterUserId, "Tickets", ticket.Id, "Report submitted", now);
+        await push.ForStaff(PushNotificationKind.StaffTicketCreated, ticket.Id, reporterUserId, ct);
         await db.SaveChangesAsync(ct);
         return new SupportReportResponse(ticket.Id, ticket.Type.ToString(), ticket.Status.ToString(),
             ticket.Title, ticket.Description, ticket.ReproductionSteps, ticket.CreatedAt);

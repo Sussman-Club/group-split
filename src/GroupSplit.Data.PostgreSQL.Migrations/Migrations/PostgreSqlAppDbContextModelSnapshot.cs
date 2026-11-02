@@ -766,6 +766,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<bool>("SettlementsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("StaffSupportEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Token")
                         .IsRequired()
                         .HasMaxLength(4096)
@@ -1204,38 +1207,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsUnique();
 
                     b.ToTable("StaffSavedView");
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.SupportNotification", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("MessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ReadAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MessageId");
-
-                    b.HasIndex("TicketId");
-
-                    b.HasIndex("UserId", "ReadAt");
-
-                    b.ToTable("SupportNotification");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SupportTicket", b =>
@@ -2134,27 +2105,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.StaffSavedView", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("GroupSplit.Data.Entities.SupportNotification", b =>
-                {
-                    b.HasOne("GroupSplit.Data.Entities.SupportTicketMessage", null)
-                        .WithMany()
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GroupSplit.Data.Entities.SupportTicket", null)
-                        .WithMany()
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("GroupSplit.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

@@ -156,7 +156,6 @@ public sealed class AccountService(
             .Where(device => device.UserId == user.Id).ToListAsync(cancellationToken));
 
         context.RemoveRange(await context.Set<StaffSavedView>().Where(v => v.UserId == user.Id).ToListAsync(cancellationToken));
-        context.RemoveRange(await context.Set<SupportNotification>().Where(n => n.UserId == user.Id).ToListAsync(cancellationToken));
         // Support conversations can contain free-form personal data, including in replies
         // from staff. Scrub the entire conversation for this reporter and messages authored
         // by this account on other tickets, while keeping operational history intact.

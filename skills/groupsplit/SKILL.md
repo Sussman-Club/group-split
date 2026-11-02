@@ -32,8 +32,9 @@ This skill is the protocol around the CLI. The command surface comes from the CL
 team members and saved views. Staff activity is kept for seven days; account views are
 not activity entries. Ticket conversations and status history are separate. These commands require the `groupsplit-staff` realm role;
 the server enforces it. Use `staff tickets note` for private staff notes and `reply` only
-for a message the reporter should see. A reply creates an in-app notification. Reporters use
-`groupsplit support list`, `messages`, `reply`, `notifications`, and `mark-read` for their
+for a message the reporter should see. Staff can opt in to Android alerts for new tickets
+and customer replies in staff settings. Reporters use
+`groupsplit support list`, `messages`, and `reply` for their
 own reports.
 
 Before merging merchants, run `staff merchants merge-preview` and present its source,

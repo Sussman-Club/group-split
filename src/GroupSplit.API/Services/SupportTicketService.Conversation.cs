@@ -49,10 +49,8 @@ public sealed partial class SupportTicketService
         else if (isPublic && request.WaitForCustomer)
             ChangeStatus(ticket, SupportTicketStatus.WaitingForCustomer, actor, now);
         ticket.UpdatedAt = now;
-        if (isPublic && !fromReporter && actor != ticket.ReporterUserId)
-            db.Add(new SupportNotification { UserId = ticket.ReporterUserId, TicketId = id, MessageId = message.Id, CreatedAt = now });
         if (fromReporter)
-            foreach (var notice in await db.Set<SupportNotification>().Where(n => n.UserId == actor && n.TicketId == id && n.ReadAt == null).ToListAsync(ct)) notice.ReadAt = now;
+            await push.ForStaff(PushNotificationKind.StaffCustomerReplied, id, actor, ct);
         StaffActivityService.Record(db, actor, "Tickets", id, fromReporter ? "Customer replied" : isPublic ? "Reply sent to customer" : "Internal note added", now,
             new ActivityChange("Status", beforeStatus.ToString(), ticket.Status.ToString()));
         await SaveTicketChanges(ct);
@@ -64,14 +62,4 @@ public sealed partial class SupportTicketService
         await db.Set<SupportTicket>().SingleOrDefaultAsync(t => t.Id == id && (reporterId == null || t.ReporterUserId == reporterId), ct)
         ?? throw new NotFoundException(ErrorCodes.SupportTicketNotFound, "Ticket not found.");
 
-    public Task<int> UnreadCountAsync(Guid userId, CancellationToken ct) =>
-        db.Set<SupportNotification>().CountAsync(n => n.UserId == userId && n.ReadAt == null, ct);
-
-    public async Task MarkReadAsync(Guid id, Guid reporterId, CancellationToken ct)
-    {
-        await VisibleTicket(id, reporterId, ct);
-        var notices = await db.Set<SupportNotification>().Where(n => n.UserId == reporterId && n.TicketId == id && n.ReadAt == null).ToListAsync(ct);
-        foreach (var notice in notices) notice.ReadAt = clock.GetUtcNow();
-        if (notices.Count > 0) await db.SaveChangesAsync(ct);
-    }
 }

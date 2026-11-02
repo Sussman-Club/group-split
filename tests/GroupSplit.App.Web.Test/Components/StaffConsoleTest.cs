@@ -177,7 +177,7 @@ public class StaffConsoleTest : ComponentTest
         Navigation.NavigateTo(uri);
         using var layout = RenderPage<T>(id);
         layout.WaitForAssertion(() => Assert.NotEmpty(layout.FindAll(".staff-panel, .staff-ticket-detail, .staff-merchant-detail, .staff-user-card, .staff-activity-feed")));
-        Assert.Equal(4, layout.FindAll(".staff-sidebar .staff-nav-link").Count);
+        Assert.Equal(5, layout.FindAll(".staff-sidebar .staff-nav-link").Count);
         Assert.Empty(layout.FindAll("[role=alert]"));
         StaffConsoleFixtures.Export(_themeMarkup + layout.Markup, name);
     }

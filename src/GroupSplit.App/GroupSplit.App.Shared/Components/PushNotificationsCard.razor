@@ -11,7 +11,8 @@
         <div class="gs-card-title"><h2>@Loc["Notifications"]</h2></div>
         <p class="gs-muted gs-notifications-intro">@Loc["Choose which alerts this Android device receives."]</p>
         <div class="gs-notification-options">
-        @foreach (var kind in PushNotificationKinds.Settings)
+        @foreach (var kind in PushNotificationKinds.Settings.Where(kind =>
+            (PushNotificationKinds.Category(kind) == PushNotificationCategory.StaffSupport) == StaffOnly))
         {
             <MudSwitch @key="kind" T="bool" Value="push.IsEnabled(kind)" ValueChanged="@(value => SetEnabled(kind, value))"
                        Class="gs-notification-option" LabelPlacement="Placement.Start"
@@ -31,6 +32,7 @@
 }
 
 @code {
+    [Microsoft.AspNetCore.Components.Parameter] public bool StaffOnly { get; set; }
     private IPushNotifications? push;
     private bool busy;
     private string? error;
@@ -40,6 +42,7 @@
         PushNotificationCategory.Settlements => Loc["Recorded payments and requests to settle up."].Value,
         PushNotificationCategory.GuestsJoining => Loc["When a guest joins one of your groups."].Value,
         PushNotificationCategory.BankSyncIssues => Loc["When a connected bank needs your attention."].Value,
+        PushNotificationCategory.StaffSupport => Loc["New tickets and customer replies."].Value,
         _ => ""
     };
     protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();

@@ -335,6 +335,17 @@ public sealed class KeycloakAdminClient(
         return await response.Content.ReadFromJsonAsync<KeycloakUserSummary>(Json, ct);
     }
 
+    public async Task<bool> HasRealmRoleAsync(string id, string role, CancellationToken ct = default)
+    {
+        using var request = await AuthorizedAsync(HttpMethod.Get,
+            $"admin/realms/{Realm}/users/{Uri.EscapeDataString(id)}/role-mappings/realm/composite", ct);
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        await ThrowOnFailure(response, $"read the roles of user {id}", ct);
+        var roles = await response.Content.ReadFromJsonAsync<List<KeycloakRole>>(Json, ct) ?? [];
+        return roles.Any(item => string.Equals(item.Name, role, StringComparison.Ordinal));
+    }
+
     /// <summary>
     /// The user holding this email, or null. Exact rather than the default prefix search, so
     /// "omar@test.com" cannot match somebody else's longer address.

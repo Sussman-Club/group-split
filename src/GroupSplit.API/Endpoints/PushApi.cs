@@ -15,7 +15,7 @@ public static class PushApi
         var group = routes.MapGroup("/users/me/push-devices").RequireAuthorization()
             .WithTags("Push notifications").ProducesStandardProblems();
         group.MapPut("/{id:guid}", async Task<IResult> (Guid id, PushDeviceRequest request,
-            ICurrentUser current, AppDbContext db, CancellationToken ct) =>
+            ICurrentUser current, System.Security.Claims.ClaimsPrincipal principal, AppDbContext db, CancellationToken ct) =>
         {
             // Keep the unique PostgreSQL index below its per-entry byte limit, including UTF-8 input.
             if (id == Guid.Empty || string.IsNullOrWhiteSpace(request.Token)
@@ -41,6 +41,7 @@ public static class PushApi
             device.SettlementsEnabled = request.SettlementsEnabled;
             device.InvitationsEnabled = request.InvitationsEnabled;
             device.BankSyncIssuesEnabled = request.BankSyncIssuesEnabled;
+            device.StaffSupportEnabled = request.StaffSupportEnabled && StaffAccess.IsStaff(principal);
             device.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();

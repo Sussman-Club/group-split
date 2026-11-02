@@ -15,6 +15,7 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
         PushNotificationCategory.Settlements => d => d.SettlementsEnabled,
         PushNotificationCategory.GuestsJoining => d => d.InvitationsEnabled,
         PushNotificationCategory.BankSyncIssues => d => d.BankSyncIssuesEnabled,
+        PushNotificationCategory.StaffSupport => d => d.StaffSupportEnabled,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -30,6 +31,17 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
     public Task ForBankIssue(Guid ownerId, Guid connectionId, CancellationToken ct) =>
         Enqueue(PushNotificationKind.BankSyncIssue, Guid.Empty, connectionId,
             db.Set<User>().Where(u => u.Id == ownerId && u.Kind == UserKind.Account).Select(u => u.Id), ct);
+
+    public Task ForStaff(PushNotificationKind kind, Guid ticketId, Guid actorId, CancellationToken ct)
+    {
+        if (PushNotificationKinds.Category(kind) != PushNotificationCategory.StaffSupport)
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        var users = from member in db.Set<StaffMember>()
+            join user in db.Set<User>() on member.UserId equals user.Id
+            where member.Active && user.Kind == UserKind.Account && user.Id != actorId
+            select user.Id;
+        return Enqueue(kind, Guid.Empty, ticketId, users, ct);
+    }
 
     private async Task Enqueue(PushNotificationKind kind, Guid groupId, Guid? subjectId,
         IQueryable<Guid> users, CancellationToken ct)

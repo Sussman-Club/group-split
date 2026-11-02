@@ -29,6 +29,12 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>().UseNpgsql(cs.ConnectionString, b => b.MigrationsAssembly("GroupSplit.Data.PostgreSQL.Migrations")).Options;
             await using var db = new PostgreSqlAppDbContext(options);
             await db.Database.MigrateAsync();
+            await using (var check = new NpgsqlConnection(cs.ConnectionString))
+            {
+                await check.OpenAsync();
+                await using var tableCheck = new NpgsqlCommand("SELECT to_regclass('\"SupportNotification\"') IS NULL", check);
+                Assert.True((bool)(await tableCheck.ExecuteScalarAsync())!);
+            }
             var user = new User { FirstName = "Staff", LastName = "Verification", Email = "verify@example.test", Kind = UserKind.Account };
             db.Add(user); await db.SaveChangesAsync();
             var merchantService = new MerchantService(new VerificationUser(user), db, TimeProvider.System);
@@ -65,7 +71,9 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var users = new SupportUserService(db);
             Check((await users.SearchAsync("verify", default)).Count == 1, "User search translates");
             await users.GetAsync(user.Id, user.Id, default);
-            var tickets = new SupportTicketService(db, TimeProvider.System, new SupportReportClassifier(null!, Microsoft.Extensions.Options.Options.Create(new GroupSplit.API.Services.Banking.Suggestions.FilingSuggestionOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SupportReportClassifier>.Instance), team);
+            var push = new GroupSplit.API.Services.Push.PushNotificationQueue(db,
+                new Moq.Mock<GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue>().Object, TimeProvider.System);
+            var tickets = new SupportTicketService(db, TimeProvider.System, new SupportReportClassifier(null!, Microsoft.Extensions.Options.Options.Create(new GroupSplit.API.Services.Banking.Suggestions.FilingSuggestionOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SupportReportClassifier>.Instance), team, push);
             var report = await tickets.CreateAsync(new CreateSupportReportRequest { Description = "Verify support reply" }, user.Id, default);
             await tickets.StaffReplyAsync(report.Id, new CreateSupportMessageRequest { Body = "Public reply" }, user.Id, default);
             Check((await tickets.GetAsync(report.Id, default)).Status == "WaitingForCustomer", "Waiting status and history constraints");

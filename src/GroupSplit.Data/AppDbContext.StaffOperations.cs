@@ -39,13 +39,6 @@ public partial class AppDbContext
             e.HasIndex(a => new { a.UserId, a.Resource, a.Name }).IsUnique();
             e.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
         });
-        model.Entity<SupportNotification>(e =>
-        {
-            e.HasIndex(a => new { a.UserId, a.ReadAt });
-            e.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne<SupportTicket>().WithMany().HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne<SupportTicketMessage>().WithMany().HasForeignKey(a => a.MessageId).OnDelete(DeleteBehavior.Cascade);
-        });
     }
 
     private List<Merchant> ChangedMerchantNames()

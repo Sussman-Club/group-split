@@ -29,7 +29,7 @@ public class StaffOperationsUiTest : ComponentTest
         _staff.Verify(s => s.AddNoteAsync(id, "Investigating privately"), Times.Once);
         _staff.Verify(s => s.ReplyAsync(It.IsAny<Guid>(), It.IsAny<CreateSupportMessageRequest>()), Times.Never);
         await composer.FindAll(".staff-compose-modes button")[1].ClickAsync();
-        Assert.Contains("receive an in-app notification", composer.Markup);
+        Assert.Contains("The reporter can see this reply", composer.Markup);
         await composer.Find("textarea").ChangeAsync(new() { Value = "Please try again" });
         await composer.Find("form").SubmitAsync();
         _staff.Verify(s => s.ReplyAsync(id, It.Is<CreateSupportMessageRequest>(r => r.Body == "Please try again" && r.ExpectedUpdatedAt == version && r.WaitForCustomer)), Times.Once);
@@ -43,7 +43,6 @@ public class StaffOperationsUiTest : ComponentTest
         _reports.Setup(s => s.ReplyAsync(id, It.IsAny<CreateSupportMessageRequest>())).ThrowsAsync(new HttpRequestException());
         var composer = Render<SupportConversation>(p => p.Add(c => c.TicketId, id).Add(c => c.ForReporter, true));
         Assert.Empty(composer.FindAll(".staff-compose-modes"));
-        _reports.Verify(s => s.MarkReadAsync(id), Times.Once);
         await composer.Find("textarea").ChangeAsync(new() { Value = "My reply" });
         await composer.Find("form").SubmitAsync();
         Assert.True(composer.Instance.HasDraft);

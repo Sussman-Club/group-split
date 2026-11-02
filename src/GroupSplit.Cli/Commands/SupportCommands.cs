@@ -15,7 +15,6 @@ public static class SupportCommands
     {
         var root = new Command("support", "View and reply to your support reports.");
         root.Subcommands.Add(Read("list", "List your reports.", "support-reports"));
-        root.Subcommands.Add(Read("notifications", "Count unread support replies.", "support-reports/notifications"));
         var id = new Argument<Guid>("id") { Description = "Report ID." };
         var page = new Option<int>("--page") { Description = "Zero-based page of messages." };
         var messages = new Command("messages", "Read public messages on your report.") { id, page };
@@ -23,8 +22,6 @@ public static class SupportCommands
         var body = new Argument<string>("body") { Description = "Your public reply." };
         var reply = new Command("reply", "Reply to your report.") { id, body };
         reply.SetHandler(async (c, ct) => { using var response = await c.ApiHttpClient.PostAsJsonAsync($"support-reports/{c.ParseResult.GetValue(id)}/messages", new CreateSupportMessageRequest { Body = c.ParseResult.GetValue(body)! }, ct); await Check(response, ct); var data = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct); Write(c, data); return ExitCodes.Success; }); root.Subcommands.Add(reply);
-        var read = new Command("mark-read", "Mark your report's replies as read.") { id };
-        read.SetHandler(async (c, ct) => { using var response = await c.ApiHttpClient.PostAsync($"support-reports/{c.ParseResult.GetValue(id)}/read", null, ct); await Check(response, ct); c.Output.WriteMessage("Marked as read."); return ExitCodes.Success; }); root.Subcommands.Add(read);
         return root;
     }
     private static Command Read(string name, string description, string url) { var command = new Command(name, description); command.SetHandler(async (c, ct) => { await ReadJson(c, url, ct); return ExitCodes.Success; }); return command; }

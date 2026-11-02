@@ -11,6 +11,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<bool>(name: "StaffSupportEnabled", table: "PushDevice",
+                type: "boolean", nullable: false, defaultValue: false);
             migrationBuilder.AddColumn<Guid>(
                 name: "Version",
                 table: "Merchant",
@@ -122,40 +124,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "SupportNotification",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TicketId = table.Column<Guid>(type: "uuid", nullable: false),
-                    MessageId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ReadAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SupportNotification", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_SupportNotification_SupportTicketMessage_MessageId",
-                        column: x => x.MessageId,
-                        principalTable: "SupportTicketMessage",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_SupportNotification_SupportTicket_TicketId",
-                        column: x => x.TicketId,
-                        principalTable: "SupportTicket",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_SupportNotification_User_UserId",
-                        column: x => x.UserId,
-                        principalTable: "User",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
             migrationBuilder.CreateIndex(
                 name: "IX_MerchantAlias_MerchantId",
                 table: "MerchantAlias",
@@ -198,27 +166,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 table: "StaffSavedView",
                 columns: new[] { "UserId", "Resource", "Name" },
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SupportNotification_MessageId",
-                table: "SupportNotification",
-                column: "MessageId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SupportNotification_TicketId",
-                table: "SupportNotification",
-                column: "TicketId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SupportNotification_UserId_ReadAt",
-                table: "SupportNotification",
-                columns: new[] { "UserId", "ReadAt" });
-            // Reserve every existing canonical name in the same unique registry as aliases.
-            migrationBuilder.Sql("""
-                INSERT INTO "MerchantAlias" ("Id", "MerchantId", "Name", "NormalizedName", "CreatedAt")
-                SELECT "Id", "Id", "Name", "NormalizedName", "FirstSeenAt" FROM "Merchant";
-
-                """);
 
 
             migrationBuilder.DropCheckConstraint(
@@ -334,12 +281,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             migrationBuilder.DropTable(
                 name: "StaffSavedView");
 
-            migrationBuilder.DropTable(
-                name: "SupportNotification");
-
             migrationBuilder.DropColumn(
                 name: "Version",
                 table: "Merchant");
+
+            migrationBuilder.DropColumn(name: "StaffSupportEnabled", table: "PushDevice");
 
         }
     }

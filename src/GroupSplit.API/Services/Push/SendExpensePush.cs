@@ -26,7 +26,8 @@ public sealed record SendPushNotification(Guid DeviceId, Guid UserId, Guid Group
     public const string Name = "push.send-notification";
 }
 
-public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sender, TimeProvider clock)
+public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sender, TimeProvider clock,
+    GroupSplit.Keycloak.IKeycloakAdminClient? keycloak = null)
     : IJobHandler<SendPushNotification>
 {
     public async ValueTask HandleAsync(SendPushNotification job, CancellationToken ct)
@@ -46,6 +47,17 @@ public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sen
                 && (b.Status != BankConnectionStatus.Active || b.SignInExpiring || b.AccountsNotShared
                     || b.Accounts.Any(a => a.AccessRevoked)), ct);
             if (!relevant) return;
+        }
+        else if (PushNotificationKinds.Category(job.Kind) == PushNotificationCategory.StaffSupport)
+        {
+            var eligible = await db.Set<StaffMember>().AnyAsync(m => m.UserId == job.UserId && m.Active, ct)
+                && await db.Set<SupportTicket>().AnyAsync(t => t.Id == job.SubjectId, ct);
+            if (!eligible) return;
+            var subject = await db.Set<User>().Where(u => u.Id == job.UserId && u.Kind == UserKind.Account)
+                .Select(u => u.Identity.IdentityId).SingleOrDefaultAsync(ct);
+            // A cached staff roster is not an authorization source: recheck the actual
+            // Keycloak role at delivery so revocation stops notifications immediately.
+            if (subject is null || keycloak is null || !await keycloak.HasRealmRoleAsync(subject, StaffAccess.Role, ct)) return;
         }
         else
         {

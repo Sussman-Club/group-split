@@ -28,7 +28,7 @@
                     <button type="button" class="@(!_public ? "active" : "")" aria-pressed="@(!_public)" disabled="@_sending" @onclick="() => _public = false"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" />@Loc["Internal note"]</button>
                     <button type="button" class="@(_public ? "active" : "")" aria-pressed="@_public" disabled="@_sending" @onclick="() => _public = true"><MudIcon Icon="@Icons.Material.Rounded.Reply" Size="Size.Small" />@Loc["Reply to customer"]</button>
                 </div>
-                <p class="staff-visibility-explanation">@(_public ? Loc["The reporter will see this reply and receive an in-app notification."] : Loc["Only staff can see this note. It will not be sent to the customer."])</p>
+                <p class="staff-visibility-explanation">@(_public ? Loc["The reporter can see this reply in their support conversation."] : Loc["Only staff can see this note. It will not be sent to the customer."])</p>
             }
             <label class="staff-field">@(ForReporter ? Loc["Your reply"] : _public ? Loc["Reply to customer"] : Loc["Internal note"])
                 <textarea @bind="_body" rows="4" maxlength="10000" disabled="@_sending"></textarea>
@@ -65,7 +65,6 @@
         {
             _messages = (ForReporter ? await Reports.MessagesAsync(TicketId) : await Staff.MessagesAsync(TicketId)) ?? [];
             _page = 0; _more = _messages.Count == 100;
-            if (ForReporter) await Reports.MarkReadAsync(TicketId);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _loadFailed = true; }
         finally { _loading = false; }

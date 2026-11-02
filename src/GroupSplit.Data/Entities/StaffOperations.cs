@@ -26,15 +26,6 @@ public sealed class StaffSavedView : Entity
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public sealed class SupportNotification : Entity
-{
-    public Guid UserId { get; set; }
-    public Guid TicketId { get; set; }
-    public Guid MessageId { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset? ReadAt { get; set; }
-}
-
 /// <summary>Canonical names and aliases share one unique namespace.</summary>
 public class MerchantAlias : Entity
 {

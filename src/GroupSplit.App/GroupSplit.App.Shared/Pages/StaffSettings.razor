@@ -1,0 +1,17 @@
+@page "/staff/settings"
+@layout StaffLayout
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+<PageTitle>@Loc["Settings - Staff - Group Split"]</PageTitle>
+<header class="staff-page-header"><div><h1>@Loc["Staff settings"]</h1><p>@Loc["Choose how this device alerts you about support work."]</p></div></header>
+@if (Services.GetService<IPushNotifications>() is { Supported: true })
+{
+    <PushNotificationsCard StaffOnly="true" />
+}
+else
+{
+    <section class="gs-card gs-card-pad"><h2>@Loc["Android notifications"]</h2><p>@Loc["Open the Android app to choose support ticket alerts for that device."]</p></section>
+}
