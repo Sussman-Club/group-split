@@ -204,6 +204,50 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Single_unidentified_item_receives_receipt_tax_without_manual_distribution()
+    {
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 10m, TotalPrice = 10m }]
+        };
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", receipt) }
+            }));
+
+        Assert.DoesNotContain(provider.FindAll("button"), button => button.TextContent.Contains("Distribute tax"));
+        Assert.Equal("0.75", provider.FindComponents<MudNumericField<decimal>>()
+            .Single(field => field.Instance.Label == "Line tax").Find("input").GetAttribute("value"));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .ClickAsync(new MouseEventArgs());
+        var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();
+        Assert.Equal(.75m, Assert.Single(result!.Items).TaxAmount);
+    }
+
+    [Fact]
+    public async Task Single_tax_exempt_item_does_not_receive_receipt_tax()
+    {
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = false }]
+        };
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptDraftDialog>("Check receipt", new DialogParameters<ReceiptDraftDialog>
+            {
+                { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", receipt) }
+            }));
+        Assert.Contains("Line tax must add up", provider.Markup);
+        Assert.True(provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
+            .HasAttribute("disabled"));
+    }
+
+    [Fact]
     public async Task Unassigned_scanned_tax_can_be_distributed_before_using_the_receipt()
     {
         var provider = Render<MudDialogProvider>();
