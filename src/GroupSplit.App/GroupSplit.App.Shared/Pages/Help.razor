@@ -31,9 +31,11 @@
                 @foreach (var report in _reports)
                 {
                     <details class="support-report" @key="report.Id">
-                        <summary><span><strong>@report.Title</strong><small>@TypeLabel(report.Type) · @report.CreatedAt.ToLocalTime().ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
+                        <summary><span><strong>@report.Title</strong><small>@if (report.HasUnreadReplies) { <span class="staff-unread">@Loc["New reply"]</span> }@TypeLabel(report.Type) · @report.CreatedAt.ToLocalTime().ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
                         <p class="support-description">@report.Description</p>
                         <small class="gs-muted">@Loc["Report ID"]: @report.Id</small>
+                        <button class="staff-button" type="button" @onclick="() => _opened = report.Id">@Loc["Open conversation"]</button>
+                        @if (_opened == report.Id) { <SupportConversation TicketId="report.Id" ForReporter="true" OnPosted="LoadAsync" /> }
                     </details>
                 }
             </div>
@@ -42,6 +44,7 @@
 </div>
 
 @code {
+    private Guid? _opened;
     private CreateSupportReportRequest _report = new();
     private List<SupportReportResponse> _reports = [];
     private bool _loading = true, _loadFailed, _saving, _sent;
@@ -72,5 +75,5 @@
         finally { _saving = false; }
     }
     private string TypeLabel(string type) => type switch { "Bug" => Loc["Problem"], "FeatureRequest" => Loc["Suggestion"], _ => Loc["Help"] };
-    private string StatusLabel(string status) => status switch { "New" => Loc["New"], "UnderReview" => Loc["Under review"], "InProgress" => Loc["In progress"], "Resolved" => Loc["Resolved"], "Closed" => Loc["Closed"], _ => status };
+    private string StatusLabel(string status) => status switch { "New" => Loc["New"], "UnderReview" => Loc["Under review"], "InProgress" => Loc["In progress"], "WaitingForCustomer" => Loc["Waiting for your reply"], "Resolved" => Loc["Resolved"], "Closed" => Loc["Closed"], _ => status };
 }

@@ -26,6 +26,23 @@ can answer.
 
 This skill is the protocol around the CLI. The command surface comes from the CLI itself.
 
+## Staff workspace
+
+`groupsplit staff` manages tickets, shared merchants, support account lookup, activity,
+team members and saved views. Staff activity is kept for seven days; account views are
+not activity entries. Ticket conversations and status history are separate. These commands require the `groupsplit-staff` realm role;
+the server enforces it. Use `staff tickets note` for private staff notes and `reply` only
+for a message the reporter should see. A reply creates an in-app notification. Reporters use
+`groupsplit support list`, `messages`, `reply`, `notifications`, and `mark-read` for their
+own reports.
+
+Before merging merchants, run `staff merchants merge-preview` and present its source,
+destination and impact. Pass its source and target versions to `merge`. The CLI returns
+the standard exit-4 confirmation request; only retry the exact `confirmCommand` after
+user approval. Bulk updates read a JSON file with ticket versions and pin its SHA-256 in
+the confirmation command. Image uploads accept PNG files up to 1 MiB and 512×512 pixels.
+Use `groupsplit schema --json` for the installed version's exact arguments.
+
 ## Receipts are two separate flows
 
 The source file and the itemised bill are separate. Keep them apart, as the app does:

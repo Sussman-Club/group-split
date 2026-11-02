@@ -1,0 +1,63 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+<section class="gs-card staff-activity-feed">
+    <h2>@Loc["Activity history"]</h2>
+    <p class="gs-muted">@Loc["Activity is kept for seven days. Ticket conversations and status history are stored separately."]</p>
+    @if (_loading && _items.Count == 0) { <p role="status">@Loc["Loading activity…"]</p> }
+    else if (!_loading && !_failed && _items.Count == 0) { <p class="gs-muted">@Loc["No recorded changes yet."]</p> }
+    @foreach (var item in _items)
+    {
+        <article class="staff-activity-item" @key="item.Id">
+            <div><a class="staff-record-link" href="@RecordUrl(item)">@Loc[item.Action]</a><span class="staff-row-meta">@Loc[item.Resource] · @item.ResourceId.ToString("N")[..8]</span><small>@item.ActorName · @item.At.ToLocalTime().ToString("g")</small></div>
+            @if (item.Changes.Any(c => c.Before != c.After))
+            {
+                <dl>@foreach (var change in item.Changes.Where(c => c.Before != c.After)) { <div><dt>@Loc[change.Field]</dt><dd><span>@Display(change.Before)</span><span aria-hidden="true"> → </span><strong>@Display(change.After)</strong></dd></div> }</dl>
+            }
+        </article>
+    }
+    @if (_failed) { <p role="alert">@Loc["Could not load activity."]</p><button class="staff-button" disabled="@_loading" @onclick="RetryAsync">@Loc["Try again"]</button> }
+    else if (_more) { <button class="staff-button" disabled="@_loading" @onclick="MoreAsync">@(_loading ? Loc["Loading…"] : Loc["Load older activity"])</button> }
+</section>
+@code {
+    [Parameter] public string Resource { get; set; } = "";
+    [Parameter] public Guid? ResourceId { get; set; }
+    [Parameter] public string? RefreshKey { get; set; }
+    private List<StaffActivityResponse> _items = [];
+    private List<StaffPersonResponse> _people = [];
+    private string? _key;
+    private int _page, _request;
+    private bool _loading = true, _failed, _more;
+    protected override Task OnParametersSetAsync()
+    {
+        var key = $"{Resource}/{ResourceId}/{RefreshKey}";
+        if (_key == key) return Task.CompletedTask;
+        _key = key; _page = 0; _items = []; _more = false;
+        return LoadAsync(0);
+    }
+    private static string RecordUrl(StaffActivityResponse item) => $"/staff/{item.Resource.ToLowerInvariant()}/{item.ResourceId}";
+    private string Display(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return Loc["None"];
+        if (Guid.TryParse(value, out var id)) return _people.FirstOrDefault(p => p.Id == id)?.Name ?? Loc["Unavailable account"].Value;
+        return Loc[SupportTicketLabels.Key(value)];
+    }
+    private async Task LoadAsync(int page)
+    {
+        var request = ++_request;
+        _loading = true; _failed = false;
+        try
+        {
+            var result = await Staff.ActivityAsync(Resource, ResourceId, page);
+            if (request != _request) return;
+            _people = await Staff.TeamAsync() ?? [];
+            if (request != _request) return;
+            if (page == 0) _items.Clear();
+            if (result is not null) { _items.AddRange(result.Items); _more = result.HasMore; }
+            _page = page;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { if (request == _request) _failed = true; }
+        finally { if (request == _request) _loading = false; }
+    }
+    private Task MoreAsync() => LoadAsync(_page + 1);
+    private Task RetryAsync() => LoadAsync(_items.Count == 0 ? 0 : _page + 1);
+}

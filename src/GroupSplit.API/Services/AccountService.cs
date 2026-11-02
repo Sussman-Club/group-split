@@ -155,6 +155,11 @@ public sealed class AccountService(
         context.RemoveRange(await context.Set<PushDevice>()
             .Where(device => device.UserId == user.Id).ToListAsync(cancellationToken));
 
+        context.RemoveRange(await context.Set<StaffSavedView>().Where(v => v.UserId == user.Id).ToListAsync(cancellationToken));
+        context.RemoveRange(await context.Set<SupportNotification>().Where(n => n.UserId == user.Id).ToListAsync(cancellationToken));
+        var staffMembership = await context.Set<StaffMember>().SingleOrDefaultAsync(s => s.UserId == user.Id, cancellationToken);
+        if (staffMembership is not null) staffMembership.Active = false;
+
         // One save for the whole thing, so a failure part way through leaves the account
         // as it was rather than stranded between states -- and the login deletion is never
         // owed without the account having gone, or the other way round.

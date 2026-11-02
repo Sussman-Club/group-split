@@ -1,0 +1,112 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+@inject ISupportReportsClient Reports
+@inject IJSRuntime Browser
+
+<section class="gs-card staff-conversation" aria-labelledby="@_headingId">
+    <NavigationLock ConfirmExternalNavigation="@HasDraft" OnBeforeInternalNavigation="BeforeNavigationAsync" />
+    <h2 id="@_headingId">@(ForReporter ? Loc["Conversation"] : Loc["Conversation & notes"])</h2>
+    @if (_loading) { <p role="status">@Loc["Loading conversation…"]</p> }
+    @if (_loadFailed) { <p role="alert">@Loc["Could not load the conversation."]</p><button class="staff-button" @onclick="LoadAsync">@Loc["Try again"]</button> }
+    @if (!_loading && !_loadFailed)
+    {
+        @if (_more) { <button class="staff-button" disabled="@_olderLoading" @onclick="OlderAsync">@Loc["Load older messages"]</button> }
+        @if (_olderError) { <p role="alert">@Loc["Could not load older messages. Try again."]</p> }
+        @if (_messages.Count == 0) { <p class="gs-muted">@Loc["No messages yet."]</p> }
+        @foreach (var message in _messages)
+        {
+            <article class="staff-message @(message.Visibility == "Internal" ? "internal" : "public")" @key="message.Id">
+                <header><strong>@(message.FromReporter ? Loc["Customer"].Value + " · " + message.AuthorName : message.AuthorName)</strong><span class="staff-message-visibility">@(message.Visibility == "Internal" ? Loc["Internal note · staff only"] : Loc["Reply · visible to customer"])</span><time>@message.CreatedAt.ToLocalTime().ToString("g")</time></header>
+                <p>@message.Body</p>
+            </article>
+        }
+
+        <form class="staff-message-compose @(_public || ForReporter ? "public" : "internal")" @onsubmit="SendAsync" @onsubmit:preventDefault>
+            @if (!ForReporter)
+            {
+                <div class="staff-compose-modes" role="group" aria-label="@Loc["Message visibility"]">
+                    <button type="button" class="@(!_public ? "active" : "")" aria-pressed="@(!_public)" disabled="@_sending" @onclick="() => _public = false"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" />@Loc["Internal note"]</button>
+                    <button type="button" class="@(_public ? "active" : "")" aria-pressed="@_public" disabled="@_sending" @onclick="() => _public = true"><MudIcon Icon="@Icons.Material.Rounded.Reply" Size="Size.Small" />@Loc["Reply to customer"]</button>
+                </div>
+                <p class="staff-visibility-explanation">@(_public ? Loc["The reporter will see this reply and receive an in-app notification."] : Loc["Only staff can see this note. It will not be sent to the customer."])</p>
+            }
+            <label class="staff-field">@(ForReporter ? Loc["Your reply"] : _public ? Loc["Reply to customer"] : Loc["Internal note"])
+                <textarea @bind="_body" rows="4" maxlength="10000" disabled="@_sending"></textarea>
+            </label>
+            @if (!ForReporter && _public) { <label class="staff-check"><input type="checkbox" @bind="_waiting" disabled="@_sending" />@Loc["Mark as waiting for customer"]</label> }
+            @if (!CanPost) { <p class="staff-inline-hint">@Loc["Save your ticket changes before sending a message."]</p> }
+            @if (_error is not null) { <p class="staff-alert" role="alert">@_error</p> }
+            @if (_success is not null) { <p class="staff-success" role="status">@_success</p> }
+            <button class="staff-button @(_public || ForReporter ? "staff-primary" : "")" type="submit" disabled="@(_sending || !CanPost || string.IsNullOrWhiteSpace(_body))">@(_sending ? Loc["Sending…"] : ForReporter || _public ? Loc["Send reply"] : Loc["Add internal note"])</button>
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter] public Guid TicketId { get; set; }
+    [Parameter] public bool ForReporter { get; set; }
+    [Parameter] public DateTimeOffset? ExpectedUpdatedAt { get; set; }
+    [Parameter] public bool CanPost { get; set; } = true;
+    [Parameter] public EventCallback OnPosted { get; set; }
+    private readonly string _headingId = "conversation-" + Guid.NewGuid().ToString("N");
+    private List<SupportMessageResponse> _messages = [];
+    private string _body = "";
+    private string? _error, _success;
+    private int _page;
+    private bool _more, _olderLoading, _olderError;
+    private bool _loading = true, _loadFailed, _public, _waiting = true, _sending;
+    public bool HasDraft => !string.IsNullOrWhiteSpace(_body);
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _loadFailed = false;
+        try
+        {
+            _messages = (ForReporter ? await Reports.MessagesAsync(TicketId) : await Staff.MessagesAsync(TicketId)) ?? [];
+            _page = 0; _more = _messages.Count == 100;
+            if (ForReporter) await Reports.MarkReadAsync(TicketId);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _loadFailed = true; }
+        finally { _loading = false; }
+    }
+
+    private async Task OlderAsync()
+    {
+        _olderLoading = true; _olderError = false;
+        try
+        {
+            var older = ForReporter ? await Reports.MessagesAsync(TicketId, _page + 1) : await Staff.MessagesAsync(TicketId, _page + 1);
+            _page++; _more = older.Count == 100;
+            _messages.InsertRange(0, older.Where(m => !_messages.Any(existing => existing.Id == m.Id)));
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _olderError = true; }
+        finally { _olderLoading = false; }
+    }
+
+    private async Task SendAsync()
+    {
+        if (_sending || !CanPost || string.IsNullOrWhiteSpace(_body)) return;
+        _sending = true; _error = _success = null;
+        try
+        {
+            var request = new CreateSupportMessageRequest { Body = _body, WaitForCustomer = _waiting, ExpectedUpdatedAt = ForReporter ? null : ExpectedUpdatedAt };
+            if (ForReporter) await Reports.ReplyAsync(TicketId, request);
+            else if (_public) await Staff.ReplyAsync(TicketId, request);
+            else await Staff.AddNoteAsync(TicketId, _body);
+            _body = "";
+            await LoadAsync();
+            await OnPosted.InvokeAsync();
+            _success = ForReporter || _public ? Loc["Reply sent."] : Loc["Internal note added."];
+        }
+        catch (HttpRequestException e)
+        { _error = e.StatusCode == System.Net.HttpStatusCode.Conflict ? Loc["This ticket changed. Refresh before sending your reply."] : Loc["Could not send the message. Your draft is still here."]; }
+        catch (TaskCanceledException) { _error = Loc["The request timed out. Your draft is still here."]; }
+        finally { _sending = false; }
+    }
+
+    private async Task BeforeNavigationAsync(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context)
+    {
+        if (_sending || HasDraft && !await Browser.InvokeAsync<bool>("confirm", Loc["Discard your unsent message?"].Value)) context.PreventNavigation();
+    }
+}

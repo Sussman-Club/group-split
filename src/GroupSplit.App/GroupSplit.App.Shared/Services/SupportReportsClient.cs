@@ -7,12 +7,31 @@ public interface ISupportReportsClient
 {
     Task<List<SupportReportResponse>> ListAsync();
     Task<SupportReportResponse> CreateAsync(CreateSupportReportRequest report);
+    Task<List<SupportMessageResponse>> MessagesAsync(Guid id);
+    Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page);
+    Task ReplyAsync(Guid id, CreateSupportMessageRequest request);
+    Task MarkReadAsync(Guid id);
+    Task<int> UnreadCountAsync();
 }
 
 public sealed class SupportReportsClient(HttpClient http) : ISupportReportsClient
 {
+    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page) => await http.GetFromJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages?page={page}") ?? [];
     public async Task<List<SupportReportResponse>> ListAsync() =>
         await http.GetFromJsonAsync<List<SupportReportResponse>>("support-reports") ?? [];
+
+    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id) => await http.GetFromJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages") ?? [];
+    public async Task<int> UnreadCountAsync() => await http.GetFromJsonAsync<int>("support-reports/notifications");
+    public async Task ReplyAsync(Guid id, CreateSupportMessageRequest request)
+    {
+        using var response = await http.PostAsJsonAsync($"support-reports/{id}/messages", request);
+        response.EnsureSuccessStatusCode();
+    }
+    public async Task MarkReadAsync(Guid id)
+    {
+        using var response = await http.PostAsync($"support-reports/{id}/read", null);
+        response.EnsureSuccessStatusCode();
+    }
 
     public async Task<SupportReportResponse> CreateAsync(CreateSupportReportRequest report)
     {

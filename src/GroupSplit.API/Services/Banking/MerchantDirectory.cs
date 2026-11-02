@@ -61,8 +61,9 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
         if (_seen.TryGetValue(normalized, out var cached))
             return Freshen(cached, logoUrl);
 
-        var stored = await dbContext.Set<Merchant>()
-            .FirstOrDefaultAsync(merchant => merchant.NormalizedName == normalized, ct);
+        var stored = await dbContext.Set<MerchantAlias>().Where(a => a.NormalizedName == normalized)
+            .Select(a => a.Merchant).FirstOrDefaultAsync(ct)
+            ?? await dbContext.Set<Merchant>().FirstOrDefaultAsync(merchant => merchant.NormalizedName == normalized, ct);
 
         if (stored is not null)
         {
@@ -97,7 +98,10 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
     private static Merchant Freshen(Merchant merchant, string? logoUrl)
     {
         if (merchant.LogoUrl is null && logoUrl is not null)
+        {
             merchant.LogoUrl = logoUrl;
+            merchant.Version = Guid.NewGuid();
+        }
 
         return merchant;
     }

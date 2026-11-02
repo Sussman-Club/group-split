@@ -8,6 +8,15 @@ namespace GroupSplit.Seeder.Test.Realm;
 public sealed class RealmSettingsReconcilerTests
 {
     [Fact]
+    public async Task Existing_realm_gets_the_staff_role_without_user_assignments()
+    {
+        var admin = new StubRealmAdmin(Imported());
+        await Reconcile(admin);
+        await Reconcile(admin);
+        Assert.Equal("groupsplit-staff", Assert.Single(admin.RealmRoles));
+    }
+
+    [Fact]
     public async Task Native_is_created_on_existing_realms_and_its_security_drift_is_repaired()
     {
         var current = Imported();
@@ -999,6 +1008,13 @@ public sealed class RealmSettingsReconcilerTests
         public int ClientUpdates { get; private set; }
 
         public Task SignInAsync(CancellationToken ct = default) => throw new NotSupportedException();
+
+        public HashSet<string> RealmRoles { get; } = [];
+        public Task EnsureRealmRoleAsync(string name, CancellationToken ct = default)
+        {
+            RealmRoles.Add(name);
+            return Task.CompletedTask;
+        }
 
         public Task<JsonObject> GetRealmAsync(CancellationToken ct = default)
             => Task.FromResult((JsonObject)RealmData.DeepClone());

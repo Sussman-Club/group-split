@@ -1,0 +1,41 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+@inject NavigationManager Navigation
+<section class="gs-card staff-maintenance">
+    <h2>@Loc["Names & aliases"]</h2><p class="gs-muted">@Loc["Bank imports recognize these names as this merchant. Previous merchant names are kept as aliases."]</p>
+    @if (_loading) { <p role="status">@Loc["Loading aliases…"]</p> }
+    <ul class="staff-aliases">@foreach (var alias in _aliases) { <li><span>@alias.Name @if (alias.IsCanonical) { <small>@Loc["Current name"]</small> }</span>@if (!alias.IsCanonical) { <button class="staff-icon-button" type="button" disabled="@_busy" aria-label="@Loc["Remove alias {0}", alias.Name]" @onclick="() => RemoveAsync(alias.Id)"><MudIcon Icon="@Icons.Material.Rounded.Close" Size="Size.Small" /></button> }</li> }</ul>
+    <form class="staff-filter-bar" @onsubmit="AddAsync" @onsubmit:preventDefault><MudTextField T="string" @bind-Value="_alias" Label="@Loc["Add a name used by this merchant"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="128" Class="staff-search-control" Disabled="@_busy" /><button class="staff-button" type="submit" disabled="@(_busy || string.IsNullOrWhiteSpace(_alias))">@Loc["Add alias"]</button></form>
+    @if (_error is not null) { <p class="staff-alert" role="alert">@_error</p> }
+    <details class="staff-merge"><summary>@Loc["Merge a duplicate merchant"]</summary><p>@Loc["Move this merchant's expenses, imported bank rows and aliases to an existing merchant. The destination keeps its name and image. Review before confirming."]</p>
+        <form class="staff-filter-bar" @onsubmit="SearchAsync" @onsubmit:preventDefault><MudTextField T="string" @bind-Value="_search" Label="@Loc["Find the merchant to keep"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="staff-search-control" Disabled="@_busy" /><button class="staff-button" type="submit" disabled="@(_busy || _search.Trim().Length < 2)">@Loc["Search"]</button></form>
+        @if (_searched && _targets.Count == 0) { <p>@Loc["No other merchants match. Try another name."]</p> }
+        <div class="staff-merge-targets">@foreach (var target in _targets) { <button class="staff-merge-target" disabled="@_busy" @onclick="() => PreviewAsync(target.Id)"><MerchantMark MerchantName="@target.Name" MerchantLogoUrl="@target.LogoUrl" /><span>@target.Name<small>@target.TransactionCount @Loc["transactions"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ArrowForward" /></button> }</div>
+        @if (_preview is not null)
+        {
+            <div class="staff-merge-preview" role="region" aria-label="@Loc["Merge preview"]"><h3>@Loc["Review merge"]</h3><div class="staff-merge-direction"><span><small>@Loc["Merge from"]</small><strong>@_preview.Source.Name</strong></span><MudIcon Icon="@Icons.Material.Rounded.ArrowForward" /><span><small>@Loc["Keep"]</small><strong>@_preview.Target.Name</strong></span></div>
+            <ul><li>@Loc["{0} expenses will keep their amounts and splits.", _preview.Transactions]</li><li>@Loc["{0} imported bank rows will point to the destination.", _preview.BankRows]</li><li>@Loc["{0} aliases will move to the destination.", _preview.Aliases]</li></ul>
+            <label class="staff-check"><input type="checkbox" @bind="_confirmed" disabled="@_busy" />@Loc["I reviewed the destination and want to merge these merchants."]</label>
+            <div class="staff-form-actions"><button class="staff-button staff-danger" disabled="@(_busy || !_confirmed)" @onclick="MergeAsync">@Loc["Confirm merge"]</button><button class="staff-button" disabled="@_busy" @onclick="() => _preview = null">@Loc["Cancel"]</button></div></div>
+        }
+    </details>
+</section>
+@code {
+    [Parameter, EditorRequired] public MerchantResponse Merchant { get; set; } = null!;
+    [Parameter] public Func<Task<bool>>? BeforeMerge { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private List<MerchantAliasResponse> _aliases = [];
+    private List<MerchantResponse> _targets = [];
+    private MerchantMergePreview? _preview;
+    private string _alias = "", _search = "";
+    private string? _error;
+    private bool _loading = true, _busy, _searched, _confirmed;
+    protected override async Task OnInitializedAsync() { await RunAsync(async () => _aliases = await Staff.AliasesAsync(Merchant.Id) ?? []); _loading = false; }
+    private Task AddAsync() => RunAsync(async () => { await Staff.AddAliasAsync(Merchant.Id, _alias.Trim()); _alias = ""; await ChangedAsync(); });
+    private Task RemoveAsync(Guid id) => RunAsync(async () => { await Staff.RemoveAliasAsync(Merchant.Id, id); await ChangedAsync(); });
+    private async Task ChangedAsync() { _aliases = await Staff.AliasesAsync(Merchant.Id); await OnChanged.InvokeAsync(); }
+    private Task SearchAsync() => RunAsync(async () => { _preview = null; var result = await Staff.MerchantsAsync(_search.Trim(), 0); _targets = result.Items.Where(m => m.Id != Merchant.Id).ToList(); _searched = true; });
+    private Task PreviewAsync(Guid id) => RunAsync(async () => { _confirmed = false; _preview = await Staff.MergePreviewAsync(Merchant.Id, id); });
+    private Task MergeAsync() => RunAsync(async () => { if (!_confirmed || _preview is null || BeforeMerge is not null && !await BeforeMerge()) return; var saved = await Staff.MergeAsync(Merchant.Id, new(_preview.Target.Id, _preview.Source.Version, _preview.Target.Version)); Navigation.NavigateTo($"/staff/merchants/{saved.Id}"); });
+    private async Task RunAsync(Func<Task> action) { if (_busy) return; _busy = true; _error = null; try { await action(); } catch (HttpRequestException e) { _error = e.StatusCode == System.Net.HttpStatusCode.Conflict ? Loc["A merchant changed or this name already exists. Refresh and review the entries before continuing."] : Loc["Could not complete this action. Check your connection and try again."]; _preview = null; } catch (TaskCanceledException) { _error = Loc["The request timed out. Refresh before trying again."]; } finally { _busy = false; } }
+}

@@ -1,0 +1,37 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+<details class="staff-bulk gs-card" @key="_generation">
+    <summary>@Loc["Bulk update"] <span class="gs-muted">@Loc["Select tickets on this page"]</span></summary>
+    <div class="staff-bulk-content">
+        <label class="staff-check"><input type="checkbox" checked="@(_selected.Count == Tickets.Count && Tickets.Count > 0)" @onchange="SelectAll" disabled="@_saving" />@Loc["Select this page"]</label>
+        <div class="staff-bulk-selection">@foreach (var ticket in Tickets) { <label class="staff-check"><input type="checkbox" checked="@_selected.Contains(ticket.Id)" @onchange="e => Toggle(ticket.Id, e.Value is true)" disabled="@_saving" />@ticket.Title</label> }</div>
+        <div class="staff-filter-bar">
+            <MudSelect T="string" @bind-Value="_status" Label="@Loc["Set status"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="staff-filter-select" Disabled="@_saving"><MudSelectItem Value="@string.Empty">@Loc["Keep status"]</MudSelectItem>@foreach (var status in SupportTicketLabels.Statuses) { <MudSelectItem Value="@status">@Loc[SupportTicketLabels.Key(status)]</MudSelectItem> }</MudSelect>
+            <MudSelect T="string" @bind-Value="_assignment" Label="@Loc["Set assignment"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="staff-filter-select" Disabled="@_saving"><MudSelectItem Value="@string.Empty">@Loc["Keep assignment"]</MudSelectItem><MudSelectItem Value='@("unassigned")'>@Loc["Unassigned"]</MudSelectItem>@foreach (var person in Team) { <MudSelectItem Value="@person.Id.ToString()">@person.Name</MudSelectItem> }</MudSelect>
+            <button class="staff-button staff-primary" disabled="@(_saving || _selected.Count == 0 || _status == "" && _assignment == "")" @onclick="SaveAsync">@Loc["Update {0} selected", _selected.Count]</button>
+        </div>
+        <p class="gs-muted">@Loc["All selected tickets are checked for newer changes before the update is applied."]</p>
+        @if (_error is not null) { <p class="staff-alert" role="alert">@_error</p> }
+    </div>
+</details>
+@code {
+    [Parameter] public List<SupportTicketResponse> Tickets { get; set; } = [];
+    [Parameter] public List<StaffPersonResponse> Team { get; set; } = [];
+    [Parameter] public EventCallback OnSaved { get; set; }
+    private HashSet<Guid> _selected = [];
+    private string _status = "", _assignment = "";
+    private string? _error;
+    private bool _saving;
+    private int _generation;
+    protected override void OnParametersSet() => _selected.IntersectWith(Tickets.Select(t => t.Id));
+    private void Toggle(Guid id, bool selected) { if (selected) _selected.Add(id); else _selected.Remove(id); }
+    private void SelectAll(ChangeEventArgs e) => _selected = e.Value is true ? Tickets.Select(t => t.Id).ToHashSet() : [];
+    private async Task SaveAsync()
+    {
+        _saving = true; _error = null;
+        try { await Staff.BulkTicketsAsync(new BulkTicketUpdateRequest { Tickets = Tickets.Where(t => _selected.Contains(t.Id)).Select(t => new TicketSelection(t.Id, t.UpdatedAt)).ToList(), Status = _status == "" ? null : _status, ChangeAssignment = _assignment != "", AssignedUserId = Guid.TryParse(_assignment, out var id) ? id : null }); _selected.Clear(); _generation++; await OnSaved.InvokeAsync(); }
+        catch (HttpRequestException e) { _error = e.StatusCode == System.Net.HttpStatusCode.Conflict ? Loc["A selected ticket changed. Refresh the queue and review your selection; no tickets were updated."] : Loc["Could not update tickets. Try again."]; }
+        catch (TaskCanceledException) { _error = Loc["The request timed out. Refresh to check the current status before trying again."]; }
+        finally { _saving = false; }
+    }
+}

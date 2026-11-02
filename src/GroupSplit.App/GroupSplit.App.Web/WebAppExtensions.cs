@@ -113,8 +113,8 @@ public static class WebAppExtensions
         /// browser, which must never hold a token, and wrong for everything else.
         /// </para>
         /// <para>
-        /// Anonymous, and deliberately so: every endpoint group in the API calls
-        /// <c>RequireAuthorization</c>, and its health checks answer only on a management
+        /// Anonymous, and deliberately so: domain data endpoints in the API enforce authorization; the anonymous merchant-image
+        /// route returns only shared brand images. Health checks answer only on a management
         /// port that is never published. So there is nothing behind this to reach without a
         /// token, and authenticating here as well would mean validating the same token twice
         /// and maintaining a second scheme in this app to do it. The header is passed

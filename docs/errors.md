@@ -151,7 +151,7 @@ no `errors` member; the code is the whole message.
 | `SPLITS_INVALID` | The stated shares name nobody, name somebody twice, include a share that goes the other way from the amount (a negative share on an expense, a positive one on a refund), or arrive alongside a `splitRuleId` -- which is two answers to one question, and not resolved by precedence. Leaving them out entirely is how you ask for the category's division, or for the division of the rule the expense names. On a settlement, more than one share: a repayment has exactly one recipient. |
 | `PATCH_INVALID` | A JSON Patch could not be applied to what it was sent to: a path the model does not have, a value of the wrong type for the member it replaces (`"/amount": "abc"`), or a `test` operation that did not hold. Nothing was written. A patch that applies cleanly and leaves a model that does not hold up is `VALIDATION_FAILED` instead. |
 | `SETTLEMENT_AMOUNT_NOT_POSITIVE` | A settlement's amount was edited below zero. Zero is refused earlier, as on any transaction, with `VALIDATION_FAILED` and an `errors` member; a negative amount is checked here because the edit model is shared with expenses, whose amount may be negative. |
-| `MERCHANT_LOGO_NOT_ALLOWED` | A merchant's `logoUrl` names somewhere other than the bank provider's image hosts (`https://plaid-merchant-logos.plaid.com/...`, `https://plaid-category-icons.plaid.com/...`) or one of the marks the app ships (`/_content/GroupSplit.App.Shared/merchants/<name>.svg`). Every viewer of every ledger showing the place loads its logo, so an address anybody can type would be a tracking pixel on other people's screens. The list is `MerchantLogos` in the shared project. |
+| `MERCHANT_LOGO_NOT_ALLOWED` | A merchant's `logoUrl` names somewhere other than the bank provider's image hosts (`https://plaid-merchant-logos.plaid.com/...`, `https://plaid-category-icons.plaid.com/...`) one of the marks the app ships (`/_content/GroupSplit.App.Shared/merchants/<name>.svg`), or a validated upload (`/native/api/merchant-images/<id>.png`). Every viewer of every ledger showing the place loads its logo, so an address anybody can type would be a tracking pixel on other people's screens. The list is `MerchantLogos` in the shared project. |
 | `MERCHANT_SEARCH_TOO_SHORT` | `GET /merchants?search=` with fewer than two characters once trimmed. Leave `search` out to list the caller's places instead. |
 | `NOT_A_SETTLEMENT` | An edit set something only a settlement has on an expense: `coversThrough`, the day a settlement covers through. |
 | `RULE_USERS_NOT_IN_GROUP` | A split rule names a user who is neither a member of the group nor invited to it. |
@@ -304,3 +304,21 @@ catch (Exception exception) when (ApiErrors.IsApiFailure(exception))
   it resolve to this document is a later, additive change.
 - **`traceId` is the W3C `traceparent` form** (`00-<trace>-<span>-<flags>`), the same value
   the OpenTelemetry pipeline attaches to the log line and the Aspire dashboard searches by.
+
+
+### Directory maintenance and support tickets
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `MERCHANT_IMAGE_INVALID` | 400 | The upload is not a bounded PNG merchant image. |
+| `MERCHANT_IMAGE_NOT_FOUND` | 404 | The uploaded merchant image does not exist. |
+| `INVALID_MERCHANT` | 400 | Merchant fields or directory filters are invalid. |
+| `MERCHANT_NAME_EXISTS` | 409 | Another merchant already has the normalized name. |
+| `INVALID_SUPPORT_REPORT` | 400 | The submitted report is empty, too long, or has an invalid type. |
+| `INVALID_TICKET` | 400 | Ticket fields, filters, or internal note content are invalid. |
+| `TICKET_NOT_FOUND` | 404 | The ticket does not exist. |
+| `TICKET_CHANGED` | 409 | Another update has changed the ticket since it was loaded; refresh before saving. |
+
+Staff authorization failures use the standard 401/403 responses before the domain service
+is invoked. Ticket status history and the ticket update are saved together. Internal notes
+are only available through staff-authorized routes.

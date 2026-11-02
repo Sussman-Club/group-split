@@ -1,4 +1,4 @@
-﻿@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
@@ -18,6 +18,7 @@
 
     @if (UserInfo is not null)
     {
+        <SupportNotifications />
         <a class="gs-topbar-help" href="/help" aria-label="@Loc["Help & feedback"]">
             <MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Size="Size.Small" />
             <span class="gs-topbar-help-full">@Loc["Help & feedback"]</span>
@@ -50,6 +51,7 @@
                 </div>
                 <MudDivider Class="my-1" />
                 <MudMenuItem Icon="@Icons.Material.Rounded.Settings" Label="@Loc["Settings"]" Href="/settings" />
+                <StaffConsoleLink />
                 <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="@Loc["Sign out"]" OnClick="TryLogout" />
             </ChildContent>
         </MudMenu>

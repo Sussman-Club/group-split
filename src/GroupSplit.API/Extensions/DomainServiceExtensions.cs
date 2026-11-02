@@ -55,8 +55,10 @@ public static class DomainServiceExtensions
                     .AddJobHandler<SendExpensePush, SendExpensePushHandler>()
                     .AddJobHandler<SendPushNotification, SendPushNotificationHandler>()
                     .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
+                    .AddJobHandler<SweepStaffActivity, SweepStaffActivityHandler>()
                 .JobsBuilder
-                    .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule);
+                    .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule)
+                    .Add(new SweepStaffActivity(), JobSchedule.Every(TimeSpan.FromDays(1), DateTimeOffset.UtcNow.AddMinutes(1)));
             services.AddScoped<IGroupService, GroupService>();
             services.AddScoped<IGroupJoiner, GroupJoiner>();
             services.AddScoped<IGroupParticipants, GroupParticipants>();
@@ -70,6 +72,7 @@ public static class DomainServiceExtensions
             services.AddSplitRuleServices();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IMerchantService, MerchantService>();
+            services.AddScoped<MerchantImageService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();
             services.AddScoped<IMemberSplitRules, MemberSplitRules>();
@@ -81,6 +84,12 @@ public static class DomainServiceExtensions
             services.AddScoped<IReceiptAttachmentService, ReceiptAttachmentService>();
             services.AddBankingServices();
             services.AddScoped<SupportReportClassifier>();
+            services.AddScoped<SupportTicketService>();
+            services.AddScoped<StaffTeamService>();
+            services.AddScoped<StaffActivityService>();
+            services.AddScoped<StaffActivityRetention>();
+            services.AddScoped<StaffSavedViewService>();
+            services.AddScoped<SupportUserService>();
 
             return services;
         }
@@ -105,6 +114,8 @@ public static class DomainServiceExtensions
             routes.MapBankConnectionsApi();
             routes.MapInboxApi();
             routes.MapSupportReportsApi();
+            routes.MapStaffApi();
+            routes.MapMerchantImagesApi();
             routes.MapWebhooksApi();
 
             return routes;

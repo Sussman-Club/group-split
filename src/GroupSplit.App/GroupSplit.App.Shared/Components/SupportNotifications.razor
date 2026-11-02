@@ -1,0 +1,12 @@
+@implements IAsyncDisposable
+@inject ISupportReportsClient Reports
+<a class="staff-notifications" href="/help" aria-label="@Loc["Support replies: {0} unread", _count]" title="@Loc["Support replies"]"><MudIcon Icon="@Icons.Material.Rounded.NotificationsNone" />@if (_count > 0) { <span>@Math.Min(_count, 99)</span> }</a>
+@code {
+    private int _count;
+    private readonly CancellationTokenSource _stop = new();
+    private Task? _poll;
+    protected override async Task OnInitializedAsync() { await RefreshAsync(); _poll = PollAsync(); }
+    private async Task RefreshAsync() { try { _count = await Reports.UnreadCountAsync(); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { } }
+    private async Task PollAsync() { using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60)); try { while (await timer.WaitForNextTickAsync(_stop.Token)) { await InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); }); } } catch (OperationCanceledException) { } }
+    public async ValueTask DisposeAsync() { await _stop.CancelAsync(); if (_poll is not null) await _poll; _stop.Dispose(); }
+}

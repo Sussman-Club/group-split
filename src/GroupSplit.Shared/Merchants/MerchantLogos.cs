@@ -1,8 +1,8 @@
 namespace GroupSplit.Shared;
 
 /// <summary>
-/// Where a merchant's logo is allowed to come from: the bank provider's own image hosts, or
-/// the marks the app ships itself. Nowhere else.
+/// Where a merchant's logo is allowed to come from: supported provider hosts, bundled
+/// marks, or validated merchant images uploaded to the application.
 /// </summary>
 /// <remarks>
 /// A merchant is shared by every group that has spent there, so its logo is an image every
@@ -36,6 +36,19 @@ public static class MerchantLogos
     /// </summary>
     public const string BundledPath = "/_content/GroupSplit.App.Shared/merchants/";
 
+    // Published through the existing public API passthrough, including on native clients.
+    public const string UploadedPath = "/native/api/merchant-images/";
+    public const int MaximumImageDimension = 512;
+    public const int MaximumUploadBytes = 1024 * 1024;
+    public const int MaximumSourceBytes = 5 * 1024 * 1024;
+
+    public static string? Resolve(string? url, Uri? publicOrigin)
+    {
+        var usable = Usable(url);
+        return usable is not null && publicOrigin is not null && usable.StartsWith(UploadedPath, StringComparison.Ordinal)
+            ? new Uri(publicOrigin, usable).AbsoluteUri : usable;
+    }
+
     /// <summary>
     /// Whether <paramref name="url"/> is somewhere a logo may be loaded from.
     /// </summary>
@@ -45,6 +58,13 @@ public static class MerchantLogos
             return false;
 
         var value = url.Trim();
+
+        if (value.StartsWith(UploadedPath, StringComparison.Ordinal))
+        {
+            var file = value[UploadedPath.Length..];
+            return file.Length == 36 && file.EndsWith(".png", StringComparison.Ordinal)
+                && Guid.TryParseExact(file[..32], "N", out _);
+        }
 
         if (value.StartsWith(BundledPath, StringComparison.Ordinal))
             return IsBundledFile(value[BundledPath.Length..]);

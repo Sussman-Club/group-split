@@ -1,0 +1,113 @@
+@page "/staff/tickets"
+@layout StaffLayout
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@inherits StaffPageBase
+
+<PageTitle>@Loc["Tickets - Staff - Group Split"]</PageTitle>
+<header class="staff-page-header">
+    <div><h1>@Loc["Tickets"]</h1><p>@Loc["Find the next report to review and keep support moving."]</p></div>
+    <button class="staff-button staff-refresh" disabled="@Loading" @onclick="RefreshAsync"><MudIcon Icon="@Icons.Material.Rounded.Refresh" Size="Size.Small" />@Loc["Refresh"]</button>
+</header>
+<nav class="staff-view-tabs" aria-label="@Loc["Ticket views"]">
+    <a class="@((Status == "New" || Status is null) && string.IsNullOrEmpty(Assignee) ? "active" : "")" href="@View("New")">@Loc["New tickets"]</a>
+    <a class="@(Status == "InProgress" && string.IsNullOrEmpty(Assignee) ? "active" : "")" href="@View("InProgress")">@Loc["In progress"]</a>
+    <a class="@(Status == "" && string.IsNullOrEmpty(Assignee) ? "active" : "")" href="@View("")">@Loc["All tickets"]</a>
+    <a class="@(Assignee == "me" ? "active" : "")" href="@Queue("me")">@Loc["My tickets"]</a>
+    <a class="@(Assignee == "unassigned" ? "active" : "")" href="@Queue("unassigned")">@Loc["Unassigned"]</a>
+    <a class="@(Status == "WaitingForCustomer" && string.IsNullOrEmpty(Assignee) ? "active" : "")" href="@View("WaitingForCustomer")">@Loc["Waiting for customer"]</a>
+</nav>
+<StaffSavedViews Resource="Tickets" CurrentUrl="@CurrentView" />
+<section class="staff-panel gs-card" aria-label="@Loc["Ticket queue"]">
+    <form class="staff-filter-bar" @onsubmit="ApplyAsync" @onsubmit:preventDefault>
+        <MudTextField T="string" @bind-Value="_search" Label="@Loc["Search tickets"]" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Class="staff-search-control" Disabled="@Loading" />
+        <MudSelect T="string" @bind-Value="_status" Label="@Loc["Status"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select" Disabled="@Loading">
+            <MudSelectItem T="string" Value="@string.Empty">@Loc["All statuses"]</MudSelectItem>
+            @foreach (var status in SupportTicketLabels.Statuses) { <MudSelectItem T="string" Value="@status">@Label(status)</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_type" Label="@Loc["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select" Disabled="@Loading">
+            <MudSelectItem T="string" Value="@string.Empty">@Loc["All types"]</MudSelectItem>
+            @foreach (var type in SupportTicketLabels.Types) { <MudSelectItem T="string" Value="@type">@Label(type)</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_priority" Label="@Loc["Priority"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select" Disabled="@Loading">
+            <MudSelectItem T="string" Value="@string.Empty">@Loc["All priorities"]</MudSelectItem>
+            @foreach (var priority in SupportTicketLabels.Priorities) { <MudSelectItem T="string" Value="@priority">@Label(priority)</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_assignee" Label="@Loc["Assignment"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select"><MudSelectItem Value="@string.Empty">@Loc["Everyone"]</MudSelectItem><MudSelectItem Value='@("me")'>@Loc["Assigned to me"]</MudSelectItem><MudSelectItem Value='@("unassigned")'>@Loc["Unassigned"]</MudSelectItem>@foreach (var person in _team) { <MudSelectItem Value="@person.Id.ToString()">@person.Name</MudSelectItem> }</MudSelect>
+        <MudSelect T="string" @bind-Value="_sort" Label="@Loc["Sort by"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-filter-select"><MudSelectItem Value='@("updated")'>@Loc["Recently updated"]</MudSelectItem><MudSelectItem Value='@("oldest")'>@Loc["Oldest first"]</MudSelectItem><MudSelectItem Value='@("priority")'>@Loc["Highest priority"]</MudSelectItem></MudSelect>
+        <button class="staff-button staff-primary" type="submit" disabled="@Loading">@Loc["Apply"]</button>
+        <label class="staff-review-filter"><input type="checkbox" @bind="_review" disabled="@Loading" />@Loc["Needs classification review"]</label>
+        @if (!string.IsNullOrEmpty(Search) || !string.IsNullOrEmpty(Priority) || !string.IsNullOrEmpty(Type) || Review)
+        { <a class="staff-clear" href="/staff/tickets">@Loc["Clear filters"]</a> }
+    </form>
+    <StaffLoadState Loading="Loading" Error="@LoadError" OnRetry="RefreshAsync" />
+    @if (!Loading && LoadError is null)
+    {
+        <StaffBulkTickets Tickets="_result.Items" Team="_team" OnSaved="RefreshAsync" />
+        @if (_result.Items.Count == 0)
+        { <div class="staff-empty"><MudIcon Icon="@Icons.Material.Rounded.TaskAlt" /><h2>@Loc["No tickets in this view"]</h2><p>@Loc["You're up to date here. Try another status or clear the filters."]</p><a href="@View("")">@Loc["View all tickets"]</a></div> }
+        else
+        {
+            <div class="staff-table-scroll">
+                <table class="staff-table staff-ticket-table">
+                    <thead><tr><th scope="col">@Loc["Ticket"]</th><th scope="col">@Loc["Priority"]</th><th scope="col">@Loc["Status"]</th><th scope="col">@Loc["Assignment"]</th><th scope="col">@Loc["Updated"]</th></tr></thead>
+                    <tbody>
+                    @foreach (var ticket in _result.Items)
+                    {
+                        <tr @key="ticket.Id">
+                            <td><a class="staff-record-link" href="@StaffLinks.Detail($"/staff/tickets/{ticket.Id}", CurrentView)">@ticket.Title</a><div class="staff-row-meta">@Label(ticket.Type) @if (ticket.ClassificationNeedsReview) { <span class="staff-review-mark">@Loc["Needs review"]</span> }</div></td>
+                            <td><span class="staff-priority @ticket.Priority.ToLowerInvariant()"><span aria-hidden="true"></span>@Label(ticket.Priority)</span></td>
+                            <td><span class="staff-status @ticket.Status.ToLowerInvariant()">@Label(ticket.Status)</span></td>
+                            <td class="staff-secondary">@(ticket.AssignedUserId is null ? Loc["Unassigned"] : ticket.AssignedUserName ?? Loc["Unavailable staff member"].Value)</td>
+                            <td class="staff-date">@ticket.UpdatedAt.ToLocalTime().ToString("g")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <StaffPagination Page="SafePage" Count="_result.Items.Count" HasMore="_result.HasMore" Previous="@PageUrl(SafePage - 1)" Next="@PageUrl(SafePage + 1)" />
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "priority")] public string? Priority { get; set; }
+    [SupplyParameterFromQuery(Name = "review")] public bool Review { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int Page { get; set; }
+    [SupplyParameterFromQuery(Name = "assignee")] public string? Assignee { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? Type { get; set; }
+    private List<StaffPersonResponse> _team = [];
+    private string _search = "", _status = "New", _priority = "", _assignee = "", _sort = "updated", _type = "";
+    private bool _review;
+    private DirectoryPage<SupportTicketResponse> _result = new([], false);
+    private int SafePage => Math.Clamp(Page, 0, 10000);
+    private string CurrentView => StaffLinks.Tickets(Search, Status, Priority, Review, SafePage, Assignee, Sort, Type);
+    private string View(string status) => StaffLinks.Tickets(Search, status, Priority, Review, 0, null, Sort, Type);
+    private string PageUrl(int page) => StaffLinks.Tickets(Search, Status, Priority, Review, Math.Max(page, 0), Assignee, Sort, Type);
+    private string Queue(string assignee) => StaffLinks.Tickets(Search, "", Priority, Review, 0, assignee, Sort, Type);
+    private string Label(string value) => Loc[SupportTicketLabels.Key(value)];
+
+    protected override Task OnParametersSetAsync()
+    {
+        _search = Search ?? ""; _status = Status ?? "New"; _priority = Priority ?? ""; _review = Review; _assignee = Assignee ?? ""; _sort = Sort ?? "updated"; _type = Type ?? "";
+        return RefreshAsync();
+    }
+
+    private Task RefreshAsync() => LoadAsync(async () =>
+    {
+        _team = await Client.TeamAsync() ?? [];
+        return Type is not null
+            ? await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated", Type)
+            : Assignee is null && Sort is null
+            ? await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage)
+            : await Client.TicketsAsync(Search ?? "", Status ?? "New", Priority ?? "", Review, SafePage, Assignee ?? "", Sort ?? "updated");
+    }, result => _result = result);
+    private Task ApplyAsync()
+    {
+        Navigation.NavigateTo(StaffLinks.Tickets(_search.Trim(), _status, _priority, _review, 0, _assignee, _sort, _type));
+        return Task.CompletedTask;
+    }
+}
