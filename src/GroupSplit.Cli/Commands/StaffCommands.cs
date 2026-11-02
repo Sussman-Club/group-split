@@ -199,7 +199,7 @@ public static class StaffCommands
                 throw CliException.Input("The merge impact changed after review.", "Run merge-preview again and review it.");
             Confirmation.Require(c, "staff.merchants.merge", $"Merge '{preview.Source.Name}' into '{preview.Target.Name}'?", [$"Move {preview.Transactions} expenses, {preview.BankRows} bank rows, and {preview.Aliases} aliases.", "The destination keeps its name and logo."],
                 new Dictionary<Option, string> { [transactions] = preview.Transactions.ToString(), [bankRows] = preview.BankRows.ToString(), [aliases] = preview.Aliases.ToString() });
-            await Send(c, HttpMethod.Post, $"staff/merchants/{source}/merge", new MergeMerchantsRequest(destination, p.GetValue(sourceVersion), p.GetValue(targetVersion)), ct); return ExitCodes.Success; }); return command;
+            await Send(c, HttpMethod.Post, $"staff/merchants/{source}/merge", new MergeMerchantsRequest(destination, p.GetValue(sourceVersion), p.GetValue(targetVersion), preview.Transactions, preview.BankRows, preview.Aliases), ct); return ExitCodes.Success; }); return command;
     }
 
     private static Command Read(string name, string description, string url) { var command = new Command(name, description); command.SetHandler(async (c, ct) => { await Show(c, url, ct); return ExitCodes.Success; }); return command; }

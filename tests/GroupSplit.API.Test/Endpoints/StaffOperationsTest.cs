@@ -211,9 +211,11 @@ public class StaffOperationsTest : IAsyncLifetime
         Assert.Single((await staff.GetFromJsonAsync<DirectoryPage<MerchantResponse>>("/staff/merchants?search=%23123", Ct))!.Items);
         var preview = (await staff.GetFromJsonAsync<MerchantMergePreview>($"/staff/merchants/{source.Id}/merge-preview?targetId={target.Id}", Ct))!;
         (await staff.PutAsJsonAsync($"/staff/merchants/{target.Id}", new UpdateMerchantRequest { Name = "Corner Supermarket", ExpectedVersion = target.Version }, Ct)).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/merge", new MergeMerchantsRequest(target.Id, preview.Source.Version, preview.Target.Version), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/merge", new MergeMerchantsRequest(target.Id, preview.Source.Version, preview.Target.Version, preview.Transactions, preview.BankRows, preview.Aliases), Ct)).StatusCode);
         preview = (await staff.GetFromJsonAsync<MerchantMergePreview>($"/staff/merchants/{source.Id}/merge-preview?targetId={target.Id}", Ct))!;
-        (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/merge", new MergeMerchantsRequest(target.Id, preview.Source.Version, preview.Target.Version), Ct)).EnsureSuccessStatusCode();
+        var wrongImpact = new MergeMerchantsRequest(target.Id, preview.Source.Version, preview.Target.Version, preview.Transactions + 1, preview.BankRows, preview.Aliases);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/merge", wrongImpact, Ct)).StatusCode);
+        (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/merge", new MergeMerchantsRequest(target.Id, preview.Source.Version, preview.Target.Version, preview.Transactions, preview.BankRows, preview.Aliases), Ct)).EnsureSuccessStatusCode();
         Assert.Equal(target.Id, (await staff.GetFromJsonAsync<MerchantResponse>($"/staff/merchants/{source.Id}", Ct))!.Id);
         Assert.Equal(4, (await staff.GetFromJsonAsync<List<MerchantAliasResponse>>($"/staff/merchants/{target.Id}/aliases", Ct))!.Count);
         using var scope = _host.Services.CreateScope();

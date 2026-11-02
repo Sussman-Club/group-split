@@ -58,7 +58,7 @@ public static class DomainServiceExtensions
                     .AddJobHandler<SweepStaffActivity, SweepStaffActivityHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule)
-                    .Add(new SweepStaffActivity(), JobSchedule.Every(TimeSpan.FromDays(1), DateTimeOffset.UtcNow.AddMinutes(1)));
+                    .Add(new SweepStaffActivity(), JobSchedule.Every(TimeSpan.FromHours(1), DateTimeOffset.UtcNow.AddMinutes(1)));
             services.AddScoped<IGroupService, GroupService>();
             services.AddScoped<IGroupJoiner, GroupJoiner>();
             services.AddScoped<IGroupParticipants, GroupParticipants>();

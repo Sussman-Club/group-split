@@ -10,13 +10,12 @@ public sealed class StaffActivityRetention(AppDbContext db, TimeProvider clock)
 {
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
     private const int BatchSize = 1000;
-    private const int MaxBatches = 20;
 
     public async Task<int> PruneAsync(CancellationToken ct)
     {
         var cutoff = clock.GetUtcNow() - Retention;
         var deleted = 0;
-        for (var batch = 0; batch < MaxBatches; batch++)
+        while (true)
         {
             var ids = await db.Set<StaffActivity>().Where(a => a.At < cutoff)
                 .OrderBy(a => a.At).ThenBy(a => a.Id).Select(a => a.Id).Take(BatchSize).ToListAsync(ct);

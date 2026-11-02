@@ -21,7 +21,8 @@ public sealed class StaffActivityService(AppDbContext db)
     {
         if (page is < 0 or > 10000 || resource is not (null or "" or "Tickets" or "Merchants" or "Users"))
             throw new ValidationException(ErrorCodes.BadRequest, "Choose a valid activity filter.");
-        var query = db.Set<StaffActivity>().AsNoTracking().Where(a => a.Action != "Account viewed");
+        var cutoff = DateTimeOffset.UtcNow - StaffActivityRetention.Retention;
+        var query = db.Set<StaffActivity>().AsNoTracking().Where(a => a.Action != "Account viewed" && a.At >= cutoff);
         if (!string.IsNullOrEmpty(resource)) query = query.Where(a => a.Resource == resource);
         if (resourceId is not null) query = query.Where(a => a.ResourceId == resourceId);
         var rows = await query.OrderByDescending(a => a.At).ThenByDescending(a => a.Id).Skip(page * 30).Take(31).ToListAsync(ct);

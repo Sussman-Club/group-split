@@ -19,6 +19,12 @@ public static class OpenApiOptionsExtensions
             {
                 services.AddOpenApi("api", options =>
                 {
+                    // The app and CLI use hand-written staff clients; NSwag cannot map the
+                    // generic directory response and would generate a conflicting IStaffClient.
+                    // Keep the runtime OpenAPI document complete while excluding those routes
+                    // only from the build-time document consumed by that generator.
+                    options.ShouldInclude = description =>
+                        !(description.RelativePath?.StartsWith("staff/", StringComparison.OrdinalIgnoreCase) ?? false);
                     options.CreateSchemaReferenceId = typeInfo =>
                     {
                         if (typeInfo.Type is not { IsGenericType: true, GenericTypeArguments: [var modelType] } type)

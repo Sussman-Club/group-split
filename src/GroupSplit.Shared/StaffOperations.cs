@@ -10,7 +10,8 @@ public sealed record SaveStaffViewRequest(string Name, string Resource, string U
 public sealed record MerchantAliasResponse(Guid Id, string Name, bool IsCanonical);
 public sealed record CreateMerchantAliasRequest(string Name);
 public sealed record MerchantMergePreview(MerchantResponse Source, MerchantResponse Target, int Transactions, int BankRows, int Aliases);
-public sealed record MergeMerchantsRequest(Guid TargetId, Guid SourceVersion, Guid TargetVersion);
+public sealed record MergeMerchantsRequest(Guid TargetId, Guid SourceVersion, Guid TargetVersion,
+    int Transactions, int BankRows, int Aliases);
 public sealed record TicketSelection(Guid Id, DateTimeOffset ExpectedUpdatedAt);
 public sealed class BulkTicketUpdateRequest
 {

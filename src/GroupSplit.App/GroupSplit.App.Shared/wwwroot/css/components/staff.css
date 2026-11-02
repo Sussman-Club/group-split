@@ -74,24 +74,15 @@
 .staff-sidebar-footer {
     margin-top: auto;
     border-top: 1px solid var(--gs-line);
-    padding: 20px 12px 0;
+    padding: 18px 0 0;
 }
 
 .staff-return {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--gs-ink-2);
-    font-size: .875rem;
-    font-weight: 650;
-    text-decoration: none;
+    display:flex; align-items:center; width:100%; gap:12px; padding:12px 14px; border:1px solid var(--gs-line); border-radius:12px; background:var(--gs-surface-2,var(--gs-surface)); color:var(--gs-ink-2); font-size:.82rem; font-weight:650; line-height:1.3; white-space:nowrap; text-decoration:none; transition:background .15s,border-color .15s;
 }
 
 .staff-sidebar-footer p {
-    margin: 14px 0 0;
-    color: var(--gs-muted);
-    font-size: .75rem;
-    line-height: 1.6;
+    padding-inline:12px; margin:14px 0 0; color:var(--gs-muted); font-size:.72rem; line-height:1.7;
 }
 
 .staff-main {
@@ -1054,16 +1045,12 @@
 .staff-user-table th:first-child { width:55%; }
 .staff-user-ticket-count { display:inline-flex; align-items:center; justify-content:center; min-width:30px; height:28px; border-radius:8px; background:var(--gs-surface-3); color:var(--gs-muted); font-weight:650; }
 .staff-user-ticket-count.has-open { background:var(--gs-teal-soft); color:var(--gs-teal-deep); }
-.staff-sidebar-footer { padding:18px 0 0; }
-.staff-return { display:flex; align-items:center; width:100%; gap:12px; padding:12px 14px; border:1px solid var(--gs-line); border-radius:12px; background:var(--gs-surface-2,var(--gs-surface)); font-size:.82rem; font-weight:650; line-height:1.3; white-space:nowrap; transition:background .15s,border-color .15s; }
 .staff-return:hover { background:var(--gs-teal-soft); border-color:var(--gs-teal); color:var(--gs-teal-deep); }
 .staff-return-icon { display:flex; align-items:center; justify-content:center; width:22px; height:22px; flex:0 0 22px; }
 .staff-return-icon .mud-icon-root { width:18px; height:18px; font-size:18px; }
-.staff-sidebar-footer p { padding-inline:12px; margin:14px 0 0; font-size:.72rem; line-height:1.7; }
 .staff-workspace-label>.mud-icon-root { width:18px; height:18px; flex:0 0 18px; }
 @media(max-width:700px) {
     .staff-user-table th:nth-child(2),.staff-user-table td:nth-child(2) { display:none; }
-    .staff-user-table th:first-child { width:auto; }
     .staff-user-table .staff-table-action { white-space:normal; }
     .staff-user-table .staff-edit-link { font-size:.75rem; }
     .staff-user-identity { gap:10px; }

@@ -16,27 +16,27 @@ public interface ISupportReportsClient
 
 public sealed class SupportReportsClient(HttpClient http) : ISupportReportsClient
 {
-    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page) => await http.GetFromJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages?page={page}") ?? [];
+    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id, int page) => await http.GetFromApiJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages?page={page}") ?? [];
     public async Task<List<SupportReportResponse>> ListAsync() =>
-        await http.GetFromJsonAsync<List<SupportReportResponse>>("support-reports") ?? [];
+        await http.GetFromApiJsonAsync<List<SupportReportResponse>>("support-reports") ?? [];
 
-    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id) => await http.GetFromJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages") ?? [];
-    public async Task<int> UnreadCountAsync() => await http.GetFromJsonAsync<int>("support-reports/notifications");
+    public async Task<List<SupportMessageResponse>> MessagesAsync(Guid id) => await http.GetFromApiJsonAsync<List<SupportMessageResponse>>($"support-reports/{id}/messages") ?? [];
+    public async Task<int> UnreadCountAsync() => await http.GetFromApiJsonAsync<int>("support-reports/notifications");
     public async Task ReplyAsync(Guid id, CreateSupportMessageRequest request)
     {
         using var response = await http.PostAsJsonAsync($"support-reports/{id}/messages", request);
-        response.EnsureSuccessStatusCode();
+        await response.EnsureApiSuccessAsync();
     }
     public async Task MarkReadAsync(Guid id)
     {
         using var response = await http.PostAsync($"support-reports/{id}/read", null);
-        response.EnsureSuccessStatusCode();
+        await response.EnsureApiSuccessAsync();
     }
 
     public async Task<SupportReportResponse> CreateAsync(CreateSupportReportRequest report)
     {
         using var response = await http.PostAsJsonAsync("support-reports", report);
-        response.EnsureSuccessStatusCode();
+        await response.EnsureApiSuccessAsync();
         return (await response.Content.ReadFromJsonAsync<SupportReportResponse>())!;
     }
 }

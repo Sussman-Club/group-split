@@ -685,6 +685,6 @@ not contain receipts or account data. Replacing a logo creates a new image URL, 
 stale cached images. Existing image versions remain immutable.
 
 
-Staff activity entries are retained for seven days and removed by a daily bounded cleanup.
+Staff activity entries older than seven days are hidden immediately and removed by an hourly cleanup in batches. Cleanup can be delayed while the API is unavailable.
 Account views are not included. Ticket messages and status history are stored separately
 and are not removed by this cleanup.

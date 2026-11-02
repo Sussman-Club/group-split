@@ -16,6 +16,27 @@ namespace GroupSplit.API.Test.User;
 /// </summary>
 public class AccountDeleteTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    [Fact]
+    public async Task Deletion_scrubs_support_conversations_for_the_reporter_and_their_authored_messages()
+    {
+        var user = GetService<ICurrentUser>().User;
+        var other = await CreateNewUser();
+        var own = new Data.Entities.SupportTicket { ReporterUserId = user.Id, Title = "Private title", Description = "Private report", ReproductionSteps = "Private steps" };
+        var otherTicket = new Data.Entities.SupportTicket { ReporterUserId = other.Id, Title = "Other", Description = "Other report" };
+        DbContext.AddRange(own, otherTicket);
+        DbContext.AddRange(
+            new Data.Entities.SupportTicketMessage { TicketId = own.Id, AuthorUserId = other.Id, Body = "Staff reply with personal data" },
+            new Data.Entities.SupportTicketMessage { TicketId = otherTicket.Id, AuthorUserId = user.Id, Body = "Message authored by deleted user" },
+            new Data.Entities.SupportTicketMessage { TicketId = otherTicket.Id, AuthorUserId = other.Id, Body = "Unrelated message" });
+        await DbContext.SaveChangesAsync();
+
+        Assert.Empty(await Delete());
+        Assert.Equal("Deleted account report", own.Title);
+        Assert.Null(own.ReproductionSteps);
+        var messages = await DbContext.Set<Data.Entities.SupportTicketMessage>().AsNoTracking().ToListAsync();
+        Assert.DoesNotContain(messages, m => m.Body == "Staff reply with personal data" || m.Body == "Message authored by deleted user");
+        Assert.Contains(messages, m => m.Body == "Unrelated message");
+    }
     private Task<IReadOnlyList<OutstandingBalance>> Delete() =>
         Delete(GetService<ICurrentUser>().User.Id);
 

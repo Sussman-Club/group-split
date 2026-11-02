@@ -59,9 +59,15 @@ public partial class MerchantService
     public async Task<MerchantResponse> Merge(Guid sourceId, MergeMerchantsRequest request, Guid actorId, CancellationToken ct)
     {
         await using var transaction = dbContext.Database.IsRelational() ? await dbContext.Database.BeginTransactionAsync(ct) : null;
+        // PostgreSQL foreign-key checks take a key-share lock on the merchant. Lock both
+        // rows first so references cannot be added between the impact check and the merge.
+        if (dbContext.Database.IsRelational())
+            await dbContext.Set<Merchant>().FromSqlInterpolated($"SELECT * FROM \"Merchant\" WHERE \"Id\" IN ({sourceId}, {request.TargetId}) ORDER BY \"Id\" FOR UPDATE").ToListAsync(ct);
         var preview = await PreviewMerge(sourceId, request.TargetId, ct);
         if (preview.Source.Version != request.SourceVersion || preview.Target.Version != request.TargetVersion)
             throw new ConflictException(ErrorCodes.Conflict, "A merchant changed after the preview. Review the merge again.");
+        if (preview.Transactions != request.Transactions || preview.BankRows != request.BankRows || preview.Aliases != request.Aliases)
+            throw new ConflictException(ErrorCodes.Conflict, "The merge impact changed. Review the merge again.");
         var source = await dbContext.Set<Merchant>().FindAsync([sourceId], ct);
         var target = await dbContext.Set<Merchant>().FindAsync([request.TargetId], ct);
         dbContext.Entry(source!).Property(m => m.Version).OriginalValue = request.SourceVersion;

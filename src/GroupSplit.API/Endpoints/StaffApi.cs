@@ -14,11 +14,16 @@ public static class StaffApi
             var allowed = StaffAccess.IsStaff(user);
             await team.RecordAccessAsync(current.User.Id, allowed, ct);
             return new StaffAccessResponse(allowed);
-        }).RequireAuthorization().WithTags("Staff").ExcludeFromDescription();
+        }).RequireAuthorization().ProducesStandardProblems().WithTags("Staff");
         var group = routes.MapGroup("/staff")
             .RequireAuthorization(policy => policy.RequireAuthenticatedUser()
                 .RequireAssertion(context => StaffAccess.IsStaff(context.User)))
-            .ProducesStandardProblems().WithTags("Staff").ExcludeFromDescription();
+            .ProducesStandardProblems()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithTags("Staff");
 
         group.AddEndpointFilter(async (context, next) =>
         {

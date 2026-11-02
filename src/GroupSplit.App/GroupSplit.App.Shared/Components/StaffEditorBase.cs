@@ -48,7 +48,8 @@ public abstract class StaffEditorBase : ComponentBase
         try { await action(); }
         catch (HttpRequestException e)
         {
-            Error = Text[e.StatusCode switch
+            Error = e is ApiProblemException { Problem.Detail: { Length: > 0 } detail } && (int?)e.StatusCode is >= 400 and < 500
+                ? detail : Text[e.StatusCode switch
             {
                 HttpStatusCode.Conflict => "This record changed or the merchant name already exists. Refresh before trying again.",
                 HttpStatusCode.Forbidden => "Staff access is required. Your permissions may have changed.",

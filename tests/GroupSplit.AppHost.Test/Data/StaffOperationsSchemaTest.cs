@@ -44,7 +44,7 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             db.Add(expense); db.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
             var preview = await merchantService.PreviewMerge(source.Id, target.Id, default);
             Check(preview.Transactions == 1 && preview.BankRows == 1 && preview.Aliases == 2, "Merge preview counts");
-            await merchantService.Merge(source.Id, new(target.Id, preview.Source.Version, preview.Target.Version), user.Id, default);
+            await merchantService.Merge(source.Id, new(target.Id, preview.Source.Version, preview.Target.Version, preview.Transactions, preview.BankRows, preview.Aliases), user.Id, default);
             db.ChangeTracker.Clear();
             Check((await db.Set<Expense>().SingleAsync()).MerchantId == target.Id, "Expense association preserved");
             Check((await db.Set<Expense>().SingleAsync()).Amount == 12.34m, "Expense amount preserved");
