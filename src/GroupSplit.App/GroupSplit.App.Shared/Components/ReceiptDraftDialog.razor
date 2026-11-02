@@ -208,7 +208,10 @@
 
     private bool HasInvalidItemName => _items.Any(item => ValidateItemName(item.Name).Any());
     private decimal[] CalculatedTaxes => ReceiptTaxes.Calculate(_tax, _items.Select(item =>
-        new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+        new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(),
+        allocateUnidentified: _items.Count == 1 && _items[0].IsTaxable is null
+            && _items[0].TaxRate is null && _items[0].TaxAmount == 0m
+            && _items[0].TotalPrice > 0m && _tax > 0m && decimal.Round(_tax, 2) == _tax);
     private void DistributeTax()
     {
         var taxes = ReceiptTaxes.Calculate(_tax, _items.Select(item =>
