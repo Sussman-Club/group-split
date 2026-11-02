@@ -1,118 +1,119 @@
 using System.Text.Json;
-using GroupSplit.App.Shared.Components;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using Moq;
+using Duende.AccessTokenManagement.OpenIdConnect;
 
 namespace GroupSplit.App.Web.Test.Authentication;
 
-/// <summary>
-/// What "Keep me signed in" has to be worth. The tick is collected on the app's own
-/// sign-in page, carried across the round trip to Keycloak in the challenge properties,
-/// and spent here -- on a cookie the browser keeps and an expiry the realm agrees with.
-/// </summary>
 public class RememberMeTest
 {
-    private static readonly DateTimeOffset SignedInAt = new(2026, 9, 12, 8, 0, 0, TimeSpan.Zero);
-
-    /// <summary>
-    /// No <c>IsPersistent</c> is what makes the browser drop the cookie when it closes,
-    /// and no <c>ExpiresUtc</c> leaves the cookie handler to apply its own thirty minutes.
-    /// Both have to stay unset rather than be set to something short.
-    /// </summary>
     [Fact]
-    public void Without_the_tick_the_session_ends_with_the_browser()
+    public void Every_provider_gets_a_persistent_fifteen_day_sliding_ticket()
     {
-        var properties = IdentityApi.ChallengeProperties("/groups", remember: false);
-
-        AuthenticationExtensions.RememberSession(properties, Time());
-
-        Assert.False(properties.IsPersistent);
-        Assert.Null(properties.ExpiresUtc);
-        Assert.Null(properties.AllowRefresh);
-    }
-
-    [Fact]
-    public void The_tick_writes_a_cookie_the_browser_keeps()
-    {
-        var properties = IdentityApi.ChallengeProperties("/groups", remember: true);
-
-        AuthenticationExtensions.RememberSession(properties, Time());
-
+        var now = new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
+        var properties = IdentityApi.ChallengeProperties("/groups");
+        AuthenticationExtensions.PersistSession(properties, new FixedTime(now));
         Assert.True(properties.IsPersistent);
-        Assert.Equal(SignedInAt.Add(AuthenticationExtensions.RememberedSessionLifetime), properties.ExpiresUtc);
+        Assert.True(properties.AllowRefresh);
+        Assert.Equal(now.AddDays(15), properties.ExpiresUtc);
+        Assert.Equal(now.AddDays(90).ToString("O"), properties.Items[AuthenticationExtensions.SessionDeadlineItem]);
+        Assert.Equal("/groups", properties.RedirectUri);
+        Assert.Equal("/", IdentityApi.ChallengeProperties("//evil.example").RedirectUri);
     }
 
-    /// <summary>
-    /// Sliding would push the ticket past the Keycloak session it is refreshed against,
-    /// which ends thirty days after the sign-in whatever the cookie says. From inside the
-    /// app that reads as being signed out at a moment nothing announced.
-    /// </summary>
     [Fact]
-    public void A_remembered_session_is_thirty_days_from_the_sign_in_and_not_from_the_last_visit()
+    public void The_cookie_handler_allows_sliding_with_the_common_inactivity_window()
     {
-        var properties = IdentityApi.ChallengeProperties(returnUrl: null, remember: true);
-
-        AuthenticationExtensions.RememberSession(properties, Time());
-
-        Assert.False(properties.AllowRefresh);
+        using var app = SignInHost.Build("https://keycloak.test/realms/group-split");
+        var options = app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        Assert.Equal(TimeSpan.FromDays(15), options.ExpireTimeSpan);
+        Assert.True(options.SlidingExpiration);
+        Assert.True(options.Cookie.HttpOnly);
     }
 
-    /// <summary>
-    /// The tick still has to leave the sign-in landing where it was going.
-    /// </summary>
-    [Fact]
-    public void Remembering_does_not_disturb_the_return_url()
-    {
-        Assert.Equal("/groups", IdentityApi.ChallengeProperties("/groups", remember: true).RedirectUri);
-        Assert.Equal("/", IdentityApi.ChallengeProperties("//evil.example", remember: true).RedirectUri);
-    }
-
-    /// <summary>
-    /// The layer that actually ends a remembered session first is whichever of the two has
-    /// the shorter opinion, so they are not allowed to hold different ones: Keycloak stops
-    /// refreshing at <c>ssoSessionMaxLifespan</c>, or sooner at <c>ssoSessionIdleTimeout</c>,
-    /// and the cookie stops at <see cref="AuthenticationExtensions.RememberedSessionLifetime"/>.
-    /// Either one moving alone brings the reported symptom back in a quieter form.
-    /// </summary>
     [Theory]
-    [InlineData("ssoSessionIdleTimeout")]
-    [InlineData("ssoSessionMaxLifespan")]
-    public void The_realm_ends_a_remembered_session_at_the_same_moment_the_cookie_does(string setting)
+    [InlineData("ssoSessionIdleTimeout", 15)]
+    [InlineData("ssoSessionMaxLifespan", 90)]
+    public void All_keycloak_sessions_support_the_same_bounded_lifetime(string setting, int days)
     {
-        using var realm = JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Authentication", "realms.json")));
-
-        Assert.Equal(
-            (int)AuthenticationExtensions.RememberedSessionLifetime.TotalSeconds,
+        using var realm = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "Authentication", "realms.json")));
+        Assert.False(realm.RootElement.GetProperty("rememberMe").GetBoolean());
+        Assert.Equal((int)TimeSpan.FromDays(days).TotalSeconds,
             realm.RootElement.GetProperty(setting).GetInt32());
     }
 
-    /// <summary>
-    /// Keycloak has a "Remember Me" of its own and keeps the answer to itself, so an app
-    /// federated to it cannot find out which was chosen. Leaving it on would put a second
-    /// checkbox in front of people that changes nothing this side can see.
-    /// </summary>
-    [Fact]
-    public void The_realm_does_not_ask_the_question_a_second_time()
+    [Theory]
+    [InlineData(5, 20)]
+    [InlineData(14, 29)]
+    [InlineData(85, 90)]
+    public async Task Activity_moves_the_idle_deadline_without_extending_the_absolute_limit(int day, int expiresOnDay)
     {
-        using var realm = JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Authentication", "realms.json")));
+        var start = new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
+        var properties = new AuthenticationProperties();
+        AuthenticationExtensions.PersistSession(properties, new FixedTime(start));
+        var context = Validation(properties, start.AddDays(day));
 
-        Assert.False(realm.RootElement.GetProperty("rememberMe").GetBoolean());
+        await AuthenticationExtensions.RenewSession(context);
+
+        Assert.True(context.ShouldRenew);
+        Assert.Equal(start.AddDays(expiresOnDay), properties.ExpiresUtc);
+        Assert.Equal(start.AddDays(90).ToString("O"), properties.Items[AuthenticationExtensions.SessionDeadlineItem]);
     }
 
-    /// <summary>
-    /// The sign-in screens print a number of days. It is copy, and copy that disagrees with
-    /// the thing it describes is the same defect as a checkbox that does nothing.
-    /// </summary>
     [Fact]
-    public void The_sign_in_screens_promise_the_period_the_cookie_actually_gets()
+    public async Task Background_connection_requests_do_not_extend_the_session()
     {
-        Assert.Equal(
-            (int)AuthenticationExtensions.RememberedSessionLifetime.TotalDays,
-            RememberMeChoice.Days);
+        var start = DateTimeOffset.UtcNow;
+        var properties = new AuthenticationProperties();
+        AuthenticationExtensions.PersistSession(properties, new FixedTime(start));
+        var context = Validation(properties, start.AddDays(5));
+        context.Request.Path = "/_blazor";
+        var before = properties.ExpiresUtc;
+        await AuthenticationExtensions.RenewSession(context);
+        Assert.False(context.ShouldRenew);
+        Assert.Equal(before, properties.ExpiresUtc);
     }
 
-    private static TimeProvider Time() => new FixedTime(SignedInAt);
+    [Fact]
+    public async Task The_absolute_deadline_rejects_the_ticket_and_discards_its_tokens()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var properties = new AuthenticationProperties();
+        AuthenticationExtensions.PersistSession(properties, new FixedTime(start));
+        var context = Validation(properties, start.AddDays(90));
+        var principal = context.Principal!;
+        var tokens = new Mock<IUserTokenStore>();
+        var authentication = new Mock<IAuthenticationService>();
+        using var services = new ServiceCollection().AddSingleton(tokens.Object)
+            .AddSingleton(authentication.Object).BuildServiceProvider();
+        context.HttpContext.RequestServices = services;
+
+        await AuthenticationExtensions.RenewSession(context);
+
+        Assert.Null(context.Principal);
+        tokens.Verify(store => store.ClearTokenAsync(principal, null, It.IsAny<CancellationToken>()), Times.Once);
+        authentication.Verify(service => service.SignOutAsync(context.HttpContext,
+            CookieAuthenticationDefaults.AuthenticationScheme, null), Times.Once);
+    }
+
+    private static CookieValidatePrincipalContext Validation(AuthenticationProperties properties, DateTimeOffset now)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Method = "GET";
+        http.Request.Path = "/groups";
+        var scheme = new AuthenticationScheme(CookieAuthenticationDefaults.AuthenticationScheme,
+            null, typeof(CookieAuthenticationHandler));
+        return new CookieValidatePrincipalContext(http, scheme,
+            new CookieAuthenticationOptions { TimeProvider = new FixedTime(now) },
+            new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity("test")), properties, scheme.Name));
+    }
 
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider
     {

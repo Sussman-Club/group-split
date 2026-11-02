@@ -9,8 +9,7 @@ using Moq;
 namespace GroupSplit.App.Web.Test.Components;
 
 /// <summary>
-/// The sign-in hand-off. It collects one thing -- whether to stay signed in -- and that is
-/// the whole reason it waits for a click instead of redirecting by itself.
+/// Web sign-in and expiry recovery start directly; invitations and deletion notices remain explicit.
 /// </summary>
 public class AuthHandoffTest : ComponentTest
 {
@@ -23,7 +22,7 @@ public class AuthHandoffTest : ComponentTest
     [InlineData("/claim/invitation-token")]
     public void Cancelled_invitation_sign_in_keeps_the_destination_for_retry(string destination)
     {
-        _auth.Setup(service => service.Login(destination, false, It.IsAny<CancellationToken>()))
+        _auth.Setup(service => service.Login(destination, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
         var page = Render<AuthHandoff>(parameters => parameters
             .Add(value => value.Title, "Join a group")
@@ -33,13 +32,13 @@ public class AuthHandoffTest : ComponentTest
         page.Find("button").Click();
         page.WaitForAssertion(() => Assert.Contains("Sign-in was cancelled", page.Markup));
         page.Find("button").Click();
-        _auth.Verify(service => service.Login(destination, false, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _auth.Verify(service => service.Login(destination, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
     public void Failed_native_sign_in_shows_a_retryable_message()
     {
-        _auth.Setup(service => service.Login(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+        _auth.Setup(service => service.Login(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("private server details"));
         var page = Render();
         page.Find("button").Click();
@@ -47,53 +46,51 @@ public class AuthHandoffTest : ComponentTest
         Assert.DoesNotContain("private server details", page.Markup);
         Assert.False(page.Find("button").HasAttribute("disabled"));
         page.Find("button").Click();
-        _auth.Verify(service => service.Login(null, false, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _auth.Verify(service => service.Login(null, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     /// <summary>
-    /// It used to hand off on first render. A checkbox nobody is given time to see is the
-    /// bug this was written against, one layer up.
+    /// Invitation handoffs wait for the person to choose to continue.
     /// </summary>
     [Fact]
-    public void Nobody_is_sent_to_keycloak_before_they_have_answered()
+    public void An_invitation_does_not_start_sign_in_before_continue()
     {
         Render();
 
         _auth.Verify(
-            service => service.Login(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            service => service.Login(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public void The_tick_travels_with_the_sign_in()
+    public void Native_login_has_no_persistence_checkbox_and_still_waits_for_a_click()
     {
-        var page = Render();
-
-        page.Find("input[type=checkbox]").Change(true);
+        Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example")));
+        var page = Render<AuthHandoff>(parameters => parameters.Add(value => value.AutoStart, true));
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
+        _auth.Verify(service => service.Login(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         page.Find("button").Click();
-
-        _auth.Verify(service => service.Login(null, true, It.IsAny<CancellationToken>()));
+        _auth.Verify(service => service.Login(null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public void Left_unticked_the_sign_in_says_so_rather_than_saying_nothing()
+    public void Ordinary_web_login_starts_without_a_second_form()
     {
-        Render().Find("button").Click();
+        var page = Render<AuthHandoff>(parameters => parameters
+            .Add(value => value.AutoStart, true));
 
-        _auth.Verify(service => service.Login(null, false, It.IsAny<CancellationToken>()));
+        _auth.Verify(service => service.Login(null, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
     }
 
-    /// <summary>
-    /// The promise has to be a period the page can state, or the checkbox is back to
-    /// meaning whatever the reader assumes.
-    /// </summary>
     [Fact]
-    public void The_page_says_how_long_being_remembered_lasts()
+    public void Session_expiry_recovers_automatically_and_preserves_the_destination()
     {
-        Assert.Contains(
-            $"{(int)AuthenticationExtensions.RememberedSessionLifetime.TotalDays} days",
-            Render().Markup,
-            StringComparison.Ordinal);
+        GoTo(AuthRoutes.Handoff(HandoffReason.SessionExpired, "/groups"));
+        var page = Render<AuthHandoff>(parameters => parameters.Add(value => value.AutoStart, true));
+
+        Assert.DoesNotContain(ErrorMessages.SessionExpired, page.Markup);
+        _auth.Verify(service => service.Login("/groups", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -109,7 +106,7 @@ public class AuthHandoffTest : ComponentTest
         page.Find("button").Click();
 
         _auth.Verify(
-            service => service.Login(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            service => service.Login(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -129,7 +126,7 @@ public class AuthHandoffTest : ComponentTest
 
         page.Find("button").Click();
 
-        _auth.Verify(service => service.Login("/groups", false, It.IsAny<CancellationToken>()));
+        _auth.Verify(service => service.Login("/groups", It.IsAny<CancellationToken>()));
     }
 
     /// <summary>
@@ -141,8 +138,9 @@ public class AuthHandoffTest : ComponentTest
     {
         GoTo(AuthRoutes.Handoff(HandoffReason.AccountDeleted));
 
-        var page = Render();
+        var page = Render<AuthHandoff>(parameters => parameters.Add(value => value.AutoStart, true));
 
+        _auth.Verify(service => service.Login(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.Contains(ErrorMessages.AccountDeletedSignedOut, page.Markup, StringComparison.Ordinal);
         Assert.Empty(page.FindAll(".mud-alert-outlined-error"));
         Assert.NotEmpty(page.FindAll(".mud-alert-outlined-info"));

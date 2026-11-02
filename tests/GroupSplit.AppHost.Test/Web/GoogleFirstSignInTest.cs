@@ -101,6 +101,22 @@ public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost
         await CreateStandInPersonAsync(account.Email, emailVerified: true);
 
         Assert.Equal(Outcome.SignedIn, await SignInWithGoogleAsync(account.Email));
+        var ticket = Assert.Single(await Context.CookiesAsync(), cookie => cookie.Name == "GroupSplit.Auth");
+        Assert.InRange(ticket.Expires - DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            TimeSpan.FromDays(14).TotalSeconds, TimeSpan.FromDays(15).TotalSeconds + 60);
+        Assert.Equal([_standIn], await LinksAsync(account.Id));
+    }
+
+    [Fact(Timeout = 240_000)]
+    public async Task A_linked_external_account_can_sign_in_again_from_a_phone()
+    {
+        var account = await CreateAccountAsync();
+        await CreateStandInPersonAsync(account.Email, emailVerified: true);
+        await Page.SetViewportSizeAsync(390, 700);
+
+        Assert.Equal(Outcome.SignedIn, await SignInWithGoogleAsync(account.Email));
+        await Context.ClearCookiesAsync();
+        Assert.Equal(Outcome.SignedIn, await SignInWithGoogleAsync(account.Email));
         Assert.Equal([_standIn], await LinksAsync(account.Id));
     }
 
@@ -136,27 +152,19 @@ public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost
     }
 
     /// <summary>
-    /// Starts at the app's own challenge, sends Keycloak straight to the stand-in, signs in
-    /// there, and reports where it ended.
+    /// Starts at the app's login page, clicks the external provider, signs in there,
+    /// and reports where it ended. No provider hint bypasses the hosted UI.
     /// </summary>
     /// <param name="typeOnTheWayIn">
     /// What to put in the email field if a profile form appears and lets it be edited.
     /// </param>
     private async Task<Outcome> SignInWithGoogleAsync(string username, string? typeOnTheWayIn = null)
     {
-        // The stand-in is hidden on the login page, so the hint is what picks it -- added to
-        // the authorization request the app's challenge redirects to, which names no provider.
-        // Read through the context's own request client, which shares the browser's cookie
-        // jar, so the correlation and nonce cookies the challenge sets are there for the
-        // callback. A route cannot do this: Playwright does not route a redirect's target.
-        await using (var challenge = await Context.APIRequest.GetAsync(
-                   Url("auth/login?returnUrl=/groups"),
-                   new APIRequestContextOptions { MaxRedirects = 0, IgnoreHTTPSErrors = true }))
-        {
-            var authorize = challenge.Headers["location"];
-
-            await Page.GotoAsync($"{authorize}&kc_idp_hint={_standIn}", new PageGotoOptions { Timeout = OperationTimeoutMs });
-        }
+        await Page.GotoAsync(Url("login?returnUrl=/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
+        var provider = Page.Locator($"#social-{_standIn}");
+        await Expect(provider).ToBeVisibleAsync(Visible);
+        await Expect(Page.Locator("input[name=rememberMe]")).ToHaveCountAsync(0);
+        await provider.ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // Only ever typed on the stand-in's own page. Anywhere else would be signing in to the
         // app's realm with a password, which proves nothing about Google.
@@ -259,9 +267,10 @@ public class GoogleFirstSignInTest(AppHostFixture appHost) : WebPageTest(appHost
         await Admin.SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/identity-provider/instances", new
         {
             alias = _standIn,
+            displayName = "Test external sign-in",
             providerId = "oidc",
             enabled = true,
-            hideOnLogin = true,
+            hideOnLogin = false,
             trustEmail = google.GetProperty("trustEmail").GetBoolean(),
             firstBrokerLoginFlowAlias = google.GetProperty("firstBrokerLoginFlowAlias").GetString(),
             config

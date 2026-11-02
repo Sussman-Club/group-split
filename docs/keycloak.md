@@ -10,12 +10,20 @@ deployed is in [deployment.md](deployment.md).
 
 Keycloak hosts the sign-in page, password reset, email verification, the Google link and the
 account console. Keeping the forms there keeps SSO, the password policy and brute-force
-protection in one place. The app's own sign-in page,
-[`AuthHandoff`](../src/GroupSplit.App/GroupSplit.App.Shared/Components/AuthHandoff.razor),
-collects one answer, "Keep me signed in", and sends the browser to `/auth/login`, which starts
-an OpenID Connect authorization code sign-in against the `group-split` realm. Why that checkbox
-is the app's and not Keycloak's is under
-[How long a session lasts](deployment.md#how-long-a-session-lasts).
+protection in one place. Web `/login` starts authorization code + PKCE automatically.
+There is no remember-me checkbox: password, Google and other configured providers all
+receive the same persistent app session, renewed for 15 days on activity, with a 90-day
+absolute maximum. Tokens stay on the server; the browser holds only the protected, HttpOnly
+session cookie. Native sign-in saves tokens in secure device storage by default,
+subject to the same realm limit. Expired local web sessions recover through OIDC without
+an extra Continue click. Invitations and account-deletion notices remain explicit.
+See [How long a session lasts](deployment.md#how-long-a-session-lasts).
+
+"Manage account" opens the realm's account console with `referrer=web-app`. That client's
+managed `name` and `baseUrl` supply the "Back to Group Split" link to the app's `/account`
+page. Using the configured base URL avoids trusting a caller-supplied return origin or
+broadening the OIDC callback allowlist. The browser tab uses the Group Split mark: the login
+theme supplies `img/favicon.ico`, and the account theme uses its existing SVG logo.
 
 Nobody signs themselves up. `registrationAllowed` is `false`, so Keycloak serves no
 registration page and its login page has no "no account?" link, even for somebody who kept the
@@ -374,6 +382,34 @@ on a realm that already exists, change them under Identity providers in the admi
 parts of the provider the worker does hold are in
 [the Google first sign-in](#which-account-a-first-google-sign-in-lands-in).
 
+### Checking Google and other external sign-ins
+
+The browser tests in `GoogleFirstSignInTest` start at `/login`, click a visible provider
+button, authenticate with a temporary OIDC provider and follow the broker callback back to
+the app. That provider copies Google's live verified-email and first-login settings. The
+tests cover first linking, a returning linked user on a phone, unverified email rejection,
+and refusal to link an unrelated address. The temporary provider and realm are removed
+after each test. No real Google account or external credentials are used by this suite.
+
+A real Google acceptance check also needs the provider enabled in the existing realm and
+the OAuth client configured in Google Cloud. Register the exact broker callback shown by
+Keycloak, including scheme, hostname, port and path. In production it is
+`https://<app-origin>/idp/realms/group-split/broker/google/endpoint`, not `/signin-oidc`.
+Local Keycloak ports are normally dynamic, so register the current callback or use a stable
+local endpoint before testing. Google requires an
+[exact redirect URI match](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+Use an existing Group Split account whose address Google has verified. Check first sign-in,
+returning sign-in, provider cancellation, and app sign-out. The browser should return to the
+original local destination. App sign-out ends the Keycloak session; it does not sign out of
+the person's Google account.
+
+Other providers are configured in Keycloak, not as app-owned password or OAuth flows. Review
+each provider's verified-email guarantee and first broker login flow before allowing account
+linking. Disabling realm registration alone does not prevent a provider's default broker flow
+from creating users. Only Google is configured in the shipped realm; the OIDC stand-in tests
+the shared broker path without claiming every external provider has been configured.
+
 Whichever relay you use, expect to prove you own the sender domain by adding the SPF and DKIM
 records it gives you. Mail from an unverified sender is rejected or filed as spam.
 
@@ -536,3 +572,70 @@ verified, every flow binding is named and reconciled, the password reset follows
 switch. `RealmSettingsReconcilerTests` beside it covers the worker. The tests in
 `tests/GroupSplit.AppHost.Test/Web` whose names start with `Realm` run the worker against a
 real Keycloak. How to run each is in [testing.md](testing.md).
+
+## Authentication review (November 2026)
+
+- Keep Keycloak-hosted credential forms and authorization code with S256 PKCE. Do not replace
+  them with app-owned password collection or Direct Grant; the
+  [Keycloak OIDC guide](https://www.keycloak.org/securing-apps/oidc-layers) advises against that grant.
+- Use one provider-independent session policy: a persistent app ticket with a 15-day
+  sliding inactivity window and a 90-day absolute maximum. Match the realm's idle/max limits
+  to those values. Disable Keycloak's optional remember-me checkbox; the realm worker
+  reconciles the common settings on existing realms.
+- Keep the existing antiforgery-protected POST sign-out, OIDC end-session redirect with an
+  ID-token hint, and server-side token cleanup. This follows Keycloak's recommended standard
+  logout flow. Logging out of Google itself is a separate provider session.
+- Google and other brokered providers receive the same persistent app ticket at the OIDC
+  callback, without a custom Keycloak authenticator, theme script, or preference cookie.
+- Public sign-up remains disabled, including the existing Google link-only first-login flow.
+  If opening registration later, use Keycloak's registration form, enable verified email,
+  review abuse controls and explicitly decide whether Google may create users. Do not create
+  a competing app registration endpoint.
+- Consider a separate confidential web client in production: the BFF can protect a secret,
+  while native and CLI clients must remain public. This needs secret provisioning and client
+  reconciliation changes, so it is a separate deployment change.
+- Consider OIDC back-channel logout if admin revocation must immediately remove local app
+  tickets. The current API token checks/refresh path eventually detects revoked sessions;
+  the local cookie is not a real-time view of Keycloak's session table.
+- Build output currently reports existing security advisories for ASP.NET WebAssembly Server
+  and Cryptography Pkcs/Xml packages at 10.0.12. Update those through a coordinated dependency
+  patch rather than hiding the warnings.
+
+Sources: [Keycloak session settings and Remember Me](https://www.keycloak.org/docs/latest/server_admin/),
+[OIDC endpoints and logout](https://www.keycloak.org/securing-apps/oidc-layers),
+[OAuth security BCP](https://www.rfc-editor.org/rfc/rfc9700.html), and
+[Keycloak theme development](https://www.keycloak.org/docs/latest/server_development/).
+
+### Persistence policy and standards
+
+Default persistence is a deliberate Group Split usability policy, not a requirement of OAuth
+or NIST. [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2) recommends expiring
+refresh tokens after inactivity and leaves durations to the authorization server. The realm
+uses a 15-day idle limit and a 90-day maximum. Authenticated page visits and user activity
+renew the app cookie for 15 days, without passing its original 90-day deadline. Renewal is
+not left to the cookie handler's default halfway-through-the-window rule.
+
+For long-lived Blazor circuits, an antiforgery-protected `/auth/session` POST touches token
+management and renews the cookie in response to visible-page interaction or focus. Reports
+are throttled to one per five minutes; they are not sent on a timer. An abandoned tab or a
+SignalR reconnect does not continually renew the cookie. Token-store sliding retention uses
+the same 15-day window. At the absolute deadline the app rejects the ticket and removes its
+stored tokens. Authority revocation is still detected on token refresh, not instantly via
+back-channel logout.
+
+[NIST session guidance](https://pages.nist.gov/800-63-4/sp800-63b/session/) recommends against
+persistent bearer session secrets. This convenience policy, including the selected 90-day
+maximum, should not be described as strict NIST session-management conformance.
+
+The stock Keycloak image remains in use. Keycloak's browser SSO cookie is separate from the
+app cookie and can end when the browser closes. After restoring a browser, Group Split can
+still open using its persistent cookie, while **Manage account** may require a new Keycloak
+sign-in. This extra authentication was intentionally retained; no cookie-provider extension
+or custom image is installed. Sensitive account changes remain subject to Keycloak's own
+authentication/required-action controls.
+
+Sign-out clears the local ticket and stored tokens and invokes OIDC logout. Existing tickets
+without an explicit maximum inherit one anchored to their original issue time. Their next
+authenticated visit adopts the new sliding policy. Disabling Keycloak remember-me can
+invalidate sessions previously created with that flag; those users may need to sign in once
+after deployment.

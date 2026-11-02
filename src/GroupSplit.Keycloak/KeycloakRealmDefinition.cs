@@ -52,7 +52,7 @@ public static class KeycloakRealmDefinition
             ProtocolMappers = ["audience-mapper"],
             CreateWhenMissing = true
         },
-        new("web-app", Properties: ["redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"]),
+        new("web-app", Properties: ["name", "baseUrl", "redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"]),
         new("cli",
             Properties:
             [

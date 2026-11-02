@@ -24,29 +24,16 @@ public static class AuthRoutes
     /// </summary>
     public const string HandoffPath = "/login";
 
-    /// <param name="remember">
-    /// Whether "Keep me signed in" was ticked. Passed rather than remembered client-side:
-    /// the cookie it decides is written by the server, at the end of a round trip through
-    /// Keycloak that this page does not survive.
-    /// </param>
-    public static string Login(string? returnUrl = null, bool remember = false)
-    {
-        var login = WithReturnUrl("/auth/login", returnUrl);
-
-        return remember ? Append(login, "remember=true") : login;
-    }
+    /// <summary>Starts web sign-in using the common session policy.</summary>
+    public static string Login(string? returnUrl = null) => WithReturnUrl("/auth/login", returnUrl);
 
     /// <summary>
     /// Where to send somebody whose session has ended: the hand-off page, told why it is
     /// being shown and where to put them back afterwards.
     /// </summary>
     /// <remarks>
-    /// Deliberately not <see cref="Login"/>. That is a challenge, and a challenge is the
-    /// wrong answer to a session that has just ended: it sends the person through Keycloak,
-    /// signs them back in, and only then lands them on a page telling them their session
-    /// expired -- so they sign in twice and are told the opposite of what just happened.
-    /// The hand-off is a page. It explains itself and asks the "Keep me signed in" question
-    /// before the round trip rather than after it.
+    /// Web expiry recovery starts a fresh OIDC challenge automatically. Native login
+    /// and account-deletion notices stay explicit; the local destination survives both.
     /// </remarks>
     /// <param name="reason">One of <see cref="HandoffReason"/>.</param>
     public static string Handoff(string reason, string? returnUrl = null) =>
