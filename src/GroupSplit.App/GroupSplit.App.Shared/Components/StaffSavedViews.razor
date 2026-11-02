@@ -1,0 +1,51 @@
+@using GroupSplit.Shared
+@inject IStaffClient Staff
+@inject NavigationManager Navigation
+<div class="staff-saved-views">
+    <MudSelect T="string" Value="_selected" ValueChanged="OpenAsync" Label="@Loc["Saved views"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="staff-saved-select">
+        @foreach (var view in _views) { <MudSelectItem T="string" Value="@view.Url">@view.Name</MudSelectItem> }
+    </MudSelect>
+    <button class="staff-button" type="button" disabled="@_busy" @onclick="() => _saving = !_saving">@Loc["Save current view"]</button>
+    @if (_selected is not null) { <button class="staff-back-control" type="button" disabled="@_busy" @onclick="DeleteAsync">@Loc["Delete saved view"]</button> }
+    @if (_saving)
+    {
+        <form @onsubmit="SaveAsync" @onsubmit:preventDefault><label class="staff-field">@Loc["View name"]<input @bind="_name" maxlength="60" required /></label><button class="staff-button staff-primary" disabled="@_busy">@Loc["Save view"]</button><button class="staff-button" type="button" @onclick="() => _saving = false">@Loc["Cancel"]</button></form>
+    }
+    @if (_error is not null) { <p role="alert">@_error</p> }
+</div>
+@code {
+    [Parameter] public string Resource { get; set; } = "";
+    [Parameter] public string CurrentUrl { get; set; } = "";
+    private List<SavedStaffViewResponse> _views = [];
+    private string? _selected, _error;
+    private string _name = "";
+    private bool _saving, _busy;
+    protected override async Task OnInitializedAsync()
+    {
+        try { _views = await Staff.ViewsAsync(Resource) ?? []; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _error = Loc["Could not load saved views."]; }
+    }
+    private Task OpenAsync(string? url)
+    {
+        _selected = url;
+        if (url is not null && _views.Any(v => v.Url == url)) Navigation.NavigateTo(url);
+        return Task.CompletedTask;
+    }
+    private async Task SaveAsync()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_name)) return;
+        _busy = true; _error = null;
+        try { await Staff.SaveViewAsync(new(_name, Resource, CurrentUrl)); _views = await Staff.ViewsAsync(Resource) ?? []; _saving = false; _name = ""; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _error = Loc["Could not save this view. Use a different name or try again."]; }
+        finally { _busy = false; }
+    }
+    private async Task DeleteAsync()
+    {
+        var view = _views.FirstOrDefault(v => v.Url == _selected);
+        if (view is null) return;
+        _busy = true; _error = null;
+        try { await Staff.DeleteViewAsync(view.Id); _views.Remove(view); _selected = null; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { _error = Loc["Could not delete this view."]; }
+        finally { _busy = false; }
+    }
+}

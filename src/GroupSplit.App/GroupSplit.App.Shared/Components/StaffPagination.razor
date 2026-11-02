@@ -1,0 +1,17 @@
+<nav class="staff-pagination" aria-label="@Loc["Results pages"]">
+    <span>@Loc["Page"] @(Page + 1)<span class="staff-pagination-count"> · @Count @Loc["shown"]</span></span>
+    <div>
+        @if (Page > 0) { <a class="staff-button" href="@Previous">@Loc["Previous"]</a> }
+        else { <button class="staff-button" disabled>@Loc["Previous"]</button> }
+        @if (HasMore) { <a class="staff-button" href="@Next">@Loc["Next"]</a> }
+        else { <button class="staff-button" disabled>@Loc["Next"]</button> }
+    </div>
+</nav>
+
+@code {
+    [Parameter] public int Page { get; set; }
+    [Parameter] public int Count { get; set; }
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public string Previous { get; set; } = "";
+    [Parameter] public string Next { get; set; } = "";
+}

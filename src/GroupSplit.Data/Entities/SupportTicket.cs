@@ -1,7 +1,7 @@
 namespace GroupSplit.Data.Entities;
 
 public enum SupportTicketType { Bug, FeatureRequest, Support }
-public enum SupportTicketStatus { New, UnderReview, InProgress, Resolved, Closed }
+public enum SupportTicketStatus { New, UnderReview, InProgress, Resolved, Closed, WaitingForCustomer }
 public enum SupportTicketPriority { Low, Normal, High, Urgent }
 public enum SupportMessageVisibility { Public, Internal }
 

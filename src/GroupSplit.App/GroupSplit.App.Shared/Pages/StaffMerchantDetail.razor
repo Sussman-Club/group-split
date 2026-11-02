@@ -1,0 +1,54 @@
+@page "/staff/merchants/{Id:guid}"
+@page "/staff/merchants/new"
+@layout StaffLayout
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@inherits StaffPageBase
+@inject IJSRuntime Browser
+
+<PageTitle>@Loc["Merchant details - Staff - Group Split"]</PageTitle>
+<a class="staff-back-link" href="@Back"><MudIcon Icon="@Icons.Material.Rounded.ArrowBack" Size="Size.Small" />@Loc["Back to merchants"]</a>
+<header class="staff-page-header"><div><h1>@(Id is null ? Loc["Add merchant"].Value : _merchant?.Name ?? Loc["Edit merchant"].Value)</h1><p>@Loc["One shared identity, consistent across everyone's expenses."]</p></div></header>
+<StaffLoadState Loading="Loading" Error="@LoadError" OnRetry="RefreshAsync" />
+@if (!Loading && LoadError is null)
+{
+    <div class="staff-merchant-detail">
+        <div class="staff-merchant-workspace"><MerchantDirectoryEditor @ref="_editor" @key="Id" Merchant="_merchant" OnSaved="CloseAsync" OnClose="CloseAsync" />
+        @if (_merchant is not null) { <MerchantMaintenance @key="@("maintenance-" + Id)" Merchant="_merchant" OnChanged="MaintenanceChangedAsync" BeforeMerge="BeforeMergeAsync" /><StaffActivityFeed Resource="Merchants" ResourceId="_merchant.Id" RefreshKey="@_merchant.Version.ToString()" /> }
+        </div>
+        <aside class="staff-guidance gs-card" aria-label="@Loc["Directory impact"]">
+            <div class="staff-guidance-heading"><span class="staff-guidance-icon"><MudIcon Icon="@Icons.Material.Rounded.Public" /></span><span>@Loc["Directory impact"]</span></div>
+            <h2>@Loc["One merchant."]<br />@Loc["Every group."]</h2>
+            <p>@Loc["Name and image changes appear wherever this merchant is used."]</p>
+            @if (_merchant is not null)
+            {
+                <div class="staff-impact"><span class="staff-impact-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span><div><strong>@_merchant.TransactionCount.ToString("N0")</strong><span>@Loc["linked transactions"]</span></div></div>
+            }
+            <div class="staff-guidance-checklist"><h3>@Loc["Before you save"]</h3><ul>
+                <li><MudIcon Icon="@Icons.Material.Rounded.CheckCircleOutline" Size="Size.Small" /><span>@Loc["Use a recognizable merchant name."]</span></li>
+                <li><MudIcon Icon="@Icons.Material.Rounded.CheckCircleOutline" Size="Size.Small" /><span>@Loc["Check for an existing entry first."]</span></li>
+                <li><MudIcon Icon="@Icons.Material.Rounded.CheckCircleOutline" Size="Size.Small" /><span>@Loc["Choose a logo, or leave it blank for initials."]</span></li>
+            </ul></div>
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "returnTo")] public string? ReturnTo { get; set; }
+    private MerchantResponse? _merchant;
+    private MerchantDirectoryEditor? _editor;
+    private async Task<bool> BeforeMergeAsync()
+    {
+        if (_editor?.HasUnsavedChanges == true && !await Browser.InvokeAsync<bool>("confirm", Loc["Discard your unsaved merchant changes and continue with the merge?"].Value)) return false;
+        _editor?.DiscardDraft();
+        return true;
+    }
+    private async Task MaintenanceChangedAsync() { if (Id is { } id) _merchant = await Client.MerchantAsync(id); }
+    private string Back => StaffLinks.ReturnTo(ReturnTo, "/staff/merchants");
+    protected override Task OnParametersSetAsync() => RefreshAsync();
+    private Task RefreshAsync() => Id is { } id
+        ? LoadAsync(() => Client.MerchantAsync(id), merchant => { _merchant = merchant; if (merchant.Id != id) Navigation.NavigateTo(StaffLinks.Detail($"/staff/merchants/{merchant.Id}", Back), replace: true); })
+        : LoadAsync(() => Task.FromResult<MerchantResponse?>(null), merchant => _merchant = merchant);
+    private Task CloseAsync() { Navigation.NavigateTo(Back); return Task.CompletedTask; }
+}

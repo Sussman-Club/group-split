@@ -55,6 +55,7 @@
          whatever it cannot translate instead of refusing, so a query that Npgsql rejects
          passes there and 500s in production. -->
     <ProjectReference Include="..\..\src\GroupSplit.API\GroupSplit.API.csproj" />
+    <ProjectReference Include="..\..\src\GroupSplit.Data.PostgreSQL.Migrations\GroupSplit.Data.PostgreSQL.Migrations.csproj" />
   </ItemGroup>
 
 </Project>

@@ -90,7 +90,8 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
         request.Content = JsonContent.Create(new PushDeviceRequest(token,
             IsEnabled(PushNotificationKind.ExpenseCreated),
             IsEnabled(PushNotificationKind.Settlement),
-            IsEnabled(PushNotificationKind.InvitationAccepted), IsEnabled(PushNotificationKind.BankSyncIssue)), NativeJsonContext.Default.PushDeviceRequest);
+            IsEnabled(PushNotificationKind.InvitationAccepted), IsEnabled(PushNotificationKind.BankSyncIssue),
+            IsEnabled(PushNotificationKind.StaffTicketCreated)), NativeJsonContext.Default.PushDeviceRequest);
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }

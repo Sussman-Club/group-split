@@ -13,6 +13,15 @@ namespace GroupSplit.Shared.Errors;
 /// </summary>
 public static class ErrorCodes
 {
+    public const string InvalidMerchant = "INVALID_MERCHANT";
+    public const string MerchantNameExists = "MERCHANT_NAME_EXISTS";
+    public const string MerchantImageInvalid = "MERCHANT_IMAGE_INVALID";
+    public const string MerchantImageNotFound = "MERCHANT_IMAGE_NOT_FOUND";
+    public const string InvalidSupportTicket = "INVALID_TICKET";
+    public const string SupportTicketNotFound = "TICKET_NOT_FOUND";
+    public const string SupportTicketChanged = "TICKET_CHANGED";
+    public const string InvalidSupportReport = "INVALID_SUPPORT_REPORT";
+
     // ---- Generic, chosen from the status code when nothing more specific applies --------
 
     public const string BadRequest = "BAD_REQUEST";

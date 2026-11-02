@@ -23,7 +23,10 @@ public sealed record MerchantResponse(
     string Name,
     string? LogoUrl,
     DateTimeOffset FirstSeenAt,
-    int TransactionCount);
+    int TransactionCount)
+{
+    public Guid Version { get; init; }
+}
 
 /// <summary>
 /// A place to add by hand, for spending no bank imported.
@@ -54,6 +57,8 @@ public record CreateMerchantRequest
 /// </remarks>
 public record UpdateMerchantRequest
 {
+    public Guid? ExpectedVersion { get; set; }
+
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
     [StringLength(128, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength128))]
     public string Name { get; set; } = null!;

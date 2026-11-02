@@ -1,6 +1,6 @@
 # Android notifications
 
-The Android MAUI app can opt in to Firebase Cloud Messaging (FCM) alerts under **Account → Notifications**. Each category has an independent switch on each device. Android permission is requested only when enabling a category; one account can register several devices. All categories default to off.
+The Android MAUI app can opt in to Firebase Cloud Messaging (FCM) alerts under **Account → Notifications**. Staff ticket alerts are configured separately under **Staff → Settings**. Each category has an independent switch on each device. Android permission is requested only when enabling a category; one account can register several devices. All categories default to off.
 
 Available categories:
 
@@ -10,8 +10,11 @@ Available categories:
 | Settlements | A repayment is recorded or a member requests repayment | Repayments alert current members on either end except the actor and open the group; requests alert the named recipient and open the request |
 | Guests joining | A guest accepts a shareable invitation | Other current group members; opens the group |
 | Bank sync issues | A bank newly requires sign-in, revokes access, warns of expiring sign-in, or reports unshared accounts | Only the bank owner; opens Account |
+| Support tickets | A customer submits a ticket or replies to one | Opted-in staff except the actor; opens the staff ticket queue |
 
 Bank alerts are for actionable state changes. Repeated webhook reports of the same issue do not enqueue another alert, and ordinary transient sync retries do not send alerts. There is no in-app notification history. Automatically filed bank expenses are not wired to the new-expense event yet.
+
+Staff notifications contain no report text or customer details. The API checks the recipient's current Keycloak staff role before delivery; opening the staff queue requires authorization as usual. Public staff replies do not currently notify the reporter.
 
 ## Create the Firebase project
 
@@ -78,7 +81,7 @@ Firebase credentials and an Android device are required for these live checks; l
 
 ## Extend to iOS and other notification events
 
-`PushNotificationKinds.Definitions` is the shared event catalog: each event has its own kind and message, and belongs to one of the four preference categories. UI settings and Android channels come from those categories. Add an event to an existing category and stage `SendPushNotification` through `PushNotificationQueue` in the same save as its business change. Add any event-specific authorization or relevance checks to the delivery handler, and any new destination to the shared route helper. Persisted enum values must stay stable. New preference categories still need an explicit device preference and schema change.
+`PushNotificationKinds.Definitions` is the shared event catalog: each event has its own kind and message, and belongs to a preference category. UI settings and Android channels come from those categories. Add an event to an existing category and stage `SendPushNotification` through `PushNotificationQueue` in the same save as its business change. Add any event-specific authorization or relevance checks to the delivery handler, and any new destination to the shared route helper. Persisted enum values must stay stable. New preference categories still need an explicit device preference and schema change.
 
 The Firebase sender and device registration API accept FCM tokens without assuming Android. The message includes common notification text and routing data, plus separate Android and APNs delivery settings. Apple alerts have a one-hour expiry, default sound, and a group thread. Both platforms use the same queue, preferences, recipient checks, and server credential.
 

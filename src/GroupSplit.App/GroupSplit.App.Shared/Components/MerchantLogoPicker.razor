@@ -1,0 +1,113 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Models
+
+<fieldset class="staff-logo-picker" disabled="@(Disabled || _processing)">
+    <legend>@Loc["Merchant image"]</legend>
+    <div class="staff-logo-summary">
+        <div class="staff-logo-preview">
+            @if (Value.Preview is not null)
+            {
+                <img src="@Value.Preview" alt="@Loc["Selected merchant image"]" width="72" height="72" />
+            }
+            else
+            {
+                <MerchantMark MerchantName="@(string.IsNullOrWhiteSpace(Name) ? Loc["Merchant"].Value : Name)" MerchantLogoUrl="@Value.Url" />
+            }
+        </div>
+        <div class="staff-logo-copy">
+            <strong>@(string.IsNullOrWhiteSpace(Name) ? Loc["Merchant image"].Value : Name)</strong>
+            <span>@(Value.UploadedPng is not null ? Loc["New image ready to save"] : string.IsNullOrWhiteSpace(Value.Url) ? Loc["Initials are shown when no image is selected."] : Loc["Current image"])</span>
+            <div class="staff-logo-actions">
+                <label class="staff-button staff-logo-upload">
+                    <MudIcon Icon="@Icons.Material.Rounded.Upload" Size="Size.Small" />@Loc["Upload image"]
+                    <InputFile @key="_inputVersion" OnChange="UploadAsync" accept="image/png,image/jpeg" disabled="@(Disabled || _processing)" aria-label="@Loc["Upload merchant image"]" />
+                </label>
+                @if (Value.UploadedPng is not null || !string.IsNullOrWhiteSpace(Value.Url))
+                {
+                    <button class="staff-logo-remove" type="button" @onclick="ClearAsync">@Loc["Remove image"]</button>
+                }
+            </div>
+        </div>
+    </div>
+    <p class="staff-logo-help">@Loc["PNG or JPG, up to 5 MB. Your image is saved when you save the merchant."]</p>
+    @if (_processing) { <p role="status">@Loc["Preparing image…"]</p> }
+    @if (_error is not null) { <p class="staff-logo-error" role="alert">@_error</p> }
+    <details class="staff-logo-library">
+        <summary>@Loc["Choose an existing logo"]</summary>
+        <div class="staff-logo-grid">
+            @foreach (var option in Logos)
+            {
+                var url = MerchantLogos.BundledPath + option.File + ".svg";
+                <button type="button" class="staff-logo-option @(Value.Url == url ? "selected" : "")" aria-pressed="@(Value.Url == url)" @onclick="() => SelectAsync(url)">
+                    <img src="@url" alt="" width="36" height="36" loading="lazy" /><span>@option.Name</span>
+                </button>
+            }
+        </div>
+    </details>
+    <details class="staff-logo-url">
+        <summary>@Loc["Use a logo URL"]</summary>
+        <MudTextField T="string" Value="@Value.Url" ValueChanged="SetUrlAsync" Label="@Loc["Logo URL"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="512" Disabled="@(Disabled || _processing)" />
+        <p class="staff-logo-help">@Loc["Use an existing app image or a supported bank-provider logo URL."]</p>
+        @if (!ValidUrl) { <p class="staff-logo-error" role="alert">@Loc["This image address is not supported. Upload the image or choose an existing logo."]</p> }
+    </details>
+</fieldset>
+
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter, EditorRequired] public MerchantLogoSelection Value { get; set; } = new(null);
+    [Parameter] public EventCallback<MerchantLogoSelection> ValueChanged { get; set; }
+    [Parameter] public EventCallback<bool> ProcessingChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    private bool _processing;
+    private int _inputVersion;
+    private string? _error;
+    private bool ValidUrl => string.IsNullOrWhiteSpace(Value.Url) || MerchantLogos.IsAllowed(Value.Url);
+    private static readonly (string File, string Name)[] Logos =
+    [
+        ("aldi", "ALDI"), ("amazon", "Amazon"), ("blue-bottle-coffee", "Blue Bottle"),
+        ("costco", "Costco"), ("glovo", "Glovo"), ("ikea", "IKEA"), ("lidl", "Lidl"),
+        ("netflix", "Netflix"), ("uber", "Uber"), ("pharmacy-88", "Pharmacy 88"),
+        ("trattoria-da-enzo", "Da Enzo"), ("city-power-and-light", "City Power"),
+        ("nos-internet", "NOS"), ("vodafone-fibre", "Vodafone")
+    ];
+
+    private async Task UploadAsync(InputFileChangeEventArgs args)
+    {
+        _error = null;
+        var file = args.File;
+        if (file.Size is <= 0 or > MerchantLogos.MaximumSourceBytes || file.ContentType is not ("image/png" or "image/jpeg"))
+        {
+            _inputVersion++;
+            _error = Loc["Choose a PNG or JPG image up to 5 MB."];
+            return;
+        }
+        _processing = true;
+        await ProcessingChanged.InvokeAsync(true);
+        try
+        {
+            var resized = await file.RequestImageFileAsync("image/png", MerchantLogos.MaximumImageDimension, MerchantLogos.MaximumImageDimension);
+            await using var stream = resized.OpenReadStream(MerchantLogos.MaximumUploadBytes);
+            using var target = new MemoryStream();
+            await stream.CopyToAsync(target);
+            await ValueChanged.InvokeAsync(MerchantLogoSelection.FromUpload(target.ToArray()));
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or JSException)
+        {
+            _error = Loc["Could not prepare this image. Try another PNG or JPG file."];
+        }
+        finally
+        {
+            _inputVersion++;
+            _processing = false;
+            await ProcessingChanged.InvokeAsync(false);
+        }
+    }
+
+    private Task ClearAsync() => SelectAsync(null);
+    private Task SetUrlAsync(string? value) => SelectAsync(string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+    private Task SelectAsync(string? url)
+    {
+        _error = null;
+        return ValueChanged.InvokeAsync(new MerchantLogoSelection(url));
+    }
+}

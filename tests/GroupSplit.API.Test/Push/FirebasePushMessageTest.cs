@@ -27,6 +27,8 @@ public sealed class FirebasePushMessageTest
     [InlineData(PushNotificationKind.PaymentRequest, "You have a payment request in Trip.")]
     [InlineData(PushNotificationKind.InvitationAccepted, "A guest joined Trip.")]
     [InlineData(PushNotificationKind.BankSyncIssue, "A linked bank needs your attention.")]
+    [InlineData(PushNotificationKind.StaffTicketCreated, "A new support ticket is ready to review.")]
+    [InlineData(PushNotificationKind.StaffCustomerReplied, "A customer replied to a support ticket.")]
     public void Categories_include_their_own_channel_and_routing_data(PushNotificationKind kind, string body)
     {
         var groupId = Guid.NewGuid();
@@ -36,6 +38,10 @@ public sealed class FirebasePushMessageTest
         Assert.Equal(PushNotificationKinds.Channel(kind), message.Android.Notification.ChannelId);
         Assert.Equal(kind.ToString(), message.Data["notificationKind"]);
     }
+
+    [Fact]
+    public void Staff_alerts_open_the_staff_queue() =>
+        Assert.Equal("/staff/tickets?status=", PushNotificationKinds.Route(PushNotificationKind.StaffCustomerReplied, Guid.Empty));
 
     [Fact]
     public void Apple_delivery_uses_the_same_content_and_routing_with_a_bounded_lifetime()

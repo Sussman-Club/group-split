@@ -288,6 +288,10 @@ update when the AppHost starts; in publish mode it becomes a migration bundle in
 run as a one-shot Compose service that is not restarted. The API and the seeder wait for it
 to complete, so neither ever runs against an old schema.
 
+The staff operations migration enables PostgreSQL's trusted `pg_trgm` extension for
+case-insensitive substring search. The migration database role needs permission to create
+the extension; the added search indexes also increase write and storage costs.
+
 ## Background jobs
 
 `GroupSplit.Jobs` is a seam rather than a queue:

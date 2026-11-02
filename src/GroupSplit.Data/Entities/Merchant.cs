@@ -19,6 +19,8 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class Merchant : Entity
 {
+    public Guid Version { get; set; } = Guid.NewGuid();
+
     /// <summary>
     /// The name to show, cased as the provider wrote it the first time we saw it.
     /// </summary>

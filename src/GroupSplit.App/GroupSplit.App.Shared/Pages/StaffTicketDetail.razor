@@ -1,0 +1,25 @@
+@page "/staff/tickets/{Id:guid}"
+@layout StaffLayout
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@inherits StaffPageBase
+
+<PageTitle>@Loc["Ticket details - Staff - Group Split"]</PageTitle>
+<a class="staff-back-link" href="@Back"><MudIcon Icon="@Icons.Material.Rounded.ArrowBack" Size="Size.Small" />@Loc["Back to tickets"]</a>
+<StaffLoadState Loading="Loading" Error="@LoadError" OnRetry="RefreshAsync" />
+@if (!Loading && LoadError is null && _ticket is not null)
+{
+    <header class="staff-page-header staff-detail-header"><div><p class="staff-record-reference">@Loc["Ticket"] #@_ticket.Id.ToString()[..8]</p><h1>@_ticket.Title</h1><p>@Loc["Reported"] @_ticket.CreatedAt.ToLocalTime().ToString("f")</p></div><span class="staff-status @_ticket.Status.ToLowerInvariant()">@Loc[SupportTicketLabels.Key(_ticket.Status)]</span></header>
+    <SupportTicketEditor @key="Id" Ticket="_ticket" OnSaved="SavedAsync" OnClose="CloseAsync" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "returnTo")] public string? ReturnTo { get; set; }
+    private SupportTicketResponse? _ticket;
+    private string Back => StaffLinks.ReturnTo(ReturnTo, "/staff/tickets");
+    protected override Task OnParametersSetAsync() => RefreshAsync();
+    private Task RefreshAsync() => LoadAsync(() => Client.TicketAsync(Id), ticket => _ticket = ticket);
+    private Task SavedAsync(SupportTicketResponse ticket) { _ticket = ticket; return Task.CompletedTask; }
+    private Task CloseAsync() { Navigation.NavigateTo(Back); return Task.CompletedTask; }
+}

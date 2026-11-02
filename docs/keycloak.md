@@ -639,3 +639,52 @@ without an explicit maximum inherit one anchored to their original issue time. T
 authenticated visit adopts the new sliding policy. Disabling Keycloak remember-me can
 invalidate sessions previously created with that flag; those users may need to sign in once
 after deployment.
+
+
+## Staff console access
+
+The app's account menu offers **Staff console** at `/staff/tickets` only when the API confirms
+that the current access token has the `groupsplit-staff` realm role. All `/staff` data
+and mutation routes independently enforce that role. The console maintains the global
+merchant directory and triages support tickets, with status history and staff-only notes.
+Ordinary accounts keep their existing merchant and report visibility.
+
+The first-boot realm import and the realm reconciliation worker ensure the
+`groupsplit-staff` realm role exists, with no automatic user grants.
+Assign it only to staff through **Users → Role mapping → Assign role**. Do not add it to
+default roles. Ensure the clients' standard `roles` scope includes realm roles in the
+access token (`realm_access.roles`). Sign out and back in to acquire the new grant.
+Revocations take effect when the existing access token expires (five minutes by default).
+Keycloak administrative roles alone do not grant application staff access.
+
+Authorization lives at the HTTP boundary. `MerchantService` directory methods and
+`SupportTicketService` validate and persist operations without inspecting roles.
+Ticket edits use `UpdatedAt` as an optimistic concurrency token, so a stale staff edit
+returns 409 instead of silently overwriting another operator's work. Internal notes are
+never returned by the reporter's `/support-reports` endpoints.
+
+
+The staff workspace has its own layout and sidebar. Tickets (`/staff/tickets`) and
+merchants (`/staff/merchants`) are independent server-paged lists. Search, status,
+priority, review filters, and page number are stored in query parameters. Record links
+carry a validated return destination, so returning from a ticket or merchant preserves
+the list context. Detail pages load by ID rather than searching through the current page.
+Draft navigation is guarded; a successful merchant save returns directly to its directory.
+
+
+Staff can change a merchant's name and image together. The editor previews uploads locally,
+allows selecting a bundled logo, and can remove a logo to restore initials. PNG/JPEG source
+images up to 5 MB are resized in the browser to at most 512 pixels, then uploaded as PNG
+only when the merchant is saved. The API independently checks format, dimensions, and the
+1 MB upload limit. Images use immutable random IDs in the configured object store under
+`merchant-logos/`; failed merchant saves remove their new object. The object bucket stays
+private. A read-only anonymous route serves these shared brand images through the existing
+native API forwarder, so browser and native clients can render them without sharing tokens.
+All upload and merchant-edit routes remain staff-only. Logos are shared app assets and do
+not contain receipts or account data. Replacing a logo creates a new image URL, avoiding
+stale cached images. Existing image versions remain immutable.
+
+
+Staff activity entries older than seven days are hidden immediately and removed by an hourly cleanup in batches. Cleanup can be delayed while the API is unavailable.
+Account views are not included. Ticket messages and status history are stored separately
+and are not removed by this cleanup.

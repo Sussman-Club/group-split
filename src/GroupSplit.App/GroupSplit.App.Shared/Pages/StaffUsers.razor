@@ -1,0 +1,47 @@
+@page "/staff/users"
+@page "/staff/users/{Id:guid}"
+@layout StaffLayout
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@inherits StaffPageBase
+<PageTitle>@Loc["Users - Staff - Group Split"]</PageTitle>
+<header class="staff-page-header"><div><h1>@(Id is null ? Loc["User lookup"] : Loc["Account details"])</h1><p>@Loc["Find an account and the support context you need."]</p></div></header>
+@if (Id is { } id) { <a class="staff-back-link" href="/staff/users">@Loc["Back to user lookup"]</a><div class="staff-user-detail"><SupportUserCard Title="Account context" ShowLink="false" UserId="id" /></div> }
+else
+{
+    <section class="staff-panel gs-card">
+        <form class="staff-filter-bar" @onsubmit="ApplyAsync" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_search" Label="@Loc["Search name or email"]" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="staff-search-control" />
+            <button class="staff-button staff-primary" type="submit" disabled="@Loading">@Loc["Search"]</button>
+        </form>
+        <p class="staff-directory-notice">@Loc["Account identity, membership count and open support reports. Financial details are not included."]</p>
+        <StaffLoadState Loading="Loading" Error="@LoadError" OnRetry="RefreshAsync" />
+        @if (!Loading && LoadError is null)
+        {
+            @if (_result.Items.Count == 0) { <p class="staff-empty">@Loc["No accounts match this search."]</p> }
+            @if (_result.Items.Count > 0)
+            {
+                <div class="staff-table-scroll"><table class="staff-table staff-user-table">
+                    <thead><tr><th scope="col">@Loc["Account"]</th><th scope="col">@Loc["Groups"]</th><th scope="col">@Loc["Open tickets"]</th><th scope="col"><span class="staff-sr-only">@Loc["Actions"]</span></th></tr></thead>
+                    <tbody>@foreach (var user in _result.Items)
+                    {
+                        <tr @key="user.Id"><td><div class="staff-user-identity"><Avatar Name="@user.Name" Size="sm" /><div><a class="staff-record-link" href="@($"/staff/users/{user.Id}")">@user.Name</a><span class="staff-row-meta">@user.Email</span></div></div></td><td>@user.Groups</td><td><span class="staff-user-ticket-count @(user.OpenTickets > 0 ? "has-open" : "")">@user.OpenTickets</span></td><td class="staff-table-action"><a class="staff-edit-link" href="@($"/staff/users/{user.Id}")">@Loc["View account"]<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" /></a></td></tr>
+                    }</tbody>
+                </table></div>
+            }
+            <StaffPagination Page="SafePage" Count="_result.Items.Count" HasMore="_result.HasMore" Previous="@PageUrl(SafePage - 1)" Next="@PageUrl(SafePage + 1)" />
+        }
+    </section>
+}
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery(Name="q")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name="page")] public int Page { get; set; }
+    private string _search = "";
+    private DirectoryPage<SupportUserResponse> _result = new([], false);
+    private int SafePage => Math.Clamp(Page, 0, 10000);
+    protected override Task OnParametersSetAsync() { _search = Search ?? ""; return Id is null ? RefreshAsync() : Task.CompletedTask; }
+    private Task RefreshAsync() => LoadAsync(() => Client.UserDirectoryAsync(Search ?? "", SafePage), result => _result = result);
+    private string PageUrl(int page) => $"/staff/users?q={Uri.EscapeDataString(Search ?? "")}&page={Math.Max(0, page)}";
+    private Task ApplyAsync() { Navigation.NavigateTo($"/staff/users?q={Uri.EscapeDataString(_search.Trim())}"); return Task.CompletedTask; }
+}

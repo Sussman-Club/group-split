@@ -18,6 +18,9 @@ public interface IKeycloakAdminClient
     /// <summary>The user with this id, or null when the realm has none.</summary>
     Task<KeycloakUserSummary?> FindByIdAsync(string id, CancellationToken ct = default);
 
+    /// <summary>Whether the user currently has the named effective realm role.</summary>
+    Task<bool> HasRealmRoleAsync(string id, string role, CancellationToken ct = default);
+
     /// <summary>The user holding this email, or null.</summary>
     Task<KeycloakUserSummary?> FindByEmailAsync(string email, CancellationToken ct = default);
 

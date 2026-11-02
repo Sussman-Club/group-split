@@ -1,4 +1,4 @@
-﻿@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
 @inject IAuthService AuthService
@@ -50,6 +50,7 @@
                 </div>
                 <MudDivider Class="my-1" />
                 <MudMenuItem Icon="@Icons.Material.Rounded.Settings" Label="@Loc["Settings"]" Href="/settings" />
+                <StaffConsoleLink />
                 <MudMenuItem Icon="@Icons.Material.Rounded.Logout" Label="@Loc["Sign out"]" OnClick="TryLogout" />
             </ChildContent>
         </MudMenu>

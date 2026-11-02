@@ -1,8 +1,8 @@
 namespace GroupSplit.Shared;
 
 // Values are persisted in jobs: append kinds without renumbering existing ones.
-public enum PushNotificationKind { ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue }
-public enum PushNotificationCategory { Expenses, Settlements, GuestsJoining, BankSyncIssues }
+public enum PushNotificationKind { ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue, StaffTicketCreated, StaffCustomerReplied }
+public enum PushNotificationCategory { Expenses, Settlements, GuestsJoining, BankSyncIssues, StaffSupport }
 
 public sealed record PushNotificationDefinition(
     PushNotificationKind Kind, PushNotificationCategory Category, string BodyTemplate);
@@ -18,7 +18,9 @@ public static class PushNotificationKinds
         new(PushNotificationKind.Settlement, PushNotificationCategory.Settlements, "A settlement was recorded in {0}."),
         new(PushNotificationKind.PaymentRequest, PushNotificationCategory.Settlements, "You have a payment request in {0}."),
         new(PushNotificationKind.InvitationAccepted, PushNotificationCategory.GuestsJoining, "A guest joined {0}."),
-        new(PushNotificationKind.BankSyncIssue, PushNotificationCategory.BankSyncIssues, "A linked bank needs your attention.")
+        new(PushNotificationKind.BankSyncIssue, PushNotificationCategory.BankSyncIssues, "A linked bank needs your attention."),
+        new(PushNotificationKind.StaffTicketCreated, PushNotificationCategory.StaffSupport, "A new support ticket is ready to review."),
+        new(PushNotificationKind.StaffCustomerReplied, PushNotificationCategory.StaffSupport, "A customer replied to a support ticket.")
     ]);
 
     public static IReadOnlyList<PushNotificationKind> Settings { get; } = Array.AsReadOnly(
@@ -37,6 +39,7 @@ public static class PushNotificationKinds
         PushNotificationCategory.Settlements => "settlements",
         PushNotificationCategory.GuestsJoining => "invitations",
         PushNotificationCategory.BankSyncIssues => "bank_sync",
+        PushNotificationCategory.StaffSupport => "staff_support",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -46,6 +49,7 @@ public static class PushNotificationKinds
         PushNotificationCategory.Settlements => "Settlements",
         PushNotificationCategory.GuestsJoining => "Guests joining",
         PushNotificationCategory.BankSyncIssues => "Bank sync issues",
+        PushNotificationCategory.StaffSupport => "Support tickets",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -55,6 +59,7 @@ public static class PushNotificationKinds
         PushNotificationCategory.Settlements => "push.settlements",
         PushNotificationCategory.GuestsJoining => "push.invitations",
         PushNotificationCategory.BankSyncIssues => "push.bank_sync",
+        PushNotificationCategory.StaffSupport => "push.staff_support",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -62,6 +67,7 @@ public static class PushNotificationKinds
     {
         if (!Enum.IsDefined(kind)) return null;
         if (kind == PushNotificationKind.BankSyncIssue) return "/account";
+        if (kind is PushNotificationKind.StaffTicketCreated or PushNotificationKind.StaffCustomerReplied) return "/staff/tickets?status=";
         if (kind == PushNotificationKind.PaymentRequest)
             return requestToken is { Length: > 0 and <= 128 }
                 && requestToken.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')

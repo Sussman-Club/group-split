@@ -8,5 +8,6 @@ public sealed class PushDevice : Entity
     public bool SettlementsEnabled { get; set; }
     public bool InvitationsEnabled { get; set; }
     public bool BankSyncIssuesEnabled { get; set; }
+    public bool StaffSupportEnabled { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

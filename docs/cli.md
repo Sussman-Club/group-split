@@ -662,3 +662,15 @@ client depends on the environment, so creating it writes exactly what an import 
 See [Applying this to a realm that already exists](keycloak.md#applying-this-to-a-realm-that-already-exists).
 
 `GROUPSPLIT_TOKEN` needs no realm change at all.
+
+
+### Staff operations
+
+Staff role holders can use `groupsplit staff` for support tickets, the shared merchant
+directory, account lookup, activity, team members and saved views. Use `staff tickets
+reply` for a reporter-visible message and `staff tickets note` for an internal note.
+`staff merchants merge-preview` returns impact counts and the source and target versions;
+pass those versions to `staff merchants merge`, which requires confirmation. Bulk updates
+require a reviewed JSON file containing each selected ticket's `expectedUpdatedAt`; the
+confirmation command pins its SHA-256. `staff merchants upload-logo` accepts a PNG up to
+1 MiB and 512×512 pixels. Run `groupsplit schema --json` for the complete command tree.

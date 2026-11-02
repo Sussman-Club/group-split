@@ -1380,6 +1380,8 @@ public class TransactionService(
         if (merchantId is null)
             return null;
 
+        var redirect = await dbContext.Set<MerchantRedirect>().Where(r => r.Id == merchantId).Select(r => (Guid?)r.MerchantId).SingleOrDefaultAsync(ct);
+        merchantId = redirect ?? merchantId;
         var exists = await dbContext.Set<Merchant>().AnyAsync(merchant => merchant.Id == merchantId, ct);
 
         if (!exists)

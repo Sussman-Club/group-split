@@ -97,6 +97,11 @@
     "user": "${SMTP_USER}",
     "password": "${SMTP_PASSWORD}"
   },
+  "roles": {
+    "realm": [
+      { "name": "groupsplit-staff", "description": "Maintain merchants and triage support tickets in the staff console" }
+    ]
+  },
   "clients": [
     {
       "clientId": "native",
