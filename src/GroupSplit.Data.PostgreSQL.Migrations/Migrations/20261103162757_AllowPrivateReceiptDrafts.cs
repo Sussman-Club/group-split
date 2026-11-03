@@ -25,6 +25,15 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 type: "uuid",
                 nullable: true);
 
+            migrationBuilder.AddColumn<string>(
+                name: "Currency",
+                table: "Receipt",
+                type: "text",
+                nullable: false,
+                defaultValue: "USD");
+
+            migrationBuilder.Sql("UPDATE \"Receipt\" r SET \"Currency\" = e.\"Currency\" FROM \"Transaction\" e WHERE e.\"Id\" = r.\"ExpenseId\";");
+
             migrationBuilder.CreateIndex(
                 name: "IX_Receipt_OwnerUserId",
                 table: "Receipt",
@@ -53,6 +62,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             migrationBuilder.DropColumn(
                 name: "OwnerUserId",
+                table: "Receipt");
+
+            migrationBuilder.DropColumn(
+                name: "Currency",
                 table: "Receipt");
 
             migrationBuilder.AlterColumn<Guid>(
