@@ -1,4 +1,5 @@
-﻿@using GroupSplit.App.Shared.Models
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.Shared
 @inject NavigationManager Nav
 @implements IDisposable
@@ -13,6 +14,7 @@
         <NavLink class="gs-nav-item" href="@item.Href" Match="@item.Match" title="@Loc[item.Text].Value">
             <MudIcon Icon="@item.Icon" />
             <span class="gs-nav-text">@Loc[item.Text].Value</span>
+            @if (item.Href == "/inbox") { <InboxHeader BadgeOnly="true" /> }
         </NavLink>
     }
 </nav>
@@ -27,6 +29,7 @@
     [
         new() { Href = "/", Text = "Home", Icon = Icons.Material.Rounded.SpaceDashboard, Match = NavLinkMatch.All },
         new() { Href = "/groups", Text = "Groups", Icon = Icons.Material.Rounded.Groups },
+        new() { Href = "/inbox", Text = "Inbox", Icon = Icons.Material.Rounded.Inbox },
         new() { Href = "/settings", Text = "Settings", Icon = Icons.Material.Rounded.Settings }
     ];
 

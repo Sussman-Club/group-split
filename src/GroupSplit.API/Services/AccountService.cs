@@ -109,10 +109,11 @@ public sealed class AccountService(
         await banks.UnlinkForAccount(userId, cancellationToken);
 
         var personalFiles = await context.Set<ReceiptAttachment>()
-            .Where(file => file.Expense != null && file.Expense.GroupId == userId)
+            .Where(file => file.Expense != null && file.Expense.GroupId == userId || file.Receipt != null && file.Receipt.OwnerUserId == userId && file.Receipt.ExpenseId == null)
             .ToListAsync(cancellationToken);
         receiptFiles.Enqueue(personalFiles.Select(file => file.ObjectKey));
         context.RemoveRange(personalFiles);
+        context.RemoveRange(await context.Set<Receipt>().Where(r => r.OwnerUserId == userId && r.ExpenseId == null).ToListAsync(cancellationToken));
 
         foreach (var group in sharedGroups)
         {

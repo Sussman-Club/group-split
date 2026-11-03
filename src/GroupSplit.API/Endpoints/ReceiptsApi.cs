@@ -37,6 +37,8 @@ public static class ReceiptsApi
                 .ProducesStandardProblems()
                 .WithTags("Receipts");
 
+            group.MapReceiptInbox();
+
             group.MapPost("/suggest-filing", async (SuggestReceiptFilingRequest request,
                     IFilingSuggester suggester, CancellationToken ct) =>
                     Results.Ok(await suggester.SuggestReceipt(request, ct)))

@@ -1,0 +1,72 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Errors
+@using Microsoft.AspNetCore.Components.Web
+@namespace GroupSplit.App.Shared.Components
+@inject IInboxClient Inbox
+@inject ApiErrorPresenter Errors
+@inject LocalClock Clock
+
+<MudDialog Class="gs-sheet">
+    <TitleContent><div class="gs-dialog-head"><div><div class="gs-eyebrow">@Loc["Search your bank inbox"]</div><h2 class="gs-dialog-title">@Loc["Find a bank transaction"]</h2></div></div></TitleContent>
+    <DialogContent>
+        <div class="gs-stack" style="gap:12px">
+            <MudTextField @bind-Value="_search" Label="@Loc["Search transactions"]" Placeholder="@Loc["Merchant, description or account"]" Variant="Variant.Outlined" Immediate="true" OnKeyDown="OnKeyDown" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Rounded.Search" />
+            <div class="gs-inline" style="justify-content:space-between"><MudText Typo="Typo.caption" Class="gs-muted">@(_searched is null ? Loc["Recent unfiled transactions"].Value : Loc["Matching transactions"].Value)</MudText><MudButton OnClick="SearchAsync" Disabled="_busy">@Loc["Search"]</MudButton></div>
+            @if (_busy && _rows.Count == 0) { <MudProgressCircular Indeterminate="true" Size="Size.Small" /> }
+            else if (_rows.Count == 0) { <div class="gs-empty">@Loc["No unfiled bank transactions found."]</div> }
+            else
+            {
+                <div class="gs-list">
+                    @foreach (var row in _rows)
+                    {
+                        var compatible = string.Equals(row.Currency, Currency, StringComparison.OrdinalIgnoreCase);
+                        <button type="button" class="gs-match-choice @(compatible ? null : "is-disabled")" disabled="@(!compatible)" @onclick="@(() => Choose(row))">
+                            <Avatar Name="@(row.MerchantName ?? row.Description)" />
+                            <span class="gs-match-choice-copy"><span class="title">@(row.MerchantName ?? row.Description)</span><span class="meta">@row.SpentOn.ToString("d") · @row.AccountName · @row.InstitutionName</span>@if (!compatible) { <span class="gs-tag neutral">@Loc["Different currency"]</span> }</span>
+                            <Money Value="@row.Amount" Currency="@row.Currency" /><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
+                        </button>
+                    }
+                </div>
+                @if (_hasMore) { <MudButton Disabled="_busy" OnClick="LoadMoreAsync">@Loc["Load more"]</MudButton> }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions><MudButton OnClick="Close">@Loc["Cancel"]</MudButton></DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public string Currency { get; set; } = "USD";
+    private string _search = "";
+    private string? _searched;
+    private IReadOnlyList<BankTransactionResponse> _rows = [];
+    private bool _busy, _hasMore;
+    private int _page;
+    protected override Task OnInitializedAsync() => SearchAsync();
+    private async Task SearchAsync()
+    {
+        if (_busy) return;
+        _searched = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+        _rows = []; _page = 0; _hasMore = true;
+        await LoadMoreAsync();
+    }
+    private async Task LoadMoreAsync()
+    {
+        if (_busy || !_hasMore) return;
+        _busy = true;
+        try
+        {
+            await Errors.TryAsync(async () =>
+            {
+                var page = await Inbox.SearchReceiptBankTransactionsAsync(search: _searched, page: _page + 1, pageSize: 20);
+                _rows = _rows.Concat(page.Items.Where(row => row.Status == InboxStatus.New && row.TransactionId is null))
+                    .DistinctBy(row => row.Id).ToArray();
+                _page++;
+                _hasMore = page.Items.Count > 0 && _page * 20 < page.TotalCount;
+            }, Loc["Could not search bank transactions."].Value);
+        }
+        finally { _busy = false; }
+    }
+    private Task OnKeyDown(KeyboardEventArgs args) => args.Key == "Enter" ? SearchAsync() : Task.CompletedTask;
+    private void Choose(BankTransactionResponse row) { if (string.Equals(row.Currency, Currency, StringComparison.OrdinalIgnoreCase)) MudDialog.Close(DialogResult.Ok(row)); }
+    private void Close() => MudDialog.Cancel();
+}

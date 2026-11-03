@@ -1,0 +1,73 @@
+@page "/inbox/receipts"
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services.Errors
+@using Microsoft.AspNetCore.Components.Forms
+@inject IReceiptsClient Client
+@inject IDialogService Dialogs
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
+@inject GroupSplit.App.Shared.Services.InboxOverview Overview
+
+<PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
+<InboxHeader />
+<div class="gs-inbox-context"><h2>@Loc["Receipts"]</h2><span class="gs-muted">@Loc["Private until filed. Choose who paid when you create the expense."]</span></div>
+<div class="gs-inbox-add" id="add-receipt">
+    <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" Title="@Loc["Add a receipt"]" Description="@Loc["Upload a photo or PDF. Review the details when you are ready."]" />
+</div>
+@if (_busy) { <MudProgressLinear Indeterminate="true" aria-label="@Loc["Saving receipt"]" /> }
+<LoadView Loading="_loading" Failed="@(_rows is null)" Retry="Load">
+@if (_rows is { Count: 0 })
+{
+    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@Loc["Your receipts start here"]</h3><p>@Loc["Keep a receipt now, then connect it to a bank payment or expense when you are ready."]</p></div>
+}
+else if (_rows is not null)
+{
+    <div class="gs-card gs-receipt-inbox-list">
+    @foreach (var row in _rows)
+    {
+        var source = row.Attachments.FirstOrDefault();
+        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{BankQuery}")" @key="row.Id">
+            <div class="gs-receipt-inbox-thumb">
+                @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
+                else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
+            </div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span><span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span></div>
+            <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong><span>@Loc["Review"] <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" /></span></div>
+        </a>
+    }
+    </div>
+}
+</LoadView>
+@code {
+    private IReadOnlyList<ReceiptInboxResponse>? _rows;
+    private bool _busy;
+    private bool _loading = true;
+    [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
+    private string BankQuery => BankId is { } id ? $"?bank={id}" : "";
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load()
+    {
+        _loading = true;
+        try { await Errors.TryAsync(async () => { _rows = (await Client.ListReceiptInboxAsync()).ToList(); Overview.SetReceiptCount(_rows.Count); }, Loc["Could not load receipts."].Value); }
+        finally { _loading = false; }
+    }
+    private string Source(Guid r, Guid a) => Nav.BaseUri + $"api/receipts/inbox/{r}/files/{a}";
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        _busy = true;
+        try
+        {
+            await Errors.TryAsync(async () =>
+            {
+                var id = Guid.NewGuid();
+                // Upload creates the draft and source together.
+                await using var stream = args.File.OpenReadStream(10 * 1024 * 1024);
+                var uploaded = await Client.UploadInboxReceiptFileAsync(id, new FileParameter(stream, args.File.Name, args.File.ContentType));
+                Nav.NavigateTo($"/inbox/receipts/{uploaded.ReceiptId ?? id}");
+            }, "Could not upload receipt. Please retry.");
+            await Load();
+        }
+        finally { _busy = false; }
+    }
+}
