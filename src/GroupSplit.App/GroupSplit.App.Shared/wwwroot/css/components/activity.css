@@ -77,3 +77,9 @@
     .gs-ledger-listing .gs-feed-row { padding-inline: 12px; transition: background var(--gs-fast); }
     .gs-ledger-listing .gs-feed-row:hover, .gs-ledger-listing .gs-feed-row:focus-within { background: var(--gs-surface-2); }
 }
+
+/* Equal row extents keep virtual scroll offsets stable across day boundaries.
+   Reserve the heading slot on every row, including continuations of a day. */
+.gs-ledger-listing .gs-virtual-row { height: 128px; box-sizing: border-box; padding-top: 44px; position: relative; }
+.gs-ledger-listing .gs-virtual-row .gs-virtual-date { position: absolute; top: 0; inset-inline: 0; height: 44px; margin: 0; padding: 12px 0; box-sizing: border-box; }
+.gs-ledger-listing .gs-virtual-row .gs-feed-row { height: 84px; min-height: 0; flex: 0 0 84px; }
