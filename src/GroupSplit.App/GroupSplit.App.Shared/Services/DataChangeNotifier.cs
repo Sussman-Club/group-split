@@ -31,6 +31,9 @@ public sealed class DataChangeNotifier
     /// </remarks>
     public event Func<Task>? BankDataChanged;
 
+    public event Func<Task>? ReceiptsChanged;
+    public Task NotifyReceiptsChangedAsync() => RaiseAsync(ReceiptsChanged);
+
     public Task NotifyTransactionsChangedAsync() => RaiseAsync(TransactionsChanged);
 
     public Task NotifyGroupsChangedAsync() => RaiseAsync(GroupsChanged);

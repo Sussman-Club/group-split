@@ -851,6 +851,8 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(r => r.Total).HasPrecision(18, 2);
             entity.HasOne(r => r.Expense).WithOne(e => e.Receipt)
                 .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(r => r.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(r => r.OwnerUserId);
         });
 
         modelBuilder.Entity<ReceiptAttachment>(entity =>

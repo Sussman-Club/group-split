@@ -297,6 +297,9 @@ public static class ErrorCodes
     /// name or a negative price, or a claim with no share in it. Distinct from
     /// <see cref="ReceiptDoesNotAddUp"/>, which is a well-formed bill whose figures disagree.
     /// </summary>
+    public const string ReceiptAlreadyFiled = "RECEIPT_ALREADY_FILED";
+    public const string ReceiptAlreadyAttached = "RECEIPT_ALREADY_ATTACHED";
+    public const string ReceiptSourceAlreadyImported = "RECEIPT_SOURCE_ALREADY_IMPORTED";
     public const string ReceiptInvalid = "RECEIPT_INVALID";
     public const string SplitOnAPersonalExpense = "SPLIT_ON_A_PERSONAL_EXPENSE";
     public const string RuleUsersNotInGroup = "RULE_USERS_NOT_IN_GROUP";

@@ -31,7 +31,7 @@ public static class ReceiptExtensions
                 : null;
 
         return new ReceiptResponse(
-            receipt.Id, receipt.ExpenseId, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
+            receipt.Id, receipt.ExpenseId ?? throw new InvalidOperationException("Receipt is not filed."), receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
             receipt.Items.Count(i => Shown(i) is null), canDivide, dividesItsExpense,
             [
                 .. receipt.Items.OrderBy(i => i.Position).ThenBy(i => i.Id).Select(i => new ReceiptItemResponse(

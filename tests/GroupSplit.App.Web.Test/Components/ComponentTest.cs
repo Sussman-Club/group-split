@@ -42,6 +42,11 @@ public abstract class ComponentTest : BunitContext
         Services.AddSingleton(Snackbar.Object);
         Services.AddSingleton<ApiErrorPresenter>();
         Services.AddSingleton(new DataChangeNotifier());
+        Services.AddSingleton(Mock.Of<GroupSplit.App.Shared.Services.Banking.IInboxStateService>());
+        var receiptInbox = new Mock<IReceiptsClient>();
+        receiptInbox.Setup(client => client.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ReceiptInboxResponse>());
+        Services.AddSingleton(receiptInbox.Object);
+        Services.AddSingleton<InboxOverview>();
         Services.AddSingleton<LoadGuard>();
 
         // A plain mock rather than bUnit's runtime, and deliberately not an in-process one:

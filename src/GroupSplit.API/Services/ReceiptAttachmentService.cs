@@ -13,6 +13,8 @@ namespace GroupSplit.API.Services;
 
 public interface IReceiptAttachmentService
 {
+    Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default);
+    Task<ReceiptAttachmentDownload> DownloadDraft(Guid receiptId, Guid attachmentId, CancellationToken ct = default);
     Task<IReadOnlyList<ReceiptAttachmentResponse>> List(Guid expenseId, CancellationToken ct = default);
     Task<ReceiptAttachmentResponse> Upload(Guid expenseId, IFormFile file, CancellationToken ct = default);
     Task<IReadOnlyList<ReceiptAttachmentResponse>> ListBank(Guid bankTransactionId, CancellationToken ct = default);
@@ -103,6 +105,53 @@ public sealed class ReceiptAttachmentService(
         return ToResponse(attachment);
     }
 
+    public async Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default)
+    {
+        await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
+        var contentType = Validate(file);
+        await using var hashStream = file.OpenReadStream();
+        var hash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(hashStream, ct));
+        var key = $"private/{currentUser.User.Id:N}/{hash}";
+        var existing = await db.Set<ReceiptAttachment>().Include(a => a.Receipt)
+            .FirstOrDefaultAsync(a => a.ObjectKey == key, ct);
+        if (existing is not null)
+        {
+            // A retry opens the existing private draft rather than creating another one.
+            if (existing.Receipt is { ExpenseId: null } draft && draft.OwnerUserId == currentUser.User.Id)
+                return ToResponse(existing);
+            throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
+                "This source file is already attached to an expense. Review the existing expense instead.")
+                .WithExtension("expenseId", existing.ExpenseId);
+        }        var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
+        if (receipt is null)
+            db.Add(new Receipt { Id = receiptId, OwnerUserId = currentUser.User.Id, Subtotal = 0, Total = 0 });
+        else if (receipt.OwnerUserId != currentUser.User.Id || receipt.ExpenseId != null)
+            throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
+        // The new draft and attachment are saved together only after storage succeeds.
+        var attachment = NewAttachment(file, null, receiptId);
+        attachment.ObjectKey = key;
+        attachment.BankTransactionId = null;
+        attachment.ReceiptId = receiptId;
+        await Store(attachment, file, ct);
+        return ToResponse(attachment);
+    }
+
+    public async Task<ReceiptAttachmentDownload> DownloadDraft(Guid receiptId, Guid attachmentId, CancellationToken ct = default)
+    {
+        await FindDraft(receiptId, ct);
+        var attachment = await db.Set<ReceiptAttachment>().FirstOrDefaultAsync(a => a.Id == attachmentId && a.ReceiptId == receiptId && a.ExpenseId == null, ct)
+            ?? throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file not found.");
+        using var response = await storage.GetObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct);
+        await using var buffer = new MemoryStream();
+        await response.ResponseStream.CopyToAsync(buffer, ct);
+        return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
+    }
+
+    private async Task FindDraft(Guid id, CancellationToken ct)
+    {
+        if (!await db.Set<Receipt>().AnyAsync(r => r.Id == id && r.OwnerUserId == currentUser.User.Id && r.ExpenseId == null, ct))
+            throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
+    }
     private ReceiptAttachment NewAttachment(IFormFile file, Guid? expenseId, Guid? bankTransactionId)
     {
         var contentType = Validate(file);

@@ -3,8 +3,10 @@ namespace GroupSplit.Data.Entities;
 /// <summary>The itemized bill for one expense.</summary>
 public class Receipt : Entity
 {
-    public virtual Expense Expense { get; set; } = null!;
-    public Guid ExpenseId { get; set; }
+    public virtual Expense? Expense { get; set; }
+    public Guid? ExpenseId { get; set; }
+    public Guid? OwnerUserId { get; set; }
+    public string Currency { get; set; } = Currencies.Default;
     public required decimal Subtotal { get; set; }
 
     /// <summary>The vendor wording read from the source document. It is not forced through

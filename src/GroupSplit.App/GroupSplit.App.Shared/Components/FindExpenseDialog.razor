@@ -72,6 +72,10 @@
                         </button>
                     }
                 </div>
+                @if (_hasMore)
+                {
+                    <MudButton Variant="Variant.Text" Disabled="@_busy" OnClick="LoadMoreAsync">@Loc["Load more"]</MudButton>
+                }
             }
         </div>
     </DialogContent>
@@ -85,35 +89,63 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter, EditorRequired] public BankTransactionResponse Row { get; set; } = null!;
+    [Parameter] public bool RequireUnlinkedBank { get; set; } = true;
 
     private string _search = string.Empty;
     private IReadOnlyList<TransactionResponse> _expenses = [];
     private bool _busy;
+    private bool _hasMore;
+    private int _page;
+    private string? _searched;
 
     protected override Task OnInitializedAsync() => SearchAsync();
 
     private async Task SearchAsync()
     {
+        if (_busy) return;
         _busy = true;
         _expenses = [];
+        _hasMore = false;
+        _page = 0;
+        _searched = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
 
         try
         {
             await Errors.TryAsync(async () =>
             {
                 var page = await TransactionsClient.GetTransactionsAsync(
-                    search: string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                    search: _searched,
                     sortBy: "dateTime",
                     sortDescending: true,
                     page: 1,
                     pageSize: 20);
                 _expenses = page.Items;
+                _page = 1;
+                _hasMore = _expenses.Count < page.TotalCount;
             }, Loc["Could not search expenses."].Value);
         }
         finally
         {
             _busy = false;
         }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_busy || !_hasMore) return;
+        _busy = true;
+        try
+        {
+            await Errors.TryAsync(async () =>
+            {
+                var page = await TransactionsClient.GetTransactionsAsync(search: _searched,
+                    sortBy: "dateTime", sortDescending: true, page: _page + 1, pageSize: 20);
+                _expenses = _expenses.Concat(page.Items).DistinctBy(expense => expense.Id).ToArray();
+                _page++;
+                _hasMore = page.Items.Count > 0 && _page * 20 < page.TotalCount;
+            }, Loc["Could not search expenses."].Value);
+        }
+        finally { _busy = false; }
     }
 
     private async Task OnKeyDown(KeyboardEventArgs args)
@@ -129,7 +161,7 @@
     }
 
     private bool CanAttach(TransactionResponse expense) =>
-        !expense.HasBankTransaction
+        (!RequireUnlinkedBank || !expense.HasBankTransaction)
         && string.Equals(expense.Currency, Row.Currency, StringComparison.OrdinalIgnoreCase);
 
     private string WhyNotAttachable(TransactionResponse expense) =>

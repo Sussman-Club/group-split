@@ -59,7 +59,7 @@ public class ReceiptService(
     public async Task<ReceiptResponse> ResponseFor(Receipt receipt, Guid? expenseId = null,
         CancellationToken ct = default)
     {
-        var expense = await VisibleExpense(receipt.ExpenseId, ct);
+        var expense = await VisibleExpense(receipt.ExpenseId ?? throw new InvalidOperationException("Receipt is not filed."), ct);
         // Personal receipts are useful as itemized records even though they never produce
         // a group division. They remain editable by their owner, while division stays a
         // shared-expense concern.

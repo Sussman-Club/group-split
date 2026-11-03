@@ -26,23 +26,14 @@
     paid and how much, and everything else is secondary.
 *@
 
-<PageTitle>@Loc["Bank transactions - Group Split"]</PageTitle>
-
-<div class="gs-page-head">
-    <div>
-        <div class="gs-eyebrow">@Loc["Bank transactions"]</div>
-        <h1>@Loc["Not filed"]</h1>
-        @if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
-        {
-            <p role="status" aria-live="polite">@Loc["{0} left to review in this range.", Counted(State.TotalCount)].Value</p>
-        }
-        @if (Headline is { Length: > 0 } headline)
-        {
-            <p>@headline</p>
-        }
-    </div>
-</div>
-
+<PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
+<InboxHeader />
+<div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review imported payments and connect them to expenses or receipts."]</span></div>
+@if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
+{
+    <p role="status" aria-live="polite">@Loc["{0} left to review in this range.", Counted(State.TotalCount)].Value</p>
+}
+@if (Headline is { Length: > 0 } headline) { <p>@headline</p> }
 <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@(_initializing || State.IsLoading)" Failed="@(!State.RowsLoaded)" Retry="InitializeAsync">
 
 

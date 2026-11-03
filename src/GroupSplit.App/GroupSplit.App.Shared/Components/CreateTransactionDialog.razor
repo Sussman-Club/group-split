@@ -213,6 +213,8 @@
     public sealed record Answer(CreateTransactionRequest Request, IBrowserFile File,
         SaveReceiptRequest? Receipt);
 
+    [Parameter] public SaveReceiptRequest? InboxReceipt { get; set; }
+    [Parameter] public string? InboxCurrency { get; set; }
     [Parameter] public bool ShowFirstExpenseGuide { get; set; }
     private int _guideStep;
     private bool _guideDismissed;
@@ -629,6 +631,13 @@
         _selectedTime = now.TimeOfDay;
 
         await OpenAsync();
+        if (InboxReceipt is { } inbox)
+        {
+            _model.Name = inbox.MerchantName ?? "Receipt";
+            _model.Amount = inbox.Total;
+            _currency = InboxCurrency ?? _currency;
+            if (inbox.PurchaseDate is { } day) _selectedDate = day.ToDateTime(TimeOnly.MinValue);
+        }
     }
 
     /// <summary>

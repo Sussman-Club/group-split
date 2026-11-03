@@ -81,6 +81,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IEvenSplitRule, EvenSplitRule>();
             services.AddScoped<IExpenseSplitter, ExpenseSplitter>();
             services.AddScoped<IReceiptService, ReceiptService>();
+            services.AddScoped<ReceiptInboxService>();
             services.AddScoped<IReceiptFiles, ReceiptFiles>();
             services.AddScoped<IReceiptAttachmentService, ReceiptAttachmentService>();
             services.AddBankingServices();
