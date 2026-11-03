@@ -9,6 +9,8 @@ public sealed class ApiProblemException(ProblemDetails? problem, System.Net.Http
     : HttpRequestException(problem?.Detail ?? problem?.Title ?? "The request failed.", null, status)
 {
     public ProblemDetails? Problem { get; } = problem;
+
+    public string UserMessage => Errors.ErrorMessages.For(Problem?.GetExtensionString("code"), (int?)StatusCode);
 }
 
 internal static class ApiHttpResponse

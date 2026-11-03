@@ -533,12 +533,14 @@
     private IReadOnlyList<GroupLedgerEntryResponse> _mobileEntries = [];
     private bool _ledgerLoaded;
     private long _feedVersion;
+    private TransactionPageCache<GroupLedgerEntryResponse> _pageCache = new();
     private ScrollFeed<DayGroupedItem<GroupLedgerEntryResponse>>? _virtualFeed;
     private bool _virtualFailed;
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
     private SummaryKey? _inFlight;
     private long _summaryVersion;
+    private CancellationTokenSource? _summaryRequest;
     private bool _initializing = true;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_searchString);
@@ -650,15 +652,17 @@
     private async Task<GridData<GroupLedgerEntryResponse>> LoadPageAsync(
         GridState<GroupLedgerEntryResponse> state, CancellationToken cancellationToken)
     {
-        var version = _feedVersion;
         var sort = state.SortDefinitions.FirstOrDefault();
 
         // Every narrowing ends up here, so this is where the URL catches up with it.
         // Android shows a chronological feed, not a sortable table. Its hidden grid
         // must not restore an ascending or non-date sort, including on later pages.
-        _sort = AppLinks.IsAndroidNative || sort is null
+        var nextSort = AppLinks.IsAndroidNative || sort is null
             ? ListingQuery.DefaultSort
             : (Camel(sort.SortBy), sort.Descending);
+        if (_sort != nextSort) InvalidateFeed();
+        _sort = nextSort;
+        var version = _feedVersion;
         await WriteUrlAsync();
 
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
@@ -705,14 +709,15 @@
         var sort = _sort;
         var version = _feedVersion;
         ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>> result = default;
+        var cache = _pageCache;
         var loaded = await Errors.TryAsync(async () =>
         {
             result = await DayGroupedItemsProvider.GetAsync<GroupLedgerEntryResponse>(request,
-                async (page, size, ct) => await GroupsClient.GetGroupActivityAsync(
+                (page, size, ct) => cache.GetAsync(page, size, ct, async (page, size, ct) => await GroupsClient.GetGroupActivityAsync(
                     group, from: bounds.From, to: bounds.To, kind: (int?)kind, search: search,
                     categoryId: category, uncategorized: uncategorized ? true : null, paidBy: payer,
                     sortBy: sort.Key, sortDescending: sort.Descending, page: page, pageSize: size,
-                    cancellationToken: ct), entry => Clock.Day(entry.DateTime));
+                    cancellationToken: ct)), entry => Clock.Day(entry.DateTime));
         }, Loc["Could not load this group's ledger."].Value);
         request.CancellationToken.ThrowIfCancellationRequested();
         if (_disposed || version != _feedVersion) return new ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>([], 0);
@@ -752,8 +757,7 @@
     private async Task OnSearchChangedAsync(string _)
     {
         InvalidateFeed();
-        await ReadSummaryAsync();
-        await BackToFirstPageAsync();
+        await Task.WhenAll(ReadSummaryAsync(), BackToFirstPageAsync());
     }
 
     private async Task ClearSearchAsync()
@@ -767,8 +771,7 @@
         _range = range;
         InvalidateFeed();
 
-        await ReadSummaryAsync();
-        await BackToFirstPageAsync();
+        await Task.WhenAll(ReadSummaryAsync(), BackToFirstPageAsync());
     }
 
     private Task ShowAllTimeAsync() => OnRangeChangedAsync(DateFilter.AllTime);
@@ -781,8 +784,7 @@
         _uncategorized = !selectingCurrent && categoryId is null;
         InvalidateFeed();
 
-        await ReadSummaryAsync();
-        await BackToFirstPageAsync();
+        await Task.WhenAll(ReadSummaryAsync(), BackToFirstPageAsync());
     }
 
     private async Task SetPaidByAsync(Guid? userId)
@@ -792,8 +794,7 @@
 
         _paidBy = userId;
         InvalidateFeed();
-        await ReadSummaryAsync();
-        await BackToFirstPageAsync();
+        await Task.WhenAll(ReadSummaryAsync(), BackToFirstPageAsync());
     }
 
     private async Task LoadPayersAsync()
@@ -826,6 +827,7 @@
     private void InvalidateFeed()
     {
         ++_feedVersion;
+        _pageCache = new();
     }
 
     /// <summary>
@@ -885,6 +887,9 @@
 
         var version = ++_summaryVersion;
         _inFlight = key;
+        _summaryRequest?.Cancel();
+        using var request = new CancellationTokenSource();
+        _summaryRequest = request;
 
         try
         {
@@ -892,11 +897,15 @@
 
             var spending = await ReadAsync(() => GroupsClient.GetGroupTransactionsSummaryAsync(
                 key.Group, from: bounds.From, to: bounds.To, paidBy: key.PaidBy,
-                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search));
+                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search,
+                cancellationToken: request.Token));
+
+            if (request.IsCancellationRequested) return;
 
             var byCategory = await ReadAsync(() => GroupsClient.GetGroupSpendingByCategoryAsync(
                 key.Group, from: bounds.From, to: bounds.To, paidBy: key.PaidBy,
-                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search));
+                categoryId: key.CategoryId, uncategorized: key.Uncategorized ? true : null, search: key.Search,
+                cancellationToken: request.Token));
 
             // A failed read must not count as an answer, and an answer from an older request
             // must not overwrite the figures after a write invalidated the same question.
@@ -909,7 +918,8 @@
         }
         finally
         {
-            if (version == _summaryVersion)
+            if (ReferenceEquals(_summaryRequest, request)) _summaryRequest = null;
+            if (version == _summaryVersion && !_disposed)
             {
                 _inFlight = null;
                 _initializing = false;
@@ -1131,7 +1141,7 @@
 
     private async Task OnDataChangedAsync()
     {
-        ++_feedVersion;
+        InvalidateFeed();
         _asked = null;
         _inFlight = null;
         ++_summaryVersion;
@@ -1243,9 +1253,10 @@
     /// </summary>
     protected override async Task OnParametersSetAsync()
     {
-        if (Asked != _settled)
+        if (Asked != _settled || _feedGroup != GroupId)
         {
-            ++_feedVersion;
+            InvalidateFeed();
+            _feedGroup = GroupId;
             Apply(Asked);
             _gridGeneration++;
         }
@@ -1254,9 +1265,12 @@
         await ReadSummaryAsync();
     }
 
+    private Guid _feedGroup;
+
     public void Dispose()
     {
         _disposed = true;
+        _summaryRequest?.Cancel();
         ++_feedVersion;
 
         Changes.TransactionsChanged -= OnDataChangedAsync;

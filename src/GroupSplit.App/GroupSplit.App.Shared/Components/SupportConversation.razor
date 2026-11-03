@@ -99,7 +99,7 @@
             _success = ForReporter || _public ? Loc["Reply sent."] : Loc["Internal note added."];
         }
         catch (HttpRequestException e)
-        { _error = e is ApiProblemException { Problem.Detail: { Length: > 0 } detail } && (int?)e.StatusCode is >= 400 and < 500 ? detail : Loc["Could not send the message. Your draft is still here."]; }
+        { _error = e is ApiProblemException problem ? problem.UserMessage : Loc["Could not send the message. Your draft is still here."]; }
         catch (TaskCanceledException) { _error = Loc["The request timed out. Your draft is still here."]; }
         finally { _sending = false; }
     }

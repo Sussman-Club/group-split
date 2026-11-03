@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Globalization;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.Shared;
 
@@ -7,6 +8,21 @@ namespace GroupSplit.App.Web.Test.Errors;
 
 public class StaffClientProblemTest
 {
+    [Fact]
+    public void Ticket_errors_use_localized_codes_instead_of_English_API_details()
+    {
+        var before = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es");
+            var problem = System.Text.Json.JsonSerializer.Deserialize<ProblemDetails>(
+                """{"detail":"This support ticket changed on the server.","code":"TICKET_CHANGED"}""");
+            var exception = new ApiProblemException(problem, HttpStatusCode.Conflict);
+            Assert.Equal("Este ticket cambió. Actualízalo antes de intentarlo de nuevo.", exception.UserMessage);
+        }
+        finally { CultureInfo.CurrentUICulture = before; }
+    }
+
     [Fact]
     public async Task Staff_mutations_preserve_problem_details()
     {

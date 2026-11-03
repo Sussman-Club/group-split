@@ -293,6 +293,39 @@ public class GroupLedgerTabTest : ComponentTest
         return tab.InvokeAsync(() => filter.Instance.ValueChanged.InvokeAsync(new DateFilter(preset)));
     }
 
+    [Fact]
+    public async Task Repeatedly_switching_all_time_and_this_year_keeps_the_feed_responsive()
+    {
+        _entries = [Expense(Guid.NewGuid(), "Visible expense")];
+        var tab = Render();
+        for (var i = 0; i < 4; i++)
+        {
+            await PickSpanAsync(tab, DateFilterPreset.AllTime);
+            await PickSpanAsync(tab, DateFilterPreset.ThisYear);
+        }
+        await PickSpanAsync(tab, DateFilterPreset.AllTime);
+        tab.WaitForAssertion(() => Assert.Contains("Visible expense", tab.Markup));
+        Assert.True(_asks.Last().IsAllTime);
+    }
+
+    [Fact]
+    public async Task All_time_rows_load_while_a_slow_summary_is_still_pending()
+    {
+        var tab = Render();
+        var held = new TaskCompletionSource<TransactionSummaryResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _answer = ask => ask.IsAllTime ? held.Task : Task.FromResult(new TransactionSummaryResponse(5, 29m));
+        var before = _pages.Count;
+        var widening = PickSpanAsync(tab, DateFilterPreset.AllTime);
+        try
+        {
+            tab.WaitForAssertion(() => Assert.True(_pages.Count > before));
+            await PickSpanAsync(tab, DateFilterPreset.ThisYear);
+        }
+        finally { held.TrySetResult(new TransactionSummaryResponse(999, 999m)); }
+        await widening;
+        Assert.False(_asks.Last().IsAllTime);
+    }
+
     private static IReadOnlyList<IElement> Buttons(IRenderedComponent<GroupLedgerTab> tab, string prefix) =>
         tab.FindAll("button[aria-label^='" + prefix + "']");
 

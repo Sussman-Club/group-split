@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
@@ -105,10 +106,13 @@ public class TokenRedactionTest
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
+        // Capture request logs and spans regardless of production log levels or parent sampling.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Information);
         builder.ConfigureOpenTelemetry();
         builder.Services.AddHttpClient();
         builder.Services.ConfigureOpenTelemetryTracerProvider(tracing =>
-            tracing.AddProcessor(new SimpleActivityExportProcessor(new Collector<Activity>(spans, Describe))));
+            tracing.SetSampler(new AlwaysOnSampler())
+                .AddProcessor(new SimpleActivityExportProcessor(new Collector<Activity>(spans, Describe))));
         builder.Services.ConfigureOpenTelemetryLoggerProvider(logging =>
             logging.AddProcessor(new SimpleLogRecordExportProcessor(new Collector<LogRecord>(logs, Describe))));
 

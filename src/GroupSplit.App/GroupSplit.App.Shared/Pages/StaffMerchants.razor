@@ -35,7 +35,7 @@
                         var href = StaffLinks.Detail($"/staff/merchants/{merchant.Id}", CurrentView);
                         <tr @key="merchant.Id">
                             <td><div class="staff-merchant-name"><MerchantMark MerchantName="@merchant.Name" MerchantLogoUrl="@merchant.LogoUrl" /><div><a class="staff-record-link" href="@href">@merchant.Name</a><span class="staff-row-meta">@(string.IsNullOrWhiteSpace(merchant.LogoUrl) ? Loc["Initials shown"] : Loc["Logo configured"])</span></div></div></td>
-                            <td><strong>@merchant.TransactionCount.ToString("N0")</strong><span class="staff-row-meta">@Loc["transactions"]</span></td>
+                            <td><strong>@merchant.TransactionCount.ToString("N0")</strong><span class="staff-row-meta">@Loc["Copy.Lower.transactions"]</span></td>
                             <td class="staff-date">@merchant.FirstSeenAt.ToLocalTime().ToString("d")</td>
                             <td class="staff-table-action"><a class="staff-edit-link" href="@href" aria-label="@Loc["Edit {0}", merchant.Name]">@Loc["Edit"]<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" /></a></td>
                         </tr>
