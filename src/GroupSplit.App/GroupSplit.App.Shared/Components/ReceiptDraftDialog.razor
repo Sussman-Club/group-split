@@ -101,7 +101,7 @@
                         <span>@item.Quantity.ToString("0.###") × @item.UnitPrice.ToMoney(Currency)@if (item.TotalPrice == 0) { <text> · @Loc["Free item"]</text> }@if (item.TaxRate is { } rate) { <text> · @rate.ToString("0.####")%</text> }</span>
                         <div class="gs-editable-receipt-actions">
                             <button type="button" class="gs-receipt-detail-toggle" aria-expanded="@_expandedItems.Contains(item.Key)" @onclick="@(() => ToggleDetails(item.Key))">@Loc["Details"]</button>
-                            <button type="button" class="gs-receipt-remove" aria-label="@Loc["Remove item"]" title="@Loc["Remove item"]" @onclick="@(() => RemoveItem(item))"><MudIcon Icon="@Icons.Material.Rounded.DeleteOutline" Size="Size.Small" /></button>
+                            <button type="button" class="gs-editable-receipt-remove" aria-label="@Loc["Remove item"]" title="@Loc["Remove item"]" @onclick="@(() => RemoveItem(item))"><MudIcon Icon="@Icons.Material.Rounded.DeleteOutline" Size="Size.Small" /></button>
                         </div>
                     </div>
                     <div class="gs-receipt-fields gs-editable-receipt-line-details" hidden="@(!_expandedItems.Contains(item.Key))">

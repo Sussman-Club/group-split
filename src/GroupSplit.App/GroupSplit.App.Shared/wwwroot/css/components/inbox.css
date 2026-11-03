@@ -246,7 +246,7 @@
 .gs-receipt-inbox-end > span { display: flex; align-items: center; color: var(--gs-teal-deep); font-size: .85rem; }
 .gs-receipt-inbox-end small { font-weight: 400; }
 .gs-receipt-empty { padding: 32px 20px; }
-.gs-receipt-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.gs-receipt-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .gs-receipt-review-original { min-width: 0; }
 .gs-receipt-review-original summary { cursor: pointer; padding: 14px; min-height: 48px; border: 1px solid var(--gs-line); border-radius: var(--gs-radius); margin-bottom: 14px; }
 @media (max-width: 600px) {
@@ -259,12 +259,12 @@
     .gs-receipt-inbox-thumb { width: 36px; height: 48px; flex-basis: 36px; }
     .gs-receipt-inbox-end { max-width: 38%; font-size: .9rem; overflow-wrap: anywhere; }
     .gs-receipt-inbox-end small { display: block; text-align: right; }
-    .gs-receipt-review-layout { grid-template-columns: minmax(0, 1fr); }
+    .gs-receipt-review-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .gs-receipt-review-details .mud-button-root { min-height: 48px; }
 }
 
 /* Keep form controls at their natural height beside a tall document preview. */
-.gs-receipt-review-layout { align-items: start; }
+
 .gs-receipt-review-back { margin-bottom: 20px; }
 .gs-receipt-review-heading { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
 .gs-receipt-review-heading h1, .gs-receipt-review-heading p { margin: 0; }
@@ -281,7 +281,7 @@
 .gs-receipt-review-original .gs-stack { min-width: 0; }
 .gs-receipt-review-original .mud-button-root { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-    .gs-receipt-review-layout { gap: 16px; }
+
     .gs-receipt-currency-row { flex-wrap: wrap; }
     .gs-receipt-currency-row .mud-input-control { flex: 1 1 120px; }
     .gs-receipt-review-section { gap: 12px; }
