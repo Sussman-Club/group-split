@@ -10,6 +10,20 @@ namespace GroupSplit.App.Web.Test.State;
 public sealed class LanguageResourcesTest
 {
     [Theory]
+    [InlineData("Tickets", "Tickets")]
+    [InlineData("Waiting for customer", "Pendiente de respuesta del usuario")]
+    [InlineData("Ticket management", "Gestión del ticket")]
+    [InlineData("Conversation & notes", "Conversación y notas")]
+    [InlineData("Internal note · staff only", "Nota interna · solo el equipo")]
+    [InlineData("Report submitted", "Informe enviado")]
+    public void Support_copy_has_explicit_Spanish_resources(string key, string expected)
+    {
+        var manager = new ResourceManager(typeof(AppStrings));
+        var spanish = manager.GetResourceSet(CultureInfo.GetCultureInfo("es"), true, false)!;
+        Assert.Equal(expected, spanish.GetString(key));
+    }
+
+    [Theory]
     [InlineData("es")]
     [InlineData("pt")]
     public void Built_in_rules_translate_but_custom_rule_names_remain_verbatim(string language)

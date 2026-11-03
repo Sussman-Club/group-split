@@ -40,9 +40,11 @@ internal class AuthDelegatingHandler(
             // it was handed is not one it will honour (RFC 6749 section 5.2). Against a realm
             // that rotates them one-time-use that is the ordinary end of a session -- idle
             // timeout reached, max lifespan reached, or the token already exchanged -- and not
-            // a fault. Every other error from the exchange is.
+            // a fault. Missing cached tokens likewise require a fresh sign-in; the existing
+            // 401 handling takes care of that. Exchange and infrastructure failures remain errors.
             if (string.Equals(failure.Error, OidcConstants.TokenErrors.InvalidGrant,
-                    StringComparison.OrdinalIgnoreCase))
+                    StringComparison.OrdinalIgnoreCase)
+                || failure.Error is "no_stored_token" or "no_session")
             {
                 logger.LogWarning(
                     "Session token was refused for {Method} {Uri}: {Error} ({Description}).",

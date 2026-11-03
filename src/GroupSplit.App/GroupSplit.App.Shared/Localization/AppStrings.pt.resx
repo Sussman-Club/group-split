@@ -4725,4 +4725,826 @@
   <data name="If you already recorded this payment, attach it to that expense to avoid counting it twice." xml:space="preserve"><value>Se você já registrou este pagamento, vincule-o à despesa existente para não contá-lo duas vezes.</value></data>
   <data name="For a new expense, choose a group or Personal. In a shared group, check the category and each person’s share before adding it." xml:space="preserve"><value>Para uma nova despesa, escolha um grupo ou Pessoal. Em um grupo compartilhado, confira a categoria e a parte de cada pessoa antes de adicioná-la.</value></data>
   <data name="Describe what happened, your suggestion, or your question. If something went wrong, include what you did before it happened." xml:space="preserve"><value>Descreva o que aconteceu, sua sugestão ou sua pergunta. Se algo deu errado, inclua o que você fez antes de acontecer.</value></data>
+  <data name="A selected ticket changed. Refresh the queue and review your selection; no tickets were updated." xml:space="preserve">
+    <value>Um chamado selecionado mudou. Atualize a fila e revise a seleção; nenhum chamado foi atualizado.</value>
+  </data>
+  <data name="A shared record of support and directory changes." xml:space="preserve">
+    <value>Um registro compartilhado de alterações no suporte e no diretório.</value>
+  </data>
+  <data name="Account" xml:space="preserve">
+    <value>Conta</value>
+  </data>
+  <data name="Account details" xml:space="preserve">
+    <value>Detalhes da conta</value>
+  </data>
+  <data name="Account details are unavailable." xml:space="preserve">
+    <value>Os detalhes da conta não estão disponíveis.</value>
+  </data>
+  <data name="Account identity, membership count and open support reports. Financial details are not included." xml:space="preserve">
+    <value>Identidade da conta, número de grupos e pedidos de suporte abertos. Não inclui dados financeiros.</value>
+  </data>
+  <data name="Activity - Staff - Group Split" xml:space="preserve">
+    <value>Atividade - Equipe - Group Split</value>
+  </data>
+  <data name="Activity filters" xml:space="preserve">
+    <value>Filtros de atividade</value>
+  </data>
+  <data name="Activity history" xml:space="preserve">
+    <value>Histórico de atividade</value>
+  </data>
+  <data name="Activity is kept for seven days. Ticket conversations and status history are stored separately." xml:space="preserve">
+    <value>A atividade é mantida por sete dias. As conversas e o histórico de status dos chamados são armazenados separadamente.</value>
+  </data>
+  <data name="Add a description before sending." xml:space="preserve">
+    <value>Adicione uma descrição antes de enviar.</value>
+  </data>
+  <data name="Add a name used by this merchant" xml:space="preserve">
+    <value>Adicionar um nome usado por este estabelecimento</value>
+  </data>
+  <data name="Add alias" xml:space="preserve">
+    <value>Adicionar nome alternativo</value>
+  </data>
+  <data name="Add internal note" xml:space="preserve">
+    <value>Adicionar nota interna</value>
+  </data>
+  <data name="Add merchant" xml:space="preserve">
+    <value>Adicionar estabelecimento</value>
+  </data>
+  <data name="Alias" xml:space="preserve">
+    <value>Nome alternativo</value>
+  </data>
+  <data name="Alias added" xml:space="preserve">
+    <value>Nome alternativo adicionado</value>
+  </data>
+  <data name="Alias removed" xml:space="preserve">
+    <value>Nome alternativo removido</value>
+  </data>
+  <data name="All priorities" xml:space="preserve">
+    <value>Todas as prioridades</value>
+  </data>
+  <data name="All selected tickets are checked for newer changes before the update is applied." xml:space="preserve">
+    <value>Antes da atualização, todos os chamados selecionados são verificados quanto a alterações recentes.</value>
+  </data>
+  <data name="All statuses" xml:space="preserve">
+    <value>Todos os status</value>
+  </data>
+  <data name="All tickets" xml:space="preserve">
+    <value>Todos os chamados</value>
+  </data>
+  <data name="All types" xml:space="preserve">
+    <value>Todos os tipos</value>
+  </data>
+  <data name="Android notifications" xml:space="preserve">
+    <value>Notificações do Android</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Aplicar</value>
+  </data>
+  <data name="Assign to me" xml:space="preserve">
+    <value>Atribuir a mim</value>
+  </data>
+  <data name="Assigned to" xml:space="preserve">
+    <value>Atribuído a</value>
+  </data>
+  <data name="Assigned to me" xml:space="preserve">
+    <value>Atribuídos a mim</value>
+  </data>
+  <data name="Assignment" xml:space="preserve">
+    <value>Atribuição</value>
+  </data>
+  <data name="Back to app" xml:space="preserve">
+    <value>Voltar ao aplicativo</value>
+  </data>
+  <data name="Back to merchants" xml:space="preserve">
+    <value>Voltar aos estabelecimentos</value>
+  </data>
+  <data name="Back to tickets" xml:space="preserve">
+    <value>Voltar aos chamados</value>
+  </data>
+  <data name="Back to user lookup" xml:space="preserve">
+    <value>Voltar à busca de usuários</value>
+  </data>
+  <data name="Bank imports recognize these names as this merchant. Previous merchant names are kept as aliases." xml:space="preserve">
+    <value>As importações bancárias reconhecem estes nomes como este estabelecimento. Os nomes anteriores são mantidos como nomes alternativos.</value>
+  </data>
+  <data name="Bank rows moved" xml:space="preserve">
+    <value>Transações bancárias movidas</value>
+  </data>
+  <data name="Before you save" xml:space="preserve">
+    <value>Antes de salvar</value>
+  </data>
+  <data name="Bug" xml:space="preserve">
+    <value>Erro</value>
+  </data>
+  <data name="Bulk update" xml:space="preserve">
+    <value>Atualização em lote</value>
+  </data>
+  <data name="Check for an existing entry first." xml:space="preserve">
+    <value>Verifique primeiro se já existe.</value>
+  </data>
+  <data name="Checking staff access…" xml:space="preserve">
+    <value>Verificando o acesso da equipe…</value>
+  </data>
+  <data name="Choose a PNG or JPG image up to 5 MB." xml:space="preserve">
+    <value>Escolha uma imagem PNG ou JPG de até 5 MB.</value>
+  </data>
+  <data name="Choose a logo, or leave it blank for initials." xml:space="preserve">
+    <value>Escolha um logotipo ou deixe em branco para mostrar as iniciais.</value>
+  </data>
+  <data name="Choose an existing logo" xml:space="preserve">
+    <value>Escolher um logotipo existente</value>
+  </data>
+  <data name="Choose how this device alerts you about support work." xml:space="preserve">
+    <value>Escolha como este dispositivo avisa sobre o trabalho de suporte.</value>
+  </data>
+  <data name="Classification needs review" xml:space="preserve">
+    <value>A classificação precisa de revisão</value>
+  </data>
+  <data name="Classification review" xml:space="preserve">
+    <value>Revisão da classificação</value>
+  </data>
+  <data name="Clear filters" xml:space="preserve">
+    <value>Limpar filtros</value>
+  </data>
+  <data name="Closed" xml:space="preserve">
+    <value>Fechado</value>
+  </data>
+  <data name="Confirm merge" xml:space="preserve">
+    <value>Confirmar fusão</value>
+  </data>
+  <data name="Conversation" xml:space="preserve">
+    <value>Conversa</value>
+  </data>
+  <data name="Conversation &amp; notes" xml:space="preserve">
+    <value>Conversa e notas</value>
+  </data>
+  <data name="Could not check access" xml:space="preserve">
+    <value>Não foi possível verificar o acesso</value>
+  </data>
+  <data name="Could not complete this action. Check your connection and try again." xml:space="preserve">
+    <value>Não foi possível concluir esta ação. Verifique a conexão e tente novamente.</value>
+  </data>
+  <data name="Could not delete this view." xml:space="preserve">
+    <value>Não foi possível excluir esta visualização.</value>
+  </data>
+  <data name="Could not load activity." xml:space="preserve">
+    <value>Não foi possível carregar a atividade.</value>
+  </data>
+  <data name="Could not load older messages. Try again." xml:space="preserve">
+    <value>Não foi possível carregar as mensagens anteriores. Tente novamente.</value>
+  </data>
+  <data name="Could not load saved views." xml:space="preserve">
+    <value>Não foi possível carregar as visualizações salvas.</value>
+  </data>
+  <data name="Could not load the conversation." xml:space="preserve">
+    <value>Não foi possível carregar a conversa.</value>
+  </data>
+  <data name="Could not prepare this image. Try another PNG or JPG file." xml:space="preserve">
+    <value>Não foi possível preparar esta imagem. Tente outro arquivo PNG ou JPG.</value>
+  </data>
+  <data name="Could not save this view. Use a different name or try again." xml:space="preserve">
+    <value>Não foi possível salvar esta visualização. Use outro nome ou tente novamente.</value>
+  </data>
+  <data name="Could not send the message. Your draft is still here." xml:space="preserve">
+    <value>Não foi possível enviar a mensagem. Seu rascunho continua aqui.</value>
+  </data>
+  <data name="Could not update tickets. Try again." xml:space="preserve">
+    <value>Não foi possível atualizar os chamados. Tente novamente.</value>
+  </data>
+  <data name="Couldn&#x27;t load your reports." xml:space="preserve">
+    <value>Não foi possível carregar seus relatos.</value>
+  </data>
+  <data name="Couldn&#x27;t send your report. Please try again." xml:space="preserve">
+    <value>Não foi possível enviar seu relato. Tente novamente.</value>
+  </data>
+  <data name="Current image" xml:space="preserve">
+    <value>Imagem atual</value>
+  </data>
+  <data name="Current name" xml:space="preserve">
+    <value>Nome atual</value>
+  </data>
+  <data name="Customer" xml:space="preserve">
+    <value>Usuário</value>
+  </data>
+  <data name="Customer replied" xml:space="preserve">
+    <value>O usuário respondeu</value>
+  </data>
+  <data name="Delete saved view" xml:space="preserve">
+    <value>Excluir visualização salva</value>
+  </data>
+  <data name="Describe the problem, suggestion, or question" xml:space="preserve">
+    <value>Descreva o problema, a sugestão ou a pergunta</value>
+  </data>
+  <data name="Directory impact" xml:space="preserve">
+    <value>Impacto no diretório</value>
+  </data>
+  <data name="Discard your unsaved merchant changes and continue with the merge?" xml:space="preserve">
+    <value>Descartar as alterações não salvas do estabelecimento e continuar com a fusão?</value>
+  </data>
+  <data name="Discard your unsent message?" xml:space="preserve">
+    <value>Descartar a mensagem não enviada?</value>
+  </data>
+  <data name="Edit merchant" xml:space="preserve">
+    <value>Editar estabelecimento</value>
+  </data>
+  <data name="Edits update the merchant across all groups. Review usage before making a change." xml:space="preserve">
+    <value>As alterações atualizam o estabelecimento em todos os grupos. Revise o uso antes de fazer uma alteração.</value>
+  </data>
+  <data name="Every group." xml:space="preserve">
+    <value>Todos os grupos.</value>
+  </data>
+  <data name="False" xml:space="preserve">
+    <value>Não</value>
+  </data>
+  <data name="Feature request" xml:space="preserve">
+    <value>Pedido de melhoria</value>
+  </data>
+  <data name="Find an account and the support context you need." xml:space="preserve">
+    <value>Encontre uma conta e as informações de suporte necessárias.</value>
+  </data>
+  <data name="Find the merchant to keep" xml:space="preserve">
+    <value>Buscar o estabelecimento a manter</value>
+  </data>
+  <data name="Find the next report to review and keep support moving." xml:space="preserve">
+    <value>Encontre o próximo relato para revisar e continue o atendimento.</value>
+  </data>
+  <data name="Help" xml:space="preserve">
+    <value>Ajuda</value>
+  </data>
+  <data name="Help &amp; feedback" xml:space="preserve">
+    <value>Ajuda e comentários</value>
+  </data>
+  <data name="Help &amp; feedback - Group Split" xml:space="preserve">
+    <value>Ajuda e comentários - Group Split</value>
+  </data>
+  <data name="High" xml:space="preserve">
+    <value>Alta</value>
+  </data>
+  <data name="Highest priority" xml:space="preserve">
+    <value>Maior prioridade</value>
+  </data>
+  <data name="I reviewed the destination and want to merge these merchants." xml:space="preserve">
+    <value>Revisei o destino e quero fundir estes estabelecimentos.</value>
+  </data>
+  <data name="In progress" xml:space="preserve">
+    <value>Em andamento</value>
+  </data>
+  <data name="Initials are shown when no image is selected." xml:space="preserve">
+    <value>As iniciais são exibidas quando nenhuma imagem é selecionada.</value>
+  </data>
+  <data name="Initials shown" xml:space="preserve">
+    <value>Iniciais exibidas</value>
+  </data>
+  <data name="Internal note" xml:space="preserve">
+    <value>Nota interna</value>
+  </data>
+  <data name="Internal note added" xml:space="preserve">
+    <value>Nota interna adicionada</value>
+  </data>
+  <data name="Internal note added." xml:space="preserve">
+    <value>Nota interna adicionada.</value>
+  </data>
+  <data name="Internal note · staff only" xml:space="preserve">
+    <value>Nota interna · apenas a equipe</value>
+  </data>
+  <data name="Keep" xml:space="preserve">
+    <value>Manter</value>
+  </data>
+  <data name="Keep assignment" xml:space="preserve">
+    <value>Manter atribuição</value>
+  </data>
+  <data name="Keep status" xml:space="preserve">
+    <value>Manter status</value>
+  </data>
+  <data name="Keep the shared directory accurate for every group." xml:space="preserve">
+    <value>Mantenha o diretório compartilhado atualizado para todos os grupos.</value>
+  </data>
+  <data name="Load older activity" xml:space="preserve">
+    <value>Carregar atividade anterior</value>
+  </data>
+  <data name="Load older messages" xml:space="preserve">
+    <value>Carregar mensagens anteriores</value>
+  </data>
+  <data name="Loading activity…" xml:space="preserve">
+    <value>Carregando atividade…</value>
+  </data>
+  <data name="Loading aliases…" xml:space="preserve">
+    <value>Carregando nomes alternativos…</value>
+  </data>
+  <data name="Loading conversation…" xml:space="preserve">
+    <value>Carregando conversa…</value>
+  </data>
+  <data name="Loading reports…" xml:space="preserve">
+    <value>Carregando relatos…</value>
+  </data>
+  <data name="Logo URL" xml:space="preserve">
+    <value>URL do logotipo</value>
+  </data>
+  <data name="Logo configured" xml:space="preserve">
+    <value>Logotipo configurado</value>
+  </data>
+  <data name="Low" xml:space="preserve">
+    <value>Baixa</value>
+  </data>
+  <data name="Mark as waiting for customer" xml:space="preserve">
+    <value>Marcar como aguardando o usuário</value>
+  </data>
+  <data name="Merchant created" xml:space="preserve">
+    <value>Estabelecimento criado</value>
+  </data>
+  <data name="Merchant details - Staff - Group Split" xml:space="preserve">
+    <value>Detalhes do estabelecimento - Equipe - Group Split</value>
+  </data>
+  <data name="Merchant directory" xml:space="preserve">
+    <value>Diretório de estabelecimentos</value>
+  </data>
+  <data name="Merchant image" xml:space="preserve">
+    <value>Imagem do estabelecimento</value>
+  </data>
+  <data name="Merchant information" xml:space="preserve">
+    <value>Informações do estabelecimento</value>
+  </data>
+  <data name="Merchant maintenance and customer support" xml:space="preserve">
+    <value>Gestão de estabelecimentos e atendimento ao usuário</value>
+  </data>
+  <data name="Merchant merged" xml:space="preserve">
+    <value>Estabelecimentos fundidos</value>
+  </data>
+  <data name="Merchant updated" xml:space="preserve">
+    <value>Estabelecimento atualizado</value>
+  </data>
+  <data name="Merchants" xml:space="preserve">
+    <value>Estabelecimentos</value>
+  </data>
+  <data name="Merchants - Staff - Group Split" xml:space="preserve">
+    <value>Estabelecimentos - Equipe - Group Split</value>
+  </data>
+  <data name="Merge a duplicate merchant" xml:space="preserve">
+    <value>Fundir um estabelecimento duplicado</value>
+  </data>
+  <data name="Merge from" xml:space="preserve">
+    <value>Fundir a partir de</value>
+  </data>
+  <data name="Merge preview" xml:space="preserve">
+    <value>Prévia da fusão</value>
+  </data>
+  <data name="Message visibility" xml:space="preserve">
+    <value>Visibilidade da mensagem</value>
+  </data>
+  <data name="Most used" xml:space="preserve">
+    <value>Mais utilizados</value>
+  </data>
+  <data name="Move this merchant&#x27;s expenses, imported bank rows and aliases to an existing merchant. The destination keeps its name and image. Review before confirming." xml:space="preserve">
+    <value>Mova os gastos, as transações bancárias importadas e os nomes alternativos deste estabelecimento para um existente. O destino mantém seu nome e imagem. Revise antes de confirmar.</value>
+  </data>
+  <data name="My reports" xml:space="preserve">
+    <value>Meus relatos</value>
+  </data>
+  <data name="My tickets" xml:space="preserve">
+    <value>Meus chamados</value>
+  </data>
+  <data name="Name and image changes appear wherever this merchant is used." xml:space="preserve">
+    <value>As alterações de nome e imagem aparecem onde este estabelecimento é usado.</value>
+  </data>
+  <data name="Names &amp; aliases" xml:space="preserve">
+    <value>Nomes e nomes alternativos</value>
+  </data>
+  <data name="Needs classification review" xml:space="preserve">
+    <value>Precisa de revisão da classificação</value>
+  </data>
+  <data name="Needs review" xml:space="preserve">
+    <value>Precisa de revisão</value>
+  </data>
+  <data name="New" xml:space="preserve">
+    <value>Novo</value>
+  </data>
+  <data name="New image ready to save" xml:space="preserve">
+    <value>Nova imagem pronta para salvar</value>
+  </data>
+  <data name="New tickets" xml:space="preserve">
+    <value>Novos chamados</value>
+  </data>
+  <data name="New tickets and customer replies." xml:space="preserve">
+    <value>Novos chamados e respostas dos usuários.</value>
+  </data>
+  <data name="Newest" xml:space="preserve">
+    <value>Mais recentes</value>
+  </data>
+  <data name="No accounts match this search." xml:space="preserve">
+    <value>Nenhuma conta corresponde à busca.</value>
+  </data>
+  <data name="No merchants found" xml:space="preserve">
+    <value>Nenhum estabelecimento encontrado</value>
+  </data>
+  <data name="No messages yet." xml:space="preserve">
+    <value>Ainda não há mensagens.</value>
+  </data>
+  <data name="No other merchants match. Try another name." xml:space="preserve">
+    <value>Nenhum outro estabelecimento corresponde. Tente outro nome.</value>
+  </data>
+  <data name="No recorded changes yet." xml:space="preserve">
+    <value>Ainda não há alterações registradas.</value>
+  </data>
+  <data name="No reports yet" xml:space="preserve">
+    <value>Ainda não há relatos</value>
+  </data>
+  <data name="No tickets in this view" xml:space="preserve">
+    <value>Não há chamados nesta visualização</value>
+  </data>
+  <data name="Normal" xml:space="preserve">
+    <value>Normal</value>
+  </data>
+  <data name="Nothing in {0}. This group&#x27;s Activity opens on {1} – pick &quot;All time&quot; for " xml:space="preserve">
+    <value>Não há movimentos em {0}. A atividade deste grupo abre em {1}; escolha "Todo o período" para </value>
+  </data>
+  <data name="Oldest first" xml:space="preserve">
+    <value>Mais antigos primeiro</value>
+  </data>
+  <data name="One merchant." xml:space="preserve">
+    <value>Um estabelecimento.</value>
+  </data>
+  <data name="One shared identity, consistent across everyone&#x27;s expenses." xml:space="preserve">
+    <value>Uma identidade compartilhada, consistente nos gastos de todos.</value>
+  </data>
+  <data name="Only staff can see this note. It will not be sent to the customer." xml:space="preserve">
+    <value>Apenas a equipe pode ver esta nota. Ela não será enviada ao usuário.</value>
+  </data>
+  <data name="Open conversation" xml:space="preserve">
+    <value>Abrir conversa</value>
+  </data>
+  <data name="Open the Android app to choose support ticket alerts for that device." xml:space="preserve">
+    <value>Abra o aplicativo Android para escolher os alertas de chamados de suporte desse dispositivo.</value>
+  </data>
+  <data name="Open tickets" xml:space="preserve">
+    <value>Chamados abertos</value>
+  </data>
+  <data name="PNG or JPG, up to 5 MB. Your image is saved when you save the merchant." xml:space="preserve">
+    <value>PNG ou JPG, até 5 MB. A imagem é salva ao salvar o estabelecimento.</value>
+  </data>
+  <data name="Page" xml:space="preserve">
+    <value>Página</value>
+  </data>
+  <data name="Please leave out passwords and payment details. Device details and diagnostics are not collected." xml:space="preserve">
+    <value>Não inclua senhas nem dados de pagamento. Dados do dispositivo e diagnósticos não são coletados.</value>
+  </data>
+  <data name="Preparing image…" xml:space="preserve">
+    <value>Preparando imagem…</value>
+  </data>
+  <data name="Priority" xml:space="preserve">
+    <value>Prioridade</value>
+  </data>
+  <data name="Problem" xml:space="preserve">
+    <value>Problema</value>
+  </data>
+  <data name="Recently updated" xml:space="preserve">
+    <value>Atualizados recentemente</value>
+  </data>
+  <data name="Refresh merchants" xml:space="preserve">
+    <value>Atualizar estabelecimentos</value>
+  </data>
+  <data name="Reload this page to try again." xml:space="preserve">
+    <value>Recarregue esta página para tentar novamente.</value>
+  </data>
+  <data name="Remove alias {0}" xml:space="preserve">
+    <value>Remover nome alternativo {0}</value>
+  </data>
+  <data name="Remove image" xml:space="preserve">
+    <value>Remover imagem</value>
+  </data>
+  <data name="Reply sent to customer" xml:space="preserve">
+    <value>Resposta enviada ao usuário</value>
+  </data>
+  <data name="Reply sent." xml:space="preserve">
+    <value>Resposta enviada.</value>
+  </data>
+  <data name="Reply to customer" xml:space="preserve">
+    <value>Responder ao usuário</value>
+  </data>
+  <data name="Reply · visible to customer" xml:space="preserve">
+    <value>Resposta · visível ao usuário</value>
+  </data>
+  <data name="Report" xml:space="preserve">
+    <value>Relato</value>
+  </data>
+  <data name="Report ID" xml:space="preserve">
+    <value>ID do relato</value>
+  </data>
+  <data name="Report a problem, suggest an improvement, or check your reports." xml:space="preserve">
+    <value>Relate um problema, sugira uma melhoria ou consulte seus relatos.</value>
+  </data>
+  <data name="Report details" xml:space="preserve">
+    <value>Detalhes do relato</value>
+  </data>
+  <data name="Report sent. You can follow its status below." xml:space="preserve">
+    <value>Relato enviado. Você pode acompanhar o status abaixo.</value>
+  </data>
+  <data name="Report submitted" xml:space="preserve">
+    <value>Relato enviado</value>
+  </data>
+  <data name="Reported" xml:space="preserve">
+    <value>Enviado</value>
+  </data>
+  <data name="Reporter" xml:space="preserve">
+    <value>Enviado por</value>
+  </data>
+  <data name="Reproduction steps" xml:space="preserve">
+    <value>Passos para reproduzir o problema</value>
+  </data>
+  <data name="Resolved" xml:space="preserve">
+    <value>Resolvido</value>
+  </data>
+  <data name="Results pages" xml:space="preserve">
+    <value>Páginas de resultados</value>
+  </data>
+  <data name="Review merge" xml:space="preserve">
+    <value>Revisar fusão</value>
+  </data>
+  <data name="Review the classification and choose the next status." xml:space="preserve">
+    <value>Revise a classificação e escolha o próximo status.</value>
+  </data>
+  <data name="Save current view" xml:space="preserve">
+    <value>Salvar visualização atual</value>
+  </data>
+  <data name="Save merchant" xml:space="preserve">
+    <value>Salvar estabelecimento</value>
+  </data>
+  <data name="Save view" xml:space="preserve">
+    <value>Salvar visualização</value>
+  </data>
+  <data name="Save your ticket changes before sending a message." xml:space="preserve">
+    <value>Salve as alterações do chamado antes de enviar uma mensagem.</value>
+  </data>
+  <data name="Saved views" xml:space="preserve">
+    <value>Visualizações salvas</value>
+  </data>
+  <data name="Search merchants" xml:space="preserve">
+    <value>Buscar estabelecimentos</value>
+  </data>
+  <data name="Search name or email" xml:space="preserve">
+    <value>Buscar por nome ou e-mail</value>
+  </data>
+  <data name="Search tickets" xml:space="preserve">
+    <value>Buscar chamados</value>
+  </data>
+  <data name="See the status of the reports you&#x27;ve sent." xml:space="preserve">
+    <value>Veja o status dos relatos que você enviou.</value>
+  </data>
+  <data name="Select this page" xml:space="preserve">
+    <value>Selecionar esta página</value>
+  </data>
+  <data name="Select tickets on this page" xml:space="preserve">
+    <value>Selecionar os chamados desta página</value>
+  </data>
+  <data name="Selected merchant image" xml:space="preserve">
+    <value>Imagem do estabelecimento selecionada</value>
+  </data>
+  <data name="Send a report" xml:space="preserve">
+    <value>Enviar um relato</value>
+  </data>
+  <data name="Send reply" xml:space="preserve">
+    <value>Enviar resposta</value>
+  </data>
+  <data name="Send report" xml:space="preserve">
+    <value>Enviar relato</value>
+  </data>
+  <data name="Sending…" xml:space="preserve">
+    <value>Enviando…</value>
+  </data>
+  <data name="Set assignment" xml:space="preserve">
+    <value>Alterar atribuição</value>
+  </data>
+  <data name="Set status" xml:space="preserve">
+    <value>Alterar status</value>
+  </data>
+  <data name="Settings - Staff - Group Split" xml:space="preserve">
+    <value>Configurações - Equipe - Group Split</value>
+  </data>
+  <data name="Sort by" xml:space="preserve">
+    <value>Ordenar por</value>
+  </data>
+  <data name="Source merchant" xml:space="preserve">
+    <value>Estabelecimento de origem</value>
+  </data>
+  <data name="Staff access required" xml:space="preserve">
+    <value>É necessário acesso da equipe</value>
+  </data>
+  <data name="Staff console" xml:space="preserve">
+    <value>Painel da equipe</value>
+  </data>
+  <data name="Staff navigation" xml:space="preserve">
+    <value>Navegação da equipe</value>
+  </data>
+  <data name="Staff settings" xml:space="preserve">
+    <value>Configurações da equipe</value>
+  </data>
+  <data name="Staff workspace" xml:space="preserve">
+    <value>Espaço da equipe</value>
+  </data>
+  <data name="Suggestion" xml:space="preserve">
+    <value>Sugestão</value>
+  </data>
+  <data name="Support" xml:space="preserve">
+    <value>Suporte</value>
+  </data>
+  <data name="Tell us what happened, suggest an improvement, or ask for help." xml:space="preserve">
+    <value>Conte o que aconteceu, sugira uma melhoria ou peça ajuda.</value>
+  </data>
+  <data name="The reporter can see this reply in their support conversation." xml:space="preserve">
+    <value>O usuário pode ver esta resposta na conversa de suporte.</value>
+  </data>
+  <data name="The request timed out. Refresh before trying again." xml:space="preserve">
+    <value>A solicitação demorou demais. Atualize antes de tentar novamente.</value>
+  </data>
+  <data name="The request timed out. Refresh to check the current status before trying again." xml:space="preserve">
+    <value>A solicitação demorou demais. Atualize para verificar o status atual antes de tentar novamente.</value>
+  </data>
+  <data name="The request timed out. Your draft is still here." xml:space="preserve">
+    <value>A solicitação demorou demais. Seu rascunho continua aqui.</value>
+  </data>
+  <data name="This image address is not supported. Upload the image or choose an existing logo." xml:space="preserve">
+    <value>Este endereço de imagem não é compatível. Envie a imagem ou escolha um logotipo existente.</value>
+  </data>
+  <data name="This workspace is available to authorized staff only." xml:space="preserve">
+    <value>Este espaço está disponível apenas para a equipe autorizada.</value>
+  </data>
+  <data name="Ticket" xml:space="preserve">
+    <value>Chamado</value>
+  </data>
+  <data name="Ticket details - Staff - Group Split" xml:space="preserve">
+    <value>Detalhes do chamado - Equipe - Group Split</value>
+  </data>
+  <data name="Ticket management" xml:space="preserve">
+    <value>Gestão do chamado</value>
+  </data>
+  <data name="Ticket queue" xml:space="preserve">
+    <value>Fila de chamados</value>
+  </data>
+  <data name="Ticket saved." xml:space="preserve">
+    <value>Chamado salvo.</value>
+  </data>
+  <data name="Ticket updated" xml:space="preserve">
+    <value>Chamado atualizado</value>
+  </data>
+  <data name="Ticket views" xml:space="preserve">
+    <value>Visualizações de chamados</value>
+  </data>
+  <data name="Tickets" xml:space="preserve">
+    <value>Chamados</value>
+  </data>
+  <data name="Tickets - Staff - Group Split" xml:space="preserve">
+    <value>Chamados - Equipe - Group Split</value>
+  </data>
+  <data name="Transactions moved" xml:space="preserve">
+    <value>Transações movidas</value>
+  </data>
+  <data name="True" xml:space="preserve">
+    <value>Sim</value>
+  </data>
+  <data name="Try another name or add a merchant to the directory." xml:space="preserve">
+    <value>Tente outro nome ou adicione um estabelecimento ao diretório.</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>Tipo</value>
+  </data>
+  <data name="Unassigned" xml:space="preserve">
+    <value>Não atribuído</value>
+  </data>
+  <data name="Unavailable account" xml:space="preserve">
+    <value>Conta indisponível</value>
+  </data>
+  <data name="Unavailable staff member" xml:space="preserve">
+    <value>Membro da equipe indisponível</value>
+  </data>
+  <data name="Under review" xml:space="preserve">
+    <value>Em revisão</value>
+  </data>
+  <data name="Update {0} selected" xml:space="preserve">
+    <value>Atualizar {0} selecionados</value>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Atualizado</value>
+  </data>
+  <data name="Upload image" xml:space="preserve">
+    <value>Enviar imagem</value>
+  </data>
+  <data name="Upload merchant image" xml:space="preserve">
+    <value>Enviar imagem do estabelecimento</value>
+  </data>
+  <data name="Urgent" xml:space="preserve">
+    <value>Urgente</value>
+  </data>
+  <data name="Usage" xml:space="preserve">
+    <value>Uso</value>
+  </data>
+  <data name="Use a clear name people recognize on their expenses." xml:space="preserve">
+    <value>Use um nome claro que as pessoas reconheçam nos gastos.</value>
+  </data>
+  <data name="Use a logo URL" xml:space="preserve">
+    <value>Usar uma URL de logotipo</value>
+  </data>
+  <data name="Use a recognizable merchant name." xml:space="preserve">
+    <value>Use um nome de estabelecimento reconhecível.</value>
+  </data>
+  <data name="Use an existing app image or a supported bank-provider logo URL." xml:space="preserve">
+    <value>Use uma imagem do aplicativo ou uma URL de logotipo de um provedor bancário compatível.</value>
+  </data>
+  <data name="User lookup" xml:space="preserve">
+    <value>Busca de usuários</value>
+  </data>
+  <data name="Users" xml:space="preserve">
+    <value>Usuários</value>
+  </data>
+  <data name="Users - Staff - Group Split" xml:space="preserve">
+    <value>Usuários - Equipe - Group Split</value>
+  </data>
+  <data name="View account" xml:space="preserve">
+    <value>Ver conta</value>
+  </data>
+  <data name="View all tickets" xml:space="preserve">
+    <value>Ver todos os chamados</value>
+  </data>
+  <data name="View name" xml:space="preserve">
+    <value>Nome da visualização</value>
+  </data>
+  <data name="View support context" xml:space="preserve">
+    <value>Ver informações de suporte</value>
+  </data>
+  <data name="Waiting for customer" xml:space="preserve">
+    <value>Aguardando o usuário</value>
+  </data>
+  <data name="Waiting for your reply" xml:space="preserve">
+    <value>Aguardando sua resposta</value>
+  </data>
+  <data name="What happened?" xml:space="preserve">
+    <value>O que aconteceu?</value>
+  </data>
+  <data name="When you send a report, you can check its status here." xml:space="preserve">
+    <value>Ao enviar um relato, você poderá consultar o status aqui.</value>
+  </data>
+  <data name="You&#x27;re up to date here. Try another status or clear the filters." xml:space="preserve">
+    <value>Tudo em dia por aqui. Tente outro status ou limpe os filtros.</value>
+  </data>
+  <data name="Your reply" xml:space="preserve">
+    <value>Sua resposta</value>
+  </data>
+  <data name="linked transactions" xml:space="preserve">
+    <value>transações vinculadas</value>
+  </data>
+  <data name="shown" xml:space="preserve">
+    <value>exibidos</value>
+  </data>
+  <data name="{0} aliases will move to the destination." xml:space="preserve">
+    <value>{0} nomes alternativos serão movidos para o destino.</value>
+  </data>
+  <data name="{0} expenses will keep their amounts and splits." xml:space="preserve">
+    <value>Os valores e as divisões de {0} gastos serão mantidos.</value>
+  </data>
+  <data name="{0} imported bank rows will point to the destination." xml:space="preserve">
+    <value>{0} transações bancárias importadas serão associadas ao destino.</value>
+  </data>
+  <data name="A merchant with that name already exists." xml:space="preserve">
+    <value>Já existe um estabelecimento com esse nome.</value>
+  </data>
+  <data name="Check the entered values and try again." xml:space="preserve">
+    <value>Verifique os dados inseridos e tente novamente.</value>
+  </data>
+  <data name="Check the merchant details and try again." xml:space="preserve">
+    <value>Verifique os dados do estabelecimento e tente novamente.</value>
+  </data>
+  <data name="Check the ticket details and try again." xml:space="preserve">
+    <value>Verifique os dados do chamado e tente novamente.</value>
+  </data>
+  <data name="Check your support report and try again." xml:space="preserve">
+    <value>Verifique seu relato de suporte e tente novamente.</value>
+  </data>
+  <data name="Choose a PNG image up to 512 by 512 pixels and 1 MB." xml:space="preserve">
+    <value>Escolha uma imagem PNG de até 512 por 512 pixels e 1 MB.</value>
+  </data>
+  <data name="Copy.Lower.transactions" xml:space="preserve">
+    <value>transações</value>
+  </data>
+  <data name="Could not complete the request. Please try again." xml:space="preserve">
+    <value>Não foi possível concluir a solicitação. Tente novamente.</value>
+  </data>
+  <data name="Discard unsaved changes?" xml:space="preserve">
+    <value>Descartar as alterações não salvas?</value>
+  </data>
+  <data name="Staff access is required. Your permissions may have changed." xml:space="preserve">
+    <value>É necessário acesso da equipe. Suas permissões podem ter mudado.</value>
+  </data>
+  <data name="That merchant image no longer exists." xml:space="preserve">
+    <value>A imagem desse estabelecimento não existe mais.</value>
+  </data>
+  <data name="That support ticket no longer exists." xml:space="preserve">
+    <value>Esse chamado de suporte não existe mais.</value>
+  </data>
+  <data name="The request timed out. Please try again." xml:space="preserve">
+    <value>A solicitação demorou demais. Tente novamente.</value>
+  </data>
+  <data name="This record changed or the merchant name already exists. Refresh before trying again." xml:space="preserve">
+    <value>Este registro mudou ou o nome do estabelecimento já existe. Atualize antes de tentar novamente.</value>
+  </data>
+  <data name="This ticket changed. Refresh it before trying again." xml:space="preserve">
+    <value>Este chamado mudou. Atualize-o antes de tentar novamente.</value>
+  </data>
 </root>

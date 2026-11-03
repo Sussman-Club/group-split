@@ -31,6 +31,7 @@ else if (_items.Count == 0)
     private int _total;
     private bool _loading;
     private bool _disposed;
+    private readonly SemaphoreSlim _interopGate = new(1, 1);
     private CancellationTokenSource _generation = new();
     private ElementReference _sentinel;
     private IJSObjectReference? _module;
@@ -41,6 +42,7 @@ else if (_items.Count == 0)
 
     public async Task RefreshDataAsync()
     {
+        if (_disposed) return;
         _generation.Cancel();
         _generation.Dispose();
         _generation = new();
@@ -77,25 +79,55 @@ else if (_items.Count == 0)
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_items.Count >= _total || _loading) return;
-        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GroupSplit.App.Shared/js/scroll-feed.js");
-        if (_module is null) return;
-        if (_observer is not null) { await _observer.InvokeVoidAsync("dispose"); await _observer.DisposeAsync(); }
-        _reference ??= DotNetObjectReference.Create(this);
-        _observer = await _module.InvokeAsync<IJSObjectReference>("observe", _sentinel, _reference);
+        await _interopGate.WaitAsync();
+        try
+        {
+            if (_disposed || _items.Count >= _total || _loading) return;
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GroupSplit.App.Shared/js/scroll-feed.js");
+            if (_disposed || _module is null) return;
+            await DisconnectObserverAsync();
+            _reference ??= DotNetObjectReference.Create(this);
+            _observer = await _module.InvokeAsync<IJSObjectReference>("observe", _sentinel, _reference);
+        }
+        catch (JSDisconnectedException) { }
+        finally { _interopGate.Release(); }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
         _disposed = true;
         _generation.Cancel();
         _generation.Dispose();
+        await _interopGate.WaitAsync();
         try
         {
-            if (_observer is not null) { await _observer.InvokeVoidAsync("dispose"); await _observer.DisposeAsync(); }
+            await DisconnectObserverAsync();
             if (_module is not null) await _module.DisposeAsync();
         }
         catch (JSDisconnectedException) { }
-        _reference?.Dispose();
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            _module = null;
+            _reference?.Dispose();
+            _interopGate.Release();
+        }
+    }
+
+    private async Task DisconnectObserverAsync()
+    {
+        var observer = _observer;
+        _observer = null;
+        if (observer is null) return;
+        try { await observer.InvokeVoidAsync("dispose"); }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            try { await observer.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (ObjectDisposedException) { }
+        }
     }
 }
