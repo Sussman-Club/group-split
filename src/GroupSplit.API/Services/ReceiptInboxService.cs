@@ -1,5 +1,6 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -20,13 +21,57 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         if (r.ExpenseId != null) throw new ConflictException(ErrorCodes.ReceiptAlreadyFiled, "This receipt is already filed.");
     }
     public async Task<IReadOnlyList<ReceiptInboxResponse>> List(CancellationToken ct) =>
-        (await Owned().Where(r => r.ExpenseId == null).Include(r => r.Items).Include(r => r.Attachments)
+        (await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct) =>
+        (await Owned().Where(r => r.ExpenseId != null).Include(r => r.Items).Include(r => r.Attachments)
+            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListIgnored(CancellationToken ct) =>
+        (await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments)
+            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+    public async Task<IReadOnlyList<ReceiptInboxSuggestion>> Suggest(ReceiptInboxSuggestionsRequest request, IFilingSuggester suggester, CancellationToken ct)
+    {
+        if (request.ReceiptIds is null || request.ReceiptIds.Count is 0 or > ReceiptInboxSuggestionsRequest.MaxRows)
+            throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose between 1 and 50 receipts.");
+        var ids = request.ReceiptIds.Distinct().ToArray();
+        var receipts = await Owned().Where(r => ids.Contains(r.Id) && r.ExpenseId == null && !r.IsIgnored)
+            .Include(r => r.Items).ToListAsync(ct);
+        var rows = receipts.Where(r => r.Items.Count > 0).Select(r =>
+            (new FilingInput(r.Id, r.PurchaseDate, r.Total, r.Currency, r.MerchantName ?? "Receipt", r.MerchantName),
+             (FilingReceipt?)new FilingReceipt { MerchantName = r.MerchantName, Items = r.Items.OrderBy(i => i.Position).Select(i => i.Name).Take(FilingReceipt.MaxItems).ToArray() })).ToList();
+        var suggestions = await suggester.Suggest(rows, ct);
+        return suggestions.Select(s => new ReceiptInboxSuggestion(s.SourceId, s.Destination)).ToList();
+    }
+    public async Task SetIgnored(Guid id, bool ignored, CancellationToken ct)
+    {
+        await using var lease = await guard.Acquire(user.User.Id, ct: ct);
+        var receipt = await Find(id, ct);
+        Unfiled(receipt);
+        receipt.IsIgnored = ignored;
+        await db.SaveChangesAsync(ct);
+    }
     public async Task<ReceiptInboxResponse> Get(Guid id, CancellationToken ct) => Response(await Find(id, ct));
     public async Task<ReceiptInboxResponse> Save(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)
     {
         await using var lease = await guard.Acquire(user.User.Id, ct: ct);
+        return await SaveCore(id, request, ct);
+    }
+    public async Task<ReceiptInboxResponse> SaveExtractedIfEmpty(Guid id, SaveReceiptRequest details, CancellationToken ct)
+    {
+        await using var lease = await guard.Acquire(user.User.Id, ct: ct);
+        var existing = await Find(id, ct);
+        Unfiled(existing);
+        if (existing.Items.Count != 0 || !string.IsNullOrWhiteSpace(existing.MerchantName) ||
+            existing.PurchaseDate is not null || existing.Total != 0 || existing.Subtotal != 0 ||
+            existing.Tax != 0 || existing.Tip != 0)
+            throw new ConflictException(ErrorCodes.ReceiptInvalid, "Receipt details have already been added. Review the receipt before changing them.");
+        return await SaveCore(id, new SaveReceiptInboxRequest { Currency = existing.Currency, Receipt = details }, ct);
+    }
+    private async Task<ReceiptInboxResponse> SaveCore(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)
+    {
         var r = await Owned().Include(r => r.Items).Include(r => r.Attachments).FirstOrDefaultAsync(r => r.Id == id, ct);
+        var importingDetails = r is null || r.Items.Count == 0 && string.IsNullOrWhiteSpace(r.MerchantName)
+            && r.PurchaseDate is null && r.Total == 0 && r.Subtotal == 0 && r.Tax == 0 && r.Tip == 0;
         var details = request.Receipt;
         var hasDetails = details is not null && (details.Items.Count > 0 ||
             !string.IsNullOrWhiteSpace(details.MerchantName) || details.PurchaseDate is not null ||
@@ -56,6 +101,14 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                     NormalizedName = line.NormalizedName ?? line.Name.ToLowerInvariant(), Description = line.Description,
                     UnitPrice = line.UnitPrice, Quantity = line.Quantity, TotalPrice = line.TotalPrice,
                     TaxAmount = line.TaxAmount, TaxRate = line.TaxRate, IsTaxable = line.IsTaxable });
+            if (importingDetails && r.Subtotal + r.Tax + r.Tip == r.Total && r.Items.Sum(item => item.TotalPrice) == r.Subtotal)
+            {
+                var lines = r.Items.OrderBy(item => item.Position).ToArray();
+                var taxes = ReceiptTaxes.DistributeUnassigned(r.Tax, lines.Select(item =>
+                    new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+                if (taxes is not null)
+                    for (var index = 0; index < lines.Length; index++) lines[index].TaxAmount = taxes[index];
+            }
             db.AddRange(r.Items);
         }
         await db.SaveChangesAsync(ct);
@@ -85,6 +138,16 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     public async Task<ReceiptInboxResponse> File(Guid id, FileReceiptInboxRequest request, CancellationToken ct)
     {
         await using var lease = await guard.Acquire(user.User.Id, ct: ct);
+        var retrying = false;
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            if (retrying) db.StartOver(user.User);
+            retrying = true;
+            return await FileAttempt(id, request, ct);
+        });
+    }
+    private async Task<ReceiptInboxResponse> FileAttempt(Guid id, FileReceiptInboxRequest request, CancellationToken ct)
+    {
         await using var transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         var r = await Find(id, ct);
         if (r.ExpenseId != null)
@@ -93,9 +156,13 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 throw new ConflictException(ErrorCodes.ReceiptAlreadyFiled, "This receipt was filed elsewhere.");
             return Response(r);
         }
+        if (r.IsIgnored) throw new ConflictException(ErrorCodes.ReceiptInvalid, "Restore this receipt before filing it.");
         if (new[] { request.ExpenseId != null, request.BankTransactionId != null && request.ExpenseId == null, request.NewExpense != null }.Count(x => x) != 1)
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose one filing destination.");
-        if (r.Items.Count > 0) { ReceiptSplitCalculator.CalculateLineTaxes(r); ReceiptSplitCalculator.RefuseIfFiguresDisagree(r); }
+        // A new expense may carry a reviewed allocation of previously unassigned tax.
+        // Validate that draft below before applying its line taxes to the inbox receipt.
+        if (r.Items.Count > 0 && (request.NewExpense is null || request.NewExpense.Receipt is null))
+        { ReceiptSplitCalculator.CalculateLineTaxes(r); ReceiptSplitCalculator.RefuseIfFiguresDisagree(r); }
         Expense expense;
         if (request.ExpenseId is { } expenseId)
         {
@@ -127,8 +194,31 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 throw new ConflictException(ErrorCodes.CurrencyMismatch, "Receipt and expense currencies differ.")
                 .WithExtension("receiptCurrency", r.Currency).WithExtension("expenseCurrency", input.Currency);
             input.Currency = r.Currency;
-            input.Receipt = null;
+            if (input.Receipt is { } submitted && r.Items.Count > 0)
+            {
+                var saved = Response(r).Receipt;
+                if (submitted.Items.Count != saved.Items.Count)
+                    throw new ValidationException(ErrorCodes.ReceiptInvalid, "The receipt items changed. Review the receipt and try again.");
+                input.Receipt = saved with { Items = saved.Items.Select((item, index) => item with
+                    { SplitRuleVersionId = submitted.Items[index].SplitRuleVersionId,
+                        TaxAmount = submitted.Items[index].TaxAmount }).ToArray() };
+            }
+            else input.Receipt = null;
             expense = await transactions.Create(input, ct);
+            if (expense.Receipt is { } prepared)
+            {
+                var sourceItems = r.Items.OrderBy(item => item.Position).ToArray();
+                var preparedItems = prepared.Items.OrderBy(item => item.Position).ToArray();
+                for (var index = 0; index < sourceItems.Length; index++)
+                {
+                    sourceItems[index].SplitRuleVersionId = preparedItems[index].SplitRuleVersionId;
+                    sourceItems[index].TaxAmount = preparedItems[index].TaxAmount;
+                }
+                ReceiptSplitCalculator.RefuseIfFiguresDisagree(r);
+                db.Remove(prepared);
+                expense.Receipt = null;
+                await db.SaveChangesAsync(ct);
+            }
         }
         if (expense.Currency != r.Currency)
             throw new ConflictException(ErrorCodes.CurrencyMismatch, "Receipt and expense currencies differ.")

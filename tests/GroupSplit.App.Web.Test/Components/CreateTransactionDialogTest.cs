@@ -23,6 +23,24 @@ namespace GroupSplit.App.Web.Test.Components;
 public class CreateTransactionDialogTest : ComponentTest
 {
     [Fact]
+    public async Task Imported_receipt_tax_is_distributed_before_requesting_a_split_preview()
+    {
+        var receipt = new SaveReceiptRequest { Subtotal = 20m, Tax = 2m, Total = 22m,
+            Items = [new ReceiptItemInput { Name = "One", UnitPrice = 10m, TotalPrice = 10m },
+                new ReceiptItemInput { Name = "Two", UnitPrice = 10m, TotalPrice = 10m }] };
+        _commands.Setup(c => c.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana", 22m)], "Even"));
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.SelectedGroupId, GroupId }, { x => x.InboxReceipt, receipt } }));
+        provider.WaitForAssertion(() => _commands.Verify(c => c.PreviewAsync(It.Is<CreateTransactionRequest>(request =>
+            request.Receipt != null && request.Receipt.Items.All(item => item.TaxAmount == 1m)),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce));
+        Assert.DoesNotContain("The receipt has tax that has not been assigned", provider.Markup);
+    }
+
+    [Fact]
     public async Task Preview_shows_zero_for_every_person_and_does_not_need_a_name()
     {
         var other = Guid.NewGuid();

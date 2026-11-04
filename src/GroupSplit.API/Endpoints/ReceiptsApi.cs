@@ -44,7 +44,7 @@ public static class ReceiptsApi
                     Results.Ok(await suggester.SuggestReceipt(request, ct)))
                 .WithName("SuggestReceiptFiling")
                 .Produces<FilingDestinationSuggestion>()
-                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
+                .RateLimitedAs(ApiRateLimitPolicies.Suggestions);
 
             group.MapPost("/transcribe", async (
                     IFormFile file,

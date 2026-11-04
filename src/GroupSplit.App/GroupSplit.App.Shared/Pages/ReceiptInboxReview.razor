@@ -10,6 +10,7 @@
 @inject NavigationManager Nav
 @inject GroupSplit.App.Shared.Services.DataChangeNotifier Changes
 @inject GroupSplit.App.Shared.Services.Commands.IReceiptCommands Receipts
+@inject GroupSplit.App.Shared.Services.ReceiptSuggestionCache SuggestionCache
 
 <PageTitle>Review receipt - Group Split</PageTitle>
 <div class="gs-receipt-review-back"><MudButton Href="/inbox/receipts">Back to receipts</MudButton></div>
@@ -93,7 +94,16 @@
         _suggestion = null;
         await Errors.TryAsync(async () => { _row = await Client.GetReceiptInboxAsync(Id); _bill = BillOf(_row); _currency = _row.Currency; _matches = (await Client.MatchReceiptInboxAsync(Id)).ToList(); _payments = (await Bank.GetInboxAsync(status: InboxStatus.New, pageSize: 100)).Items.Where(p => p.Status == InboxStatus.New && p.TransactionId == null && (p.Id == BankId || p.Currency == _row.Currency && p.Amount == _row.Receipt.Total)).ToList(); }, "Could not load receipt.");
         if (_row is { Receipt.Items.Count: > 0 } receipt)
-            _suggestion = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest { Receipt = receipt.Receipt, Currency = receipt.Currency });
+        {
+            _suggestion = SuggestionCache.Get(receipt);
+            var generation = SuggestionCache.Generation;
+            var refreshed = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest { Receipt = receipt.Receipt, Currency = receipt.Currency });
+            if (refreshed is not null)
+            {
+                SuggestionCache.Remember(receipt, refreshed, generation);
+                _suggestion = refreshed;
+            }
+        }
     }
     private static ReceiptResponse BillOf(ReceiptInboxResponse row) =>
         new(row.Id, row.ExpenseId ?? Guid.Empty, row.Receipt.Subtotal, row.Receipt.Tax,
@@ -153,7 +163,7 @@
     private async Task Create(Guid? groupId)
     {
         var dialog = await Dialogs.ShowAsync<CreateTransactionDialog>("Create expense", new DialogParameters<CreateTransactionDialog>
-        { { x => x.InboxReceipt, _row!.Receipt }, { x => x.InboxCurrency, _currency }, { x => x.SelectedGroupId, groupId } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+        { { x => x.InboxReceipt, _row!.Receipt }, { x => x.InboxCurrency, _currency }, { x => x.SelectedGroupId, groupId }, { x => x.InboxSuggestion, _suggestion is { } suggestion && (suggestion.IsPersonal ? groupId is null : groupId == suggestion.GroupId) ? suggestion : null } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
         if (await dialog.Result is { Canceled: false, Data: CreateTransactionRequest request })
         {
             var anyway = _matches.Count > 0 && await Dialogs.ShowMessageBoxAsync("Possible duplicate", "These matching expenses may already record this purchase. Create another expense?", yesText: "Create another", cancelText: "Cancel") == true;

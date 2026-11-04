@@ -5547,4 +5547,16 @@
   <data name="This ticket changed. Refresh it before trying again." xml:space="preserve">
     <value>Este chamado mudou. Atualize-o antes de tentar novamente.</value>
   </data>
+  <data name="Receipt importer unavailable" xml:space="preserve"><value>Importador de recibos indisponível</value></data>
+  <data name="Open this inbox in Chrome, Edge, or Brave with the GroupSplit receipt importer enabled, then try again." xml:space="preserve"><value>Abra esta caixa de entrada no Chrome, Edge ou Brave com o importador de recibos do GroupSplit ativado e tente novamente.</value></data>
+  <data name="The extension is in preview and isn’t available in a browser store yet. You can upload a photo or PDF below." xml:space="preserve"><value>A extensão está em prévia e ainda não está disponível em uma loja de extensões. Você pode enviar uma foto ou um PDF abaixo.</value></data>
+  <data name="Tax was distributed by item price. Review tax-exempt items." xml:space="preserve"><value>O imposto foi distribuído pelo preço dos itens. Revise os itens isentos.</value></data>
+  <data name="The receipt has tax that has not been assigned to its items. Distribute it by item price, or review the receipt first." xml:space="preserve"><value>O recibo tem imposto não atribuído aos itens. Distribua-o pelo preço ou revise o recibo primeiro.</value></data>
+  <data name="Distribute the receipt tax or review the receipt before splitting." xml:space="preserve"><value>Distribua o imposto ou revise o recibo antes de dividi-lo.</value></data>
+  <data name="Receipt status" xml:space="preserve"><value>Estado do recibo</value></data>
+  <data name="View expense" xml:space="preserve"><value>Ver despesa</value></data>
+  <data name="Receipts attached to an expense appear here." xml:space="preserve"><value>Os recibos anexados a uma despesa aparecem aqui.</value></data>
+  <data name="Ignored receipts stay here until you restore or delete them." xml:space="preserve"><value>Os recibos ignorados permanecem aqui até serem restaurados ou eliminados.</value></data>
+  <data name="Search merchants or items" xml:space="preserve"><value>Pesquisar lojas ou itens</value></data>
+  <data name="No receipts match your filters." xml:space="preserve"><value>Nenhum recibo corresponde aos filtros.</value></data>
 </root>

@@ -1,73 +1,307 @@
 @page "/inbox/receipts"
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @inject IReceiptsClient Client
 @inject IDialogService Dialogs
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject GroupSplit.App.Shared.Services.InboxOverview Overview
+@inject GroupSplit.App.Shared.Services.ReceiptSuggestionCache SuggestionCache
+@inject GroupSplit.App.Shared.Services.DataChangeNotifier Changes
+@inject GroupSplit.App.Shared.Services.LocalClock Clock
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
-<InboxHeader />
+<InboxHeader>
+    <HeaderActions>
+        <div class="gs-receipt-import-action">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.ShoppingBag" OnClick="OpenRetailerImport" Disabled="_busy">@Loc["Import from a store"]</MudButton>
+        </div>
+    </HeaderActions>
+</InboxHeader>
 <div class="gs-inbox-context"><h2>@Loc["Receipts"]</h2><span class="gs-muted">@Loc["Private until filed. Choose who paid when you create the expense."]</span></div>
+@if (_importHelp)
+{
+    <div class="gs-receipt-import-help" role="status">
+        <MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" />
+        <div>
+            <strong>@Loc["Receipt importer unavailable"]</strong>
+            <p>@Loc["Open this inbox in Chrome, Edge, or Brave with the GroupSplit receipt importer enabled, then try again."]</p>
+            <p>@Loc["The extension is in preview and isn’t available in a browser store yet. You can upload a photo or PDF below."]</p>
+        </div>
+    </div>
+}
 <div class="gs-inbox-add" id="add-receipt">
-    <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" Title="@Loc["Add a receipt"]" Description="@Loc["Upload a photo or PDF. Review the details when you are ready."]" />
+    <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" AllowMultiple="true" Title="@Loc["Add a receipt"]" Description="@Loc["Upload photos or PDFs. Review the details when you are ready."]" />
 </div>
-@if (_busy) { <MudProgressLinear Indeterminate="true" aria-label="@Loc["Saving receipt"]" /> }
+@if (_uploading) { <MudProgressLinear Indeterminate="true" aria-label="@Loc["Saving receipt"]" /> }
+@if (_uploadProgress is not null) { <p role="status">@_uploadProgress</p> }
+<nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Receipt status"]">
+    @foreach (var status in Enum.GetValues<ReceiptFilter>())
+    {
+        <MudButton Variant="@(_filter == status ? Variant.Filled : Variant.Text)" Color="@(_filter == status ? Color.Primary : Color.Default)"
+                   Size="Size.Small" Class="gs-btn-pill" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
+    }
+</nav>
+<div class="gs-receipt-search-bar">
+    <MudTextField @bind-Value="_search" @bind-Value:after="ApplyFilters" T="string" Immediate="true" DebounceInterval="200" Clearable="true"
+                  Placeholder="@Loc["Search merchants or items"]" aria-label="@Loc["Search merchants or items"]"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
+    <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
+</div>
 <LoadView Loading="_loading" Failed="@(_rows is null)" Retry="Load">
 @if (_rows is { Count: 0 })
 {
-    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@Loc["Your receipts start here"]</h3><p>@Loc["Keep a receipt now, then connect it to a bank payment or expense when you are ready."]</p></div>
+    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then connect it to a bank payment or expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
+}
+else if (_rows is not null && _visibleRows.Count == 0)
+{
+    <div class="gs-card gs-empty gs-receipt-empty" role="status"><MudIcon Icon="@Icons.Material.Rounded.SearchOff" /><h3>@Loc["No receipts match your filters."]</h3><MudButton OnClick="ClearFilters">@Loc["Clear filters"]</MudButton></div>
 }
 else if (_rows is not null)
 {
     <div class="gs-card gs-receipt-inbox-list">
-    @foreach (var row in _rows)
-    {
-        var source = row.Attachments.FirstOrDefault();
-        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{BankQuery}")" @key="row.Id">
+    <Virtualize @ref="_virtualize" Items="_visibleRows" Context="row" ItemSize="116" OverscanCount="5">
+        @{ var source = row.Attachments.FirstOrDefault(); }
+        <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
+        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{BankQuery}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
             <div class="gs-receipt-inbox-thumb">
                 @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
                 else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
             </div>
-            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span><span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span></div>
-            <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong><span>@Loc["Review"] <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" /></span></div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (_filter == ReceiptFilter.Waiting && !_suggestions.ContainsKey(row.Id)) { <span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span> }</div>
+            <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong></div>
         </a>
-    }
+        @if (_filter != ReceiptFilter.Added)
+        {
+            <div class="gs-receipt-inbox-actions">
+                @if (_suggestions.TryGetValue(row.Id, out var destination))
+                {
+                    <div class="gs-receipt-inbox-shortcut">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@destination.Destination" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review: {0}", destination.Destination]</MudButton>
+                    </div>
+                }
+                <div class="gs-receipt-inbox-state-action"><MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy" OnClick="@(() => SetIgnored(row, _filter == ReceiptFilter.Waiting))">@(_filter == ReceiptFilter.Waiting ? Loc["Ignore"] : Loc["Restore"])</MudButton></div>
+            </div>
+        }
+        </div>
+    </Virtualize>
     </div>
 }
 </LoadView>
 @code {
-    private IReadOnlyList<ReceiptInboxResponse>? _rows;
+    private List<ReceiptInboxResponse>? _rows;
+    private List<ReceiptInboxResponse> _visibleRows = [];
+    private string? _search;
+    private DateFilter _dateRange = DateFilter.AllTime;
+    private enum ReceiptFilter { Waiting, Added, Ignored }
+    private ReceiptFilter _filter;
     private bool _busy;
+    private bool _uploading;
+    private string? _uploadProgress;
     private bool _loading = true;
+    private bool _importHelp;
+    private IJSObjectReference? _importModule;
+    private DotNetObjectReference<ReceiptInbox>? _importReference;
+    private readonly Dictionary<Guid, FilingDestinationSuggestion> _suggestions = [];
+    private CancellationTokenSource? _suggestionLoad;
+    private Virtualize<ReceiptInboxResponse>? _virtualize;
     [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
     private string BankQuery => BankId is { } id ? $"?bank={id}" : "";
     protected override Task OnInitializedAsync() => Load();
-    private async Task Load()
+    private void ApplyFilters()
     {
-        _loading = true;
-        try { await Errors.TryAsync(async () => { _rows = (await Client.ListReceiptInboxAsync()).ToList(); Overview.SetReceiptCount(_rows.Count); }, Loc["Could not load receipts."].Value); }
-        finally { _loading = false; }
+        var search = _search?.Trim();
+        var bounds = _dateRange.Days(Clock.Today);
+        _visibleRows = (_rows ?? []).Where(row =>
+        {
+            if (!string.IsNullOrEmpty(search) && !(row.Receipt.MerchantName?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                row.Receipt.Items.Any(item => item.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))) return false;
+            if (bounds.From is null && bounds.To is null) return true;
+            return row.Receipt.PurchaseDate is { } date && (bounds.From is null || date >= bounds.From) && (bounds.To is null || date <= bounds.To);
+        }).ToList();
     }
-    private string Source(Guid r, Guid a) => Nav.BaseUri + $"api/receipts/inbox/{r}/files/{a}";
-    private async Task Upload(InputFileChangeEventArgs args)
+    private void SetDateRange(DateFilter range) { _dateRange = range; ApplyFilters(); }
+    private void ClearFilters() { _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); }
+    private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
+    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _rows = null; await Load(); }
+    private async Task OpenAdded(ReceiptInboxResponse row)
     {
+        if (_filter == ReceiptFilter.Added && row.ExpenseId is { } id)
+            await Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value, new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+    }
+    private async Task SetIgnored(ReceiptInboxResponse row, bool ignored)
+    {
+        if (_busy) return;
         _busy = true;
         try
         {
-            await Errors.TryAsync(async () =>
+            if (await Errors.TryAsync(async () => { if (ignored) await Client.IgnoreInboxReceiptAsync(row.Id); else await Client.RestoreInboxReceiptAsync(row.Id); }, Loc["Could not update receipt."].Value))
             {
-                var id = Guid.NewGuid();
-                // Upload creates the draft and source together.
-                await using var stream = args.File.OpenReadStream(10 * 1024 * 1024);
-                var uploaded = await Client.UploadInboxReceiptFileAsync(id, new FileParameter(stream, args.File.Name, args.File.ContentType));
-                Nav.NavigateTo($"/inbox/receipts/{uploaded.ReceiptId ?? id}");
-            }, "Could not upload receipt. Please retry.");
-            await Load();
+                await Changes.NotifyReceiptsChangedAsync();
+                await Load();
+            }
         }
         finally { _busy = false; }
+    }
+    private async Task OpenRetailerImport()
+    {
+        try
+        {
+            _importModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GroupSplit.App.Shared/js/receipt-importer.js");
+            if (_importReference is null)
+            {
+                _importReference = DotNetObjectReference.Create(this);
+                await _importModule.InvokeVoidAsync("watchReceipts", _importReference);
+            }
+            _importHelp = !await _importModule.InvokeAsync<bool>("openReceiptImporter");
+        }
+        catch (JSException) { _importHelp = true; }
+    }
+    private async Task Load()
+    {
+        _loading = true;
+        _suggestionLoad?.Cancel();
+        _suggestionLoad?.Dispose();
+        _suggestionLoad = new CancellationTokenSource();
+        var token = _suggestionLoad.Token;
+        _suggestions.Clear();
+        try { await Errors.TryAsync(async () => {
+            var loaded = (await (_filter switch { ReceiptFilter.Added => Client.ListAddedReceiptInboxAsync(token), ReceiptFilter.Ignored => Client.ListIgnoredReceiptInboxAsync(token), _ => Client.ListReceiptInboxAsync(token) })).ToList();
+            if (token.IsCancellationRequested) return;
+            _rows = loaded;
+            ApplyFilters();
+            if (_filter == ReceiptFilter.Waiting)
+            {
+                SuggestionCache.Retain(_rows);
+                foreach (var row in _rows)
+                    if (SuggestionCache.Get(row) is { } cached) _suggestions[row.Id] = cached;
+                Overview.SetReceiptCount(_rows.Count);
+                _ = LoadSuggestions(_rows, SuggestionCache.Generation, token);
+            }
+        }, Loc["Could not load receipts."].Value); }
+        finally { if (!token.IsCancellationRequested) _loading = false; }
+    }
+    private async Task LoadSuggestions(IReadOnlyList<ReceiptInboxResponse> rows, long generation, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var batch in rows.Where(row => row.Receipt.Items.Count > 0 && !_suggestions.ContainsKey(row.Id)).Chunk(ReceiptInboxSuggestionsRequest.MaxRows))
+            {
+                IReadOnlyCollection<ReceiptInboxSuggestion> suggestions;
+                try
+                {
+                    suggestions = (await Client.SuggestReceiptInboxFilingsAsync(new ReceiptInboxSuggestionsRequest { ReceiptIds = batch.Select(row => row.Id).ToArray() }, ct)).ToArray();
+                }
+                catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { continue; }
+                if (ct.IsCancellationRequested) return;
+                await InvokeAsync(async () => {
+                    if (ct.IsCancellationRequested || generation != SuggestionCache.Generation) return;
+                    var byId = batch.ToDictionary(row => row.Id);
+                    foreach (var suggestion in suggestions)
+                        if (byId.TryGetValue(suggestion.ReceiptId, out var row))
+                        {
+                            SuggestionCache.Remember(row, suggestion.Destination, generation);
+                            _suggestions[row.Id] = suggestion.Destination;
+                        }
+                    if (_virtualize is not null) await _virtualize.RefreshDataAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+    [JSInvokable] public async Task RefreshImportedReceipts() => await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+    public async ValueTask DisposeAsync()
+    {
+        _suggestionLoad?.Cancel(); _suggestionLoad?.Dispose();
+        if (_importModule is not null)
+        {
+            try { await _importModule.InvokeVoidAsync("stopWatching"); await _importModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+        _importReference?.Dispose();
+    }
+    private string Source(Guid r, Guid a) => Nav.BaseUri + $"api/receipts/inbox/{r}/files/{a}";
+    private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion suggestion)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            IReadOnlyList<ReceiptExpenseCandidate>? matches = null;
+            if (!await Errors.TryAsync(async () => matches = (await Client.MatchReceiptInboxAsync(row.Id)).ToList(), Loc["Could not check for matching expenses."].Value)) return;
+            var dialog = await Dialogs.ShowAsync<CreateTransactionDialog>(Loc["Create expense"].Value,
+                new DialogParameters<CreateTransactionDialog>
+                {
+                    { x => x.InboxReceipt, row.Receipt }, { x => x.InboxCurrency, row.Currency },
+                    { x => x.SelectedGroupId, suggestion.IsPersonal ? null : suggestion.GroupId },
+                    { x => x.InboxSuggestion, suggestion }
+                }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await dialog.Result is not { Canceled: false, Data: CreateTransactionRequest request }) return;
+            var createAnyway = matches!.Count > 0 && await Dialogs.ShowMessageBoxAsync(Loc["Possible duplicate"].Value,
+                Loc["These matching expenses may already record this purchase. Create another expense?"].Value,
+                yesText: Loc["Create another"].Value, cancelText: Loc["Cancel"].Value) == true;
+            if (matches.Count > 0 && !createAnyway) return;
+            if (await Errors.TryAsync(async () => await Client.FileReceiptInboxAsync(row.Id,
+                    new FileReceiptInboxRequest { NewExpense = request, CreateAnyway = createAnyway }), Loc["Could not file receipt."].Value))
+            {
+                await Changes.NotifyReceiptsChangedAsync();
+                await Changes.NotifyTransactionsChangedAsync();
+                await Load();
+            }
+        }
+        finally { _busy = false; }
+    }
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        const int maximumFiles = 100;
+        if (args.FileCount > maximumFiles)
+        {
+            _uploadProgress = Loc["Choose no more than 100 receipts at a time."].Value;
+            return;
+        }
+        _busy = true;
+        _uploading = true;
+        _uploadProgress = null;
+        try
+        {
+            var files = args.GetMultipleFiles(maximumFiles);
+            var completed = 0;
+            var failed = 0;
+            var alreadyImported = 0;
+            Guid? singleReceiptId = null;
+            foreach (var file in files)
+            {
+                _uploadProgress = Loc["Importing receipt {0} of {1}…", completed + failed + alreadyImported + 1, files.Count].Value;
+                await InvokeAsync(StateHasChanged);
+                var alreadyExists = false;
+                var succeeded = await Errors.TryAsync(async () =>
+                {
+                    var id = Guid.NewGuid();
+                    await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+                    var uploaded = await Client.UploadInboxReceiptFileAsync(id, new FileParameter(stream, file.Name, file.ContentType));
+                    singleReceiptId = uploaded.ReceiptId ?? id;
+                    alreadyExists = singleReceiptId != id;
+                }, Loc["Could not upload receipt: {0}", file.Name].Value);
+                if (!succeeded) failed++;
+                else if (alreadyExists) alreadyImported++;
+                else completed++;
+            }
+            if (files.Count == 1 && failed == 0 && singleReceiptId is { } receiptId)
+            {
+                Nav.NavigateTo($"/inbox/receipts/{receiptId}");
+                return;
+            }
+            _uploadProgress = Loc["Finished: {0} uploaded, {1} already in your inbox, {2} failed.", completed, alreadyImported, failed].Value;
+            _filter = ReceiptFilter.Waiting;
+            await Load();
+        }
+        finally { _busy = false; _uploading = false; }
     }
 }

@@ -25,6 +25,10 @@ public sealed class ApiRateLimits
     /// Each one is a paid call to Veryfi or Azure OpenAI.
     /// </summary>
     public RateLimit Transcription { get; set; } = new() { PermitLimit = 30, Window = TimeSpan.FromHours(1) };
+    /// <summary>Suggestion batches are limited separately from receipt transcription.</summary>
+    public RateLimit Suggestions { get; set; } = new() { PermitLimit = 1000, Window = TimeSpan.FromHours(1) };
+    /// <summary>Provider calls on suggestion cache misses, shared by bank and receipt suggestions.</summary>
+    public RateLimit SuggestionModelCalls { get; set; } = new() { PermitLimit = 1500, Window = TimeSpan.FromHours(1) };
 
     /// <summary>
     /// Asking for a link token, exchanging one, refreshing or syncing a connection. Each one
@@ -52,6 +56,7 @@ public sealed class RateLimit
 public static class ApiRateLimitPolicies
 {
     public const string Transcription = "transcription";
+    public const string Suggestions = "suggestions";
     public const string Bank = "bank";
     public const string Invitations = "invitations";
 }
@@ -88,6 +93,7 @@ public static class RateLimitingExtensions
                 options.OnRejected = OnRejected;
 
                 options.AddPolicy(ApiRateLimitPolicies.Transcription, context => PerUser(context, limits => limits.Transcription));
+                options.AddPolicy(ApiRateLimitPolicies.Suggestions, context => PerUser(context, limits => limits.Suggestions));
                 options.AddPolicy(ApiRateLimitPolicies.Bank, context => PerUser(context, limits => limits.Bank));
                 options.AddPolicy(ApiRateLimitPolicies.Invitations, context => PerUser(context, limits => limits.Invitations));
             });

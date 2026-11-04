@@ -65,8 +65,10 @@
             }
             @if (_items.Count > 0)
             {
-                <MudText Typo="Typo.caption">@Loc["Mark any tax-exempt items below first, then spread the unassigned tax across the remaining items by price."]</MudText>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" ButtonType="ButtonType.Button" Disabled="@(_saving || _tax <= 0 || !_items.Any(item => item.TaxRate is null && item.IsTaxable != false && item.TotalPrice > 0))" OnClick="DistributeTax">@Loc["Distribute tax"]</MudButton>
+                <div class="gs-editable-receipt-tax">
+                    <span>@(_taxWasDistributed ? Loc["Tax was distributed by item price. Review tax-exempt items."].Value : Loc["Mark any tax-exempt items below first, then spread the unassigned tax across the remaining items by price."].Value)</span>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" ButtonType="ButtonType.Button" Disabled="@(_saving || _tax <= 0 || !_items.Any(item => item.TaxRate is null && item.IsTaxable != false && item.TotalPrice > 0))" OnClick="DistributeTax">@Loc["Distribute tax"]</MudButton>
+                </div>
             }
 
             @if (FinancialValuesChanged)
@@ -178,6 +180,7 @@
     private string? _merchantName;
     private DateTime? _purchaseDate;
     private List<EditableLine> _items = [];
+    private bool _taxWasDistributed;
     private bool _saving;
     private MudForm _form = null!;
     private string? _validationError;
@@ -281,6 +284,18 @@
         _merchantName = source.MerchantName;
         _purchaseDate = source.PurchaseDate?.ToDateTime(TimeOnly.MinValue);
         _items = source.Items;
+        _taxWasDistributed = false;
+        if (Transcription is not null && Receipt is null && _subtotal + _tax + _tip == _total &&
+            _items.Sum(item => item.TotalPrice) == _subtotal)
+        {
+            var taxes = ReceiptTaxes.DistributeUnassigned(_tax, _items.Select(item =>
+                new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+            if (taxes is not null)
+            {
+                for (var index = 0; index < _items.Count; index++) _items[index].TaxAmount = taxes[index];
+                _taxWasDistributed = true;
+            }
+        }
         _originalTotals = (_subtotal, _tax, _tip, _total);
         _originalLines = _items.Select(item =>
             (item.Key, item.Quantity, item.UnitPrice, item.TotalPrice, item.TaxAmount, item.TaxRate)).ToArray();

@@ -5547,4 +5547,16 @@
   <data name="This ticket changed. Refresh it before trying again." xml:space="preserve">
     <value>This ticket changed. Refresh it before trying again.</value>
   </data>
+  <data name="Receipt importer unavailable" xml:space="preserve"><value>Receipt importer unavailable</value></data>
+  <data name="Open this inbox in Chrome, Edge, or Brave with the GroupSplit receipt importer enabled, then try again." xml:space="preserve"><value>Open this inbox in Chrome, Edge, or Brave with the GroupSplit receipt importer enabled, then try again.</value></data>
+  <data name="The extension is in preview and isn’t available in a browser store yet. You can upload a photo or PDF below." xml:space="preserve"><value>The extension is in preview and isn’t available in a browser store yet. You can upload a photo or PDF below.</value></data>
+  <data name="Tax was distributed by item price. Review tax-exempt items." xml:space="preserve"><value>Tax was distributed by item price. Review tax-exempt items.</value></data>
+  <data name="The receipt has tax that has not been assigned to its items. Distribute it by item price, or review the receipt first." xml:space="preserve"><value>The receipt has tax that has not been assigned to its items. Distribute it by item price, or review the receipt first.</value></data>
+  <data name="Distribute the receipt tax or review the receipt before splitting." xml:space="preserve"><value>Distribute the receipt tax or review the receipt before splitting.</value></data>
+  <data name="Receipt status" xml:space="preserve"><value>Receipt status</value></data>
+  <data name="View expense" xml:space="preserve"><value>View expense</value></data>
+  <data name="Receipts attached to an expense appear here." xml:space="preserve"><value>Receipts attached to an expense appear here.</value></data>
+  <data name="Ignored receipts stay here until you restore or delete them." xml:space="preserve"><value>Ignored receipts stay here until you restore or delete them.</value></data>
+  <data name="Search merchants or items" xml:space="preserve"><value>Search merchants or items</value></data>
+  <data name="No receipts match your filters." xml:space="preserve"><value>No receipts match your filters.</value></data>
 </root>

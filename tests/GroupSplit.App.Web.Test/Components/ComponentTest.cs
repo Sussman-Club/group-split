@@ -47,6 +47,7 @@ public abstract class ComponentTest : BunitContext
         receiptInbox.Setup(client => client.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ReceiptInboxResponse>());
         Services.AddSingleton(receiptInbox.Object);
         Services.AddSingleton<InboxOverview>();
+        Services.AddSingleton<ReceiptSuggestionCache>();
         Services.AddSingleton<LoadGuard>();
 
         // A plain mock rather than bUnit's runtime, and deliberately not an in-process one:

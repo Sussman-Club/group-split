@@ -35,7 +35,7 @@ public static class ErrorMessages
     /// </summary>
     public static string RateLimited(int? retryAfterSeconds)
     {
-        if (retryAfterSeconds is not { } seconds || seconds <= 0)
+        if (retryAfterSeconds is not ({ } seconds and > 0))
             return For(ErrorCodes.RateLimited);
 
         if (seconds < 60)

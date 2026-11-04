@@ -4,6 +4,19 @@ public readonly record struct ReceiptTaxLine(decimal TotalPrice, decimal TaxAmou
 
 public static class ReceiptTaxes
 {
+    /// <summary>Allocates otherwise unassigned tax by price, retaining explicit line tax and exemptions.</summary>
+    public static decimal[]? DistributeUnassigned(decimal totalTax, IReadOnlyList<ReceiptTaxLine> items)
+    {
+        if (totalTax <= 0 || decimal.Round(totalTax, 2) != totalTax ||
+            !items.Any(item => item.IsTaxable != false && item.TaxRate is null &&
+                item.TaxAmount == 0m && item.TotalPrice > 0m)) return null;
+        if (Calculate(totalTax, items).Sum() >= totalTax) return null;
+        var result = Calculate(totalTax, items, allocateUnidentified: true);
+        if (result.Sum() != totalTax || items.Select((item, index) => (item, index))
+                .Any(pair => pair.item.TaxAmount != 0m && result[pair.index] != pair.item.TaxAmount)) return null;
+        return result;
+    }
+
     public static decimal[] Calculate(decimal totalTax, IReadOnlyList<ReceiptTaxLine> items, bool allocateUnidentified = false)
     {
         // A reconciled saved bill already includes its cent allocation. Preserve it on reread.

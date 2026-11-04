@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GroupSplit.API.Services;
+using GroupSplit.API.Extensions;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.API.Test.Base;
@@ -22,6 +23,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private readonly FakeDecisionClient _model = new();
 
     private bool _configured = true;
+    private int? _modelCallLimit;
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -31,6 +33,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         services.AddKeyedSingleton<IBankConnector>(FakeBankConnector.Name, _bank);
         services.AddSingleton<IDecisionClient>(_model);
+        services.Configure<ApiRateLimits>(options => { if (_modelCallLimit is { } limit) options.SuggestionModelCalls.PermitLimit = limit; });
         services.Configure<FilingSuggestionOptions>(options =>
         {
             if (!_configured)
@@ -40,6 +43,21 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             options.Endpoint = new Uri("https://decision.test/");
             options.Key = "test-key";
         });
+    }
+
+    [Fact]
+    public async Task Cached_suggestions_remain_available_after_model_call_limit_is_reached()
+    {
+        _modelCallLimit = 1;
+        var (group, _) = await Home();
+        _model.Answer("Home · Groceries", .9);
+        var request = new SuggestReceiptFilingRequest { GroupId = group.Id, Currency = "USD",
+            Receipt = new SaveReceiptRequest { MerchantName = "Shop", Total = 12m, Items = [new ReceiptItemInput { Name = "Milk" }] } };
+        var service = GetService<IFilingSuggester>();
+        Assert.NotNull(await service.SuggestReceipt(request, Ct));
+        Assert.NotNull(await service.SuggestReceipt(request, Ct));
+        Assert.Null(await service.SuggestReceipt(request with { Receipt = request.Receipt with { Total = 24m } }, Ct));
+        Assert.Single(_model.Asked);
     }
 
     [Fact]

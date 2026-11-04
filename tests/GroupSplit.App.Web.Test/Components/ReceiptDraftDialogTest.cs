@@ -248,7 +248,7 @@ public class ReceiptDraftDialogTest : ComponentTest
     }
 
     [Fact]
-    public async Task Unassigned_scanned_tax_can_be_distributed_before_using_the_receipt()
+    public async Task Unassigned_scanned_tax_is_distributed_before_using_the_receipt()
     {
         var provider = Render<MudDialogProvider>();
         IDialogReference? reference = null;
@@ -264,8 +264,7 @@ public class ReceiptDraftDialogTest : ComponentTest
             {
                 { component => component.Transcription, new ReceiptTranscriptionResponse(Guid.Empty, "test", receipt) }
             }));
-        await provider.FindAll("button").Single(button => button.TextContent.Contains("Distribute tax"))
-            .ClickAsync(new MouseEventArgs());
+        Assert.Contains("Tax was distributed by item price", provider.Markup);
         await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt"))
             .ClickAsync(new MouseEventArgs());
         var result = await reference!.GetReturnValueAsync<SaveReceiptRequest>();

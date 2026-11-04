@@ -803,6 +803,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("ExpenseId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsIgnored")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
