@@ -31,7 +31,13 @@
 }
 
 /* The editable counterpart of BillSheet: keep the paper rhythm and aligned prices. */
-.gs-editable-receipt { gap: 16px; background: var(--gs-paper, var(--gs-surface)); color: var(--gs-paper-ink, var(--gs-ink)); padding: 20px; border-top: 3px dotted var(--gs-line); border-bottom: 3px dotted var(--gs-line); }
+@media (min-width: 601px) {
+    .mud-dialog-container > .mud-dialog.gs-editable-receipt-dialog { max-width: 640px; }
+}
+.gs-editable-receipt { gap: 14px; background: var(--gs-paper, var(--gs-surface)); color: var(--gs-paper-ink, var(--gs-ink)); padding: 18px 20px; border-top: 2px dotted var(--gs-line); border-bottom: 2px dotted var(--gs-line); }
+.gs-editable-receipt > p:first-child { margin: 0; font-size: .875rem; line-height: 1.45; }
+.gs-editable-receipt-tax { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--gs-line); border-radius: 10px; color: var(--gs-muted); font-size: .8rem; line-height: 1.4; }
+.gs-editable-receipt-tax .mud-button-root { flex: 0 0 auto; }
 .gs-editable-receipt-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .8fr); align-items: end; gap: 12px; border-bottom: 1px dashed var(--gs-line); padding: 0 0 10px; }
 .gs-editable-receipt-head .mud-input-control { width: 100%; min-width: 0; margin: 0; }
 .gs-editable-receipt-head input { text-align: center; font-family: ui-monospace, Consolas, monospace; }
@@ -53,6 +59,8 @@
 .gs-editable-receipt-totals { border-top: 2px solid var(--gs-line); padding-top: 18px; }
 @media(max-width:600px) {
     .gs-editable-receipt { padding: 12px; gap: 12px; }
+    .gs-editable-receipt-tax { align-items: flex-start; flex-wrap: wrap; }
+    .gs-editable-receipt-tax .mud-button-root { margin-left: auto; }
     .gs-editable-receipt-line-main { grid-template-columns: minmax(0, 1fr) 96px; gap: 6px; }
     .gs-editable-receipt-line-meta > span { min-width: 0; }
     .gs-editable-receipt-actions { margin-left: auto; gap: 12px; padding-block: 2px; }

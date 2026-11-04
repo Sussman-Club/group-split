@@ -1,6 +1,7 @@
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Mvc;
 
@@ -28,10 +29,23 @@ public static class ReceiptInboxApi
           .RateLimitedAs(ApiRateLimitPolicies.Transcription);
         group.MapGet("/inbox", async (ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.List(ct)))
             .WithName("ListReceiptInbox").Produces<IReadOnlyList<ReceiptInboxResponse>>();
+        group.MapGet("/inbox/added", async (ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.ListAdded(ct)))
+            .WithName("ListAddedReceiptInbox").Produces<IReadOnlyList<ReceiptInboxResponse>>();
+        group.MapGet("/inbox/ignored", async (ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.ListIgnored(ct)))
+            .WithName("ListIgnoredReceiptInbox").Produces<IReadOnlyList<ReceiptInboxResponse>>();
+        group.MapPost("/inbox/suggestions", async (ReceiptInboxSuggestionsRequest request, ReceiptInboxService service, IFilingSuggester suggester, CancellationToken ct) => Results.Ok(await service.Suggest(request, suggester, ct)))
+            .WithName("SuggestReceiptInboxFilings").Produces<IReadOnlyList<ReceiptInboxSuggestion>>().ProducesValidationProblem()
+            .RateLimitedAs(ApiRateLimitPolicies.Suggestions);
+        group.MapPost("/inbox/{receiptId:guid}/ignore", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => { await service.SetIgnored(receiptId, true, ct); return Results.NoContent(); })
+            .WithName("IgnoreInboxReceipt").Produces(StatusCodes.Status204NoContent);
+        group.MapPost("/inbox/{receiptId:guid}/restore", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => { await service.SetIgnored(receiptId, false, ct); return Results.NoContent(); })
+            .WithName("RestoreInboxReceipt").Produces(StatusCodes.Status204NoContent);
         group.MapGet("/inbox/{receiptId:guid}", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.Get(receiptId, ct)))
             .WithName("GetReceiptInbox").Produces<ReceiptInboxResponse>();
         group.MapPut("/inbox/{receiptId:guid}", async (Guid receiptId, SaveReceiptInboxRequest request, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.Save(receiptId, request, ct)))
             .WithName("SaveReceiptInbox").Produces<ReceiptInboxResponse>();
+        group.MapPut("/inbox/{receiptId:guid}/extracted", async (Guid receiptId, SaveReceiptRequest request, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.SaveExtractedIfEmpty(receiptId, request, ct)))
+            .WithName("SaveExtractedInboxReceipt").Produces<ReceiptInboxResponse>();
         group.MapDelete("/inbox/{receiptId:guid}", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => { await service.Delete(receiptId, ct); return Results.NoContent(); })
             .WithName("DeleteReceiptInbox").Produces(StatusCodes.Status204NoContent);
         group.MapGet("/inbox/{receiptId:guid}/matches", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.Matches(receiptId, ct)))

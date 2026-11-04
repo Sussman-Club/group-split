@@ -55,6 +55,7 @@ public static class ServiceExtensions
             // that would each fetch the count.
             services.TryAddScoped<InboxStateService>();
             services.TryAddScoped<InboxOverview>();
+            services.TryAddScoped<ReceiptSuggestionCache>();
             services.TryAddScoped<IInboxStateService>(sp => sp.GetRequiredService<InboxStateService>());
             services.TryAddScoped<IBankLinkLauncher, PlaidLinkLauncher>();
 

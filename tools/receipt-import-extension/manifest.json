@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "GroupSplit receipt importer (preview)",
+  "version": "0.1.0",
+  "description": "Import Amazon order summaries and Costco warehouse receipts into your GroupSplit inbox.",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "permissions": ["activeTab", "scripting", "debugger", "downloads"],
+  "optional_host_permissions": ["https://www.amazon.com/*", "https://www.costco.com/*"],
+  "content_scripts": [{
+    "matches": ["https://groupsplit.sussman.win/*", "https://localhost/*", "http://localhost/*", "https://127.0.0.1/*", "http://127.0.0.1/*"],
+    "js": ["app-bridge.js"],
+    "run_at": "document_idle"
+  }],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'none'" },
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "GroupSplit receipts" }
+}

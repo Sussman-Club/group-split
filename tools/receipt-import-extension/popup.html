@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import receipts - GroupSplit</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="importer">
+    <header class="importer-header">
+      <div class="importer-brand"><img class="brand-mark" src="logo.svg" alt=""><span>Group Split</span></div>
+      <h1>Bring your receipts in</h1>
+      <p>Choose a store and a date range. Review the receipts before adding them to your inbox.</p>
+    </header>
+
+    <section class="importer-section" aria-labelledby="store-heading">
+      <div class="section-heading"><span class="step-number" aria-hidden="true">1</span><div><h2 id="store-heading">Choose a store</h2><p>Sign in on the store’s website if needed.</p></div></div>
+      <div class="store-controls">
+        <label class="field">Store<select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco</option></select></label>
+        <button id="open-costco" class="button button-secondary" type="button">Connect store</button>
+      </div>
+      <p id="connection" class="connection" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="importer-section" aria-labelledby="dates-heading">
+      <div class="section-heading"><span class="step-number" aria-hidden="true">2</span><div><h2 id="dates-heading">Find receipts</h2><p>Choose the dates for your search.</p></div></div>
+      <div class="filter-fields">
+        <label class="field">From<input type="date" id="from" required></label>
+        <label class="field">To<input type="date" id="to" required></label>
+        <label class="field buyer-field" id="buyer-field">Ship to
+          <select id="buyer"><option value="all">All recipients</option><option value="unknown">Recipient not shown</option></select>
+        </label>
+      </div>
+      <div class="buyer-guidance" id="buyer-guidance">
+        <span id="buyer-note" class="field-note" role="status" aria-live="polite">Recipient names are used only for this filter and aren’t saved to receipts.</span>
+        <button id="refresh-buyers" class="text-button" type="button">Check recipients</button>
+      </div>
+      <button id="find" class="button button-primary" type="button">Find receipts</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <ul id="receipts" class="receipt-results" aria-label="Receipts to review"></ul>
+      <button id="download" class="button button-primary" type="button" hidden>Save and import receipts</button>
+    </section>
+
+    <aside class="privacy-note" aria-label="Your privacy">
+      <span class="privacy-icon" aria-hidden="true">✓</span>
+      <div><strong>Review before importing</strong><p id="privacy-note">Amazon summaries omit customer, address and payment sections. Check item names for personal text.</p></div>
+    </aside>
+    <button id="back-to-inbox" class="return-link" type="button" hidden>Back to receipts</button>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

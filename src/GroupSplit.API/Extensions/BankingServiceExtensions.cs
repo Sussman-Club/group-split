@@ -70,6 +70,7 @@ public static class BankingServiceExtensions
             // the suggester answers nothing without calling anybody.
             services.AddOptions<FilingSuggestionOptions>();
             services.AddHttpClient<IDecisionClient, DecisionClient>();
+            services.AddSingleton<SuggestionModelLimiter>();
             services.AddScoped<IFilingSuggester, FilingSuggester>();
 
             services.AddJobs()
