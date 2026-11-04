@@ -248,7 +248,6 @@
 .gs-receipt-inbox-copy .gs-receipt-inbox-status { color: var(--gs-teal-deep); }
 .gs-receipt-inbox-end { display: flex; flex-direction: column; align-items: end; gap: 8px; font-variant-numeric: tabular-nums; }
 .gs-receipt-inbox-end > span { display: flex; align-items: center; color: var(--gs-teal-deep); font-size: .85rem; }
-.gs-receipt-inbox-end small { font-weight: 400; }
 .gs-receipt-empty { padding: 32px 20px; }
 .gs-receipt-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .gs-receipt-review-original { min-width: 0; }
@@ -296,13 +295,12 @@
 .gs-receipt-suggestion { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--gs-radius); background: var(--gs-teal-soft); }
 .gs-receipt-suggestion > span { color: var(--gs-ink-2); }
 .gs-receipt-inbox-entry { position: relative; height: 116px; box-sizing: border-box; border-bottom: 1px solid var(--gs-line); }
-.gs-receipt-inbox-entry .gs-receipt-inbox-row { height: 100%; box-sizing: border-box; padding: 14px 20px; align-items: flex-start; }
+.gs-receipt-inbox-entry .gs-receipt-inbox-row { height: 100%; box-sizing: border-box; padding: 14px 20px; align-items: flex-start; border-bottom: 0; }
 .gs-receipt-inbox-copy > strong, .gs-receipt-inbox-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gs-receipt-inbox-shortcut .mud-button-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gs-receipt-inbox-entry:last-child { border-bottom: 0; }
-.gs-receipt-inbox-entry .gs-receipt-inbox-row { border-bottom: 0; }
 .gs-receipt-inbox-end > strong { white-space: nowrap; }
-.gs-receipt-inbox-end small { display: inline; margin-left: 3px; font-size: .72em; color: var(--gs-muted); }
+.gs-receipt-inbox-end small { display: inline; margin-left: 3px; font-size: .72em; font-weight: 400; color: var(--gs-muted); }
 .gs-receipt-inbox-actions { position: absolute; left: 84px; right: 20px; bottom: 8px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; pointer-events: none; }
 .gs-receipt-inbox-actions .mud-button-root { pointer-events: auto; }
 .gs-receipt-inbox-entry:not(.has-suggestion) .gs-receipt-inbox-actions { justify-content: flex-end; }

@@ -59,7 +59,7 @@ async page => {
     await load();
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.gs-inbox-bundle')).borderInlineStartWidth === '4px');
     check(await page.locator('.gs-inbox-bundle').count() === 1, 'Only compatible shared charges should bundle');
-    check(await page.getByRole('button',{name:'File Whole Foods in Personal · Groceries',exact:true}).count() === 1,
+    check(await page.getByRole('button',{name:'Review: Personal · Groceries',exact:true}).count() === 1,
         'Same merchant personal charge must stay separate');
     check(await page.getByText('You may already have recorded this:',{exact:true}).count() === 1,
         'Duplicate warning must remain visible');
@@ -90,12 +90,11 @@ async page => {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({path:'.playwright-cli/inbox-queue-dark.png',fullPage:true});
     await page.getByRole('radio',{name:'Light',exact:true}).check();
-    await page.getByRole('button',{name:'Likely personal (1)',exact:true}).click();
-    check(await page.locator('.gs-inbox-bundle').count() === 0, 'Personal filter excludes shared bundle');
-    await page.getByRole('button',{name:'Keep personal',exact:true}).click();
+    await page.getByRole('button',{name:'Select',exact:true}).click();
+    await page.locator('.gs-row').filter({has: page.getByRole('button',{name:'Review: Personal · Groceries',exact:true})}).getByRole('checkbox').check();
+    await page.locator('.gs-selection-bar').getByRole('button',{name:'Keep personal',exact:true}).click();
     await page.getByText('4 transactions left to review in this range.',{exact:true}).waitFor();
     check(calls.length === 1 && !calls[0].body.groupId, 'Personal action must not file into shared group');
-    await page.getByRole('button',{name:'All charges (4)',exact:true}).click();
     await page.locator('.gs-inbox-bundle summary').click();
     await page.getByRole('button',{name:'Confirm 2 in Home · Groceries',exact:true}).click();
     await page.getByText('2 transactions left to review in this range.',{exact:true}).waitFor();
