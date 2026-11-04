@@ -955,6 +955,8 @@
     private async Task OnSplitRuleChangedAsync(Guid? splitRuleId)
     {
         _model.SplitRuleId = splitRuleId;
+        if (splitRuleId is not null && splitRuleId == _billRuleId)
+            await ApplyDefaultReceiptRuleAsync();
         await RefreshPreviewAsync();
     }
 

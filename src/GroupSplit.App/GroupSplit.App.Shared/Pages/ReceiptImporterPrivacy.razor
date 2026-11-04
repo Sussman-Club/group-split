@@ -10,13 +10,12 @@
     <p>The GroupSplit receipt importer helps you import selected purchases from Amazon and Costco into your GroupSplit receipts inbox using Microsoft Edge. You choose when to connect a store and start an import.</p>
 
     <h2>Information the importer uses</h2>
-    <p>For Amazon, the importer reads order dates, items, quantities, prices, shipping, tax and totals. It reads ship-to recipient names for the optional recipient filter and uses the order identifier to create a reference for duplicate detection. Recipient names are used locally for filtering and are not included in the generated receipt or sent to GroupSplit.</p>
-    <p>The Amazon receipt is a newly generated summary. It does not copy the original invoice's customer, address or payment sections. Item names can themselves contain personal information, so review them before importing.</p>
-    <p>For Costco warehouse purchases, the importer reads receipt listings and prints the displayed receipt to PDF. A Costco receipt may include customer or membership information and masked payment details. Costco online orders are not supported by this preview.</p>
+    <p>For Amazon, the importer reads order dates and ship-to names for the optional recipient filter. It verifies the order number on the printable receipt and saves the full page as a PDF. The PDF may include customer names, addresses, payment details and order numbers. Review the printable receipt before importing.</p>
+    <p>For Costco warehouse purchases, the importer reads receipt listings and prints the displayed receipt to PDF. A Costco receipt may include customer or membership information and masked payment details. For Costco online purchases, the importer generates a summary from the order date, items, quantities, prices and totals.</p>
     <p>You sign in directly to the retailer. The extension uses your existing browser session and does not ask for or store your retailer password.</p>
 
     <h2>Where information goes</h2>
-    <p>When you choose to save and import receipts, the extension saves a PDF copy in your Downloads/GroupSplit folder and uploads it to your signed-in GroupSplit inbox. For new Amazon receipts, it also sends the extracted items and totals to GroupSplit. GroupSplit stores uploaded receipts under your account.</p>
+    <p>When you choose to save and import receipts, the extension saves a PDF copy in your Downloads/GroupSplit folder and uploads it to your signed-in GroupSplit inbox. GroupSplit reads new attachments to suggest receipt details and stores uploaded receipts under your account.</p>
     <p>The extension does not configure analytics or send retailer data to an additional third-party service. Retailers and Microsoft Edge handle their own requests under their respective policies.</p>
 
     <h2>Your choices</h2>

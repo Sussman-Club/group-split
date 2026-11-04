@@ -40,6 +40,13 @@ test('refuses a row containing multiple dates', () => {
   assert.equal(rows[0], null);
 });
 
+test('reads localized Costco warehouse receipt dates', () => {
+  const context = page('Compras en almacén 05/09/2026 US$12.99 Ver recibo');
+  context.document.documentElement.lang = 'es';
+  context.document.querySelectorAll()[0].textContent = 'Ver recibo';
+  assert.equal(context.scanPage()[0].date, '2026-09-05');
+});
+
 test('refuses to open a Costco receipt when its row has changed', () => {
   const context = page('Warehouse 9/5/2026 $266.39 View Receipt');
   context.location.origin = 'https://www.costco.com';
@@ -96,6 +103,18 @@ test('waits through Costco loading before accepting changed receipt rows', async
   assert.equal(rows[0].date, '2026-04-10');
 });
 
+test('recognizes Costco Online’s empty default period so discovery can switch periods', async () => {
+  const context = page('');
+  context.document.querySelectorAll = selector => selector.includes('[role="heading"]') ? [{
+    textContent: 'No orders are available for the selected date range.',
+    getClientRects: () => [{}]
+  }] : [];
+  context.testExecute = async (_id, fn) => fn();
+  vm.runInContext('execute = testExecute', context);
+  const rows = await context.waitForCostcoPage(1, async () => []);
+  assert.equal(rows.length, 0);
+});
+
 test('accepts a confirmed empty Costco period after switching', async () => {
   const context = page('');
   context.setTimeout = callback => { callback(); return 0; };
@@ -104,6 +123,45 @@ test('accepts a confirmed empty Costco period after switching', async () => {
   vm.runInContext('execute = testExecute', context);
   const rows = await context.switchCostcoPeriod(1, 'q2', [{ date: '2026-01-10' }]);
   assert.equal(rows.length, 0);
+});
+
+test('prepares Costco gas and warehouse panels with an embedded body and no dialog role', async () => {
+  const context = page('');
+  context.location.origin = 'https://www.costco.com';
+  context.getComputedStyle = () => ({ visibility: 'visible' });
+  let marked = false;
+  let closed = 0;
+  let style;
+  const close = {
+    innerText: 'Close', textContent: 'Close', getClientRects: () => [{}],
+    getAttribute: () => null,
+    click: () => { closed++; panel.isConnected = false; }
+  };
+  const panel = {
+    parentElement: context.document.body,
+    innerText: 'Gas Station Receipt\nPrint Receipt\nClose',
+    getClientRects: () => [{}],
+    closest: () => null,
+    querySelectorAll: selector => selector.startsWith('iframe') ? [{ getClientRects: () => [{}] }] : [close],
+    setAttribute: name => { marked = name === 'data-groupsplit-print'; },
+    removeAttribute: () => { marked = false; }
+  };
+  const print = { innerText: 'Print Receipt', parentElement: panel, getClientRects: () => [{}] };
+  context.document.querySelectorAll = selector => selector === 'button, a, [role="button"]' ? [print]
+    : selector === '[data-groupsplit-print]' && marked ? [panel] : [];
+  context.document.querySelector = selector => selector === '[data-groupsplit-print]' && marked ? panel : null;
+  context.document.createElement = () => ({ remove: () => { style = null; } });
+  context.document.head = { append: element => { style = element; } };
+  context.document.getElementById = id => style?.id === id ? style : null;
+  for (const title of ['Gas Station Receipt', 'In-Warehouse Receipt']) {
+    panel.innerText = title + '\nPrint Receipt\nClose';
+    panel.isConnected = true;
+    assert.equal((await context.prepareReceipt()).prepared, true);
+    assert.equal(context.verifyPreparedCostcoReceipt(), true);
+    assert.equal((await context.cleanupReceipt()).closed, true);
+    assert.equal(context.verifyPreparedCostcoReceipt(), false);
+  }
+  assert.equal(closed, 2);
 });
 
 test('refuses to upload after the GroupSplit tab changes origin', async () => {
@@ -130,6 +188,30 @@ test('uploads a PDF through the existing inbox endpoint and detects a retry', as
   const result = await context.uploadToInbox('JVBERg==', 'receipt.pdf', context.location.origin);
   assert.equal(result.ok, true);
   assert.equal(result.alreadyImported, true);
+});
+
+test('automatically reads a newly uploaded Costco PDF and saves the returned details', async () => {
+  const context = page('');
+  context.location.origin = 'https://groupsplit.example';
+  context.location.pathname = '/inbox/receipts';
+  Object.assign(context, { atob, Uint8Array, FormData, Blob });
+  const receiptId = '11111111-1111-4111-8111-111111111111';
+  const attachmentId = '22222222-2222-4222-8222-222222222222';
+  const receipt = { merchantName: 'Costco', total: 38.35, items: [] };
+  context.crypto = { randomUUID: () => receiptId };
+  const requests = [];
+  context.fetch = async (url, options) => {
+    requests.push({ url, options });
+    if (url.endsWith('/files')) return { ok: true, json: async () => ({ id: attachmentId, receiptId }) };
+    if (url.endsWith('/transcribe')) return { ok: true, json: async () => ({ receipt }) };
+    return { ok: true };
+  };
+  const result = await context.uploadToInbox('JVBERg==', 'receipt.pdf', context.location.origin);
+  assert.equal(result.detailsSaved, true);
+  assert.equal(requests[1].url, '/api/receipts/inbox/' + receiptId + '/files/' + attachmentId + '/transcribe');
+  assert.equal(requests[1].options.method, 'POST');
+  assert.match(requests[2].url, /\/extracted$/);
+  assert.deepEqual(JSON.parse(requests[2].options.body), receipt);
 });
 
 test('saves extracted details only for a newly uploaded receipt', async () => {
@@ -193,6 +275,9 @@ test('reads the ship-to recipient without using the order buyer', () => {
   };
   context.document.querySelectorAll = () => [card];
   assert.equal(context.scanAmazonPage()[0].buyer, 'Another Person');
+  card.innerText = 'Pedido realizado el 5 de septiembre de 2026\nEnvío a\nMaría José\nPedido realizado por\nOtra Persona';
+  card.querySelector = selector => selector === '.yohtmlc-recipient' ? { innerText: 'Envío a\nMaría José' } : null;
+  assert.equal(context.scanAmazonPage()[0].buyer, 'María José');
   card.innerText = 'Order placed September 5, 2026\nOrdered by\nFamily Member\nView invoice';
   card.querySelector = selector => selector === '.yohtmlc-recipient' ? null
     : { href: 'https://www.amazon.com/gp/css/summary/print.html?orderID=example' };
@@ -229,13 +314,24 @@ test('follows only a forward Amazon orders page within the selected period', () 
 test('accepts Amazon page-number pagination and preserves the selected period', () => {
   const context = page('');
   context.location.href = 'https://www.amazon.com/your-orders/orders?timeFilter=year-2026';
-  context.document.querySelectorAll = () => [{ href: 'https://www.amazon.com/your-orders/orders?page=1' }];
+  context.document.querySelectorAll = () => [{ href: 'https://www.amazon.com/-/es/your-orders/orders?page=1' }];
   const next = new URL(context.readAmazonNavigation().next);
+  assert.equal(next.pathname, '/-/es/your-orders/orders');
   assert.equal(next.searchParams.get('page'), '1');
   assert.equal(next.searchParams.get('timeFilter'), 'year-2026');
   context.location.href = next.href;
   context.document.querySelectorAll = () => [{ href: 'https://www.amazon.com/your-orders/orders?page=0&timeFilter=year-2026' }];
   assert.match(context.readAmazonNavigation().error, /unexpected next page/i);
+});
+
+test('follows Portuguese Amazon US order-history routes', () => {
+  const context = page('');
+  for (const locale of ['pt', 'pt-BR']) {
+    const route = 'https://www.amazon.com/-/' + locale + '/your-orders/orders';
+    context.location.href = route + '?page=1&timeFilter=year-2026';
+    context.document.querySelectorAll = () => [{ href: route + '?page=2' }];
+    assert.equal(context.readAmazonNavigation().next, route + '?page=2&timeFilter=year-2026');
+  }
 });
 
 test('waits for the requested page-number result', async () => {
@@ -267,7 +363,7 @@ test('reports navigation errors returned from the Amazon page', async () => {
   await assert.rejects(context.waitForAmazonNavigation(7), /open amazon your orders/i);
 });
 
-test('collects and deduplicates orders across pages and restores the original page', async () => {
+test('continues past unreadable and older cards, deduplicates orders, and restores the original page', async () => {
   const context = page('');
   context.status = context.document.getElementById('status');
   let current = 'https://www.amazon.com/your-orders/orders?timeFilter=year-2026&startIndex=0';
@@ -280,10 +376,12 @@ test('collects and deduplicates orders across pages and restores the original pa
     : current === next
       ? [{ date: '2026-10-02', buyer: 'Person Two', url: 'https://www.amazon.com/gp/css/summary/print.html?orderID=2' },
          { date: '2026-10-01', buyer: 'Person One', url: 'https://www.amazon.com/gp/css/summary/print.html?orderID=1' }]
-      : [{ date: '2026-10-01', buyer: 'Person One', url: 'https://www.amazon.com/gp/css/summary/print.html?orderID=1' }];
+      : [null, { date: '2026-10-01', buyer: 'Person One', url: 'https://www.amazon.com/gp/css/summary/print.html?orderID=1' }];
   vm.runInContext('execute = testExecute', context);
-  const results = await context.collectAmazonOrders(7);
+  const report = { pages: 0, unreadable: 0 };
+  const results = await context.collectAmazonOrders(7, '2026-10-02', '2026-10-31', report);
   assert.equal(results.length, 2);
+  assert.deepEqual(report, { pages: 2, unreadable: 1 });
   assert.equal(navigated.length, 2);
   assert.match(navigated[1], /startIndex=0/);
 });
@@ -316,20 +414,38 @@ test('uses the order-placed date even when a delivery date is also present', () 
 
 test('reuses one background tab for multiple Amazon invoices', async () => {
   const context = page('');
-  Object.assign(context, { crypto: require('node:crypto').webcrypto, TextEncoder, Uint8Array, btoa });
   const created = [], updated = [];
+  const styles = [], detached = [], media = [];
   context.chrome = { tabs: {
     create: async args => { created.push(args); return { id: 42 }; },
     update: async (id, args) => { updated.push({ id, ...args }); },
     get: async () => ({ status: 'complete' })
+  }, debugger: {
+    attach: async () => {},
+    sendCommand: async (_target, command, options) => {
+      if (command === 'Emulation.setEmulatedMedia') { media.push(options.media); return; }
+      assert.equal(command, 'Page.printToPDF');
+      assert.equal(options.marginLeft, options.marginRight);
+      assert.equal(options.scale, (8.5 - 2 * 0.375) * 96 / 1200);
+      return { data: updated.length ? 'invalid' : 'JVBERi0xLjQ=' };
+    },
+    detach: async target => { detached.push(target.tabId); }
   } };
-  context.testExecute = async (_id, fn) => fn.name === 'verifyAmazonInvoice' ? true :
-    { items: 100, shipping: 0, tax: 0, total: 100, products: [{ name: 'Item', quantity: 1, unitPrice: 100 }] };
+  context.testExecute = async (_id, fn, args) => {
+    if (fn.name === 'verifyAmazonInvoice') return true;
+    if (fn.name === 'setAmazonPrintStyle') { styles.push(args[0]); return; }
+    if (fn.name === 'amazonPrintWidth') return 1200;
+    throw new Error('Unexpected invoice script: ' + fn.name);
+  };
   vm.runInContext('execute = testExecute', context);
   const workspace = { tabId: null };
   const row = id => ({ date: '2026-10-01', url: `https://www.amazon.com/gp/css/summary/print.html?orderID=${id}` });
-  await context.prepareAmazonInvoice(row('123-1234567-1234567'), workspace);
-  await context.prepareAmazonInvoice(row('123-1234567-7654321'), workspace);
+  const summary = await context.prepareAmazonInvoice(row('123-1234567-1234567'), workspace);
+  assert.equal(summary.pdf, 'JVBERi0xLjQ=');
+  await assert.rejects(context.prepareAmazonInvoice(row('123-1234567-7654321'), workspace), /did not produce a PDF/);
+  assert.deepEqual(styles, [true, false, true, false]);
+  assert.deepEqual(media, ['print', '', 'print', '']);
+  assert.deepEqual(detached, [42, 42]);
   assert.equal(created.length, 1);
   assert.equal(created[0].active, false);
   assert.equal(updated.length, 1);
@@ -402,7 +518,7 @@ test('does not download a receipt when the connected inbox has changed', async (
   context.chrome = { tabs: { get: async () => ({ id: 7 }) }, downloads: { download: () => assert.fail('must not download') } };
   context.testExecute = async () => ({ origin: 'https://other.example', pathname: '/inbox/receipts' });
   vm.runInContext('execute = testExecute', context);
-  await assert.rejects(context.savePdf('data', 'receipt.pdf'), /inbox/);
+  await assert.rejects(context.saveReceiptFile('data', 'receipt.pdf'), /inbox/);
 });
 
 test('uploads to the connected inbox using an isolated script world', async () => {
@@ -414,7 +530,7 @@ test('uploads to the connected inbox using an isolated script world', async () =
     scripting: { executeScript: async options => { upload = options; return [{ result: { ok: true } }]; } } };
   context.testExecute = async () => ({ origin: 'https://groupsplit.sussman.win', pathname: '/inbox/receipts' });
   vm.runInContext('execute = testExecute', context);
-  await context.savePdf('data', 'receipt.pdf');
+  await context.saveReceiptFile('data', 'receipt.pdf');
   assert.equal(upload.world, 'ISOLATED');
   assert.equal(upload.target.tabId, 7);
 });
@@ -423,7 +539,7 @@ test('does not read an invoice after the tab changes to another order', () => {
   const context = page('');
   context.location = { href: 'https://www.amazon.com/gp/css/summary/print.html?orderID=other', protocol: 'https:',
     hostname: 'www.amazon.com', pathname: '/gp/css/summary/print.html' };
-  assert.match(context.readAmazonSummary('expected').error, /supported invoice/);
+  assert.equal(context.verifyAmazonInvoice('expected'), false);
 });
 
 test('refuses invoice URLs with credentials or a nonstandard port', async () => {
@@ -448,7 +564,7 @@ test('rejects malformed receipt identifiers from the upload response', async () 
 test('creates a private summary using only allowlisted values', () => {
   const context = page('');
   context.btoa = btoa;
-  const output = context.privateAmazonReceipt('2026-11-02',
+  const output = context.privateCostcoOnlineReceipt('2026-11-02',
     { items: 1799, shipping: 0, tax: 135, total: 1934, products: [{ name: 'Storage bins', quantity: 1, unitPrice: 1799 }], customer: 'PRIVATE NAME', address: 'PRIVATE ADDRESS', buyer: 'PRIVATE BUYER' },
     'a'.repeat(32));
   const pdf = atob(output.pdf);
@@ -463,7 +579,7 @@ test('creates a private summary using only allowlisted values', () => {
 test('renders multiple item names, quantities and prices in a valid PDF', t => {
   const context = page('');
   context.btoa = btoa;
-  const result = context.privateAmazonReceipt('2026-10-28', {
+  const result = context.privateCostcoOnlineReceipt('2026-10-28', {
     items: 4400, shipping: 500, tax: 392, total: 5292,
     products: [{ name: 'Storage (small)', quantity: 2, unitPrice: 1200 },
       { name: 'Free item', quantity: 1, unitPrice: 0 },
@@ -484,61 +600,31 @@ test('renders multiple item names, quantities and prices in a valid PDF', t => {
 
 test('rejects an invoice when totals cannot be reconciled', () => {
   const context = page('');
-  assert.throws(() => context.privateAmazonReceipt('2026-11-02',
+  assert.throws(() => context.privateCostcoOnlineReceipt('2026-11-02',
     { items: 1799, shipping: 0, tax: 135, total: 2000, products: [{ name: 'Bins', quantity: 1, unitPrice: 1799 }] }, 'a'.repeat(32)), /reconciled/);
-});
-
-test('extracts only items and amounts from a supported Amazon summary', () => {
-  const context = page('');
-  context.location = { href: 'https://www.amazon.com/gp/css/summary/print.html?orderID=test', protocol: 'https:', hostname: 'www.amazon.com', pathname: '/gp/css/summary/print.html' };
-  context.document.querySelector = () => null;
-  const product = {
-    querySelectorAll: selector => selector.includes('itemTitle') ? [{ textContent: 'Storage bins' }]
-      : selector.includes('unitPrice') ? [{ textContent: '$17.99' }]
-      : [{ textContent: '' }],
-    querySelector: () => null
-  };
-  context.document.querySelectorAll = selector => selector === 'li' ? [
-    { textContent: 'Ship to PRIVATE NAME PRIVATE ADDRESS' },
-    { textContent: 'Item(s) Subtotal: $17.99' }, { textContent: 'Shipping & Handling: $0.00' },
-    { textContent: 'Estimated tax to be collected: $1.35' }, { textContent: 'Grand Total: $19.34' }
-  ] : [product];
-  const amounts = context.readAmazonSummary('test');
-  assert.deepEqual(JSON.parse(JSON.stringify(amounts)), { items: 1799, shipping: 0, tax: 135, total: 1934,
-    products: [{ name: 'Storage bins', quantity: 1, unitPrice: 1799 }] });
 });
 
 test('refuses item totals that do not match the subtotal', () => {
   const context = page('');
-  assert.throws(() => context.privateAmazonReceipt('2026-11-02',
+  assert.throws(() => context.privateCostcoOnlineReceipt('2026-11-02',
     { items: 1799, shipping: 0, tax: 135, total: 1934, products: [{ name: 'Bins', quantity: 2, unitPrice: 1799 }] }, 'a'.repeat(32)), /reconciled/);
 });
 
-test('refuses invoice items containing customization details', () => {
-  const context = page('');
-  context.location = { href: 'https://www.amazon.com/gp/css/summary/print.html?orderID=test', protocol: 'https:', hostname: 'www.amazon.com', pathname: '/gp/css/summary/print.html' };
+test('verifies the printed order number and final total on English, Spanish, and Portuguese invoices', () => {
+  const orderId = '123-1234567-1234567';
+  const context = page('', 'https://www.amazon.com/gp/css/summary/print.html?orderID=' + orderId);
+  context.document.readyState = 'complete';
   context.document.querySelector = () => null;
-  const card = {
-    querySelectorAll: selector => selector.includes('itemTitle') ? [{ textContent: 'Personalized item' }]
-      : selector.includes('unitPrice') ? [{ textContent: '$17.99' }] : [{ textContent: '' }],
-    querySelector: () => ({ textContent: 'Personalized text' })
-  };
-  context.document.querySelectorAll = selector => selector === 'li' ? [] : [card];
-  assert.match(context.readAmazonSummary('test').error, /customization/);
-});
-
-test('accepts product links in the alternate Amazon product URL format', () => {
-  const context = page('');
-  context.location = { href: 'https://www.amazon.com/gp/css/summary/print.html?orderID=test', protocol: 'https:', hostname: 'www.amazon.com', pathname: '/gp/css/summary/print.html' };
-  context.document.querySelector = () => null;
-  let titleSelector;
-  const product = { querySelector: () => null, querySelectorAll: selector => {
-    if (selector.includes('itemTitle')) { titleSelector = selector; return [{ textContent: 'Item' }]; }
-    return selector.includes('unitPrice') ? [{ textContent: '$1.00' }] : [];
-  } };
-  context.document.querySelectorAll = selector => selector === 'li' ? [
-    { textContent: 'Item(s) Subtotal: $1.00' }, { textContent: 'Grand Total: $1.00' }
-  ] : [product];
-  assert.equal(context.readAmazonSummary('test').products[0].name, 'Item');
-  assert.match(titleSelector, /gp\/product/);
+  for (const [heading, total] of [
+    ['Order Summary', 'Grand Total: $68.92'],
+    ['Resumen del pedido', 'Total (I.V.A. Incluido): US$68.92'],
+    ['Resumo do pedido', 'Total do pedido: US$ 68,92']
+  ]) {
+    context.document.body.innerText = [heading, orderId, total].join('\n');
+    assert.equal(context.verifyAmazonInvoice(orderId), true);
+    context.document.body.innerText = [heading, '123-1234567-7654321', total].join('\n');
+    assert.equal(context.verifyAmazonInvoice(orderId), false);
+  }
+  context.document.body.innerText = 'Pedido ' + orderId + '\nTotal antes de impuestos: US$68.92';
+  assert.equal(context.verifyAmazonInvoice(orderId), false);
 });

@@ -17,7 +17,7 @@
     <section class="importer-section" aria-labelledby="store-heading">
       <div class="section-heading"><span class="step-number" aria-hidden="true">1</span><div><h2 id="store-heading">Choose a store</h2><p>Sign in on the store’s website if needed.</p></div></div>
       <div class="store-controls">
-        <label class="field">Store<select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco</option></select></label>
+        <label class="field">Store<select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco Warehouse</option><option value="costco-online">Costco Online</option></select></label>
         <button id="open-costco" class="button button-secondary" type="button">Connect store</button>
       </div>
       <p id="connection" class="connection" role="status" aria-live="polite"></p>
@@ -44,7 +44,7 @@
 
     <aside class="privacy-note" aria-label="Your privacy">
       <span class="privacy-icon" aria-hidden="true">✓</span>
-      <div><strong>Review before importing</strong><p id="privacy-note">Amazon summaries omit customer, address and payment sections. Check item names for personal text.</p></div>
+      <div><strong>Review before importing</strong><p id="privacy-note">Amazon PDFs contain the full printable receipt and may include addresses, payment details and order numbers.</p></div>
     </aside>
     <button id="back-to-inbox" class="return-link" type="button" hidden>Back to receipts</button>
   </main>

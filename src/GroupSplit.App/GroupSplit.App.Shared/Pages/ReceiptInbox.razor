@@ -68,19 +68,26 @@ else if (_rows is not null)
     <div class="gs-card gs-receipt-inbox-list">
     <Virtualize @ref="_virtualize" Items="_visibleRows" Context="row" ItemSize="116" OverscanCount="5">
         @{ var source = row.Attachments.FirstOrDefault(); }
-        <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
+        <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
         <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
             <div class="gs-receipt-inbox-thumb">
                 @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
                 else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
             </div>
-            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (_filter == ReceiptFilter.Waiting && !_suggestions.ContainsKey(row.Id)) { <span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span> }</div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (_filter == ReceiptFilter.Waiting && !_suggestions.ContainsKey(row.Id) && !_expenseMatches.ContainsKey(row.Id)) { <span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span> }</div>
             <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong></div>
         </a>
         @if (_filter != ReceiptFilter.Added)
         {
             <div class="gs-receipt-inbox-actions">
-                @if (_suggestions.TryGetValue(row.Id, out var destination))
+                @if (_expenseMatches.TryGetValue(row.Id, out var match))
+                {
+                    var label = Loc["Attach to {0} · {1} {2} · {3}", match.Name, match.Amount.ToString("N2"), match.Currency, match.DateTime.ToString("d")];
+                    <div class="gs-receipt-inbox-shortcut">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@label.Value" OnClick="@(() => AttachMatch(row, match))">@label</MudButton>
+                    </div>
+                }
+                else if (_suggestions.TryGetValue(row.Id, out var destination))
                 {
                     <div class="gs-receipt-inbox-shortcut">
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@destination.Destination" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review: {0}", destination.Destination]</MudButton>
@@ -109,6 +116,7 @@ else if (_rows is not null)
     private IJSObjectReference? _importModule;
     private DotNetObjectReference<ReceiptInbox>? _importReference;
     private readonly Dictionary<Guid, FilingDestinationSuggestion> _suggestions = [];
+    private readonly Dictionary<Guid, ReceiptExpenseCandidate> _expenseMatches = [];
     private CancellationTokenSource? _suggestionLoad;
     private Virtualize<ReceiptInboxResponse>? _virtualize;
     [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
@@ -200,6 +208,7 @@ else if (_rows is not null)
         _suggestionLoad = new CancellationTokenSource();
         var token = _suggestionLoad.Token;
         _suggestions.Clear();
+        _expenseMatches.Clear();
         try { await Errors.TryAsync(async () => {
             var loaded = (await (_filter switch { ReceiptFilter.Added => Client.ListAddedReceiptInboxAsync(token), ReceiptFilter.Ignored => Client.ListIgnoredReceiptInboxAsync(token), _ => Client.ListReceiptInboxAsync(token) })).ToList();
             if (token.IsCancellationRequested) return;
@@ -211,10 +220,41 @@ else if (_rows is not null)
                 foreach (var row in _rows)
                     if (SuggestionCache.Get(row) is { } cached) _suggestions[row.Id] = cached;
                 Overview.SetReceiptCount(_rows.Count);
+                _ = LoadExpenseMatches(_rows, token);
                 _ = LoadSuggestions(_rows, SuggestionCache.Generation, token);
             }
         }, Loc["Could not load receipts."].Value); }
         finally { if (!token.IsCancellationRequested) _loading = false; }
+    }
+    private async Task LoadExpenseMatches(IReadOnlyList<ReceiptInboxResponse> rows, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var batch in rows.Where(row => row.Receipt.PurchaseDate.HasValue && row.Receipt.Total != 0).Chunk(4))
+            {
+                var results = await Task.WhenAll(batch.Select(async row =>
+                {
+                    try
+                    {
+                        var day = row.Receipt.PurchaseDate!.Value.DayNumber;
+                        var matches = await Client.MatchReceiptInboxAsync(row.Id, ct);
+                        return (row.Id, Match: matches.OrderBy(match =>
+                            Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault());
+                    }
+                    catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return (row.Id, Match: (ReceiptExpenseCandidate?)null); }
+                }));
+                if (ct.IsCancellationRequested) return;
+                await InvokeAsync(async () =>
+                {
+                    if (ct.IsCancellationRequested) return;
+                    foreach (var (id, match) in results)
+                        if (match is not null) _expenseMatches[id] = match;
+                    if (_virtualize is not null) await _virtualize.RefreshDataAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
     private async Task LoadSuggestions(IReadOnlyList<ReceiptInboxResponse> rows, long generation, CancellationToken ct)
     {
@@ -257,6 +297,25 @@ else if (_rows is not null)
         _importReference?.Dispose();
     }
     private string Source(Guid r, Guid a) => Nav.BaseUri + $"api/receipts/inbox/{r}/files/{a}";
+    private async Task AttachMatch(ReceiptInboxResponse row, ReceiptExpenseCandidate match)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            if (await Dialogs.ShowMessageBoxAsync(Loc["Attach receipt"].Value,
+                Loc["Attach this receipt to {0}?", match.Name].Value,
+                yesText: Loc["Attach receipt"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+            if (await Errors.TryAsync(async () => await Client.FileReceiptInboxAsync(row.Id,
+                    new FileReceiptInboxRequest { ExpenseId = match.Id }), Loc["Could not file receipt."].Value))
+            {
+                await Changes.NotifyReceiptsChangedAsync();
+                await Changes.NotifyTransactionsChangedAsync();
+                await Load();
+            }
+        }
+        finally { _busy = false; }
+    }
     private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion suggestion)
     {
         if (_busy) return;

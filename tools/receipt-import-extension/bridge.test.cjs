@@ -4,6 +4,29 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+test('disconnects the page bridge when a reload invalidates the extension context', () => {
+  const listeners = new Map();
+  let themeChanged;
+  let disconnected = false;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'app-bridge.js'), 'utf8'), {
+    chrome: { runtime: { id: 'our-extension', onMessage: { addListener() {} },
+      sendMessage() { throw new Error('Extension context invalidated.'); } } },
+    document: { documentElement: { dataset: {} } },
+    window: {
+      addEventListener: (type, listener) => listeners.set(type, listener),
+      removeEventListener: type => listeners.delete(type)
+    },
+    MutationObserver: class {
+      constructor(callback) { themeChanged = callback; }
+      observe() {}
+      disconnect() { disconnected = true; }
+    }
+  });
+  assert.doesNotThrow(themeChanged);
+  assert.equal(disconnected, true);
+  assert.equal(listeners.has('groupsplit:open-receipt-importer'), false);
+});
+
 function background() {
   let handler;
   const opened = [];
