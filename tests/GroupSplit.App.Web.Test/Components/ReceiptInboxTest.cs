@@ -3,6 +3,7 @@ using GroupSplit.App.Shared.Pages;
 using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.Shared;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -23,11 +24,27 @@ public class ReceiptInboxTest : ComponentTest
         page.WaitForAssertion(() => Assert.Contains("Market", page.Markup));
         page.Find("input[aria-label='Search merchants or items']").Input("BINS");
         page.WaitForAssertion(() => { Assert.Contains("Shop", page.Markup); Assert.DoesNotContain("Market", page.Markup); });
+        Assert.Contains("q=BINS", Services.GetRequiredService<NavigationManager>().Uri);
         var picker = page.FindComponent<DateRangeFilter>();
         await page.InvokeAsync(() => picker.Instance.ValueChanged.InvokeAsync(new DateFilter(DateFilterPreset.Custom, new DateTime(2026, 2, 1), new DateTime(2026, 2, 28))));
         page.WaitForAssertion(() => Assert.Contains("No receipts match your filters.", page.Markup));
+        Assert.Contains("from=2026-02-01", Services.GetRequiredService<NavigationManager>().Uri);
         page.FindAll("button").Single(b => b.TextContent.Trim() == "Clear filters").Click();
         page.WaitForAssertion(() => { Assert.Contains("Shop", page.Markup); Assert.Contains("Market", page.Markup); });
+    }
+    [Fact]
+    public void Opens_the_status_search_and_dates_given_in_the_address()
+    {
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        client.Setup(x => x.ListIgnoredReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([
+            new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "Market", PurchaseDate = new DateOnly(2026, 2, 15), Items = [new ReceiptItemInput { Name = "Milk" }] }, []),
+            new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "Shop", PurchaseDate = new DateOnly(2026, 1, 15), Items = [new ReceiptItemInput { Name = "Milk" }] }, [])]);
+        Services.AddSingleton(client.Object);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/inbox/receipts?status=ignored&q=milk&from=2026-02-01&to=2026-02-28");
+        var page = Render<ReceiptInbox>();
+        page.WaitForAssertion(() => { Assert.Contains("Market", page.Markup); Assert.DoesNotContain("Shop", page.Markup); });
+        client.Verify(x => x.ListIgnoredReceiptInboxAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
     [Fact]
     public void Ignored_filter_shows_restore_and_refreshes_after_restoring()

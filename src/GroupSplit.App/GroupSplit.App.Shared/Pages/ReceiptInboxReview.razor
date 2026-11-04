@@ -13,7 +13,7 @@
 @inject GroupSplit.App.Shared.Services.ReceiptSuggestionCache SuggestionCache
 
 <PageTitle>Review receipt - Group Split</PageTitle>
-<div class="gs-receipt-review-back"><MudButton Href="/inbox/receipts">Back to receipts</MudButton></div>
+<div class="gs-receipt-review-back"><MudButton Href="@($"/inbox/receipts{new Uri(Nav.Uri).Query}")">Back to receipts</MudButton></div>
 @if (_row is { } row)
 {
     <header class="gs-receipt-review-heading">

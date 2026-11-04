@@ -49,7 +49,7 @@
     }
 </nav>
 <div class="gs-receipt-search-bar">
-    <MudTextField @bind-Value="_search" @bind-Value:after="ApplyFilters" T="string" Immediate="true" DebounceInterval="200" Clearable="true"
+    <MudTextField @bind-Value="_search" @bind-Value:after="SearchChanged" T="string" Immediate="true" DebounceInterval="200" Clearable="true"
                   Placeholder="@Loc["Search merchants or items"]" aria-label="@Loc["Search merchants or items"]"
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
     <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
@@ -69,7 +69,7 @@ else if (_rows is not null)
     <Virtualize @ref="_virtualize" Items="_visibleRows" Context="row" ItemSize="116" OverscanCount="5">
         @{ var source = row.Attachments.FirstOrDefault(); }
         <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
-        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{BankQuery}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
+        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
             <div class="gs-receipt-inbox-thumb">
                 @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
                 else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
@@ -112,8 +112,36 @@ else if (_rows is not null)
     private CancellationTokenSource? _suggestionLoad;
     private Virtualize<ReceiptInboxResponse>? _virtualize;
     [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
-    private string BankQuery => BankId is { } id ? $"?bank={id}" : "";
-    protected override Task OnInitializedAsync() => Load();
+    [SupplyParameterFromQuery(Name = "status")] public string? StatusParameter { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
+    [SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+    private sealed record FilterQuery(string? Status, string? Search, string? Range, string? From, string? To);
+    private FilterQuery? _settled;
+    private FilterQuery Asked => new(StatusParameter, SearchParameter, RangeParameter, FromParameter, ToParameter);
+    protected override async Task OnParametersSetAsync()
+    {
+        var asked = Asked;
+        if (asked == _settled) return;
+        var previous = _filter;
+        var first = _settled is null;
+        _settled = asked;
+        _filter = asked.Status?.ToLowerInvariant() switch { "added" or "filed" => ReceiptFilter.Added, "ignored" => ReceiptFilter.Ignored, _ => ReceiptFilter.Waiting };
+        _search = asked.Search;
+        _dateRange = ListingQuery.ParseRange(asked.Range, asked.From, asked.To, DateFilter.AllTime);
+        if (first || previous != _filter) { _rows = null; await Load(); }
+        else ApplyFilters();
+    }
+    private void WriteUrl()
+    {
+        var (range, from, to) = ListingQuery.FormatRange(_dateRange, DateFilter.AllTime);
+        var current = new FilterQuery(_filter switch { ReceiptFilter.Added => "added", ReceiptFilter.Ignored => "ignored", _ => null },
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), range, from, to);
+        if (current == _settled) return;
+        _settled = current;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?> { ["status"] = current.Status, ["q"] = current.Search, ["range"] = current.Range, ["from"] = current.From, ["to"] = current.To }), replace: true);
+    }
     private void ApplyFilters()
     {
         var search = _search?.Trim();
@@ -126,10 +154,11 @@ else if (_rows is not null)
             return row.Receipt.PurchaseDate is { } date && (bounds.From is null || date >= bounds.From) && (bounds.To is null || date <= bounds.To);
         }).ToList();
     }
-    private void SetDateRange(DateFilter range) { _dateRange = range; ApplyFilters(); }
-    private void ClearFilters() { _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); }
+    private void SearchChanged() { ApplyFilters(); WriteUrl(); }
+    private void SetDateRange(DateFilter range) { _dateRange = range; ApplyFilters(); WriteUrl(); }
+    private void ClearFilters() { _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
     private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
-    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _rows = null; await Load(); }
+    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _rows = null; WriteUrl(); await Load(); }
     private async Task OpenAdded(ReceiptInboxResponse row)
     {
         if (_filter == ReceiptFilter.Added && row.ExpenseId is { } id)
