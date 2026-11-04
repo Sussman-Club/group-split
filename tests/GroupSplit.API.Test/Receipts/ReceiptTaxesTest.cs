@@ -5,6 +5,20 @@ namespace GroupSplit.API.Test.Receipts;
 public sealed class ReceiptTaxesTest
 {
     [Fact]
+    public void Automatic_distribution_preserves_known_tax_and_exempt_items()
+    {
+        var taxes = ReceiptTaxes.DistributeUnassigned(2m,
+            [new(10m, .5m, null, null), new(10m, 0m, null, null), new(10m, 0m, null, false)]);
+        Assert.Equal([.5m, 1.5m, 0m], taxes);
+    }
+
+    [Fact]
+    public void Automatic_distribution_does_not_change_reconciled_or_excess_tax()
+    {
+        Assert.Null(ReceiptTaxes.DistributeUnassigned(1m, [new(10m, 1m, null, null), new(10m, 0m, null, null)]));
+        Assert.Null(ReceiptTaxes.DistributeUnassigned(1m, [new(10m, 1.5m, null, null), new(10m, 0m, null, null)]));
+    }
+    [Fact]
     public void Rates_without_line_tax_calculate_and_reconcile_the_printed_tax()
     {
         var amounts = ReceiptTaxes.Calculate(.75m,

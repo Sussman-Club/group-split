@@ -58,6 +58,20 @@ public partial class MerchantService
 
     public async Task<MerchantResponse> Merge(Guid sourceId, MergeMerchantsRequest request, Guid actorId, CancellationToken ct)
     {
+        var retrying = false;
+        await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            // A rolled-back attempt can leave moved aliases and deleted merchants tracked.
+            if (retrying) dbContext.StartOver(userContext.User);
+            retrying = true;
+            await MergeAttempt(sourceId, request, actorId, ct);
+        });
+        // A failed response read must not retry an already committed merge.
+        return await GetDirectory(request.TargetId, ct);
+    }
+
+    private async Task MergeAttempt(Guid sourceId, MergeMerchantsRequest request, Guid actorId, CancellationToken ct)
+    {
         await using var transaction = dbContext.Database.IsRelational() ? await dbContext.Database.BeginTransactionAsync(ct) : null;
         // PostgreSQL foreign-key checks take a key-share lock on the merchant. Lock both
         // rows first so references cannot be added between the impact check and the merge.
@@ -95,7 +109,6 @@ public partial class MerchantService
         StaffActivityService.Record(dbContext, actorId, "Merchants", request.TargetId, "Merchant merged", clock.GetUtcNow(), changes);
         await SaveMaintenance(ct);
         if (transaction is not null) await transaction.CommitAsync(ct);
-        return await GetDirectory(request.TargetId, ct);
     }
 
     private async Task SaveMaintenance(CancellationToken ct)

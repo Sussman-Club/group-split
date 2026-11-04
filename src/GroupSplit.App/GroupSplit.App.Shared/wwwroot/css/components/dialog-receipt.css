@@ -29,3 +29,41 @@
         padding-inline: 14px;
     }
 }
+
+/* The editable counterpart of BillSheet: keep the paper rhythm and aligned prices. */
+@media (min-width: 601px) {
+    .mud-dialog-container > .mud-dialog.gs-editable-receipt-dialog { max-width: 640px; }
+}
+.gs-editable-receipt { gap: 14px; background: var(--gs-paper, var(--gs-surface)); color: var(--gs-paper-ink, var(--gs-ink)); padding: 18px 20px; border-top: 2px dotted var(--gs-line); border-bottom: 2px dotted var(--gs-line); }
+.gs-editable-receipt > p:first-child { margin: 0; font-size: .875rem; line-height: 1.45; }
+.gs-editable-receipt-tax { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--gs-line); border-radius: 10px; color: var(--gs-muted); font-size: .8rem; line-height: 1.4; }
+.gs-editable-receipt-tax .mud-button-root { flex: 0 0 auto; }
+.gs-editable-receipt-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .8fr); align-items: end; gap: 12px; border-bottom: 1px dashed var(--gs-line); padding: 0 0 10px; }
+.gs-editable-receipt-head .mud-input-control { width: 100%; min-width: 0; margin: 0; }
+.gs-editable-receipt-head input { text-align: center; font-family: ui-monospace, Consolas, monospace; }
+.gs-editable-receipt-merchant input { font-weight: 700; letter-spacing: .04em; }
+.gs-editable-receipt-head .mud-input-slot { padding-block: 4px; }
+.gs-editable-receipt-line { padding: 7px 0; border-bottom: 1px dotted var(--gs-line); }
+.gs-editable-receipt-line-main { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 10px; align-items: start; }
+.gs-editable-receipt-line-main .mud-input-control { margin: 0; min-width: 0; }
+.gs-editable-receipt-line-main input { font-family: ui-monospace, Consolas, monospace; }
+.gs-editable-receipt-line-main .mud-input-outlined input.mud-input-slot { padding: 8px 10px; }
+.gs-editable-receipt-line-main > :last-child input { text-align: right; font-variant-numeric: tabular-nums; }
+.gs-editable-receipt-line-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; padding-top: 3px; color: var(--gs-muted); font-size: .8rem; }
+.gs-editable-receipt-actions { display: flex; gap: 12px; align-items: center; }
+.gs-receipt-detail-toggle, .gs-editable-receipt-remove { font: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px; min-height: 32px; background: transparent; color: var(--gs-teal-deep); border: 0; cursor: pointer; }
+.gs-editable-receipt-remove { min-width: 32px; color: var(--mud-palette-error); }
+.gs-receipt-detail-toggle:focus-visible, .gs-editable-receipt-remove:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 3px; }
+.gs-editable-receipt-line-details { margin-top: 14px; }
+.gs-editable-receipt-line-details[hidden] { display: none; }
+.gs-editable-receipt-totals { border-top: 2px solid var(--gs-line); padding-top: 18px; }
+@media(max-width:600px) {
+    .gs-editable-receipt { padding: 12px; gap: 12px; }
+    .gs-editable-receipt-tax { align-items: flex-start; flex-wrap: wrap; }
+    .gs-editable-receipt-tax .mud-button-root { margin-left: auto; }
+    .gs-editable-receipt-line-main { grid-template-columns: minmax(0, 1fr) 96px; gap: 6px; }
+    .gs-editable-receipt-line-meta > span { min-width: 0; }
+    .gs-editable-receipt-actions { margin-left: auto; gap: 12px; padding-block: 2px; }
+    .gs-receipt-detail-toggle, .gs-editable-receipt-remove { position: relative; }
+    .gs-receipt-detail-toggle::after, .gs-editable-receipt-remove::after { content: ""; position: absolute; inset: -7px 0; }
+}

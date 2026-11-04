@@ -57,7 +57,7 @@
 .gs-virtual-row { display: flex; flex-direction: column; }
 .gs-virtual-date { margin: 24px 0 0; padding: 0 0 12px; border-bottom: 1px solid var(--gs-line); font-size: .875rem; font-weight: 700; color: var(--gs-ink); }
 .gs-virtual-row:first-child .gs-virtual-date { margin-top: 8px; }
-.gs-ledger-listing .gs-virtual-row .gs-feed-row { min-height: 84px; border-bottom: 1px solid var(--gs-line); }
+.gs-ledger-listing .gs-virtual-row .gs-feed-row { height: 84px; min-height: 0; flex: 0 0 84px; border-bottom: 1px solid var(--gs-line); }
 .gs-ledger-listing .gs-virtual-row .gs-feed-entry { padding: 12px 0; }
 .gs-feed-sentinel { display: flex; justify-content: center; padding: 16px 0; }
 .gs-ledger-listing .gs-virtual-row .gs-feed-copy strong,
@@ -77,3 +77,8 @@
     .gs-ledger-listing .gs-feed-row { padding-inline: 12px; transition: background var(--gs-fast); }
     .gs-ledger-listing .gs-feed-row:hover, .gs-ledger-listing .gs-feed-row:focus-within { background: var(--gs-surface-2); }
 }
+
+/* Equal row extents keep virtual scroll offsets stable across day boundaries.
+   Reserve the heading slot on every row, including continuations of a day. */
+.gs-ledger-listing .gs-virtual-row { height: 128px; box-sizing: border-box; padding-top: 44px; position: relative; }
+.gs-ledger-listing .gs-virtual-row .gs-virtual-date { position: absolute; top: 0; inset-inline: 0; height: 44px; margin: 0; padding: 12px 0; box-sizing: border-box; }

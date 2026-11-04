@@ -26,66 +26,35 @@
     paid and how much, and everything else is secondary.
 *@
 
-<PageTitle>@Loc["Bank transactions - Group Split"]</PageTitle>
-
-<div class="gs-page-head">
-    <div>
-        <div class="gs-eyebrow">@Loc["Bank transactions"]</div>
-        <h1>@Loc["Not filed"]</h1>
-        @if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
-        {
-            <p role="status" aria-live="polite">@Loc["{0} left to review in this range.", Counted(State.TotalCount)].Value</p>
-        }
-        @if (Headline is { Length: > 0 } headline)
-        {
-            <p>@headline</p>
-        }
-    </div>
-</div>
-
+<PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
+<InboxHeader />
+<div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review imported payments and connect them to expenses or receipts."]</span></div>
+@if (Selectable && !_initializing && !State.IsLoading && State.RowsLoaded)
+{
+    <p role="status" aria-live="polite">@Loc["{0} left to review in this range.", Counted(State.TotalCount)].Value</p>
+}
+@if (Headline is { Length: > 0 } headline) { <p>@headline</p> }
 <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@(_initializing || State.IsLoading)" Failed="@(!State.RowsLoaded)" Retry="InitializeAsync">
 
 
 <div class="gs-stack">
-    @* Which rows, and over what span, on one line. They were two bands with the date
-       control's own margins between them, which on a phone put most of a screen of empty
-       cream between the tabs and the first row somebody came here to deal with.
-
-       The spans are the same five the expense listings offer, so narrowing by date is the
-       one control wherever you meet it. A bank sends months at a time and the answer to a
-       backlog is to take one month of it. *@
-    <div class="gs-inline" style="gap: 8px; flex-wrap: wrap">
+    <nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Bank transaction status"]">
         @foreach (var status in Filters)
         {
             var choice = status;
             <MudButton Variant="@(State.Filter == choice ? Variant.Filled : Variant.Text)"
                        Color="@(State.Filter == choice ? Color.Primary : Color.Default)"
-                       Size="Size.Small" Class="gs-btn-pill"
-                       OnClick="@(() => SetFilterAsync(choice))">
-                @Label(choice)
-            </MudButton>
+                       Size="Size.Small" Class="gs-btn-pill" aria-pressed="@(State.Filter == choice)"
+                       OnClick="@(() => SetFilterAsync(choice))">@Label(choice)</MudButton>
         }
-
+    </nav>
+    <div class="gs-receipt-search-bar">
         <DateRangeFilter Value="@State.Range" ValueChanged="SetRangeAsync" />
-    </div>
-
-    @if (Selectable && State.Rows.Count > 0)
-    {
-        <nav class="gs-inline" aria-label="@Loc["Review suggestions"]" style="gap: 8px; flex-wrap: wrap">
-            @foreach (var review in Enum.GetValues<ReviewFilter>())
-            {
-                <MudButton Size="Size.Small" Class="gs-btn-pill"
-                           Variant="@(_review == review ? Variant.Filled : Variant.Text)"
-                           Color="Color.Primary" OnClick="@(() => SetReview(review))">
-                    @ReviewLabel(review) (@State.Rows.Count(row => MatchesReview(row, review)))
-                </MudButton>
-            }
-        </nav>
-        @if (!VisibleRows.Any())
+        @if (Selectable && State.Rows.Count > 0)
         {
-            <p role="status">@Loc["No loaded charges in this view. Choose All charges or load more below."]</p>
+            <MudButton Size="Size.Small" Class="gs-btn-pill" OnClick="ToggleSelection">@(_selecting ? Loc["Cancel"].Value : Loc["Select"].Value)</MudButton>
         }
-    }
+    </div>
 
     @if (State.Connections is { Enabled: false })
     {
@@ -126,7 +95,7 @@
             @* Selecting is only offered where it means anything. A row that has been added
                or ignored has had its decision made; the bulk actions here are that same
                decision, taken for several rows at once. *@
-            @if (Selectable)
+            @if (Selectable && _selecting)
             {
                 @* A header for the list rather than a control floating over it: it carries
                    the same padding as a row, so its box sits in the same column as theirs
@@ -186,16 +155,17 @@
                                 @foreach (var member in bundle.Rows)
                                 {
                                     <div class="gs-inline gs-inbox-bundle-charge" @key="member.Id">
-                                        <MudCheckBox T="bool" Value="@_selected.Contains(member.Id)"
-                                                     ValueChanged="@((bool on) => Select(member.Id, on))"
-                                                     Dense="true" aria-label="@(Loc["Select {0} on {1:d}", member.Title, member.SpentOn].Value)" />
+                                        @if (_selecting)
+                                        {
+                                            <MudCheckBox T="bool" Value="@_selected.Contains(member.Id)"
+                                                         ValueChanged="@((bool on) => Select(member.Id, on))"
+                                                         Dense="true" aria-label="@(Loc["Select {0} on {1:d}", member.Title, member.SpentOn].Value)" />
+                                        }
                                         <span>@member.AccountName · @member.SpentOn.ToShortDateString()</span>
                                         <Money Value="@member.Amount" Currency="@member.Currency" />
-                                        <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
-                                                   OnClick="@(() => AddToGroupAsync(member))"
-                                                   aria-label="@(Loc["Change destination for {0} on {1:d}", member.Title, member.SpentOn].Value)">@Loc["Change destination"]</MudButton>
-                                        <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
-                                                   OnClick="@(() => KeepPersonalAsync(member))">@Loc["Keep personal"]</MudButton>
+                                        <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                                                   Disabled="@(_busy is not null || _bulkBusy)"
+                                                   OnClick="@(() => AddToGroupAsync(member))">@Loc["Review: {0}", member.Suggestion!.Destination]</MudButton>
                                         <MudButton Size="Size.Small" Disabled="@(_busy is not null || _bulkBusy)"
                                                    OnClick="@(() => IgnoreAsync(member))">@Loc["Ignore"]</MudButton>
                                     </div>
@@ -210,9 +180,9 @@
                     @* is-selectable, not just is-selected: the checkbox is a fourth child
                        of a three-column grid, and the row needs the column to put it in
                        whether or not it is ticked. *@
-                    <div class="gs-row @(Selectable ? "is-selectable" : "") @(_selected.Contains(row.Id) ? "is-selected" : "")"
+                    <div class="gs-row @(Selectable && _selecting ? "is-selectable" : "") @(_selected.Contains(row.Id) ? "is-selected" : "")"
                          style="cursor: default" @key="row.Id">
-                        @if (Selectable)
+                        @if (Selectable && _selecting)
                         {
                             @* Every waiting row is tickable, a suggestion on it or not.
                                What must not be taken in bulk is the answer to "is this the
@@ -257,49 +227,16 @@
                                    Signed="@row.IsCredit" Absolute="@row.IsCredit"
                                    Class="@(row.IsCredit ? "gs-muted" : "")" />
 
-                            @* Shared and personal are both ordinary answers. *@
                             @if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-inline gs-inbox-row-buttons" style="gap: 4px; flex-wrap: wrap">
-                                    @if (row.IsCredit)
-                                    {
-                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                   Class="gs-btn-pill"
-                                                   Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AddToGroupAsync(row))">@Loc["Add to group"]</MudButton>
-                                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                                   Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudButton>
-                                    }
-                                    else
-                                    {
-                                        @if (row.Suggestion is { } suggestion)
-                                        {
-                                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                                       Class="gs-btn-pill gs-inbox-suggestion"
-                                                       StartIcon="@Icons.Material.Rounded.AutoAwesome"
-                                                       Disabled="@(_busy == row.Id)"
-                                                       title="@(Loc["File it in {0}", suggestion.Destination].Value)"
-                                                       aria-label="@(Loc["File {0} in {1}", row.Title, suggestion.Destination].Value)"
-                                                       OnClick="@(() => AcceptSuggestionAsync(row, suggestion))">@suggestion.Destination</MudButton>
-                                        }
-                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                   Class="gs-btn-pill"
-                                                   Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AddToGroupAsync(row))">@Loc["Add to group"]</MudButton>
-                                        <MudMenu Icon="@Icons.Material.Rounded.MoreHoriz"
-                                                 Size="Size.Small"
-                                                 Dense="true"
-                                                 AnchorOrigin="Origin.BottomRight"
-                                                 TransformOrigin="Origin.TopRight"
-                                                 Disabled="@(_busy == row.Id)"
-                                                 aria-label="@(Loc["Other answers for {0}", row.Title].Value)">
-                                            <MudMenuItem OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudMenuItem>
-                                        </MudMenu>
-                                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                                   Disabled="@(_busy == row.Id || _bulkBusy)"
-                                                   OnClick="@(() => KeepPersonalAsync(row))">@Loc["Keep personal"]</MudButton>
-                                    }
+                                    <MudButton Variant="@(row.Suggestion is null ? Variant.Filled : Variant.Outlined)"
+                                               Color="Color.Primary" Size="Size.Small" Class="gs-btn-pill gs-inbox-suggestion"
+                                               Disabled="@(_busy == row.Id || _bulkBusy)"
+                                               OnClick="@(() => AddToGroupAsync(row))">@(row.Suggestion is { } suggestion ? Loc["Review: {0}", suggestion.Destination].Value : Loc["Add to group"].Value)</MudButton>
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               Disabled="@(_busy == row.Id || _bulkBusy)"
+                                               OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudButton>
                                 </div>
                             }
                             else if (row.Status == InboxStatus.Ignored)
@@ -419,32 +356,10 @@
     private readonly HashSet<Guid> _selected = [];
 
     private bool _bulkBusy;
+    private bool _selecting;
+    private void ToggleSelection() { _selecting = !_selecting; _selected.Clear(); }
 
-    private enum ReviewFilter { All, Shared, Personal, Uncertain }
-    private ReviewFilter _review;
-    private void SetReview(ReviewFilter review)
-    {
-        _selected.Clear();
-        _review = review;
-    }
-    private IEnumerable<BankTransactionResponse> VisibleRows => State.Rows
-        .Where(row => !Selectable || MatchesReview(row, _review));
-
-    private static bool MatchesReview(BankTransactionResponse row, ReviewFilter filter) => filter switch
-    {
-        ReviewFilter.Shared => row.PossibleDuplicates.Count == 0 && row.Suggestion is { IsPersonal: false },
-        ReviewFilter.Personal => row.PossibleDuplicates.Count == 0 && row.Suggestion is { IsPersonal: true },
-        ReviewFilter.Uncertain => row.PossibleDuplicates.Count > 0 || row.Suggestion is null,
-        _ => true
-    };
-
-    private string ReviewLabel(ReviewFilter filter) => filter switch
-    {
-        ReviewFilter.Shared => Loc["Likely shared"].Value,
-        ReviewFilter.Personal => Loc["Likely personal"].Value,
-        ReviewFilter.Uncertain => Loc["Needs a decision"].Value,
-        _ => Loc["All charges"].Value
-    };
+    private IEnumerable<BankTransactionResponse> VisibleRows => State.Rows;
 
     private async Task ConfirmBundleAsync(InboxBundle bundle)
     {
@@ -729,6 +644,8 @@
 
     private async Task SetFilterAsync(InboxStatus status)
     {
+        _selecting = false;
+        _selected.Clear();
         await State.SetFilterAsync(status);
         WriteUrl();
     }
@@ -806,19 +723,6 @@
     /// because pressing this with one on screen is the person saying it is a second payment
     /// -- and the API refuses to file over an unseen one, which is what that flag answers.
     /// </summary>
-    private async Task KeepPersonalAsync(BankTransactionResponse row) =>
-        await FileAsync(row, new FileBankTransactionRequest { FileAnyway = row.PossibleDuplicates.Count > 0 },
-            Loc["your own expenses"].Value);
-
-    /// <summary>Files the row exactly as choosing this suggestion in the dialog would.</summary>
-    private async Task AcceptSuggestionAsync(BankTransactionResponse row, FilingSuggestionResponse suggestion) =>
-        await FileAsync(row, new FileBankTransactionRequest
-            {
-                GroupId = suggestion.IsPersonal ? null : suggestion.GroupId,
-                CategoryId = suggestion.CategoryId
-            },
-            suggestion.IsPersonal ? Loc["your own expenses"].Value : suggestion.GroupName);
-
     private async Task<TransactionResponse?> AttachAsync(BankTransactionResponse row, Guid transactionId)
     {
         if (_busy is not null || _bulkBusy)

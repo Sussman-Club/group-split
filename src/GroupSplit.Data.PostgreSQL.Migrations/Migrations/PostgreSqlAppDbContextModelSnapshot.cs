@@ -796,12 +796,22 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ExpenseId")
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ExpenseId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsIgnored")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateOnly?>("PurchaseDate")
                         .HasColumnType("date");
@@ -826,6 +836,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("ExpenseId")
                         .IsUnique();
+
+                    b.HasIndex("OwnerUserId");
 
                     b.ToTable("Receipt");
                 });
@@ -1959,8 +1971,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
                         .WithOne("Receipt")
                         .HasForeignKey("GroupSplit.Data.Entities.Receipt", "ExpenseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("GroupSplit.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Expense");
                 });

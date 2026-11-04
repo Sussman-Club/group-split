@@ -81,6 +81,12 @@ public static class Extensions
                 })
                 .WithTracing(tracing =>
                 {
+                    if (builder.Configuration.GetValue<double?>("Telemetry:TraceSampleRatio") is { } ratio)
+                    {
+                        if (!double.IsFinite(ratio) || ratio < 0 || ratio > 1)
+                            throw new InvalidOperationException("Telemetry:TraceSampleRatio must be between 0 and 1.");
+                        tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(ratio)));
+                    }
                     tracing.AddSource(builder.Environment.ApplicationName)
                         .AddSource("GroupSplit.ReceiptTranscription")
                         // Decision-1 calls, as GenAI client spans. See DecisionClient.

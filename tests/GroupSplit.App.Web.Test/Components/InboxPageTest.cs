@@ -292,12 +292,13 @@ public class InboxPageTest : ComponentTest
     /// refused over both.
     /// </summary>
     [Fact]
-    public void The_header_counts_a_row_whose_match_is_only_possible()
+    public async Task The_header_counts_a_row_whose_match_is_only_possible()
     {
         _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         Assert.Contains("1 may already be recorded", page.Find(".gs-list-head").TextContent);
     }
 
@@ -315,6 +316,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
 
@@ -344,6 +346,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
         await PressAsync(page, "Keep personal");
@@ -365,6 +368,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
         await PressAsync(page, "Keep personal");
@@ -386,6 +390,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
             new ChangeEventArgs { Value = true });
         await PressAsync(page, "Ignore");
@@ -402,6 +407,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await TickAsync(page, 0);
         await TickAsync(page, 1);
         await PressAsync(page, "Ignore");
@@ -418,6 +424,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         await TickAsync(page, 0);
         await TickAsync(page, 1);
         await PressAsync(page, "Keep personal");
@@ -438,6 +445,8 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
+        Assert.Empty(Checkboxes(page));
+        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
         Assert.NotEmpty(Checkboxes(page));
 
         await page.FindAll("button").First(button => button.TextContent.Trim() == "Ignored")
@@ -484,7 +493,7 @@ public class InboxPageTest : ComponentTest
     }
 
     [Fact]
-    public async Task Review_filters_show_personal_suggestions_without_hiding_them_as_shared()
+    public void Suggestions_are_shown_as_review_actions_without_extra_filters()
     {
         var shared = Row("Shop", 30, DateOnly.FromDateTime(Today));
         var personal = Row("Cafe", 10, DateOnly.FromDateTime(Today));
@@ -492,48 +501,11 @@ public class InboxPageTest : ComponentTest
         Suggests(new(shared.Id, Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", .9),
             new(personal.Id, Guid.NewGuid(), "Personal", true, Guid.NewGuid(), "Dining", .9));
         var page = Render<Inbox>();
-        page.WaitForElement("button[aria-label='File Cafe in Personal · Dining']");
-        await page.FindAll("nav[aria-label='Review suggestions'] button")
-            .Single(button => button.TextContent.Contains("Likely personal")).ClickAsync(new());
-        Assert.Contains("Cafe", page.Markup);
-        Assert.DoesNotContain("File Shop in Home", page.Markup);
-    }
-
-    /// <summary>
-    /// The suggestion arrives after the rows -- the inbox never waits on the model -- and
-    /// one press files it with the same group and category the dialog would use.
-    /// </summary>
-    [Fact]
-    public async Task A_suggestion_lands_on_its_row_and_one_press_files_it_there()
-    {
-        var row = Row("Lidl", 30m, DateOnly.FromDateTime(Today));
-        var home = Guid.NewGuid();
-        var groceries = Guid.NewGuid();
-        _rows = [row];
-        Suggests(new FilingSuggestionResponse(row.Id, home, "Home", false, groceries, "Groceries", 0.9));
-
-        var page = Render<Inbox>();
-        await page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']").ClickAsync(new());
-
-        _bank.Verify(bank => bank.FileAsync(row.Id,
-            It.Is<FileBankTransactionRequest>(request => request.GroupId == home && request.CategoryId == groceries),
-            "Home", It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task A_personal_suggestion_files_with_no_group()
-    {
-        var row = Row("Netflix", 15m, DateOnly.FromDateTime(Today));
-        var subscriptions = Guid.NewGuid();
-        _rows = [row];
-        Suggests(new FilingSuggestionResponse(row.Id, Guid.NewGuid(), "Personal", true, subscriptions, "Subscriptions", 0.8));
-
-        var page = Render<Inbox>();
-        await page.WaitForElement("button[aria-label='File Netflix in Personal · Subscriptions']").ClickAsync(new());
-
-        _bank.Verify(bank => bank.FileAsync(row.Id,
-            It.Is<FileBankTransactionRequest>(request => request.GroupId == null && request.CategoryId == subscriptions),
-            "your own expenses", It.IsAny<CancellationToken>()), Times.Once);
+        page.WaitForAssertion(() => Assert.Contains("Review: Personal · Dining", page.Markup));
+        Assert.Contains("Review: Home · Groceries", page.Markup);
+        Assert.DoesNotContain("Likely personal", page.Markup);
+        Assert.DoesNotContain("Likely shared", page.Markup);
+        Assert.All(page.FindAll(".gs-inbox-row-buttons"), row => Assert.Equal(2, row.QuerySelectorAll("button").Length));
     }
 
     /// <summary>
@@ -565,12 +537,12 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
         var state = Services.GetRequiredService<IInboxStateService>();
-        page.WaitForElement("button[aria-label='File Lidl in Home · Groceries']");
+        page.WaitForAssertion(() => Assert.Contains("Review: Home · Groceries", page.Markup));
 
         await page.InvokeAsync(() => state.RefreshAsync());
 
         _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        Assert.NotNull(page.Find("button[aria-label='File Lidl in Home · Groceries']"));
+        Assert.Contains("Review: Home · Groceries", page.Markup);
     }
 }

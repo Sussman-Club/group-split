@@ -66,6 +66,23 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
     }
 
     [Fact(Timeout = 60_000)]
+    public async Task Receipt_filing_runs_inside_the_postgres_retry_strategy()
+    {
+        await using var scope = _services.CreateAsyncScope();
+        await SignIn(scope);
+        var inbox = scope.ServiceProvider.GetRequiredService<ReceiptInboxService>();
+        var id = Guid.NewGuid();
+        var details = new SaveReceiptRequest { MerchantName = "Test", Subtotal = 10m, Tax = 1m, Total = 11m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] };
+        var saved = await inbox.Save(id, new SaveReceiptInboxRequest { Receipt = details }, Ct);
+        Assert.Equal(1m, Assert.Single(saved.Receipt.Items).TaxAmount);
+        var result = await inbox.File(id, new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest
+        { Name = "Test receipt", Amount = 11m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, Receipt = saved.Receipt } }, Ct);
+        Assert.NotNull(result.ExpenseId);
+        Assert.Equal(1m, Assert.Single(result.Receipt.Items).TaxAmount);
+    }
+
+    [Fact(Timeout = 60_000)]
     public async Task A_bank_link_started_during_deletion_waits_then_refuses_the_stale_signed_in_user()
     {
         await using var deletingScope = _services.CreateAsyncScope();
@@ -201,6 +218,8 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Set<ReceiptAttachment>().Where(row => row.UploadedByUserId == _userId).ExecuteDeleteAsync();
+            await db.Set<ReceiptItem>().Where(row => row.Receipt.OwnerUserId == _userId).ExecuteDeleteAsync();
+            await db.Set<Receipt>().Where(row => row.OwnerUserId == _userId).ExecuteDeleteAsync();
             await db.Set<PendingBankLink>().Where(row => row.UserId == _userId).ExecuteDeleteAsync();
             await db.Set<BankConnection>().Where(row => row.UserId == _userId).ExecuteDeleteAsync();
             await db.Set<TransactionSplit>().Where(row => row.Transaction.GroupId == _userId).ExecuteDeleteAsync();

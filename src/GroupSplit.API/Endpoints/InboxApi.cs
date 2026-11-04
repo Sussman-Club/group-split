@@ -3,6 +3,7 @@ using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
 using GroupSplit.API.Services.ReceiptTranscription;
+using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,7 @@ public static class InboxApi
             group.WithTags("Inbox");
 
             group.MapList();
+            group.MapSearchForReceipt();
             group.MapSummary();
             group.MapMatches();
             group.MapSuggestions();
@@ -67,6 +69,25 @@ public static class InboxApi
 
     extension(RouteGroupBuilder group)
     {
+        private RouteHandlerBuilder MapSearchForReceipt() => group.MapGet("/receipt-search", async (
+                string? search, [AsParameters] PageRequest page, IInboxService inbox, AppDbContext db, CancellationToken ct) =>
+            {
+                var rows = await inbox.List(new InboxFilter(InboxStatus.New), ct);
+                // A linked bank row is already represented by its expense. Do not offer
+                // it as a second filing destination, even if its status is out of sync.
+                rows = rows.Where(row => !db.Set<Expense>().Any(expense => expense.BankTransactionId == row.Id));
+                var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
+                if (term is not null)
+                    rows = rows.Where(row => row.Description.ToLower().Contains(term) ||
+                        (row.MerchantName != null && row.MerchantName.ToLower().Contains(term)) ||
+                        row.Account.Name.ToLower().Contains(term));
+                var found = await rows.ApplySort(new SortRequest(), Sort).SelectDto().ToPageAsync(page, ct);
+                return Results.Ok(await found.WithDuplicatesAsync(inbox, ct));
+            })
+            .WithName("SearchReceiptBankTransactions")
+            .Produces<PagedResponse<BankTransactionResponse>>()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
         private RouteHandlerBuilder MapList()
         {
             return group.MapGet(string.Empty, async (

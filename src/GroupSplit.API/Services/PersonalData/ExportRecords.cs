@@ -33,8 +33,11 @@ public sealed record ExportTransaction(Guid Id, string Kind, Guid GroupId, Guid 
 public sealed record ExportShare(Guid UserId, decimal Amount);
 public sealed record ExportPerson(Guid Id, string? FirstName, string? LastName, UserKind Kind);
 public sealed record ExportCategory(Guid Id, Guid GroupId, string Name, string Description, DateTimeOffset? ArchivedAt);
-public sealed record ExportReceipt(Guid Id, Guid ExpenseId, decimal Subtotal, decimal Tax,
-    decimal Tip, decimal Total, string? MerchantName, DateOnly? PurchaseDate, IReadOnlyList<ExportReceiptItem> Items);
+public sealed record ExportReceipt(Guid Id, Guid? ExpenseId, decimal Subtotal, decimal Tax,
+    decimal Tip, decimal Total, string? MerchantName, DateOnly? PurchaseDate, IReadOnlyList<ExportReceiptItem> Items)
+{
+    public string? Currency { get; init; }
+}
 public sealed record ExportReceiptItem(Guid Id, int Position, string Name, string? Description,
     decimal UnitPrice, decimal Quantity, decimal TotalPrice, decimal TaxAmount, decimal? TaxRate, bool? IsTaxable);
 public sealed record ExportBankConnection(Guid Id, string Provider, string InstitutionName,
@@ -50,6 +53,7 @@ public sealed record ExportSettlementRequest(Guid Id, Guid RequesterUserId, Guid
 public sealed record ExportAttachment(Guid Id, Guid? ExpenseId, Guid? BankTransactionId,
     string FileName, string ContentType, long Length, DateTimeOffset UploadedAt)
 {
+    public Guid? ReceiptId { get; init; }
     // Neither original filenames nor storage keys can control paths inside the ZIP.
     public string Path => $"receipts/{Id}" + (ContentType switch
     {

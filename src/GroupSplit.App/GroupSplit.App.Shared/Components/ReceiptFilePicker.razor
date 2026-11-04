@@ -10,6 +10,7 @@
     <InputFile id="@_inputId"
                OnChange="FileChanged"
                accept="@Accept"
+               multiple="@AllowMultiple"
                disabled="@IsBusy"
                class="gs-file-picker-input"
                aria-label="@Loc["Receipt file"]" />
@@ -143,6 +144,7 @@
     [Parameter] public string? Description { get; set; }
     [Parameter] public string? FileName { get; set; }
     [Parameter] public bool IsAttached { get; set; }
+    [Parameter] public bool AllowMultiple { get; set; }
     [Parameter] public string? AttachedDescription { get; set; }
     [Parameter] public bool IsBusy { get; set; }
     [Parameter] public string? BusyText { get; set; }

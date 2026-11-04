@@ -53,6 +53,8 @@
 
 
 
+                @if (InboxReceipt is null)
+                {
                 <div class="gs-expense-receipt">
                     <div class="gs-expense-disclosure-body">
                 <div class="gs-card gs-card-pad" style="padding: 14px 16px">
@@ -71,6 +73,31 @@
                 </div>
                     </div>
                 </div>
+                }
+                else if (_draftBill is { } inboxBill)
+                {
+                    <details class="gs-expense-disclosure">
+                        <summary>@Loc["Receipt"]<span>@Loc["View the itemized receipt"]</span></summary>
+                        <div class="gs-expense-disclosure-body"><BillSheet Receipt="inboxBill" Title="@inboxBill.MerchantName" /></div>
+                    </details>
+                }
+
+                @if (_taxAutomaticallyDistributed)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Tax was distributed by item price. Review tax-exempt items."]</MudAlert>
+                }
+
+                @if (HasUnassignedReceiptTax)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        @Loc["The receipt has tax that has not been assigned to its items. Distribute it by item price, or review the receipt first."]
+                        @if (CanDistributeReceiptTax)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" ButtonType="ButtonType.Button"
+                                       OnClick="DistributeReceiptTaxAsync">@Loc["Distribute tax"]</MudButton>
+                        }
+                    </MudAlert>
+                }
 
                 @if (_filingSuggestion is { } suggestion)
                 {
@@ -202,7 +229,7 @@
         <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_readingReceipt || ReceiptNeedsRules)" OnClick="@Submit">@Loc["Add expense"]</MudButton>
+                   Disabled="@(_readingReceipt || ReceiptNeedsRules || HasUnassignedReceiptTax)" OnClick="@Submit">@Loc["Add expense"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -213,6 +240,9 @@
     public sealed record Answer(CreateTransactionRequest Request, IBrowserFile File,
         SaveReceiptRequest? Receipt);
 
+    [Parameter] public SaveReceiptRequest? InboxReceipt { get; set; }
+    [Parameter] public FilingDestinationSuggestion? InboxSuggestion { get; set; }
+    [Parameter] public string? InboxCurrency { get; set; }
     [Parameter] public bool ShowFirstExpenseGuide { get; set; }
     private int _guideStep;
     private bool _guideDismissed;
@@ -291,6 +321,7 @@
     /// dialog does not have.
     /// </summary>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
+    private IReadOnlyList<SplitRuleResponse> _lineRules = [];
     private Guid? _evenRuleId;
 
     private SplitPreviewResponse? _preview;
@@ -308,9 +339,37 @@
     private IBrowserFile? _receiptFile;
     private SaveReceiptRequest? _receipt;
     private ReceiptResponse? _draftBill;
+    private bool _taxAutomaticallyDistributed;
     private Guid? _billRuleId;
     private bool ReceiptNeedsRules => _billRuleId is not null && _model.SplitRuleId == _billRuleId
         && (_draftBill is null || _draftBill.Items.Any(item => item.SplitRuleVersionId is null));
+
+    private decimal[] ReceiptTaxAmounts(bool allocateUnidentified) => _receipt is not { } receipt ? [] :
+        ReceiptTaxes.Calculate(receipt.Tax, receipt.Items.Select(item =>
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), allocateUnidentified);
+    private bool HasUnassignedReceiptTax => _receipt is { Items.Count: > 0 } receipt
+        && ReceiptTaxAmounts(false).Sum() != receipt.Tax;
+    private bool CanDistributeReceiptTax => _receipt is { } receipt
+        && ReceiptTaxAmounts(true).Sum() == receipt.Tax;
+
+    private static SaveReceiptRequest DistributeImportedTax(SaveReceiptRequest receipt)
+    {
+        if (receipt.Subtotal + receipt.Tax + receipt.Tip != receipt.Total ||
+            receipt.Items.Sum(item => item.TotalPrice) != receipt.Subtotal) return receipt;
+        var taxes = ReceiptTaxes.DistributeUnassigned(receipt.Tax, receipt.Items.Select(item =>
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+        return taxes is null ? receipt : receipt with
+        { Items = receipt.Items.Select((item, index) => item with { TaxAmount = taxes[index] }).ToArray() };
+    }
+
+    private async Task DistributeReceiptTaxAsync()
+    {
+        if (_receipt is not { } receipt || _draftBill is not { } bill || !CanDistributeReceiptTax) return;
+        var taxes = ReceiptTaxAmounts(true);
+        _receipt = receipt with { Items = receipt.Items.Select((item, index) => item with { TaxAmount = taxes[index] }).ToArray() };
+        _draftBill = bill with { Items = bill.Items.Select((item, index) => item with { TaxAmount = taxes[index] }).ToArray() };
+        await RefreshPreviewAsync();
+    }
 
     private ReceiptResponse DraftBillOf(SaveReceiptRequest receipt) => new(
         Guid.NewGuid(), Guid.Empty, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
@@ -353,6 +412,9 @@
     {
         if (_receipt is { } receipt && receipt.Total != _model.Amount)
             return Loc["Match the expense amount to the receipt total before splitting."].Value;
+
+        if (HasUnassignedReceiptTax)
+            return Loc["Distribute the receipt tax or review the receipt before splitting."].Value;
 
         if (ReceiptNeedsRules)
             return Loc["Choose a split rule for every receipt item."].Value;
@@ -628,7 +690,35 @@
         _selectedDate = now.Date;
         _selectedTime = now.TimeOfDay;
 
+        if (InboxReceipt is { } inbox)
+        {
+            _receipt = DistributeImportedTax(inbox);
+            _taxAutomaticallyDistributed = !ReferenceEquals(_receipt, inbox);
+            _draftBill = DraftBillOf(_receipt);
+            _model.Name = inbox.MerchantName ?? "Receipt";
+            _model.Amount = inbox.Total;
+            _currency = InboxCurrency ?? _currency;
+            if (inbox.PurchaseDate is { } day) _selectedDate = day.ToDateTime(TimeOnly.MinValue);
+            if (!string.IsNullOrWhiteSpace(inbox.MerchantName))
+            {
+                var name = inbox.MerchantName.Trim();
+                var matches = await Merchants.SearchAsync(name);
+                var merchant = matches?.FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                _model.MerchantId = merchant?.Id;
+                _merchantName = merchant?.Name ?? name;
+                _merchantLogo = merchant?.LogoUrl;
+                _pendingMerchantName = merchant is null ? name : null;
+            }
+        }
         await OpenAsync();
+        if (InboxSuggestion is { } suggestion && (suggestion.IsPersonal ? _groupId is null : _groupId == suggestion.GroupId)
+            && _categories.Any(category => category.Id == suggestion.CategoryId))
+            await OnCategoryPickedAsync(suggestion.CategoryId);
+        if (InboxReceipt is not null)
+        {
+            await ApplyDefaultReceiptRuleAsync();
+            await RefreshPreviewAsync();
+        }
     }
 
     /// <summary>
@@ -672,6 +762,8 @@
         if (!current)
             return;
 
+        if (InboxReceipt is not null)
+            await ApplyDefaultReceiptRuleAsync();
         StateHasChanged();
 
         await RefreshPreviewAsync();
@@ -778,6 +870,8 @@
                 ?? category.DefaultSplitRuleName
         }).ToList();
         _memberRules = MemberRulesOf(listed, _members);
+        _lineRules = (listed ?? []).VisibleToMembers(_members.Select(member => member.Id))
+            .Where(rule => !rule.DividesByBill).ToArray();
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
         _billRuleId = listed?.FirstOrDefault(rule => rule.DividesByBill)?.Id;
 
@@ -789,6 +883,27 @@
             _model.PaidByUserId = _members.Any(member => member.Id == me.Id) ? me.Id : null;
 
         return true;
+    }
+
+    private async Task ApplyDefaultReceiptRuleAsync()
+    {
+        if (_groupId is not { } groupId || _receipt is null || _draftBill is null) return;
+        var categoryRule = _categories.FirstOrDefault(category => category.Id == _model.CategoryId)?.DefaultSplitRuleId;
+        var groupRule = _groups.FirstOrDefault(group => group.Id == groupId)?.DefaultSplitRuleId;
+        foreach (var id in new[] { categoryRule, groupRule, _evenRuleId }.OfType<Guid>().Distinct())
+        {
+            if (_lineRules.All(rule => rule.Id != id)) continue;
+            var detail = await SplitRules.GetAsync(id);
+            if (_groupId != groupId) return;
+            if (detail is null || detail.Definition is ItemizedSplitRuleDto) continue;
+            var items = _draftBill.Items.Select(item => item.SplitRuleVersionId is null
+                ? item with { SplitRuleVersionId = detail.VersionId, SplitRuleName = detail.Name, SplitRule = detail.Definition }
+                : item).ToArray();
+            _draftBill = _draftBill with { Items = items, MissingRuleItemCount = items.Count(item => item.SplitRuleVersionId is null) };
+            _receipt = _receipt with { Items = _receipt.Items.Select((item, index) => item with
+                { SplitRuleVersionId = items[index].SplitRuleVersionId }).ToArray() };
+            return;
+        }
     }
 
     /// <summary>
@@ -940,7 +1055,7 @@
     /// </summary>
     private async Task Submit()
     {
-        if (_readingReceipt || ReceiptNeedsRules)
+        if (_readingReceipt || ReceiptNeedsRules || HasUnassignedReceiptTax)
             return;
 
         await _form.ValidateAsync();

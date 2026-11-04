@@ -26,7 +26,8 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
         try
         {
             cs.Database = database;
-            var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>().UseNpgsql(cs.ConnectionString, b => b.MigrationsAssembly("GroupSplit.Data.PostgreSQL.Migrations")).Options;
+            var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>().UseNpgsql(cs.ConnectionString, b =>
+                b.MigrationsAssembly("GroupSplit.Data.PostgreSQL.Migrations").EnableRetryOnFailure()).Options;
             await using var db = new PostgreSqlAppDbContext(options);
             await db.Database.MigrateAsync();
             await using (var check = new NpgsqlConnection(cs.ConnectionString))

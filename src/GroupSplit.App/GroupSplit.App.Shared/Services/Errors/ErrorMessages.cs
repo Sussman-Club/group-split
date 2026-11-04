@@ -35,7 +35,7 @@ public static class ErrorMessages
     /// </summary>
     public static string RateLimited(int? retryAfterSeconds)
     {
-        if (retryAfterSeconds is not { } seconds || seconds <= 0)
+        if (retryAfterSeconds is not ({ } seconds and > 0))
             return For(ErrorCodes.RateLimited);
 
         if (seconds < 60)
@@ -89,6 +89,9 @@ public static class ErrorMessages
         [ErrorCodes.ReceiptAttachmentInvalid] = "Choose a JPG, PNG, WebP, or PDF file no larger than 10 MB.",
         [ErrorCodes.ReceiptTranscriptionUnavailable] = "Receipt transcription is not switched on for this app yet.",
         [ErrorCodes.ReceiptTranscriptionProviderUnavailable] = "We could not read that receipt just now. Please try again in a few minutes.",
+        [ErrorCodes.ReceiptAlreadyFiled] = "This receipt has already been filed. Refresh your inbox.",
+        [ErrorCodes.ReceiptAlreadyAttached] = "That expense already has an itemized receipt. Choose another expense.",
+        [ErrorCodes.ReceiptSourceAlreadyImported] = "This file has already been imported. Check your receipts and expenses.",
         [ErrorCodes.ReceiptInvalid] = "That bill could not be read. Check the lines and who is on them.",
         [ErrorCodes.ReceiptDoesNotAddUp] = "The bill does not add up to what was paid.",
 

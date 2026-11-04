@@ -47,6 +47,7 @@ public sealed class FilingSuggester(
     AppDbContext dbContext,
     IDecisionClient decisions,
     HybridCache cache,
+    SuggestionModelLimiter modelLimiter,
     IOptions<FilingSuggestionOptions> options,
     ILogger<FilingSuggester> logger) : IFilingSuggester
 {
@@ -167,6 +168,8 @@ public sealed class FilingSuggester(
                 key,
                 async token =>
                 {
+                    if (!modelLimiter.TryAcquire(userContext.User.Id))
+                        throw new DecisionFailedException();
                     modelWasCalled = true;
                     return new CachedSuggestion(await AskAsync(row, receipt, earlier, labelled, choices, settings, token));
                 },
@@ -241,7 +244,9 @@ public sealed class FilingSuggester(
         var inputs = JsonSerializer.SerializeToUtf8Bytes(new
         {
             Instructions,
-            input = row,
+            // The source id identifies the result, but does not change the decision.
+            // Normalizing it lets receipt list and detail requests share the same cache entry.
+            input = row with { Id = Guid.Empty },
             // The entire caller-visible set participates too. A newly added category gets a
             // fresh answer even if the request's size cap would not offer it this time.
             allDestinations = allDestinations.Select(destination => new

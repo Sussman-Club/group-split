@@ -51,6 +51,7 @@
     </TitleContent>
 
     <DialogContent>
+        <MudButton Href="@($"/inbox/receipts?bank={Row.Id}")">Choose receipt from inbox</MudButton>
         <ReceiptReadLock IsLocked="@ReceiptBusy">
         <div class="gs-stack" style="gap: 16px">
             @if (Login.User is { Onboarding.BankDismissed: false } && !_bankGuideDismissed)

@@ -54,6 +54,8 @@ public static class ServiceExtensions
             // Read by the inbox page and by the nav badge, so one service rather than two
             // that would each fetch the count.
             services.TryAddScoped<InboxStateService>();
+            services.TryAddScoped<InboxOverview>();
+            services.TryAddScoped<ReceiptSuggestionCache>();
             services.TryAddScoped<IInboxStateService>(sp => sp.GetRequiredService<InboxStateService>());
             services.TryAddScoped<IBankLinkLauncher, PlaidLinkLauncher>();
 

@@ -1,0 +1,28 @@
+@namespace GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
+@inject InboxOverview Overview
+@implements IDisposable
+@if (BadgeOnly)
+{
+    @if (Overview.Total is > 0) { <span class="gs-nav-badge" aria-label="@Loc["{0} waiting in inbox", Overview.Total]">@Overview.Total</span> }
+}
+else
+{
+    <div class="gs-page-head gs-inbox-head">
+        <div><div class="gs-eyebrow">@Loc["Your purchases"]</div><h1>@Loc["Inbox"]</h1>
+            <p role="status" aria-live="polite">@(Overview.Total is { } total ? Loc["{0} purchases waiting for review", total].Value : Loc["Review receipts and bank payments in one place."].Value)</p>
+        </div>
+        @HeaderActions
+    </div>
+    <nav class="gs-inbox-tabs" aria-label="@Loc["Inbox views"]">
+        <NavLink href="/inbox/receipts" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><span>@Loc["Receipts"]</span>@if (Overview.ReceiptCount is { } count) { <span class="gs-inbox-count">@count</span> }</NavLink>
+        <NavLink href="/inbox" Match="NavLinkMatch.All" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" /><span>@Loc["Bank transactions"]</span><span class="gs-inbox-count">@Overview.BankCount</span></NavLink>
+    </nav>
+}
+@code {
+    [Parameter] public bool BadgeOnly { get; set; }
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    protected override async Task OnInitializedAsync() { Overview.Changed += Refresh; await Overview.EnsureLoaded(); }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Overview.Changed -= Refresh;
+}

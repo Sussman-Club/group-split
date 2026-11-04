@@ -61,6 +61,9 @@ public static class Problems
         [ErrorCodes.ReceiptTranscriptionUnavailable] = "Receipt transcription is not available",
         [ErrorCodes.BankTransactionAlreadyFiled] = "This row has already been filed",
         [ErrorCodes.BankConnectionNeedsAttention] = "The bank connection needs signing in again",
+        [ErrorCodes.ReceiptAlreadyFiled] = "Receipt has already been filed",
+        [ErrorCodes.ReceiptAlreadyAttached] = "Expense already has an itemized receipt",
+        [ErrorCodes.ReceiptSourceAlreadyImported] = "Receipt source has already been imported",
         [ErrorCodes.CurrencyMismatch] = "The currencies do not match",
         [ErrorCodes.IdentityEmailInUse] = "The email on this sign-in belongs to another account",
 
