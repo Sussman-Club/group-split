@@ -284,8 +284,9 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     // Small sums get a flat tolerance rather than one measured in pennies.
     [InlineData(4.00, 4.75, 0, false)]
     // The far edge of the window, and one day past it.
-    [InlineData(40, 40, 5, true)]
-    [InlineData(40, 40, 6, false)]
+    [InlineData(40, 40, 2, true)]
+    [InlineData(40, 40, 3, false)]
+    [InlineData(40, 40, 5, false)]
     // Not the same money at all.
     [InlineData(40, 80, 0, false)]
     [InlineData(40, 55, 0, false)]
