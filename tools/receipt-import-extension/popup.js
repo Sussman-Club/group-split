@@ -5,7 +5,11 @@ const status = $('status');
 let selection = null;
 let inbox = null;
 let sourceTabId = Number(new URL(location.href).searchParams.get('tab'));
-const inboxTabId = Number(new URL(location.href).searchParams.get('appTab'));
+let inboxTabId = Number(new URL(location.href).searchParams.get('appTab'));
+const parentWindowId = Number(new URL(location.href).searchParams.get('windowId'));
+let parentWindow = Number.isInteger(parentWindowId) && parentWindowId > 0 ? { windowId: parentWindowId } : {};
+const embedded = new URL(location.href).searchParams.get('embedded') === '1';
+if (embedded) document.documentElement.dataset.embedded = 'true';
 const requestedTheme = new URL(location.href).searchParams.get('theme');
 const costcoPrivacyMessage = 'Costco receipt files may include customer, membership and masked payment details. Review them before sharing.';
 if (requestedTheme === 'dark' || requestedTheme === 'light') document.documentElement.dataset.theme = requestedTheme;
@@ -383,13 +387,27 @@ async function connectInbox() {
     if (page?.pathname !== '/inbox/receipts') throw new Error('Open the extension from the Group Split receipts inbox.');
     inbox = { origin, tabId: inboxTabId };
     $('connection').textContent = 'Inbox connected. Keep the GroupSplit tab open and signed in.';
-    $('back-to-inbox').hidden = false;
+    $('back-to-inbox').hidden = embedded;
   } catch (error) { $('connection').textContent = error.message; }
 }
-connectInbox();
+if (embedded) {
+  chrome.runtime.sendMessage({ type: 'embedded-context' }, context => {
+    if (chrome.runtime.lastError || !context?.tabId) {
+      $('connection').textContent = 'Open the importer from the GroupSplit receipts inbox.';
+      return;
+    }
+    inboxTabId = context.tabId;
+    if (Number.isInteger(context.windowId)) parentWindow = { windowId: context.windowId };
+    window.parent.postMessage({ type: 'groupsplit-importer-ready' }, '*');
+    void connectInbox();
+  });
+} else void connectInbox();
 
 $('back-to-inbox').addEventListener('click', async () => {
-  if (inbox) await chrome.tabs.update(inbox.tabId, { active: true });
+  if (inbox) {
+    const tab = await chrome.tabs.update(inbox.tabId, { active: true });
+    if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
+  }
 });
 
 $('retailer').addEventListener('change', () => {
@@ -440,12 +458,13 @@ $('open-costco').addEventListener('click', async () => {
     const ordersUrl = amazon ? `${origin}/your-orders/orders`
       : `${origin}/myaccount/#/app/4900eb1f-0c10-4bd9-99c3-c59e6c1ecebf/ordersandpurchases`;
     const existing = amazon ? tabs[0] : tabs.find(tab => tab.url === ordersUrl);
-    const tab = existing || await chrome.tabs.create({ url: ordersUrl });
+    const tab = existing || await chrome.tabs.create({ ...parentWindow, url: ordersUrl });
     sourceTabId = tab.id;
     await chrome.tabs.update(tab.id, { active: true });
+    if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
     status.textContent = amazon
       ? 'Sign in if needed, open your orders, then return here to find receipts.'
-      : 'Sign in if needed, then return here. Find receipts will open the selected Costco view.';
+        : 'Sign in if needed, then return here. Find receipts will open the selected Costco view.';
     if (!amazon) await openCostcoView(tab.id, $('retailer').value === 'costco-online').catch(() => {});
   } catch (error) { status.textContent = error.message; }
 });
@@ -914,7 +933,7 @@ async function prepareAmazonInvoice(row, workspace) {
     throw new Error('The invoice address is not a supported Amazon address.');
   const orderId = target.searchParams.get('orderID');
   if (!/^\d{3}-\d{7}-\d{7}$/.test(orderId || '')) throw new Error('The Amazon order could not be identified safely.');
-  if (!workspace.tabId) workspace.tabId = (await chrome.tabs.create({ url: target.href, active: false })).id;
+  if (!workspace.tabId) workspace.tabId = (await chrome.tabs.create({ ...parentWindow, url: target.href, active: false })).id;
   else await chrome.tabs.update(workspace.tabId, { url: target.href });
   const deadline = Date.now() + 20000;
   let ready = false;

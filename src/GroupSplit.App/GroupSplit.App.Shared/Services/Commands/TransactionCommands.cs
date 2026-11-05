@@ -134,6 +134,7 @@ public sealed class TransactionCommands(
             await transactions.DeleteTransactionAsync(transactionId, ct);
             snackbar.Add(UiText.Format($"{name} deleted."), Severity.Success);
             await changes.NotifyTransactionsChangedAsync();
+            await changes.NotifyReceiptsChangedAsync();
         }, UiText.Format($"Could not delete the {(noun == "expense" ? UiText.Get("Copy.Lower.expense") : noun)}."));
 
     /// <summary>

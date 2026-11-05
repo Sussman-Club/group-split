@@ -24,7 +24,7 @@
         </div>
     </HeaderActions>
 </InboxHeader>
-<div class="gs-inbox-context"><h2>@Loc["Receipts"]</h2><span class="gs-muted">@Loc["Private until filed. Choose who paid when you create the expense."]</span></div>
+<div class="gs-inbox-context"><h2>@Loc["Receipts"]</h2><span class="gs-muted">@Loc["Your receipts are private until you add them to an expense."]</span></div>
 @if (_importHelp)
 {
     <div class="gs-receipt-import-help" role="status">
@@ -36,16 +36,13 @@
         </div>
     </div>
 }
-<div class="gs-inbox-add" id="add-receipt">
-    <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" AllowMultiple="true" Title="@Loc["Add a receipt"]" Description="@Loc["Upload photos or PDFs. Review the details when you are ready."]" />
-</div>
-@if (_uploading) { <MudProgressLinear Indeterminate="true" aria-label="@Loc["Saving receipt"]" /> }
-@if (_uploadProgress is not null) { <p role="status">@_uploadProgress</p> }
+<ExtendedFab Label="@Loc["Add receipt"]" AlwaysExtended="true" OnClick="OpenUpload" />
+@if (!_uploading && _uploadProgress is not null) { <p role="status">@_uploadProgress</p> }
 <nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Receipt status"]">
     @foreach (var status in Enum.GetValues<ReceiptFilter>())
     {
         <MudButton Variant="@(_filter == status ? Variant.Filled : Variant.Text)" Color="@(_filter == status ? Color.Primary : Color.Default)"
-                   Size="Size.Small" Class="gs-btn-pill" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
+                   Size="Size.Small" Class="gs-btn-pill" Disabled="_busy" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
     }
 </nav>
 <div class="gs-receipt-search-bar">
@@ -54,10 +51,13 @@
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
     <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
 </div>
-<LoadView Loading="_loading" Failed="@(_rows is null)" Retry="Load">
+@{ var showLoading = _loading && !_uploading && (!_busy || _rows is null); }
+<div class="gs-inbox-results" aria-busy="@_loading">
+<div class="gs-inbox-results-content" @key="(_filter, showLoading)">
+<LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(_rows is null && !_uploading)" Retry="Load">
 @if (_rows is { Count: 0 })
 {
-    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then connect it to a bank payment or expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
+    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then add it to an expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
 }
 else if (_rows is not null && _visibleRows.Count == 0)
 {
@@ -66,7 +66,7 @@ else if (_rows is not null && _visibleRows.Count == 0)
 else if (_rows is not null)
 {
     <div class="gs-card gs-receipt-inbox-list">
-    <Virtualize @ref="_virtualize" Items="_visibleRows" Context="row" ItemSize="116" OverscanCount="5">
+    <Virtualize @ref="_virtualize" Items="_pageRows" Context="row" ItemSize="120" OverscanCount="5">
         @{ var source = row.Attachments.FirstOrDefault(); }
         <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
         <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
@@ -74,7 +74,7 @@ else if (_rows is not null)
                 @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
                 else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
             </div>
-            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (_filter == ReceiptFilter.Waiting && !_suggestions.ContainsKey(row.Id) && !_expenseMatches.ContainsKey(row.Id)) { <span class="gs-receipt-inbox-status">@(row.Receipt.Items.Count == 0 ? Loc["Add details"].Value : Loc["Needs review"].Value)</span> }</div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span></div>
             <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong></div>
         </a>
         @if (_filter != ReceiptFilter.Added)
@@ -93,17 +93,34 @@ else if (_rows is not null)
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@destination.Destination" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review: {0}", destination.Destination]</MudButton>
                     </div>
                 }
+                else if (_filter == ReceiptFilter.Waiting)
+                {
+                    <div class="gs-receipt-inbox-shortcut">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => ReviewSuggestion(row, null))">@Loc["Add to group"]</MudButton>
+                    </div>
+                }
                 <div class="gs-receipt-inbox-state-action"><MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy" OnClick="@(() => SetIgnored(row, _filter == ReceiptFilter.Waiting))">@(_filter == ReceiptFilter.Waiting ? Loc["Ignore"] : Loc["Restore"])</MudButton></div>
             </div>
         }
         </div>
     </Virtualize>
+    @if (_pageRows.Count < _visibleRows.Count)
+    {
+        <div class="gs-inbox-show-more">
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ShowMore">@Loc["Show more ({0} of {1})", _pageRows.Count, _visibleRows.Count]</MudButton>
+        </div>
+    }
     </div>
 }
 </LoadView>
+</div>
+</div>
 @code {
     private List<ReceiptInboxResponse>? _rows;
     private List<ReceiptInboxResponse> _visibleRows = [];
+    private List<ReceiptInboxResponse> _pageRows = [];
+    private const int PageSize = 25;
+    private int _shownCount = PageSize;
     private string? _search;
     private DateFilter _dateRange = DateFilter.AllTime;
     private enum ReceiptFilter { Waiting, Added, Ignored }
@@ -119,7 +136,6 @@ else if (_rows is not null)
     private readonly Dictionary<Guid, ReceiptExpenseCandidate> _expenseMatches = [];
     private CancellationTokenSource? _suggestionLoad;
     private Virtualize<ReceiptInboxResponse>? _virtualize;
-    [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? StatusParameter { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
     [SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
@@ -138,8 +154,8 @@ else if (_rows is not null)
         _filter = asked.Status?.ToLowerInvariant() switch { "added" or "filed" => ReceiptFilter.Added, "ignored" => ReceiptFilter.Ignored, _ => ReceiptFilter.Waiting };
         _search = asked.Search;
         _dateRange = ListingQuery.ParseRange(asked.Range, asked.From, asked.To, DateFilter.AllTime);
-        if (first || previous != _filter) { _rows = null; await Load(); }
-        else ApplyFilters();
+        if (first || previous != _filter) { _shownCount = PageSize; _rows = null; await Load(); }
+        else { _shownCount = PageSize; ApplyFilters(); }
     }
     private void WriteUrl()
     {
@@ -161,12 +177,14 @@ else if (_rows is not null)
             if (bounds.From is null && bounds.To is null) return true;
             return row.Receipt.PurchaseDate is { } date && (bounds.From is null || date >= bounds.From) && (bounds.To is null || date <= bounds.To);
         }).ToList();
+        _pageRows = _visibleRows.Take(_shownCount).ToList();
     }
-    private void SearchChanged() { ApplyFilters(); WriteUrl(); }
-    private void SetDateRange(DateFilter range) { _dateRange = range; ApplyFilters(); WriteUrl(); }
-    private void ClearFilters() { _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
+    private void ShowMore() { _shownCount += PageSize; ApplyFilters(); }
+    private void SearchChanged() { _shownCount = PageSize; ApplyFilters(); WriteUrl(); }
+    private void SetDateRange(DateFilter range) { _shownCount = PageSize; _dateRange = range; ApplyFilters(); WriteUrl(); }
+    private void ClearFilters() { _shownCount = PageSize; _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
     private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
-    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _rows = null; WriteUrl(); await Load(); }
+    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _shownCount = PageSize; _rows = null; WriteUrl(); await Load(); }
     private async Task OpenAdded(ReceiptInboxResponse row)
     {
         if (_filter == ReceiptFilter.Added && row.ExpenseId is { } id)
@@ -238,8 +256,9 @@ else if (_rows is not null)
                     {
                         var day = row.Receipt.PurchaseDate!.Value.DayNumber;
                         var matches = await Client.MatchReceiptInboxAsync(row.Id, ct);
-                        return (row.Id, Match: matches.OrderBy(match =>
-                            Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault());
+                        var match = matches.Where(match => !match.HasReceipt).OrderBy(match =>
+                            Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault();
+                        return (row.Id, Match: match);
                     }
                     catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return (row.Id, Match: (ReceiptExpenseCandidate?)null); }
                 }));
@@ -248,7 +267,9 @@ else if (_rows is not null)
                 {
                     if (ct.IsCancellationRequested) return;
                     foreach (var (id, match) in results)
+                    {
                         if (match is not null) _expenseMatches[id] = match;
+                    }
                     if (_virtualize is not null) await _virtualize.RefreshDataAsync();
                     StateHasChanged();
                 });
@@ -297,15 +318,29 @@ else if (_rows is not null)
         _importReference?.Dispose();
     }
     private string Source(Guid r, Guid a) => Nav.BaseUri + $"api/receipts/inbox/{r}/files/{a}";
+    private async Task OpenUpload()
+    {
+        if (_busy) return;
+        await Dialogs.ShowAsync<ReceiptUploadDialog>(Loc["Add receipt"].Value,
+            new DialogParameters<ReceiptUploadDialog> { { dialog => dialog.FileChanged, EventCallback.Factory.Create<InputFileChangeEventArgs>(this, Upload) } },
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseOnEscapeKey = false, BackdropClick = false });
+    }
     private async Task AttachMatch(ReceiptInboxResponse row, ReceiptExpenseCandidate match)
     {
         if (_busy) return;
         _busy = true;
         try
         {
-            if (await Dialogs.ShowMessageBoxAsync(Loc["Attach receipt"].Value,
-                Loc["Attach this receipt to {0}?", match.Name].Value,
-                yesText: Loc["Attach receipt"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+            var dialog = await Dialogs.ShowAsync<ReceiptMatchDialog>(Loc["Review receipt match"].Value,
+                new DialogParameters<ReceiptMatchDialog> { { x => x.Match, match } },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+            if (await dialog.Result is not { Canceled: false, Data: bool attach }) return;
+            if (!attach)
+            {
+                if (await Errors.TryAsync(() => Client.DismissReceiptInboxMatchAsync(row.Id, match.Id), Loc["Could not dismiss match."].Value))
+                    await Load();
+                return;
+            }
             if (await Errors.TryAsync(async () => await Client.FileReceiptInboxAsync(row.Id,
                     new FileReceiptInboxRequest { ExpenseId = match.Id }), Loc["Could not file receipt."].Value))
             {
@@ -316,7 +351,7 @@ else if (_rows is not null)
         }
         finally { _busy = false; }
     }
-    private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion suggestion)
+    private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion? suggestion)
     {
         if (_busy) return;
         _busy = true;
@@ -328,7 +363,7 @@ else if (_rows is not null)
                 new DialogParameters<CreateTransactionDialog>
                 {
                     { x => x.InboxReceipt, row.Receipt }, { x => x.InboxCurrency, row.Currency },
-                    { x => x.SelectedGroupId, suggestion.IsPersonal ? null : suggestion.GroupId },
+                    { x => x.SelectedGroupId, suggestion is { IsPersonal: false } ? suggestion.GroupId : null },
                     { x => x.InboxSuggestion, suggestion }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
             if (await dialog.Result is not { Canceled: false, Data: CreateTransactionRequest request }) return;
@@ -376,6 +411,16 @@ else if (_rows is not null)
                     var uploaded = await Client.UploadInboxReceiptFileAsync(id, new FileParameter(stream, file.Name, file.ContentType));
                     singleReceiptId = uploaded.ReceiptId ?? id;
                     alreadyExists = singleReceiptId != id;
+                    if (!alreadyExists)
+                    {
+                        _uploadProgress = Loc["Reading receipt…"].Value;
+                        await InvokeAsync(StateHasChanged);
+                        await Errors.TryAsync(async () =>
+                        {
+                            var draft = await Client.TranscribeInboxReceiptAsync(singleReceiptId.Value, uploaded.Id);
+                            await Client.SaveExtractedInboxReceiptAsync(singleReceiptId.Value, draft.Receipt);
+                        }, Loc["Could not read the receipt. You can review it and enter the details manually."].Value);
+                    }
                 }, Loc["Could not upload receipt: {0}", file.Name].Value);
                 if (!succeeded) failed++;
                 else if (alreadyExists) alreadyImported++;

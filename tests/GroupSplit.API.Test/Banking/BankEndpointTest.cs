@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
@@ -22,6 +23,7 @@ public class BankEndpointTest : IAsyncLifetime
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly FakeBankConnector _bank = new();
+    private readonly MatchDecision _decision = new();
 
     private ApiEndpointHost _host = null!;
 
@@ -32,6 +34,8 @@ public class BankEndpointTest : IAsyncLifetime
         {
             services.AddKeyedSingleton<IBankConnector>(FakeBankConnector.Name, _bank);
             services.Configure<BankingOptions>(options => options.Provider = FakeBankConnector.Name);
+            services.AddSingleton<IDecisionClient>(_decision);
+            services.PostConfigure<FilingSuggestionOptions>(options => { options.Deployment = "test"; options.Endpoint = new Uri("https://example.test/"); options.Key = "test"; });
         });
 
     public async ValueTask DisposeAsync() => await _host.DisposeAsync();
@@ -232,6 +236,63 @@ public class BankEndpointTest : IAsyncLifetime
 
         Assert.Equal(row.Id, listed.Id);
         Assert.Equal(typed.Id, Assert.Single(listed.PossibleDuplicates).TransactionId);
+    }
+
+    [Fact]
+    public async Task A_transaction_detail_is_only_visible_to_its_owner_and_includes_matches()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        var expense = await ExpenseAsync("Dinner", 10m);
+
+        var detail = await _host.Client.GetFromJsonAsync<BankTransactionResponse>($"/inbox/{row.Id}", Json, Ct);
+        Assert.NotNull(detail);
+        Assert.Equal(row.Id, detail.Id);
+        Assert.Equal(expense.Id, Assert.Single(detail.PossibleDuplicates).TransactionId);
+        await _host.Client.GetAsync($"/inbox/{row.Id}/matches", Ct);
+        Assert.Equal(0, _decision.Calls);
+
+        using var stranger = _host.ClientForAnotherUser();
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/inbox/{row.Id}", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Multiple_matches_receive_only_the_models_valid_confident_suggestion()
+    {
+        var connection = await LinkAsync();
+        var row = await RowAsync(connection);
+        await ExpenseAsync("Lunch", 10m);
+        var selected = await ExpenseAsync("Dinner", 10m);
+        _decision.Choice = selected.Id.ToString();
+        var matches = await _host.Client.GetFromJsonAsync<List<ExpenseMatchResponse>>($"/inbox/{row.Id}/matches", Json, Ct);
+        Assert.Equal(2, matches!.Count);
+        Assert.Equal(selected.Id, Assert.Single(matches, match => match.IsSuggested).TransactionId);
+        _decision.Choice = Guid.NewGuid().ToString();
+        matches = await _host.Client.GetFromJsonAsync<List<ExpenseMatchResponse>>($"/inbox/{row.Id}/matches", Json, Ct);
+        Assert.DoesNotContain(matches!, match => match.IsSuggested);
+        _decision.Fail = true;
+        matches = await _host.Client.GetFromJsonAsync<List<ExpenseMatchResponse>>($"/inbox/{row.Id}/matches", Json, Ct);
+        Assert.Equal(2, matches!.Count);
+        Assert.DoesNotContain(matches, match => match.IsSuggested);
+        _decision.Fail = false;
+        _decision.Choice = selected.Id.ToString();
+        _decision.Confidence = .2;
+        matches = await _host.Client.GetFromJsonAsync<List<ExpenseMatchResponse>>($"/inbox/{row.Id}/matches", Json, Ct);
+        Assert.DoesNotContain(matches!, match => match.IsSuggested);
+    }
+
+    private sealed class MatchDecision : IDecisionClient
+    {
+        public string Choice { get; set; } = "cannot tell";
+        public double Confidence { get; set; } = .95;
+        public int Calls { get; private set; }
+        public bool Fail { get; set; }
+        public Task<DecisionAnswer?> ChooseAsync(object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
+        {
+            Calls++;
+            if (Fail) throw new HttpRequestException("Unavailable");
+            return Task.FromResult<DecisionAnswer?>(new DecisionAnswer(Choice, Confidence));
+        }
     }
 
     [Fact]

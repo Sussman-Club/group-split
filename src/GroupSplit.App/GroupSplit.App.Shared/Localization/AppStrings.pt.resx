@@ -5559,4 +5559,226 @@
   <data name="Ignored receipts stay here until you restore or delete them." xml:space="preserve"><value>Os recibos ignorados permanecem aqui até serem restaurados ou eliminados.</value></data>
   <data name="Search merchants or items" xml:space="preserve"><value>Pesquisar lojas ou itens</value></data>
   <data name="No receipts match your filters." xml:space="preserve"><value>Nenhum recibo corresponde aos filtros.</value></data>
+  <data name="PDF preview: drag or scroll to move around" xml:space="preserve"><value>Prévia do PDF: arraste ou role para se mover</value></data>
+  <data name="Your receipts are private until you add them to an expense." xml:space="preserve"><value>Seus recibos são privados até você adicioná-los a uma despesa.</value></data>
+  <data name="Review bank transactions and add them to a group or match an expense." xml:space="preserve"><value>Revise transações bancárias e adicione-as a um grupo ou vincule-as a uma despesa.</value></data>
+  <data name="Search merchants or accounts" xml:space="preserve"><value>Buscar estabelecimentos ou contas</value></data>
+  <data name="No transactions match your search" xml:space="preserve"><value>Nenhuma transação corresponde à sua busca</value></data>
+  <data name="Try a different search." xml:space="preserve"><value>Tente outra busca.</value></data>
+  <data name="Could not read the receipt. You can review it and enter the details manually." xml:space="preserve"><value>Não foi possível ler o recibo. Você pode revisá-lo e inserir os dados manualmente.</value></data>
+  <data name="The original PDF is missing. Upload the original again to restore it." xml:space="preserve"><value>O PDF original está ausente. Envie o original novamente para restaurá-lo.</value></data>
+  <data name="Attach this receipt to {0} ({1} {2}, {3})? The expense and its current shares will stay the same. The receipt will move to Added." xml:space="preserve"><value>Anexar este recibo a {0} ({1} {2}, {3})? A despesa e suas divisões atuais permanecerão iguais. O recibo irá para Adicionados.</value></data>
+  <data name="Add original receipt" xml:space="preserve">
+    <value>Adicionar recibo original</value>
+  </data>
+  <data name="Add purchase date" xml:space="preserve">
+    <value>Adicionar data da compra</value>
+  </data>
+  <data name="Add this payment as an expense or attach it to an existing one." xml:space="preserve">
+    <value>Adicione este pagamento como despesa ou associe-o a uma existente.</value>
+  </data>
+  <data name="Attach bank transaction" xml:space="preserve">
+    <value>Associar transação bancária</value>
+  </data>
+  <data name="Attach receipt" xml:space="preserve">
+    <value>Anexar recibo</value>
+  </data>
+  <data name="Attach this receipt as evidence? The expense amount and existing shares will stay as recorded, even if this receipt has a different total." xml:space="preserve">
+    <value>Anexar este recibo como comprovativo? O valor e a divisão da despesa não serão alterados, mesmo que o total do recibo seja diferente.</value>
+  </data>
+  <data name="Attach to an existing expense to keep its current shares, or create an expense and choose who paid." xml:space="preserve">
+    <value>Associe-o a uma despesa existente para manter a divisão ou crie uma despesa e escolha quem pagou.</value>
+  </data>
+  <data name="Attach to {0} · {1} {2} · {3}" xml:space="preserve">
+    <value>Anexar a {0} · {1} {2} · {3}</value>
+  </data>
+  <data name="Attach {0} ({1} {2}, {3}) to {4}? The expense and its shares will stay the same." xml:space="preserve">
+    <value>Associar {0} ({1} {2}, {3}) a {4}? A despesa e a sua divisão não serão alteradas.</value>
+  </data>
+  <data name="Attaching keeps the expense and its shares unchanged." xml:space="preserve">
+    <value>Ao anexar, a despesa e a sua divisão não serão alteradas.</value>
+  </data>
+  <data name="Back to bank transactions" xml:space="preserve">
+    <value>Voltar às transações bancárias</value>
+  </data>
+  <data name="Back to receipts" xml:space="preserve">
+    <value>Voltar aos recibos</value>
+  </data>
+  <data name="Bank" xml:space="preserve">
+    <value>Banco</value>
+  </data>
+  <data name="Bank description" xml:space="preserve">
+    <value>Descrição do banco</value>
+  </data>
+  <data name="Bank transaction - Group Split" xml:space="preserve">
+    <value>Transação bancária - Group Split</value>
+  </data>
+  <data name="Bank transaction status" xml:space="preserve">
+    <value>Estado da transação bancária</value>
+  </data>
+  <data name="Choose another photo or PDF to attach." xml:space="preserve">
+    <value>Escolha outra fotografia ou PDF para anexar.</value>
+  </data>
+  <data name="Choose no more than 100 receipts at a time." xml:space="preserve">
+    <value>Escolha no máximo 100 recibos de cada vez.</value>
+  </data>
+  <data name="Could not check for matching expenses." xml:space="preserve">
+    <value>Não foi possível procurar despesas correspondentes.</value>
+  </data>
+  <data name="Could not dismiss match." xml:space="preserve">
+    <value>Não foi possível descartar a correspondência.</value>
+  </data>
+  <data name="Could not file receipt." xml:space="preserve">
+    <value>Não foi possível adicionar o recibo.</value>
+  </data>
+  <data name="Could not load receipt." xml:space="preserve">
+    <value>Não foi possível carregar o recibo.</value>
+  </data>
+  <data name="Could not load receipts." xml:space="preserve">
+    <value>Não foi possível carregar os recibos.</value>
+  </data>
+  <data name="Could not load transaction." xml:space="preserve">
+    <value>Não foi possível carregar a transação.</value>
+  </data>
+  <data name="Could not update receipt." xml:space="preserve">
+    <value>Não foi possível atualizar o recibo.</value>
+  </data>
+  <data name="Could not upload receipt: {0}" xml:space="preserve">
+    <value>Não foi possível carregar o recibo: {0}</value>
+  </data>
+  <data name="Create another" xml:space="preserve">
+    <value>Criar outra</value>
+  </data>
+  <data name="Create expense" xml:space="preserve">
+    <value>Criar despesa</value>
+  </data>
+  <data name="Delete private receipt" xml:space="preserve">
+    <value>Eliminar recibo privado</value>
+  </data>
+  <data name="Delete receipt" xml:space="preserve">
+    <value>Eliminar recibo</value>
+  </data>
+  <data name="Delete this private receipt and its source files?" xml:space="preserve">
+    <value>Eliminar este recibo privado e os seus ficheiros originais?</value>
+  </data>
+  <data name="Edit receipt details and items" xml:space="preserve">
+    <value>Editar detalhes e artigos do recibo</value>
+  </data>
+  <data name="File receipt" xml:space="preserve">
+    <value>Adicionar recibo a uma despesa</value>
+  </data>
+  <data name="Find an expense" xml:space="preserve">
+    <value>Procurar uma despesa</value>
+  </data>
+  <data name="Find existing expense" xml:space="preserve">
+    <value>Procurar despesa existente</value>
+  </data>
+  <data name="Finished: {0} uploaded, {1} already in your inbox, {2} failed." xml:space="preserve">
+    <value>Concluído: {0} carregados, {1} já estavam na caixa de entrada e {2} falharam.</value>
+  </data>
+  <data name="Ignore transaction" xml:space="preserve">
+    <value>Ignorar transação</value>
+  </data>
+  <data name="Import from a store" xml:space="preserve">
+    <value>Importar de uma loja</value>
+  </data>
+  <data name="Importing receipt {0} of {1}…" xml:space="preserve">
+    <value>A importar recibo {0} de {1}…</value>
+  </data>
+  <data name="Inbox - Group Split" xml:space="preserve">
+    <value>Caixa de entrada - Group Split</value>
+  </data>
+  <data name="Is this receipt for the expense below?" xml:space="preserve">
+    <value>Este recibo corresponde à despesa abaixo?</value>
+  </data>
+  <data name="Keep a receipt now, then add it to an expense when you are ready." xml:space="preserve">
+    <value>Guarde um recibo agora e adicione-o a uma despesa quando quiser.</value>
+  </data>
+  <data name="Manage transaction" xml:space="preserve">
+    <value>Gerir transação</value>
+  </data>
+  <data name="Manual entry" xml:space="preserve">
+    <value>Entrada manual</value>
+  </data>
+  <data name="New receipt" xml:space="preserve">
+    <value>Novo recibo</value>
+  </data>
+  <data name="Photo" xml:space="preserve">
+    <value>Fotografia</value>
+  </data>
+  <data name="Possible duplicate" xml:space="preserve">
+    <value>Possível duplicado</value>
+  </data>
+  <data name="Possible expense matches" xml:space="preserve">
+    <value>Possíveis despesas correspondentes</value>
+  </data>
+  <data name="Private" xml:space="preserve">
+    <value>Privado</value>
+  </data>
+  <data name="Read items from source" xml:space="preserve">
+    <value>Ler artigos do original</value>
+  </data>
+  <data name="Read the original receipt or enter its details to see the itemized bill." xml:space="preserve">
+    <value>Leia o recibo original ou introduza os seus dados para ver o detalhe.</value>
+  </data>
+  <data name="Receipt details" xml:space="preserve">
+    <value>Detalhes do recibo</value>
+  </data>
+  <data name="Receipts - Group Split" xml:space="preserve">
+    <value>Recibos - Group Split</value>
+  </data>
+  <data name="Restore transaction" xml:space="preserve">
+    <value>Restaurar transação</value>
+  </data>
+  <data name="Review and add expense" xml:space="preserve">
+    <value>Rever e adicionar despesa</value>
+  </data>
+  <data name="Review extracted details" xml:space="preserve">
+    <value>Rever dados extraídos</value>
+  </data>
+  <data name="Review matches" xml:space="preserve">
+    <value>Rever correspondências</value>
+  </data>
+  <data name="Review receipt - Group Split" xml:space="preserve">
+    <value>Rever recibo - Group Split</value>
+  </data>
+  <data name="Review receipt match" xml:space="preserve">
+    <value>Rever correspondência do recibo</value>
+  </data>
+  <data name="Review suggested group" xml:space="preserve">
+    <value>Rever grupo sugerido</value>
+  </data>
+  <data name="Review: {0}" xml:space="preserve">
+    <value>Rever: {0}</value>
+  </data>
+  <data name="Same day · same amount" xml:space="preserve">
+    <value>Mesmo dia · mesmo valor</value>
+  </data>
+  <data name="Save currency" xml:space="preserve">
+    <value>Guardar moeda</value>
+  </data>
+  <data name="Suggested destination" xml:space="preserve">
+    <value>Destino sugerido</value>
+  </data>
+  <data name="Suggested match" xml:space="preserve">
+    <value>Correspondência sugerida</value>
+  </data>
+  <data name="These matching expenses may already record this purchase. Create another expense?" xml:space="preserve">
+    <value>Estas despesas correspondentes podem já registar esta compra. Criar outra despesa?</value>
+  </data>
+  <data name="This transaction is attached to an expense." xml:space="preserve">
+    <value>Esta transação está associada a uma despesa.</value>
+  </data>
+  <data name="This transaction is ignored." xml:space="preserve">
+    <value>Esta transação está ignorada.</value>
+  </data>
+  <data name="View the itemized receipt" xml:space="preserve">
+    <value>Ver o detalhe do recibo</value>
+  </data>
+  <data name="Your receipts start here" xml:space="preserve">
+    <value>Os seus recibos começam aqui</value>
+  </data>
+  <data name="{0} day{1} apart · same amount" xml:space="preserve">
+    <value>{0} dia{1} de diferença · mesmo valor</value>
+  </data>
 </root>

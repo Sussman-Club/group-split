@@ -5,11 +5,13 @@
 const currentTheme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 const runtime = chrome.runtime;
 const openEvent = 'groupsplit:open-receipt-importer';
+const windowEvent = 'groupsplit:open-receipt-importer-window';
 const themeObserver = new MutationObserver(() => send('groupsplit-theme-changed'));
 
 function stopBridge() {
   themeObserver.disconnect();
   window.removeEventListener(openEvent, openImporter);
+  window.removeEventListener(windowEvent, openImporterWindow);
 }
 
 function send(type, onResponse) {
@@ -28,11 +30,18 @@ function send(type, onResponse) {
 function openImporter() {
   send('open-receipt-importer', response => {
     if (!response?.opened) return;
-    window.dispatchEvent(new Event('groupsplit:receipt-importer-opened'));
+    window.dispatchEvent(new CustomEvent('groupsplit:receipt-importer-opened', { detail: response.url }));
+  });
+}
+
+function openImporterWindow() {
+  send('open-receipt-importer-window', response => {
+    if (response?.opened) window.dispatchEvent(new Event('groupsplit:receipt-importer-window-opened'));
   });
 }
 
 window.addEventListener(openEvent, openImporter);
+window.addEventListener(windowEvent, openImporterWindow);
 themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
 runtime.onMessage.addListener((message, sender) => {

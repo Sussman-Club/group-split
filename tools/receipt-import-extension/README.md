@@ -3,14 +3,17 @@
 Load this folder as an unpacked extension in Chrome or Edge. Open the
 GroupSplit receipts inbox and select **Import from a store**. Choose Amazon
 or Costco, select Connect store, and sign in yourself. For Amazon, open your
-orders. For Costco, the importer opens Orders & Purchases and selects
-In-Warehouse. Return to the importer tab, choose dates, and find receipts.
+orders. For Costco, the importer opens Orders & Purchases and selects the
+chosen warehouse or online view. Return to the importer and find receipts.
 Review the list before saving receipts as PDFs and uploading them to the
 inbox. Keep the GroupSplit tab open and signed in.
 
 The inbox shortcut requires this extension to be reloaded after updates and
 the receipts page to be refreshed. If it cannot detect the extension, it
 shows installation guidance and leaves the normal file upload available.
+The AppHost parameter `receipt-importer-extension-ids` lists permitted browser
+extension IDs, separated by commas. Add the ID for each browser store or local
+unpacked extension you use; IDs can differ between installations.
 
 This early preview checks available Costco warehouse periods that may overlap
 the requested dates, and pages through each period. Costco PDFs are printouts

@@ -20,4 +20,4 @@ public sealed record FileReceiptInboxRequest
     public bool CreateAnyway { get; init; }
 }
 
-public sealed record ReceiptExpenseCandidate(Guid Id, string Name, decimal Amount, string Currency, DateTimeOffset DateTime);
+public sealed record ReceiptExpenseCandidate(Guid Id, string Name, decimal Amount, string Currency, DateTimeOffset DateTime, bool HasReceipt = false);

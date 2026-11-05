@@ -310,6 +310,15 @@
     // an expense recorded at 12:38 in New York was stored eight hours ahead.
     private DateTime? _selectedDate;
     private TimeSpan? _selectedTime;
+    private string? _initialDraft;
+
+    private string DraftState() => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        _model.Name, _model.Description, _model.Amount, _model.PaidByUserId,
+        _model.CategoryId, _model.MerchantId, _model.SplitRuleId, _model.Splits,
+        GroupId = _groupId, Currency = _currency, Date = _selectedDate, Time = _selectedTime,
+        MerchantName = _pendingMerchantName, Receipt = _receipt, ReceiptFile = _receiptFile?.Name
+    });
 
     private IReadOnlyList<GroupResponse> _groups = [];
     private IReadOnlyList<CategoryResponse> _categories = [];
@@ -719,6 +728,7 @@
             await ApplyDefaultReceiptRuleAsync();
             await RefreshPreviewAsync();
         }
+        _initialDraft = DraftState();
     }
 
     /// <summary>
@@ -1124,7 +1134,7 @@
     private async Task Cancel()
     {
         if (_readingReceipt) return;
-        if (_model.Amount != 0 || !string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrWhiteSpace(_model.Description) || _receiptFile is not null)
+        if (_initialDraft is not null && DraftState() != _initialDraft)
         {
             var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Discard changes?"].Value,
                 new DialogParameters<ConfirmationDialog>

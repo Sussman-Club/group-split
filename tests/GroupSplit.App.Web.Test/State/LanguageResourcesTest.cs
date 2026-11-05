@@ -10,6 +10,18 @@ namespace GroupSplit.App.Web.Test.State;
 public sealed class LanguageResourcesTest
 {
     [Theory]
+    [InlineData("es", "Review receipt match", "Revisar coincidencia del recibo")]
+    [InlineData("pt", "Review receipt match", "Rever correspondência do recibo")]
+    [InlineData("es", "Find an expense", "Buscar un gasto")]
+    [InlineData("pt", "Find an expense", "Procurar uma despesa")]
+    [InlineData("es", "Review matches", "Revisar coincidencias")]
+    [InlineData("pt", "Review matches", "Rever correspondências")]
+    public void Inbox_review_actions_have_translations(string language, string key, string expected)
+    {
+        var manager = new ResourceManager(typeof(AppStrings));
+        Assert.Equal(expected, manager.GetResourceSet(CultureInfo.GetCultureInfo(language), true, false)!.GetString(key));
+    }
+    [Theory]
     [InlineData("Tickets", "Tickets")]
     [InlineData("Waiting for customer", "Pendiente de respuesta del usuario")]
     [InlineData("Ticket management", "Gestión del ticket")]

@@ -1,4 +1,5 @@
 import { getDocument, GlobalWorkerOptions } from "../vendor/pdfjs/pdf.min.mjs";
+import { enablePdfPan } from "./pdf-pan.js";
 GlobalWorkerOptions.workerSrc = new URL("../vendor/pdfjs/pdf.worker.min.mjs", import.meta.url).href;
 const viewers = new WeakMap();
 
@@ -10,13 +11,14 @@ export async function mount(host, url, labels) {
     const status = host.querySelector("[data-pdf-status]");
     const pageLabel = host.querySelector("[data-pdf-page]");
     const viewportHost = host.querySelector(".gs-pdf-viewport");
+    state.stopPanning = enablePdfPan(viewportHost);
     const buttons = [...host.querySelectorAll("button[data-pdf-action]")];
     function controls() {
         for (const button of buttons) {
             const action = button.dataset.pdfAction;
             button.disabled = !state.pdf || (action === "previous" && state.page <= 1) ||
                 (action === "next" && state.page >= state.pdf.numPages) ||
-                (action === "out" && state.zoom <= .75) || (action === "in" && state.zoom >= 2.5);
+                (action === "out" && state.zoom <= .75) || (action === "in" && state.zoom >= 4);
         }
         if (state.pdf) pageLabel.textContent = labels.page.replace("{0}", state.page).replace("{1}", state.pdf.numPages);
     }
@@ -25,12 +27,14 @@ export async function mount(host, url, labels) {
         status.hidden = false;
         status.textContent = error?.name === "PasswordException"
             ? labels.password
-            : labels.failed;
+            : error?.name === "MissingPDFException" ? labels.missing : labels.failed;
         canvas.hidden = true;
         pageLabel.textContent = labels.unavailable;
     }
     function render() {
         const revision = ++state.revision;
+        const focus = state.pendingFocus;
+        state.pendingFocus = null;
         state.renderTask?.cancel();
         state.queue = state.queue.catch(() => {}).then(async () => {
             if (state.disposed || !state.pdf || revision !== state.revision) return;
@@ -47,6 +51,12 @@ export async function mount(host, url, labels) {
             canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
             canvas.style.width = `${Math.floor(viewport.width)}px`;
             canvas.style.height = `${Math.floor(viewport.height)}px`;
+            if (focus) {
+                const frame = viewportHost.getBoundingClientRect();
+                const pageBounds = canvas.getBoundingClientRect();
+                viewportHost.scrollLeft += pageBounds.left + focus.x * pageBounds.width - (frame.left + viewportHost.clientWidth / 2);
+                viewportHost.scrollTop += pageBounds.top + focus.y * pageBounds.height - (frame.top + viewportHost.clientHeight / 2);
+            }
             canvas.hidden = false;
             canvas.setAttribute("aria-label", labels.pdfPage.replace("{0}", state.page).replace("{1}", state.pdf.numPages));
             status.hidden = false;
@@ -64,10 +74,18 @@ export async function mount(host, url, labels) {
     state.click = event => {
         const button = event.target.closest("button[data-pdf-action]");
         if (!button || !state.pdf || button.disabled) return;
+        if (["in", "out", "fit"].includes(button.dataset.pdfAction)) {
+            const frame = viewportHost.getBoundingClientRect();
+            const page = canvas.getBoundingClientRect();
+            if (page.width && page.height) state.pendingFocus = {
+                x: Math.max(0, Math.min(1, (frame.left + viewportHost.clientWidth / 2 - page.left) / page.width)),
+                y: Math.max(0, Math.min(1, (frame.top + viewportHost.clientHeight / 2 - page.top) / page.height))
+            };
+        }
         switch (button.dataset.pdfAction) {
             case "previous": state.page--; break;
             case "next": state.page++; break;
-            case "in": state.zoom = Math.min(2.5, state.zoom + .25); break;
+            case "in": state.zoom = Math.min(4, state.zoom + .25); break;
             case "out": state.zoom = Math.max(.75, state.zoom - .25); break;
             case "fit": state.zoom = 1; break;
         }
@@ -101,6 +119,7 @@ export async function dispose(host) {
     state.disposed = true;
     state.revision++;
     state.observer?.disconnect();
+    state.stopPanning?.();
     host.removeEventListener("click", state.click);
     state.renderTask?.cancel();
     try { await state.loadingTask?.destroy(); } catch { /* The document may still be loading. */ }

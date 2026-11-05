@@ -111,6 +111,7 @@ public sealed class InboxService(
         // person narrowing to a month means the whole month, last day included.
         var after = filter?.From;
         var before = filter?.To;
+        var search = string.IsNullOrWhiteSpace(filter?.Search) ? null : filter.Search.Trim().ToLowerInvariant();
 
         // Against the authorized date where the provider knows it, which is the date the row
         // shows and therefore the one somebody is filtering by. A card charge often posts
@@ -121,7 +122,10 @@ public sealed class InboxService(
         return Task.FromResult(Owned().Where(row =>
             row.Status == wanted &&
             (after == null || (row.AuthorizedDate ?? row.Date) >= after) &&
-            (before == null || (row.AuthorizedDate ?? row.Date) <= before)));
+            (before == null || (row.AuthorizedDate ?? row.Date) <= before) &&
+            (search == null || row.Description.ToLower().Contains(search) ||
+             (row.MerchantName != null && row.MerchantName.ToLower().Contains(search)) ||
+             row.Account.Name.ToLower().Contains(search))));
     }
 
     public async Task<InboxSummaryResponse> Summary(bool withDuplicates = false,

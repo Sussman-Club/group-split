@@ -424,7 +424,7 @@ Imported bank rows waiting to be filed.
 | `inbox matches <row-id>` | List the expenses already recorded that an imported row could be. |
 | `inbox suggest <row-id>` | Suggest a group and category for a row. `--receipt-item` (repeatable) and `--receipt-merchant` pass what a read receipt says. Files nothing. |
 | `inbox attachments list <row-id>` | List source receipt files attached to a pending bank row. |
-| `inbox attachments upload <row-id> <file>` | Attach a source receipt file while the row is still pending. |
+| `inbox attachments upload <row-id> <file>` | Legacy pending-row attachment; prefer attaching the receipt to the expense after filing or linking. |
 | `inbox attachments download <row-id> <attachment-id> <destination>` | Download a pending source file to a new local path. |
 | `inbox attachments transcribe <row-id> <attachment-id>` | Read a pending source file into an editable draft. Saves no itemised bill or expense. |
 | `inbox attachments delete <row-id> <attachment-id>` | Delete a pending row's source file. Confirmation required. |

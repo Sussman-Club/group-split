@@ -46,9 +46,9 @@ public class InboxLoadMoreTest
 
         _inbox
             .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<DateOnly?>(),
-                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((InboxStatus? _, DateOnly? _, DateOnly? _, string _, bool? _, int? page, int? pageSize,
+            .ReturnsAsync((InboxStatus? _, DateOnly? _, DateOnly? _, string _, string _, bool? _, int? page, int? pageSize,
                 CancellationToken _) =>
             {
                 // As the server applies it: clamped to its ceiling, whatever was asked.
