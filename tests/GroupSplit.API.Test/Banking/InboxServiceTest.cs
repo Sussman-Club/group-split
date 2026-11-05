@@ -398,6 +398,19 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal("spent-in-september", Assert.Single(september).ProviderTransactionId);
     }
 
+    [Fact]
+    public async Task Search_applies_to_all_statuses_before_pagination()
+    {
+        await Row(10m, merchant: "Amazon", description: "ONLINE ORDER", providerId: "amazon");
+        var ignored = await Row(20m, merchant: "Lidl", description: "WEEKLY SHOP", providerId: "lidl");
+        await SetStatus(ignored, BankTransactionStatus.Ignored);
+
+        Assert.Equal("amazon", Assert.Single(await Listed(new InboxFilter(Search: "amazon"))).ProviderTransactionId);
+        Assert.Equal("lidl", Assert.Single(await Listed(new InboxFilter(InboxStatus.Ignored, Search: "weekly"))).ProviderTransactionId);
+        Assert.Single(await Listed(new InboxFilter(Search: "EVERYDAY")));
+        Assert.Empty(await Listed(new InboxFilter(Search: "not found")));
+    }
+
     private async Task<List<BankTransaction>> Listed(InboxFilter filter) =>
         await (await Inbox.List(filter, Ct)).ToListAsync(Ct);
 

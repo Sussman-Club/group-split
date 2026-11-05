@@ -1033,7 +1033,33 @@
         _model.Splits = null;
         _redivide = true;
 
+        if (splitRuleId is not null && splitRuleId == _billRuleId)
+            await FillMissingReceiptRulesAsync();
         await RefreshPreviewAsync();
+    }
+
+    private async Task FillMissingReceiptRulesAsync()
+    {
+        if (_receipt is not { } bill || _model.GroupId is not { } groupId || groupId != OriginalGroupId ||
+            !bill.Items.Any(item => item.SplitRuleVersionId is null)) return;
+
+        var listed = await SplitRules.ForGroupAsync(groupId);
+        if (listed is null) return;
+        var visible = listed.VisibleToMembers(_members.Select(member => member.Id)).Select(rule => rule.Id).ToHashSet();
+        var groupRule = _groups.FirstOrDefault(group => group.Id == groupId)?.DefaultSplitRuleId;
+        foreach (var id in new[] { FiledUnder?.RuleId, groupRule, _evenRuleId }.OfType<Guid>().Distinct())
+        {
+            if (!visible.Contains(id) || id == _billRuleId) continue;
+            var rule = await SplitRules.GetAsync(id);
+            if (rule is null || rule.Definition is ItemizedSplitRuleDto) continue;
+            foreach (var item in bill.Items.Where(item => item.SplitRuleVersionId is null))
+            {
+                var updated = await Receipts.SetRuleAsync(Original.Id, item.Id, rule.VersionId);
+                if (updated is null) return;
+                _receipt = updated;
+            }
+            return;
+        }
     }
 
     /// <summary>
@@ -1219,7 +1245,7 @@
     private async Task Cancel()
     {
         if (_transcribingAttachmentId is not null) return;
-        if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
+        if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || Clock.Edited(Original.DateTime, _selectedDate, _selectedTime) != Original.DateTime || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
         {
             var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Discard changes?"].Value,
                 new DialogParameters<ConfirmationDialog>

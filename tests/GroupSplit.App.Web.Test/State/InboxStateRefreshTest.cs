@@ -64,11 +64,11 @@ public class InboxStateRefreshTest
 
         _inboxClient
             .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<DateOnly?>(),
-                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<bool?>(),
+                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .Callback((InboxStatus? _, DateOnly? from, DateOnly? to, string _, bool? _, int? _, int? _,
+            .Callback((InboxStatus? _, DateOnly? from, DateOnly? to, string _, string _, bool? _, int? _, int? _,
                 CancellationToken _) => _asked = new DayBounds(from, to))
-            .ReturnsAsync((InboxStatus? status, DateOnly? from, DateOnly? to, string _, bool? _, int? _, int? _,
+            .ReturnsAsync((InboxStatus? status, DateOnly? from, DateOnly? to, string _, string _, bool? _, int? _, int? _,
                 CancellationToken _) =>
             {
                 // The server narrows by the day the row shows, so the fake does too --

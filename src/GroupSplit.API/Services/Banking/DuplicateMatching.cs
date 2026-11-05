@@ -19,8 +19,7 @@ public sealed record SpendingFacts(decimal Amount, string Currency, DateOnly On)
 /// An expense that could already be the same money as an imported row, and how close it is.
 /// </summary>
 /// <param name="AmountDifference">
-/// Always zero or more. A card can settle for more than the receipt -- a tip added
-/// afterwards -- so a difference is expected rather than disqualifying.
+/// Zero for an automatically suggested match.
 /// </param>
 /// <param name="DaysApart">
 /// How far apart the two dates are. A card charge posts days after the meal.
@@ -39,7 +38,7 @@ public sealed record DuplicateMatch(
 /// </summary>
 /// <remarks>
 /// Everything that decides it is in <see cref="DuplicateMatcher"/> and nowhere else, so the
-/// window and the tolerance can be tuned in one file without hunting for callers that
+/// date window and amount rule can be tuned in one file without hunting for callers that
 /// assumed the old numbers. Callers get candidates and say what a person chose; they never
 /// ask what the rule is.
 /// <para>
@@ -96,27 +95,7 @@ public sealed class DuplicateMatcher(
     /// A window that only caught the same day would miss most real duplicates, which is the
     /// whole problem this exists for.
     /// </remarks>
-    private const int WindowDays = 5;
-
-    /// <summary>
-    /// How far the two amounts may be apart, as a share of the smaller one, for a match
-    /// that is <see cref="MatchConfidence.Possible"/>. A tip added after the receipt was
-    /// written is the usual reason they differ.
-    /// </summary>
-    /// <remarks>
-    /// This decides nothing on its own any more. A difference inside it also has to have a
-    /// shape a duplicate could have -- see
-    /// <see cref="TheDifferenceHasAShapeADuplicateCouldHave"/> -- and the two must not name
-    /// different places. Measured against real spending, the tolerance alone lets 11.5% of
-    /// unrelated pairs through; with those two conditions it is 3.9%.
-    /// </remarks>
-    private const decimal RelativeTolerance = 0.25m;
-
-    /// <summary>
-    /// The same, as a flat amount, so small sums are not held to a tolerance of pennies.
-    /// Whichever of the two is more generous applies.
-    /// </summary>
-    private const decimal AbsoluteTolerance = 1.00m;
+    private const int WindowDays = 2;
 
     /// <summary>
     /// How many suggestions one row is worth raising. A person deciding between five
@@ -129,19 +108,11 @@ public sealed class DuplicateMatcher(
     /// money, or null when they could not be.
     /// </summary>
     /// <remarks>
-    /// Money of the same currency, inside the date window, and then the amount decides the
-    /// grade. Agreeing to the cent is a different claim from being within a quarter, and
-    /// treating them alike is what made the suggestion wrong more often than right.
+    /// Money of the same currency and amount, inside the date window, is a candidate.
     /// <para>
     /// The payer is not compared here because it is a condition on the *sets* both sides are
     /// drawn from -- the caller's own bank rows against expenses the caller paid -- and
     /// enforced there.
-    /// </para>
-    /// <para>
-    /// The bank's merchant *text* is still not a condition: "Dinner" against
-    /// <c>SQ *TRATTORIA 4421</c> is the ordinary case, so a name test would refuse most real
-    /// duplicates. What is a condition is the merchant both sides resolved to, which is a
-    /// different thing -- see <see cref="NameDifferentPlaces"/>.
     /// </para>
     /// </remarks>
     private static MatchConfidence? Grade(BankTransaction row, Transaction expense)
@@ -154,78 +125,12 @@ public sealed class DuplicateMatcher(
         if (DaysBetween(spent, recorded) > WindowDays)
             return null;
 
-        // The same money to the cent. This is the only claim worth putting in front of
-        // somebody who has not touched the row, and it stands even against a merchant that
-        // disagrees: one shop can end up as two -- a chain and its subscription arm, a shop
-        // and its parent -- and refusing a real duplicate is the expensive mistake.
-        if (spent.Amount == recorded.Amount)
-            return MatchConfidence.Confident;
-
-        if (NameDifferentPlaces(row, expense))
-            return null;
-
-        return WithinTolerance(spent, recorded)
-               && TheDifferenceHasAShapeADuplicateCouldHave(row, spent, recorded)
-            ? MatchConfidence.Possible
-            : null;
-    }
-
-    /// <summary>Close enough in amount to be worth asking about at all.</summary>
-    private static bool WithinTolerance(SpendingFacts row, SpendingFacts expense)
-    {
-        var difference = Math.Abs(row.Amount - expense.Amount);
-
-        return difference <= AbsoluteTolerance
-               || difference <= RelativeTolerance * Math.Min(Math.Abs(row.Amount), Math.Abs(expense.Amount));
+        // Only identical amounts are suggested; the date window still accounts for posting delays.
+        return spent.Amount == recorded.Amount ? MatchConfidence.Confident : null;
     }
 
     /// <summary>
-    /// Whether the direction of the difference is one a duplicate could actually produce.
-    /// </summary>
-    /// <remarks>
-    /// The tolerance exists for a tip, and a tip only ever makes the card charge *larger*
-    /// than the figure somebody wrote down. Reading the tolerance both ways cost half of
-    /// everything the rule raised -- and both false suggestions the seeded inbox produces are
-    /// of the shape this refuses, a bank charging less than the expense it was offered
-    /// against.
-    /// <para>
-    /// Two things do explain a charge coming in lower. A <b>pending</b> authorisation is
-    /// often taken before the tip is added, so for a pending row the lower charge is the
-    /// expected one. And people round when they type: an expense on a whole unit may be
-    /// above the charge and still be the same money.
-    /// </para>
-    /// </remarks>
-    private static bool TheDifferenceHasAShapeADuplicateCouldHave(
-        BankTransaction row, SpendingFacts spent, SpendingFacts recorded)
-    {
-        if (spent.Amount > recorded.Amount)
-            return true;
-
-        if (row.Pending)
-            return true;
-
-        return recorded.Amount == Math.Truncate(recorded.Amount);
-    }
-
-    /// <summary>
-    /// Both sides know where the money went, and it is not the same place.
-    /// </summary>
-    /// <remarks>
-    /// The one condition the merchant is allowed to be, and only against a
-    /// <see cref="MatchConfidence.Possible"/> match. A streaming subscription offered against
-    /// a coffee run is settled by this and by nothing else in the rule.
-    /// <para>
-    /// One side knowing and the other not says nothing: most expenses somebody types have no
-    /// merchant and never will, so silence here is not disagreement.
-    /// </para>
-    /// </remarks>
-    private static bool NameDifferentPlaces(BankTransaction row, Transaction expense) =>
-        row.MerchantId is { } place && expense.MerchantId is { } other && place != other;
-
-    /// <summary>
-    /// Both sides name the same place. Not a condition -- a ranking signal, and a better one
-    /// than a nearer amount, because a coincidence a few cents closer should not outrank the
-    /// genuine duplicate with a tip on it.
+    /// Both sides name the same place. Used to rank otherwise eligible candidates.
     /// </summary>
     private static bool NameTheSamePlace(BankTransaction row, Transaction expense) =>
         row.MerchantId is { } place && expense.MerchantId == place;
@@ -431,18 +336,11 @@ public sealed class DuplicateMatcher(
         SpendingFacts Facts);
 
     /// <summary>
-    /// Best first: a confident match before a possible one, then the place agreeing, then
-    /// nearest in amount, then nearest in date, and only then the bank's own text.
+    /// Best first: place agreement, date proximity, and the bank's own text.
     /// </summary>
     /// <remarks>
-    /// The place outranks a nearer amount deliberately. Ordering by closeness alone let a
-    /// coincidence a few cents nearer outrank the genuine duplicate with a tip on it -- and
-    /// since the inbox leads with the best candidate, that did not merely mis-sort the list,
-    /// it kept the real match off the screen.
-    /// <para>
     /// The order candidates are offered in whichever side is asking, so the two directions
     /// cannot drift apart.
-    /// </para>
     /// </remarks>
     private static IOrderedEnumerable<Graded<T>> BestFirst<T>(IEnumerable<Graded<T>> candidates,
         SpendingFacts against) =>

@@ -806,6 +806,13 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.HasIndex(row => new { row.LinkedAccountId, row.Status, row.Date });
         });
 
+        modelBuilder.Entity<ReceiptMatchDismissal>(entity =>
+        {
+            entity.HasOne(item => item.Receipt).WithMany().HasForeignKey(item => item.ReceiptId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(item => item.Expense).WithMany().HasForeignKey(item => item.ExpenseId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(item => new { item.ReceiptId, item.ExpenseId }).IsUnique();
+        });
+
         modelBuilder.Entity<BankMatchDismissal>(entity =>
         {
             entity.Property(dismissal => dismissal.DismissedAt).IsRequired();

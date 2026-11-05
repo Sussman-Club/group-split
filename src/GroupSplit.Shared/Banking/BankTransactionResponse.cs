@@ -38,7 +38,8 @@ public enum InboxStatus
 public record InboxFilter(
     InboxStatus Status = InboxStatus.New,
     DateOnly? From = null,
-    DateOnly? To = null);
+    DateOnly? To = null,
+    string? Search = null);
 
 /// <summary>
 /// How many rows are waiting, for the badge in the nav.

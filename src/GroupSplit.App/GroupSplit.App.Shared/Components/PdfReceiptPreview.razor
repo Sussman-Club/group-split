@@ -17,7 +17,7 @@
         <a class="gs-receipt-action gs-btn-quiet" href="@DownloadUrl" download="@FileName">@Loc["Download PDF"]</a>
     </div>
     <p data-pdf-status role="status" class="gs-pdf-status" hidden="@_error">@Loc["Loading the original PDF..."]</p>
-    <div class="gs-pdf-viewport" hidden="@_error"><canvas role="img" aria-label="@Loc["PDF page"]"></canvas></div>
+    <div class="gs-pdf-viewport" tabindex="0" role="region" aria-label="@Loc["PDF preview: drag or scroll to move around"]" hidden="@_error"><canvas role="img" aria-label="@Loc["PDF page"]"></canvas></div>
     @if (_error)
     {
         <p class="gs-pdf-status" role="alert">@Loc["The PDF preview couldn't load. Download the original to view it."]</p>
@@ -46,6 +46,7 @@
                 page = Loc["Page {0} of {1}"].Value,
                 pdfPage = Loc["PDF page {0} of {1}"].Value,
                 password = Loc["This PDF is password-protected. Download the original to open it."].Value,
+                missing = Loc["The original PDF is missing. Upload the original again to restore it."].Value,
                 failed = Loc["The PDF preview couldn't load. Download the original to view it."].Value,
                 unavailable = Loc["Preview unavailable"].Value,
                 rendering = Loc["Rendering PDF page..."].Value

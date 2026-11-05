@@ -65,6 +65,8 @@ public sealed record ExpenseMatchResponse(
     int DaysApart,
     MatchConfidence Confidence)
 {
+    /// <summary>A model-selected candidate for review, never an automatic attachment.</summary>
+    public bool IsSuggested { get; init; }
     /// <summary>The same money to the cent, and so worth interrupting somebody with.</summary>
     public bool IsConfident => Confidence == MatchConfidence.Confident;
 
