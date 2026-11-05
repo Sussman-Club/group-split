@@ -34,22 +34,12 @@ it for them.
 Read the **groupsplit** skill first: the JSON contract, the exit codes and the confirmation
 protocol all apply here unchanged.
 
-## Attach a receipt before filing
+## Attach a receipt to the expense
 
-A pending bank row may carry a source receipt while the person is still deciding which
-group and split rule it belongs to:
-
-```bash
-groupsplit inbox attachments upload <row-id> ./receipt.pdf
-groupsplit inbox attachments list <row-id> --json
-groupsplit inbox attachments transcribe <row-id> <attachment-id> --json
-```
-
-Uploading and transcribing do not file the row, choose a group, save an itemised bill, or
-change shares. The transcription is a draft for review. Once the row is filed or linked,
-the pending attachments move to the resulting expense; use `groupsplit receipts attachments`
-and `groupsplit receipts set` there to continue. `inbox attachments delete` is confirmation
-gated, and `inbox attachments download` writes a copy to a new local path.
+File or link the bank row to an expense first, then use `groupsplit receipts attachments`
+to add its receipt when the user is ready. Use `groupsplit receipts set` for a reviewed
+itemised bill. The older `inbox attachments` commands can still manage files already on a
+pending row; filing or linking that row moves those files to the resulting expense.
 
 A file attached to a *pending* row is not lost when the charge posts: it moves to the
 posted row that takes over, so list the attachments on the row the inbox shows now. A file

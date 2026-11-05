@@ -36,7 +36,7 @@
             var choice = status;
             <MudButton Variant="@(State.Filter == choice ? Variant.Filled : Variant.Text)"
                        Color="@(State.Filter == choice ? Color.Primary : Color.Default)"
-                       Size="Size.Small" Class="gs-btn-pill" aria-pressed="@(State.Filter == choice)"
+                       Size="Size.Small" Class="gs-btn-pill" Disabled="@(_busy is not null)" aria-pressed="@(State.Filter == choice)"
                        OnClick="@(() => SetFilterAsync(choice))">@Label(choice)</MudButton>
         }
     </nav>
@@ -47,7 +47,10 @@
         <DateRangeFilter Value="@State.Range" ValueChanged="SetRangeAsync" />
     </div>
 
-    <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@(_initializing || State.IsLoading)" Failed="@(!State.RowsLoaded)" Retry="InitializeAsync">
+    @{ var showLoading = _initializing || (State.IsLoading && _busy is null); }
+    <div class="gs-inbox-results" aria-busy="@(_initializing || State.IsLoading)">
+    <div class="gs-inbox-results-content" @key="(State.Filter, showLoading)">
+    <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(!State.RowsLoaded && _busy is null)" Retry="InitializeAsync">
     @if (State.Connections is { Enabled: false })
     {
         <div class="gs-card gs-empty" style="padding: 48px 24px">
@@ -139,6 +142,11 @@
                                            Disabled="@(_busy == row.Id)"
                                            OnClick="@(() => RestoreAsync(row))">@Loc["Restore"]</MudButton></div>
                             }
+                            else if (row.Status == InboxStatus.Filed && row.TransactionId is { } expenseId)
+                            {
+                                <div class="gs-bank-inbox-actions"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(() => OpenExpenseAsync(expenseId))">@Loc["View expense"]</MudButton></div>
+                            }
                     </div>
 
                     @* What is already in the ledger that this could be. Said on the row
@@ -197,7 +205,7 @@
 
             @if (State.HasMore)
             {
-                <div class="gs-inline" style="justify-content: center; margin-top: 12px">
+                <div class="gs-inbox-show-more">
                     <MudButton Variant="Variant.Text" Size="Size.Small" Disabled="@_loadingMore"
                                OnClick="LoadMoreAsync">@Loc["Show more ({0} of {1})", State.Rows.Count, State.TotalCount].Value</MudButton>
                 </div>
@@ -206,11 +214,16 @@
     }
 </LoadView>
 </div>
+</div>
+</div>
 
 @code {
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
     private Guid? _busy;
+    private Task OpenExpenseAsync(Guid id) => DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } },
+        new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
     private bool _loadingMore;
     private string? _search;
 

@@ -4,7 +4,6 @@
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.Components.Forms
 @inject IReceiptsClient Client
-@inject IInboxClient Bank
 @inject IDialogService Dialogs
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
@@ -55,12 +54,6 @@
             }
             <MudButton OnClick="AttachEntered" Disabled="_busy">Find existing expense</MudButton>
             <MudButton OnClick="CreateDefault" Disabled="_busy">Create expense</MudButton>
-            @if (_payments.Count > 0) { <strong>@Loc["Possible bank matches"]</strong> }
-            @foreach (var payment in _payments)
-            {
-                <MudButton OnClick="@(() => FileBank(payment))" Disabled="_busy">Record @payment.MerchantName · @payment.Amount @payment.Currency · @payment.Date</MudButton>
-            }
-            <MudButton OnClick="FindBank" Disabled="_busy">Find a bank transaction</MudButton>
             </section>
             <MudButton OnClick="Delete" Disabled="_busy" Color="Color.Error">Delete private receipt</MudButton>
         <details class="gs-receipt-review-original @(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0 ? "is-unextracted" : null)" open="@(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0)"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
@@ -79,20 +72,24 @@
 }
 @if (_busy) { <MudProgressLinear Indeterminate="true" /> }
 @code {
-    [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
     [Parameter] public Guid Id { get; set; }
     private ReceiptInboxResponse? _row;
     private ReceiptResponse? _bill;
     private FilingDestinationSuggestion? _suggestion;
     private IReadOnlyList<ReceiptExpenseCandidate> _matches = [];
     private string _currency = "USD";
-    private IReadOnlyList<BankTransactionResponse> _payments = [];
     private bool _busy;
     protected override Task OnParametersSetAsync() => Load();
     private async Task Load()
     {
         _suggestion = null;
-        await Errors.TryAsync(async () => { _row = await Client.GetReceiptInboxAsync(Id); _bill = BillOf(_row); _currency = _row.Currency; _matches = (await Client.MatchReceiptInboxAsync(Id)).ToList(); _payments = (await Bank.GetInboxAsync(status: InboxStatus.New, pageSize: 100)).Items.Where(p => p.Status == InboxStatus.New && p.TransactionId == null && (p.Id == BankId || p.Currency == _row.Currency && p.Amount == _row.Receipt.Total)).ToList(); }, "Could not load receipt.");
+        await Errors.TryAsync(async () => {
+            _row = await Client.GetReceiptInboxAsync(Id);
+            _bill = BillOf(_row);
+            _currency = _row.Currency;
+            _matches = (await Client.MatchReceiptInboxAsync(Id)).ToList();
+
+        }, "Could not load receipt.");
         if (_row is { Receipt.Items.Count: > 0 } receipt)
         {
             _suggestion = SuggestionCache.Get(receipt);
@@ -170,23 +167,7 @@
             if (_matches.Count == 0 || anyway) await File(new() { NewExpense = request, CreateAnyway = anyway });
         }
     }
-    private async Task FindBank()
-    {
-        var dialog = await Dialogs.ShowAsync<FindBankTransactionDialog>(Loc["Find a bank transaction"].Value,
-            new DialogParameters<FindBankTransactionDialog> { { x => x.Currency, _row!.Currency } },
-            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
-        if (await dialog.Result is { Canceled: false, Data: BankTransactionResponse payment })
-            await FileBank(payment);
-    }
-    private async Task FileBank(BankTransactionResponse payment)
-    {
-        var dialog = await Dialogs.ShowAsync<FileBankTransactionDialog>("Record bank payment", new DialogParameters<FileBankTransactionDialog> { { x => x.Row, payment } });
-        if (await dialog.Result is { Canceled: false, Data: FileBankTransactionDialog.Answer answer })
-        {
-            if (answer.AttachTo is { } expenseId) { await Run(async () => { await Client.FileReceiptInboxAsync(Id, new() { ExpenseId = expenseId, BankTransactionId = payment.Id }); Nav.NavigateTo("/inbox/receipts"); }); return; }
-            if (answer.Request is { } request) await File(new() { BankTransactionId = payment.Id, BankExpense = request });
-        }
-    }    private async Task Delete()
+    private async Task Delete()
     {
         if (await Dialogs.ShowMessageBoxAsync("Delete receipt", "Delete this private receipt and its source files?", yesText: "Delete", cancelText: "Cancel") == true)
             await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });

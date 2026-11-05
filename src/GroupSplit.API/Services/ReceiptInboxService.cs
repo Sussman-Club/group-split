@@ -127,8 +127,8 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     {
         var r = await Find(id, ct);
         if (r.PurchaseDate is not { } day || r.Total == 0) return [];
-        var start = new DateTimeOffset(day.AddDays(-7).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var end = start.AddDays(15);
+        var start = new DateTimeOffset(day.AddDays(-2).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var end = start.AddDays(5);
         var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
         return await db.Set<Expense>().Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId))
                 && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end)

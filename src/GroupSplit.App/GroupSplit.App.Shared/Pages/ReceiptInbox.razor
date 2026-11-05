@@ -42,7 +42,7 @@
     @foreach (var status in Enum.GetValues<ReceiptFilter>())
     {
         <MudButton Variant="@(_filter == status ? Variant.Filled : Variant.Text)" Color="@(_filter == status ? Color.Primary : Color.Default)"
-                   Size="Size.Small" Class="gs-btn-pill" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
+                   Size="Size.Small" Class="gs-btn-pill" Disabled="_busy" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
     }
 </nav>
 <div class="gs-receipt-search-bar">
@@ -51,10 +51,13 @@
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
     <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
 </div>
-<LoadView Loading="@(_loading && !_uploading)" Failed="@(_rows is null && !_uploading)" Retry="Load">
+@{ var showLoading = _loading && !_uploading && (!_busy || _rows is null); }
+<div class="gs-inbox-results" aria-busy="@_loading">
+<div class="gs-inbox-results-content" @key="(_filter, showLoading)">
+<LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(_rows is null && !_uploading)" Retry="Load">
 @if (_rows is { Count: 0 })
 {
-    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then connect it to a bank payment or expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
+    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then add it to an expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
 }
 else if (_rows is not null && _visibleRows.Count == 0)
 {
@@ -63,7 +66,7 @@ else if (_rows is not null && _visibleRows.Count == 0)
 else if (_rows is not null)
 {
     <div class="gs-card gs-receipt-inbox-list">
-    <Virtualize @ref="_virtualize" Items="_visibleRows" Context="row" ItemSize="120" OverscanCount="5">
+    <Virtualize @ref="_virtualize" Items="_pageRows" Context="row" ItemSize="120" OverscanCount="5">
         @{ var source = row.Attachments.FirstOrDefault(); }
         <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
         <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
@@ -101,12 +104,23 @@ else if (_rows is not null)
         }
         </div>
     </Virtualize>
+    @if (_pageRows.Count < _visibleRows.Count)
+    {
+        <div class="gs-inbox-show-more">
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ShowMore">@Loc["Show more ({0} of {1})", _pageRows.Count, _visibleRows.Count]</MudButton>
+        </div>
+    }
     </div>
 }
 </LoadView>
+</div>
+</div>
 @code {
     private List<ReceiptInboxResponse>? _rows;
     private List<ReceiptInboxResponse> _visibleRows = [];
+    private List<ReceiptInboxResponse> _pageRows = [];
+    private const int PageSize = 25;
+    private int _shownCount = PageSize;
     private string? _search;
     private DateFilter _dateRange = DateFilter.AllTime;
     private enum ReceiptFilter { Waiting, Added, Ignored }
@@ -122,7 +136,6 @@ else if (_rows is not null)
     private readonly Dictionary<Guid, ReceiptExpenseCandidate> _expenseMatches = [];
     private CancellationTokenSource? _suggestionLoad;
     private Virtualize<ReceiptInboxResponse>? _virtualize;
-    [SupplyParameterFromQuery(Name = "bank")] public Guid? BankId { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? StatusParameter { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
     [SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }
@@ -141,8 +154,8 @@ else if (_rows is not null)
         _filter = asked.Status?.ToLowerInvariant() switch { "added" or "filed" => ReceiptFilter.Added, "ignored" => ReceiptFilter.Ignored, _ => ReceiptFilter.Waiting };
         _search = asked.Search;
         _dateRange = ListingQuery.ParseRange(asked.Range, asked.From, asked.To, DateFilter.AllTime);
-        if (first || previous != _filter) { _rows = null; await Load(); }
-        else ApplyFilters();
+        if (first || previous != _filter) { _shownCount = PageSize; _rows = null; await Load(); }
+        else { _shownCount = PageSize; ApplyFilters(); }
     }
     private void WriteUrl()
     {
@@ -164,12 +177,14 @@ else if (_rows is not null)
             if (bounds.From is null && bounds.To is null) return true;
             return row.Receipt.PurchaseDate is { } date && (bounds.From is null || date >= bounds.From) && (bounds.To is null || date <= bounds.To);
         }).ToList();
+        _pageRows = _visibleRows.Take(_shownCount).ToList();
     }
-    private void SearchChanged() { ApplyFilters(); WriteUrl(); }
-    private void SetDateRange(DateFilter range) { _dateRange = range; ApplyFilters(); WriteUrl(); }
-    private void ClearFilters() { _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
+    private void ShowMore() { _shownCount += PageSize; ApplyFilters(); }
+    private void SearchChanged() { _shownCount = PageSize; ApplyFilters(); WriteUrl(); }
+    private void SetDateRange(DateFilter range) { _shownCount = PageSize; _dateRange = range; ApplyFilters(); WriteUrl(); }
+    private void ClearFilters() { _shownCount = PageSize; _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
     private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
-    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _rows = null; WriteUrl(); await Load(); }
+    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _shownCount = PageSize; _rows = null; WriteUrl(); await Load(); }
     private async Task OpenAdded(ReceiptInboxResponse row)
     {
         if (_filter == ReceiptFilter.Added && row.ExpenseId is { } id)
@@ -241,8 +256,9 @@ else if (_rows is not null)
                     {
                         var day = row.Receipt.PurchaseDate!.Value.DayNumber;
                         var matches = await Client.MatchReceiptInboxAsync(row.Id, ct);
-                        return (row.Id, Match: matches.Where(match => !match.HasReceipt).OrderBy(match =>
-                            Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault());
+                        var match = matches.Where(match => !match.HasReceipt).OrderBy(match =>
+                            Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault();
+                        return (row.Id, Match: match);
                     }
                     catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return (row.Id, Match: (ReceiptExpenseCandidate?)null); }
                 }));
@@ -251,7 +267,9 @@ else if (_rows is not null)
                 {
                     if (ct.IsCancellationRequested) return;
                     foreach (var (id, match) in results)
+                    {
                         if (match is not null) _expenseMatches[id] = match;
+                    }
                     if (_virtualize is not null) await _virtualize.RefreshDataAsync();
                     StateHasChanged();
                 });

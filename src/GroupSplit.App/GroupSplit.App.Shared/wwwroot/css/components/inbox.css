@@ -224,6 +224,7 @@
 }
 
 /* Shared inbox: one destination on desktop and in the phone tab bar. */
+.gs-shell:has(.gs-inbox-head) { background-attachment: fixed; }
 .gs-inbox-head { align-items: center; gap: 16px; }
 .gs-inbox-heading { width: 100%; min-width: 0; }
 .gs-inbox-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
@@ -320,7 +321,18 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-receipt-inbox-shortcut { min-width: 0; max-width: min(260px, calc(100% - 70px)); }
 .gs-receipt-inbox-shortcut .mud-button-root { max-width: 100%; min-width: 0; min-height: 40px; overflow: hidden; white-space: nowrap; text-align: left; }
 .gs-receipt-filters { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 16px 0; }
-.gs-receipt-filters .mud-button-root { min-height: 40px; padding-inline: 16px; white-space: nowrap; }
+.gs-receipt-filters .mud-button-root { min-height: 40px; padding-inline: 16px; white-space: nowrap; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.gs-inbox-results { min-height: 180px; }
+.gs-inbox-show-more { display: flex; justify-content: center; padding: 12px 16px; }
+.gs-inbox-results-content { animation: gs-inbox-results-in 180ms ease-out both; }
+@keyframes gs-inbox-results-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gs-receipt-filters .mud-button-root { transition: none; }
+    .gs-inbox-results-content { animation: none; }
+}
 .gs-receipt-search-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
 .gs-receipt-search { flex: 1 1 220px; min-width: 0; }
 .gs-receipt-inbox-state-action { flex: 0 0 auto; }

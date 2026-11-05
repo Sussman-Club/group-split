@@ -177,6 +177,25 @@ public class ReceiptInboxEndpointTest
     }
 
     [Fact]
+    public async Task Expense_matches_are_limited_to_two_days_either_side()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var id = Guid.NewGuid();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Subtotal = 42m, Total = 42m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 42m, TotalPrice = 42m }] } }, Json)).EnsureSuccessStatusCode();
+        foreach (var offset in new[] { -3, -2, 2, 3 })
+        {
+            var result = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+            { Name = $"Day {offset}", Amount = 42m, Currency = "USD", DateTime = new DateTimeOffset(day.AddDays(offset).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) }, Json);
+            result.EnsureSuccessStatusCode();
+        }
+        var matches = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{id}/matches", Json);
+        Assert.Equal(new[] { "Day -2", "Day 2" }, matches!.Select(match => match.Name).OrderBy(name => name).ToArray());
+    }
+
+    [Fact]
     public async Task Creating_from_a_draft_is_retryable_and_refuses_currency_mismatch_atomically()
     {
         await using var host = await ApiEndpointHost.StartAsync();

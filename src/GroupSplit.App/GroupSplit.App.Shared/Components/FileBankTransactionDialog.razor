@@ -80,20 +80,6 @@
                 </div>
             </div>
 
-            <div class="gs-card gs-card-pad" style="padding: 14px 16px">
-                <div class="gs-eyebrow">@Loc["Have a receipt?"]</div>
-                <div class="gs-muted" style="font-size: .8125rem; margin-bottom: 12px">@Loc["Attach the original now. Reading it is optional and can happen after it is safely kept with this payment."]</div>
-                <ReceiptFilePicker FileChanged="AttachReceiptAsync"
-                                   ReadRequested="ReadReceiptAsync"
-                                   FileName="@_receiptAttachment?.FileName"
-                                   IsAttached="@(_receiptAttachment is not null)"
-                                   IsBusy="@(_attachingReceipt || _readingReceipt)"
-                                   BusyText="@(_readingReceipt ? Loc["Reading receipt…"].Value : Loc["Attaching receipt…"].Value)"
-                                   HasTranscript="@(_receipt is not null)"
-                                   TranscriptItemCount="@(_receipt?.Items.Count ?? 0)"
-                                   Error="@_receiptError" />
-            </div>
-
             @* When the matcher has candidates, this is a choice sheet first. The expense
                form stays out of the way until the person explicitly says none of these is
                right, which makes attaching a bank row feel like one decision rather than
@@ -444,8 +430,6 @@
             MudDialog.Cancel();
             return;
         }
-
-        _receiptAttachment = (await ReceiptAttachments.GetForBankAsync(Row.Id)).FirstOrDefault();
 
         _suggestion = Row.Suggestion;
         await ApplySuggestionAsync();
