@@ -12,6 +12,31 @@ public class ReceiptInboxEndpointTest
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
+    public async Task Dismissing_a_receipt_match_is_private_persistent_and_does_not_remove_other_matches()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var id = Guid.NewGuid();
+        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Total = 20, Subtotal = 20,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 20, TotalPrice = 20 }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
+        var ids = new List<Guid>();
+        foreach (var name in new[] { "First", "Second" })
+        {
+            var created = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest { Name = name, Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+            created.EnsureSuccessStatusCode();
+            ids.Add((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        }
+        using var other = host.ClientForAnotherUser();
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/receipts/inbox/{id}/matches/{ids[0]}/dismiss", null)).StatusCode);
+        var route = $"/receipts/inbox/{id}/matches/{ids[0]}/dismiss";
+        (await host.Client.PostAsync(route, null)).EnsureSuccessStatusCode();
+        (await host.Client.PostAsync(route, null)).EnsureSuccessStatusCode();
+        var matches = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{id}/matches", Json);
+        Assert.Equal(ids[1], Assert.Single(matches!).Id);
+        Assert.NotNull(await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json));
+    }
+    [Fact]
     public async Task Suggestions_are_batched_only_for_owned_waiting_receipts()
     {
         IReadOnlyList<(FilingInput Row, FilingReceipt? Receipt)>? asked = null;

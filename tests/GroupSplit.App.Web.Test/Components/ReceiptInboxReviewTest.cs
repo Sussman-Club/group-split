@@ -8,6 +8,26 @@ namespace GroupSplit.App.Web.Test.Components;
 
 public class ReceiptInboxReviewTest : ComponentTest
 {
+    [Fact]
+    public void A_match_can_be_dismissed_without_removing_the_receipt()
+    {
+        var id = Guid.NewGuid();
+        var expense = Guid.NewGuid();
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest(), []));
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ReceiptExpenseCandidate(expense, "Lunch", 12, "USD", DateTimeOffset.UtcNow)]);
+        client.Setup(x => x.DismissReceiptInboxMatchAsync(id, expense, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(client.Object);
+
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Lunch", page.Markup));
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Not the same").Click();
+        page.WaitForAssertion(() => Assert.DoesNotContain("Lunch", page.Markup));
+        Assert.Contains("Find existing expense", page.Markup);
+        client.Verify(x => x.DismissReceiptInboxMatchAsync(id, expense, It.IsAny<CancellationToken>()), Times.Once);
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

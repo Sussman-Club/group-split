@@ -166,6 +166,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// row is asked about once; every later read of it is given the answer already had.
     /// </remarks>
     private readonly Dictionary<Guid, FilingSuggestionResponse?> _suggestions = [];
+    private readonly Dictionary<Guid, Guid?> _matchSuggestions = [];
+    private readonly Dictionary<Guid, string> _matchCandidateKeys = [];
 
     public InboxStateService(
         IInboxClient inbox,
@@ -335,6 +337,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             Announce();
             _ = SuggestAsync();
+            _ = SuggestMatchesAsync();
         }, UiText.Get("your bank inbox"));
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
         // than the one after it.
@@ -432,6 +435,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
                 Announce();
                 _ = SuggestAsync();
+                _ = SuggestMatchesAsync();
             }, UiText.Get("your bank inbox"));
         }
         finally
@@ -443,9 +447,39 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     /// <summary>The rows, each carrying the suggestion already had for it.</summary>
     private IReadOnlyList<BankTransactionResponse> WithSuggestions(IReadOnlyList<BankTransactionResponse> rows) =>
-        [.. rows.Select(row => _suggestions.GetValueOrDefault(row.Id) is { } suggestion
-            ? row with { Suggestion = suggestion }
-            : row)];
+        [.. rows.Select(row => row with {
+            Suggestion = _suggestions.GetValueOrDefault(row.Id) ?? row.Suggestion,
+            PossibleDuplicates = [.. row.PossibleDuplicates.Select(match => match with { IsSuggested = _matchSuggestions.GetValueOrDefault(row.Id) == match.TransactionId })]
+        })];
+
+    private async Task SuggestMatchesAsync()
+    {
+        foreach (var row in Rows.Where(row => row.Status == InboxStatus.New))
+        {
+            var key = string.Join(",", row.PossibleDuplicates.Select(match => match.TransactionId).OrderBy(id => id));
+            if (_matchCandidateKeys.GetValueOrDefault(row.Id) == key) continue;
+            _matchCandidateKeys[row.Id] = key;
+            _matchSuggestions.Remove(row.Id);
+        }
+        var wanted = Rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 1 && !_matchSuggestions.ContainsKey(row.Id)).Select(row => row.Id).ToList();
+        foreach (var id in wanted) _matchSuggestions[id] = null;
+        foreach (var id in wanted)
+        {
+            var key = _matchCandidateKeys[id];
+            try
+            {
+                var matches = await _inbox.GetBankTransactionMatchesAsync(id);
+                if (_matchCandidateKeys.GetValueOrDefault(id) != key) continue;
+                _matchSuggestions[id] = matches.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
+                Rows = WithSuggestions(Rows);
+                Announce();
+            }
+            catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
+            {
+                if (_matchCandidateKeys.GetValueOrDefault(id) == key) _matchSuggestions.Remove(id);
+            }
+        }
+    }
 
     /// <summary>
     /// Asks where the waiting rows on screen probably go, after they are shown rather than

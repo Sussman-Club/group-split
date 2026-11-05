@@ -121,7 +121,7 @@
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@candidate.Name</span>
                                     <span class="meta">@candidate.Where · @Clock.Day(candidate.DateTime).ToString("d") · @Loc["{0} paid", candidate.PaidByUserName ?? ""]</span>
-                                    <span class="gs-tag neutral">@MatchHint(candidate)</span>
+                                    <span class="gs-tag neutral">@(candidate.IsSuggested ? Loc["Suggested match"].Value + " · " : "")@MatchHint(candidate)</span>
                                 </span>
                                 <Money Value="@candidate.Amount" Currency="@candidate.Currency" />
                                 <MudIcon Icon="@(_selectedExpenseId == candidate.TransactionId ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
@@ -417,7 +417,7 @@
         _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
         _newExpenseChosen = !HasMatches;
-        if (Row.PossibleDuplicates.FirstOrDefault() is { } first)
+        if ((Row.PossibleDuplicates.FirstOrDefault(match => match.IsSuggested) ?? (Row.PossibleDuplicates.Count == 1 ? Row.PossibleDuplicates[0] : null)) is { } first)
             SelectMatch(first);
 
         var loaded = await Errors.TryAsync(async () =>
@@ -701,9 +701,8 @@
         ?? Loc["your personal expenses"].Value;
 
     private string MatchHint(ExpenseMatchResponse match) =>
-        match.IsConfident
-            ? Loc["same day, same amount"].Value
-            : Loc["{0} day{1} apart · {2:0.00} difference", match.DaysApart, (match.DaysApart == 1 ? "" : "s"), match.AmountDifference].Value;
+        match.DaysApart == 0 ? Loc["Same day · same amount"].Value
+            : Loc["{0} day{1} apart · same amount", match.DaysApart, (match.DaysApart == 1 ? "" : "s")].Value;
 
     private void Cancel()
     {

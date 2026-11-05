@@ -60,9 +60,7 @@ where none are duplicates is a different job from one where a third are. Pass
 `--duplicates false` to skip that count for a cheaper read; the count runs the matcher over
 every waiting row.
 
-That count covers only the `Confident` matches. `inbox list` marks the rest (see
-[How sure a suggestion is](#how-sure-a-suggestion-is)), and filing is refused over both, so
-`possibleDuplicates` being zero does **not** mean every row will file cleanly.
+The matcher suggests only exact-amount candidates; matching amounts do not prove that two purchases are the same.
 
 For each row, in order:
 
@@ -123,21 +121,9 @@ row.
 
 ## How sure a suggestion is
 
-Every candidate carries a `confidence`. It changes how you present the candidate, not
-whether you do.
-
-| `confidence` | What the rule found | How to say it |
-| --- | --- | --- |
-| `Confident` | The amounts agree to the cent | Lead with it. Measured against real spending, two unrelated expenses by one person agree this closely 0.18% of the time, so this is very probably the same money. |
-| `Possible` | The amounts differ by a tip, or by a figure somebody rounded | Mention it as a question, not a finding. It is right often enough to be worth asking and wrong often enough that presenting it as a duplicate is misleading. |
-
-**Both are refused a filing.** A tip added to a dinner is the commonest real duplicate and
-is never `Confident`, so do not skip past a `Possible` match. Take one of the three answers
-for either grade.
-
-Do not flatten the two grades. Telling somebody a streaming charge "is already recorded" when
-the rule only found a figure within a quarter of it teaches them to wave suggestions
-through, genuine duplicates included.
+Matches have the same amount and currency, but different purchases can have the same price.
+Show all candidates and let the user choose. A difference caused by a tip or rounding is
+not suggested automatically; search for the expense if the user wants to link it.
 
 ## The refusal
 
@@ -243,10 +229,8 @@ anything is compared:
   without naming it arrives as a fresh row; it is matched against that expense, and
   `inbox link` moves the expense onto it.
 
-Then the dates must be within 5 days of each other, and the amounts within 25% or 1.00,
-whichever is more generous. A card charge posts days after the meal, and a tip added after
-the receipt was written is the usual reason two amounts differ. At most 3 candidates are
-offered.
+Then the dates must be within 5 days, and amounts and currencies must match exactly.
+A card charge can post after the purchase; at most 3 candidates are offered.
 
 Money in another currency is not the same money, and money coming *in* (a refund, a
 deposit) has no expense to be a duplicate of. The bank's merchant text is not a condition:

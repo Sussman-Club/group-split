@@ -25,7 +25,12 @@ public class ReceiptInboxSeederTest
         await seeder.SeedAsync();
         await seeder.SeedAsync();
 
-        var receipt = await db.Set<Receipt>().Include(r => r.Items).SingleAsync();
+        var receipts = await db.Set<Receipt>().Include(r => r.Items).ToListAsync();
+        Assert.Equal(5, receipts.Count);
+        Assert.All(receipts, receipt => Assert.Equal(expense.UserId, receipt.OwnerUserId));
+        Assert.Equal(4, receipts.Count(receipt => !receipt.IsIgnored));
+        Assert.Single(receipts, receipt => receipt.IsIgnored);
+        var receipt = Assert.Single(receipts, receipt => receipt.MerchantName == "Pharmacy 88");
         Assert.Equal(expense.UserId, receipt.OwnerUserId);
         Assert.Null(receipt.ExpenseId);
         Assert.Equal(expense.Amount, receipt.Total);

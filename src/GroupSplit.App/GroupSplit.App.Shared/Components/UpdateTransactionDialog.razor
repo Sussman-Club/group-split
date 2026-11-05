@@ -1219,7 +1219,7 @@
     private async Task Cancel()
     {
         if (_transcribingAttachmentId is not null) return;
-        if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
+        if (!_initializing && !_failed && (_model.Amount != Original.Amount || _model.Name != Original.Name || _model.Description != Original.Description || Clock.Edited(Original.DateTime, _selectedDate, _selectedTime) != Original.DateTime || _model.PaidByUserId != Original.PaidByUserId || _model.GroupId != OriginalGroupId || _model.CategoryId != _openedCategoryId || _model.MerchantId != _openedMerchantId || _model.SplitRuleId != _openedSplitRuleId || _redivide || !(_model.Splits ?? _storedSplits).SequenceEqual(_storedSplits)))
         {
             var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Discard changes?"].Value,
                 new DialogParameters<ConfirmationDialog>

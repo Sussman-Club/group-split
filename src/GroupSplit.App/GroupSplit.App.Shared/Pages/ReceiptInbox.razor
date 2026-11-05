@@ -331,9 +331,16 @@ else if (_rows is not null)
         _busy = true;
         try
         {
-            if (await Dialogs.ShowMessageBoxAsync(Loc["Attach receipt"].Value,
-                Loc["Attach this receipt to {0} ({1} {2}, {3})? The expense and its current shares will stay the same. The receipt will move to Added.", match.Name, match.Amount.ToString("N2"), match.Currency, Clock.Day(match.DateTime).ToString("d")].Value,
-                yesText: Loc["Attach receipt"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+            var dialog = await Dialogs.ShowAsync<ReceiptMatchDialog>(Loc["Review receipt match"].Value,
+                new DialogParameters<ReceiptMatchDialog> { { x => x.Match, match } },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+            if (await dialog.Result is not { Canceled: false, Data: bool attach }) return;
+            if (!attach)
+            {
+                if (await Errors.TryAsync(() => Client.DismissReceiptInboxMatchAsync(row.Id, match.Id), Loc["Could not dismiss match."].Value))
+                    await Load();
+                return;
+            }
             if (await Errors.TryAsync(async () => await Client.FileReceiptInboxAsync(row.Id,
                     new FileReceiptInboxRequest { ExpenseId = match.Id }), Loc["Could not file receipt."].Value))
             {

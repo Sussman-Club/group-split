@@ -1,0 +1,26 @@
+@using GroupSplit.Shared
+@inject GroupSplit.App.Shared.Services.LocalClock Clock
+
+<MudDialog Class="gs-sheet">
+    <TitleContent><div class="gs-dialog-head"><h2 class="gs-dialog-title">@Loc["Review receipt match"]</h2></div></TitleContent>
+    <DialogContent>
+        <div class="gs-stack" style="gap: 12px">
+            <p>@Loc["Is this receipt for the expense below?"]</p>
+            <div class="gs-receipt-suggestion">
+                <strong>@Match.Name</strong>
+                <span>@Match.Amount.ToString("N2") @Match.Currency · @Clock.Day(Match.DateTime).ToString("d")</span>
+            </div>
+            <p class="gs-muted">@Loc["Attaching keeps the expense and its shares unchanged."]</p>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Cancel())">@Loc["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Close(DialogResult.Ok(false)))">@Loc["Not the same"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Close(DialogResult.Ok(true)))">@Loc["Attach receipt"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptExpenseCandidate Match { get; set; } = null!;
+}

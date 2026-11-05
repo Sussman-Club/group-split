@@ -38,7 +38,7 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Filing_a_row_that_looks_like_an_expense_already_recorded_is_refused_and_names_it()
     {
         var typed = await Expense("Dinner", 40m, Dinner);
-        var row = await Row(46m, on: Dinner.AddDays(2), merchant: "SQ *TRATTORIA 4421");
+        var row = await Row(40m, on: Dinner.AddDays(2), merchant: "SQ *TRATTORIA 4421");
 
         var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
             Inbox.File(row.Id, new FileBankTransactionRequest(), Ct));
@@ -50,7 +50,7 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal(typed.Id, match.TransactionId);
         Assert.Equal("Dinner", match.Name);
-        Assert.Equal(6m, match.AmountDifference);
+        Assert.Equal(0m, match.AmountDifference);
         Assert.Equal(2, match.DaysApart);
 
         // The whole point: the second expense does not exist by the time anybody is told.
@@ -208,7 +208,7 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Dismissing_one_pair_leaves_the_other_suggestions_standing()
     {
         var dismissed = await Expense("Dinner", 40m, Dinner);
-        var other = await Expense("Supper", 41m, Dinner);
+        var other = await Expense("Supper", 40m, Dinner);
         var row = await Row(40m, on: Dinner);
 
         await Inbox.DismissMatch(row.Id, new DismissBankMatchRequest { TransactionId = dismissed.Id }, Ct);
@@ -237,7 +237,7 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Recording_an_expense_that_matches_a_row_waiting_in_the_inbox_is_caught_too()
     {
         var row = await Row(46m, on: Dinner);
-        var typed = await Expense("Dinner", 40m, Dinner.AddDays(1));
+        var typed = await Expense("Dinner", 46m, Dinner.AddDays(1));
 
         var waiting = Assert.Single(await Matcher.RowsLike(typed, Ct));
 
@@ -278,11 +278,11 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     [Theory]
     // A tip added after the receipt, and a charge that posts two days later: the case the
     // whole feature exists for.
-    [InlineData(40, 46, 2, true)]
+    [InlineData(40, 46, 2, false)]
     // Same money, same day.
     [InlineData(40, 40, 0, true)]
     // Small sums get a flat tolerance rather than one measured in pennies.
-    [InlineData(4.00, 4.75, 0, true)]
+    [InlineData(4.00, 4.75, 0, false)]
     // The far edge of the window, and one day past it.
     [InlineData(40, 40, 5, true)]
     [InlineData(40, 40, 6, false)]

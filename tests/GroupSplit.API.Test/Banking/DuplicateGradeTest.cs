@@ -59,9 +59,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense("Dinner", 40m, Dinner);
         var row = await Row(46m, on: Dinner.AddDays(2));
 
-        var match = Assert.Single(await Inbox.Matches(row.Id, Ct));
-
-        Assert.Equal(MatchConfidence.Possible, match.Confidence);
+        Assert.Empty(await Inbox.Matches(row.Id, Ct));
     }
 
     /// <summary>
@@ -91,9 +89,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense("Groceries", 60m, Dinner);
         var row = await Row(58.40m, on: Dinner);
 
-        var match = Assert.Single(await Inbox.Matches(row.Id, Ct));
-
-        Assert.Equal(MatchConfidence.Possible, match.Confidence);
+        Assert.Empty(await Inbox.Matches(row.Id, Ct));
     }
 
     /// <summary>
@@ -106,9 +102,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense("Dinner", 46.20m, Dinner);
         var row = await Row(40m, on: Dinner, pending: true);
 
-        var match = Assert.Single(await Inbox.Matches(row.Id, Ct));
-
-        Assert.Equal(MatchConfidence.Possible, match.Confidence);
+        Assert.Empty(await Inbox.Matches(row.Id, Ct));
     }
 
     [Fact]
@@ -160,7 +154,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense("Dinner", 40m, Dinner);
         var row = await Row(46m, on: Dinner, at: await Place("Trattoria da Enzo"));
 
-        Assert.Single(await Inbox.Matches(row.Id, Ct));
+        Assert.Empty(await Inbox.Matches(row.Id, Ct));
     }
 
     // ---- the order -----------------------------------------------------------------------
@@ -174,7 +168,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var matches = await Inbox.Matches(row.Id, Ct);
 
-        Assert.Equal(2, matches.Count);
+        Assert.Single(matches);
         Assert.Equal(exact.Id, matches[0].Expense.Id);
     }
 
@@ -194,8 +188,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var matches = await Inbox.Matches(row.Id, Ct);
 
-        Assert.Equal(2, matches.Count);
-        Assert.Equal(dinner.Id, matches[0].Expense.Id);
+        Assert.Empty(matches);
     }
 
     // ---- what follows from the grade -----------------------------------------------------
@@ -205,21 +198,12 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// is, and it is never a confident match.
     /// </summary>
     [Fact]
-    public async Task Filing_is_still_refused_over_a_possible_match()
+    public async Task Different_amounts_do_not_block_filing()
     {
         await Expense("Dinner", 40m, Dinner);
         var row = await Row(46m, on: Dinner.AddDays(2));
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Inbox.File(row.Id, new FileBankTransactionRequest(), Ct));
-
-        Assert.Equal(ErrorCodes.PossibleDuplicateExpense, refusal.Code);
-
-        var named = Assert.IsAssignableFrom<IReadOnlyList<ExpenseMatchResponse>>(
-            refusal.Extensions[ProblemDetails.MatchesExtension]);
-
-        Assert.Equal(MatchConfidence.Possible, Assert.Single(named).Confidence);
-        Assert.Equal(1, await DbContext.Set<Expense>().CountAsync(Ct));
+        Assert.Empty(await Inbox.Matches(row.Id, Ct));
     }
 
     /// <summary>

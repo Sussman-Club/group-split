@@ -2,12 +2,14 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.Banking.Suggestions;
 using GroupSplit.API.Services.ReceiptTranscription;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace GroupSplit.API.Endpoints;
 
@@ -52,6 +54,7 @@ public static class InboxApi
             group.WithTags("Inbox");
 
             group.MapList();
+            group.MapDetail();
             group.MapSearchForReceipt();
             group.MapSummary();
             group.MapMatches();
@@ -69,6 +72,18 @@ public static class InboxApi
 
     extension(RouteGroupBuilder group)
     {
+        private RouteHandlerBuilder MapDetail() => group.MapGet("{id:guid}", async (Guid id, IInboxService inbox, CancellationToken ct) =>
+        {
+            foreach (var status in new[] { InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored })
+            {
+                var rows = await inbox.List(new InboxFilter(status), ct);
+                var row = await rows.Where(item => item.Id == id).SelectDto().FirstOrDefaultAsync(ct);
+                if (row is null) continue;
+                var matches = status == InboxStatus.New ? (await inbox.Matches(id, ct)).ToResponses() : [];
+                return Results.Ok(row with { PossibleDuplicates = matches });
+            }
+            return Results.NotFound();
+        }).WithName("GetBankTransaction").Produces<BankTransactionResponse>().ProducesProblem(StatusCodes.Status404NotFound);
         private RouteHandlerBuilder MapSearchForReceipt() => group.MapGet("/receipt-search", async (
                 string? search, [AsParameters] PageRequest page, IInboxService inbox, AppDbContext db, CancellationToken ct) =>
             {
@@ -141,11 +156,36 @@ public static class InboxApi
             return group.MapGet("{id:guid}/matches", async (
                     Guid id,
                     IInboxService inbox,
+                    IDecisionClient decisions,
+                    IOptions<FilingSuggestionOptions> options,
+                    SuggestionModelLimiter limiter,
+                    ICurrentUser currentUser,
                     CancellationToken ct) =>
                 {
                     var matches = await inbox.Matches(id, ct);
-
-                    return Results.Ok(matches.ToResponses());
+                    var result = matches.ToResponses();
+                    var settings = options.Value;
+                    if (result.Count > 1 && settings.IsConfigured && limiter.TryAcquire(currentUser.User.Id))
+                    {
+                        var rows = await inbox.List(new InboxFilter(InboxStatus.New), ct);
+                        var row = await rows.Where(item => item.Id == id).SelectDto().FirstOrDefaultAsync(ct);
+                        if (row is not null)
+                        {
+                            var choices = result.ToDictionary(match => match.TransactionId.ToString(), match => $"{match.Name}; {match.Where}; {match.DateTime:yyyy-MM-dd}; {match.Amount} {match.Currency}");
+                            choices["cannot tell"] = "There is not enough evidence to distinguish the expenses.";
+                            try
+                            {
+                                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                timeout.CancelAfter(settings.Timeout);
+                                var answer = await decisions.ChooseAsync(new { row.Title, row.Description, row.Amount, row.Currency, row.Date, row.AuthorizedDate, row.ProviderCategory, row.ProviderCategoryDetailed },
+                                    "Choose the expense most likely to be the same purchase as this bank transaction. Amount alone is not enough. If multiple purchases are plausible, choose cannot tell. This is only a suggestion for a person to review.", choices, timeout.Token);
+                                if (answer is { Confidence: var confidence } && confidence >= settings.Threshold && Guid.TryParse(answer.Choice, out var selected))
+                                    result = result.Select(match => match with { IsSuggested = match.TransactionId == selected }).ToList();
+                            }
+                            catch (Exception exception) when (!ct.IsCancellationRequested && exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+                        }
+                    }
+                    return Results.Ok(result);
                 })
                 .WithName("GetBankTransactionMatches")
                 .Produces<IReadOnlyList<ExpenseMatchResponse>>()

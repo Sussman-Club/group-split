@@ -91,7 +91,10 @@
                 @foreach (var item in VisibleRows)
                 {
                     var row = item;
-                    <div class="gs-bank-inbox-entry" @key="row.Id">
+                    <div class="gs-bank-inbox-entry @(CanOpenRow(row) ? "is-clickable" : null)"
+                         role="@(CanOpenRow(row) ? "button" : null)"
+                         tabindex="@(CanOpenRow(row) ? "0" : null)"
+                         @onclick="@(() => OpenRowAsync(row))" @onkeydown="@(args => OpenRowWithKeyboardAsync(row, args))" @key="row.Id">
                         @* The merchant's own logo where the bank sent one: a row reads as
                            the place it happened rather than as two initials. No payer to
                            show yet -- nobody has filed this -- so the logo takes the square
@@ -126,80 +129,29 @@
                         </div>
                             @if (row.Status == InboxStatus.New)
                             {
-                                <div class="gs-bank-inbox-actions">
+                                <div class="gs-bank-inbox-actions" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                                    <div class="gs-receipt-inbox-shortcut">
                                     <MudButton Variant="Variant.Outlined"
-                                               Color="Color.Primary" Size="Size.Small" Class="gs-bank-inbox-suggestion"
+                                               Color="Color.Primary" Size="Size.Small"
                                                Disabled="@(_busy == row.Id)"
-                                               OnClick="@(() => AddToGroupAsync(row))">@(row.Suggestion is { } suggestion ? Loc["Review: {0}", suggestion.Destination].Value : Loc["Add to group"].Value)</MudButton>
+                                               title="@MatchActionLabel(row)"
+                                               OnClick="@(() => AddToGroupAsync(row))">@MatchActionLabel(row)</MudButton>
+                                    </div>
+                                    <div class="gs-receipt-inbox-state-action">
                                     <MudButton Variant="Variant.Text" Size="Size.Small"
                                                Disabled="@(_busy == row.Id)"
                                                OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudButton>
+                                    </div>
                                 </div>
                             }
                             else if (row.Status == InboxStatus.Ignored)
                             {
-                                <div class="gs-bank-inbox-actions"><MudButton Variant="Variant.Text" Size="Size.Small"
+                                <div class="gs-bank-inbox-actions" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><div class="gs-receipt-inbox-state-action"><MudButton Variant="Variant.Text" Size="Size.Small"
                                            Disabled="@(_busy == row.Id)"
-                                           OnClick="@(() => RestoreAsync(row))">@Loc["Restore"]</MudButton></div>
-                            }
-                            else if (row.Status == InboxStatus.Filed && row.TransactionId is { } expenseId)
-                            {
-                                <div class="gs-bank-inbox-actions"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                           OnClick="@(() => OpenExpenseAsync(expenseId))">@Loc["View expense"]</MudButton></div>
+                                           OnClick="@(() => RestoreAsync(row))">@Loc["Restore"]</MudButton></div></div>
                             }
                     </div>
 
-                    @* What is already in the ledger that this could be. Said on the row
-                       itself, before anything is filed: a duplicate found afterwards is a
-                       balance somebody has to notice is wrong and then undo by hand.
-
-                       How loudly depends on the grade. The same money to the cent is worth a
-                       warning; a figure within a quarter of it is worth a note and no more --
-                       measured over real spending, the softer test passes on unrelated money
-                       often enough that a warning for it teaches people to stop reading them.
-
-                       Every candidate is listed, not just the best one. They are ranked, and
-                       the ranking can be wrong: a coincidence a few cents nearer used to take
-                       the one slot and keep the real duplicate off the screen entirely.
-
-                       Both answers are on each of them, and neither happens on its own. *@
-                    @if (row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 0)
-                    {
-                        var sure = row.PossibleDuplicates.Any(candidate => candidate.IsConfident);
-
-                        <MudAlert Severity="@(sure ? Severity.Warning : Severity.Normal)" Dense="true" Class="mb-2"
-                                  Style="margin-top: -4px">
-                            <div class="gs-match-lead">
-                                @(sure
-                                    ? Loc["You may already have recorded this:"].Value
-                                    : row.PossibleDuplicates.Count == 1
-                                        ? Loc["This could be one you have already recorded:"].Value
-                                        : Loc["These could be ones you have already recorded:"].Value)
-                            </div>
-                            @foreach (var match in row.PossibleDuplicates)
-                            {
-                                <div class="gs-inline gs-match-line"
-                                     style="justify-content: space-between; gap: 12px; flex-wrap: wrap" @key="match.TransactionId">
-                                    <span>
-                                        <strong>@match.Name</strong>,
-                                        <Money Value="@match.Amount" Currency="@match.Currency" />
-                                        in @match.Where on @Clock.Day(match.DateTime).ToString("d")@(match.IsConfident ? "." : $" -- {Apart(match)}.")
-                                    </span>
-                                    <div class="gs-inline" style="gap: 4px; flex-wrap: nowrap">
-                                        <MudButton Variant="@(match.IsConfident ? Variant.Filled : Variant.Text)"
-                                                   Color="@(match.IsConfident ? Color.Primary : Color.Default)"
-                                                   Size="Size.Small"
-                                                   Class="@(match.IsConfident ? "gs-btn-pill" : null)"
-                                                   Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => AttachAsync(row, match.TransactionId))">@Loc["Same payment"]</MudButton>
-                                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                                   Disabled="@(_busy == row.Id)"
-                                                   OnClick="@(() => DismissMatchAsync(row, match))">@Loc["Not the same"]</MudButton>
-                                    </div>
-                                </div>
-                            }
-                        </MudAlert>
-                    }
                 }
             </div>
 
@@ -221,9 +173,22 @@
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
     private Guid? _busy;
-    private Task OpenExpenseAsync(Guid id) => DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
-        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } },
-        new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+    private static bool CanOpenRow(BankTransactionResponse row) => true;
+    private Task OpenRowAsync(BankTransactionResponse row)
+    {
+        Nav.NavigateTo($"/inbox/bank/{row.Id}{new Uri(Nav.Uri).Query}");
+        return Task.CompletedTask;
+    }
+    private string MatchActionLabel(BankTransactionResponse row)
+    {
+        var match = row.PossibleDuplicates.FirstOrDefault(candidate => candidate.IsSuggested)
+            ?? (row.PossibleDuplicates.Count == 1 ? row.PossibleDuplicates[0] : null);
+        if (match is not null) return Loc["Attach to {0} · {1} {2} · {3}", match.Name, match.Amount.ToString("N2"), match.Currency, Clock.Day(match.DateTime).ToString("d")].Value;
+        if (row.PossibleDuplicates.Count > 0) return Loc["Review matches"].Value;
+        return row.Suggestion is { } suggestion ? Loc["Review: {0}", suggestion.Destination].Value : Loc["Add to group"].Value;
+    }
+    private Task OpenRowWithKeyboardAsync(BankTransactionResponse row, KeyboardEventArgs args) =>
+        args.Key is "Enter" or " " ? OpenRowAsync(row) : Task.CompletedTask;
     private bool _loadingMore;
     private string? _search;
 
@@ -432,43 +397,6 @@
         }
 
         return expense;
-    }
-
-    /// <summary>
-    /// Why a candidate whose amounts do not agree is being offered at all.
-    /// </summary>
-    /// <remarks>
-    /// Said only for a possible match. A confident one is the same money to the cent, so
-    /// there is nothing to explain -- and spelling out a difference of zero reads as though
-    /// there were.
-    /// </remarks>
-    private string Apart(ExpenseMatchResponse match)
-    {
-        var days = match.DaysApart switch
-        {
-            0 => Loc["same day"].Value,
-            1 => Loc["1 day apart"].Value,
-            var apart => Loc["{0} days apart", apart].Value
-        };
-
-        return Loc["{0}, {1:N2} apart", days, match.AmountDifference].Value;
-    }
-
-    private async Task DismissMatchAsync(BankTransactionResponse row, ExpenseMatchResponse match)
-    {
-        if (_busy is not null)
-            return;
-
-        _busy = row.Id;
-
-        try
-        {
-            await Bank.DismissMatchAsync(row.Id, match.TransactionId, row.Title);
-        }
-        finally
-        {
-            _busy = null;
-        }
     }
 
     /// <summary>

@@ -135,6 +135,17 @@
             "ProviderCategoryDetailed": "MEDICAL_PHARMACIES_AND_SUPPLEMENTS",
             "PaymentChannel": "in store",
             "City": "Lisbon"
+          },
+          {
+            "Id": "3F2A1B4C-5D6E-4F70-8A91-B2C3D4E5F642",
+            "DaysAgo": 0,
+            "Amount": 38.73,
+            "Description": "CAFE CENTRAL LUNCH",
+            "MerchantName": "Cafe Central",
+            "ProviderCategory": "FOOD_AND_DRINK",
+            "ProviderCategoryDetailed": "FOOD_AND_DRINK_RESTAURANT",
+            "PaymentChannel": "in store",
+            "City": "Lisbon"
           }
         ]
       }

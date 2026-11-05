@@ -23,6 +23,39 @@ namespace GroupSplit.App.Web.Test.Components;
 public class CreateTransactionDialogTest : ComponentTest
 {
     [Fact]
+    public async Task Closing_an_unchanged_imported_receipt_does_not_ask_to_discard()
+    {
+        var receipt = new SaveReceiptRequest { MerchantName = "Cafe", Subtotal = 12m, Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.SelectedGroupId, GroupId }, { x => x.InboxReceipt, receipt } }));
+        provider.WaitForAssertion(() => Assert.Contains("Cafe", provider.Markup));
+        await provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.DoesNotContain("Discard changes?", provider.Markup));
+        Assert.True((await reference!.Result)!.Canceled);
+    }
+
+    [Fact]
+    public async Task Closing_an_edited_imported_receipt_asks_to_discard()
+    {
+        var receipt = new SaveReceiptRequest { MerchantName = "Cafe", Subtotal = 12m, Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.SelectedGroupId, GroupId }, { x => x.InboxReceipt, receipt } }));
+        provider.WaitForAssertion(() => Assert.Contains("Cafe", provider.Markup));
+        var name = provider.FindComponents<MudTextField<string>>().Single(field => field.Instance.Label == "What was it?");
+        await provider.InvokeAsync(() => name.Instance.ValueChanged.InvokeAsync("Team lunch"));
+        var closing = provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        provider.WaitForAssertion(() => Assert.Contains("Discard changes?", provider.Markup));
+        await provider.FindAll("button").Last(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        await closing;
+    }
+    [Fact]
     public async Task Imported_receipt_tax_is_distributed_before_requesting_a_split_preview()
     {
         var receipt = new SaveReceiptRequest { Subtotal = 20m, Tax = 2m, Total = 22m,

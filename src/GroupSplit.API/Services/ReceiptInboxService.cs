@@ -131,11 +131,26 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         var end = start.AddDays(5);
         var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
         return await db.Set<Expense>().Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId))
-                && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end)
+                && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end
+                && !db.Set<ReceiptMatchDismissal>().Any(d => d.ReceiptId == id && d.ExpenseId == e.Id))
             .OrderByDescending(e => e.DateTime).Take(20)
             .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime,
                 db.Set<Receipt>().Any(existing => existing.ExpenseId == e.Id) ||
                 db.Set<ReceiptAttachment>().Any(existing => existing.ExpenseId == e.Id))).ToListAsync(ct);
+    }
+    public async Task DismissMatch(Guid id, Guid expenseId, CancellationToken ct)
+    {
+        var receipt = await Find(id, ct);
+        Unfiled(receipt);
+        if (await db.Set<ReceiptMatchDismissal>().AnyAsync(d => d.ReceiptId == id && d.ExpenseId == expenseId, ct)) return;
+        if (!(await Matches(id, ct)).Any(match => match.Id == expenseId))
+            throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt match not found.");
+        db.Add(new ReceiptMatchDismissal { ReceiptId = id, ExpenseId = expenseId });
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException exception) when (exception.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            foreach (var entry in db.ChangeTracker.Entries<ReceiptMatchDismissal>().Where(entry => entry.State == EntityState.Added)) entry.State = EntityState.Detached;
+        }
     }
     public async Task<ReceiptInboxResponse> File(Guid id, FileReceiptInboxRequest request, CancellationToken ct)
     {

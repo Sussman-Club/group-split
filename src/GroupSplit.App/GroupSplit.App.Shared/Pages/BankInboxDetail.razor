@@ -1,0 +1,136 @@
+@page "/inbox/bank/{Id:guid}"
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@inject IInboxClient Client
+@inject IBankCommands Bank
+@inject IDialogService Dialogs
+@inject ApiErrorPresenter Errors
+@inject NavigationManager Nav
+
+<PageTitle>@Loc["Bank transaction - Group Split"]</PageTitle>
+<div class="gs-receipt-review-back"><MudButton Href="@($"/inbox{new Uri(Nav.Uri).Query}")">@Loc["Back to bank transactions"]</MudButton></div>
+<LoadView Loading="_loading" Failed="@(_row is null)" Retry="LoadAsync">
+@if (_row is { } row)
+{
+    <header class="gs-receipt-review-heading">
+        <h1>@row.Title</h1>
+        <p>@row.AccountName · @row.SpentOn.ToString("d")</p>
+    </header>
+    <div class="gs-receipt-review-layout">
+        <section class="gs-card gs-card-pad gs-receipt-review-section">
+            <h2>@Loc["Transaction Details"]</h2>
+            <Money Value="@row.Amount" Currency="@row.Currency" Signed="@row.IsCredit" Absolute="@row.IsCredit" />
+            <div><strong>@Loc["Bank"]</strong><br />@row.InstitutionName · @row.AccountName</div>
+            <div><strong>@Loc["Date"]</strong><br />@row.SpentOn.ToString("d")</div>
+            <div><strong>@Loc["Bank description"]</strong><br />@row.Description</div>
+            @if (row.Pending) { <span class="gs-tag neutral">@Loc["Pending"]</span> }
+        </section>
+        <div class="gs-stack gs-receipt-review-sidebar">
+            <section class="gs-card gs-card-pad gs-receipt-review-section">
+                <h2>@Loc["Manage transaction"]</h2>
+                @if (row.Status == InboxStatus.New)
+                {
+                    <p>@Loc["Add this payment as an expense or attach it to an existing one."]</p>
+                    @if (row.PossibleDuplicates.Count > 0)
+                    {
+                        <strong>@Loc["Possible expense matches"]</strong>
+                        @foreach (var match in row.PossibleDuplicates)
+                        {
+                            <div class="gs-receipt-suggestion">
+                                <strong>@(match.IsSuggested ? Loc["Suggested: {0}", match.Name].Value : match.Name)</strong>
+                                <span>@match.Where · @match.DateTime.ToString("d") · @match.Amount.ToString("N2") @match.Currency</span>
+                                <div class="gs-inline">
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => AttachAsync(row, match.TransactionId))">@Loc["Attach"]</MudButton>
+                                    <MudButton Disabled="_busy" OnClick="@(() => DismissAsync(row, match))">@Loc["Not the same"]</MudButton>
+                                </div>
+                            </div>
+                        }
+                    }
+                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => FindExpenseAsync(row))">@Loc["Find an expense"]</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="@(() => FileAsync(row))">@Loc["Review and add expense"]</MudButton>
+                    <MudButton Disabled="_busy" OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore transaction"]</MudButton>
+                }
+                else if (row.Status == InboxStatus.Ignored)
+                {
+                    <p>@Loc["This transaction is ignored."]</p>
+                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => RestoreAsync(row))">@Loc["Restore transaction"]</MudButton>
+                }
+                else if (row.TransactionId is { } expenseId)
+                {
+                    <p>@Loc["This transaction is attached to an expense."]</p>
+                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => OpenExpenseAsync(expenseId))">@Loc["View expense"]</MudButton>
+                }
+            </section>
+        </div>
+    </div>
+}
+</LoadView>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private BankTransactionResponse? _row;
+    private bool _loading = true;
+    private bool _busy;
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            await Errors.TryAsync(async () => {
+                _row = await Client.GetBankTransactionAsync(Id);
+                if (_row.Status == InboxStatus.New && _row.PossibleDuplicates.Count > 1)
+                    _row = _row with { PossibleDuplicates = (await Client.GetBankTransactionMatchesAsync(Id)).ToList() };
+            }, Loc["Could not load transaction."].Value);
+        }
+        finally { _loading = false; }
+    }
+    private async Task AttachAsync(BankTransactionResponse row, Guid expenseId, string? expenseName = null)
+    {
+        var match = row.PossibleDuplicates.FirstOrDefault(item => item.TransactionId == expenseId);
+        var name = match?.Name ?? expenseName ?? Loc["this expense"].Value;
+        if (await Dialogs.ShowMessageBoxAsync(Loc["Attach bank transaction"].Value,
+            Loc["Attach {0} ({1} {2}, {3}) to {4}? The expense and its shares will stay the same.", row.Title, row.Amount.ToString("N2"), row.Currency, row.SpentOn.ToString("d"), name].Value,
+            yesText: Loc["Attach"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+        _busy = true;
+        try { if (await Bank.AttachAsync(row.Id, expenseId) is not null) Nav.NavigateTo("/inbox"); }
+        finally { _busy = false; }
+    }
+    private async Task FindExpenseAsync(BankTransactionResponse row)
+    {
+        var dialog = await Dialogs.ShowAsync<FindExpenseDialog>(Loc["Find existing expense"].Value,
+            new DialogParameters<FindExpenseDialog> { { x => x.Row, row }, { x => x.RequireUnlinkedBank, true } },
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+        if (await dialog.Result is { Canceled: false, Data: TransactionResponse expense }) await AttachAsync(row, expense.Id, expense.Name);
+    }
+    private async Task FileAsync(BankTransactionResponse row)
+    {
+        var dialog = await Dialogs.ShowAsync<FileBankTransactionDialog>(Loc["Record this payment"].Value,
+            new DialogParameters<FileBankTransactionDialog> { { x => x.Row, row } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+        if (await dialog.Result is not { Canceled: false, Data: FileBankTransactionDialog.Answer answer }) return;
+        _busy = true;
+        try
+        {
+            var result = answer.AttachTo is { } id ? await Bank.AttachAsync(row.Id, id)
+                : answer.Request is { } request ? await Bank.FileAsync(row.Id, request, answer.Destination) : null;
+            if (result is not null) Nav.NavigateTo("/inbox");
+        }
+        finally { _busy = false; }
+    }
+    private async Task IgnoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.IgnoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox"); } finally { _busy = false; } }
+    private async Task DismissAsync(BankTransactionResponse row, ExpenseMatchResponse match)
+    {
+        _busy = true;
+        try
+        {
+            if (await Bank.DismissMatchAsync(row.Id, match.TransactionId, row.Title))
+                _row = row with { PossibleDuplicates = row.PossibleDuplicates.Where(item => item.TransactionId != match.TransactionId).ToList() };
+        }
+        finally { _busy = false; }
+    }
+    private async Task RestoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.RestoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox?status=ignored"); } finally { _busy = false; } }
+    private Task OpenExpenseAsync(Guid id) => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+}
