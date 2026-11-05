@@ -149,6 +149,22 @@ public class ReceiptInboxTest : ComponentTest
     }
 
     [Fact]
+    public void Expense_with_receipt_is_not_offered_as_an_attachment_target()
+    {
+        var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
+        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4) }, []);
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
+        client.Setup(x => x.MatchReceiptInboxAsync(receipt.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ReceiptExpenseCandidate(Guid.NewGuid(), "Groceries", 10m, "USD", new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero), HasReceipt: true)]);
+        Services.AddSingleton(client.Object);
+        var page = Render<ReceiptInbox>();
+
+        page.WaitForAssertion(() => Assert.Contains("Add to group", page.Markup));
+        Assert.DoesNotContain("Attach to Groceries", page.Markup);
+    }
+
+    [Fact]
     public void Suggestion_arriving_after_receipts_is_rendered_in_virtualized_row()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD",

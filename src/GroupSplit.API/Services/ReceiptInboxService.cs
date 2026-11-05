@@ -131,10 +131,11 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         var end = start.AddDays(15);
         var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
         return await db.Set<Expense>().Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId))
-                && !db.Set<Receipt>().Any(existing => existing.ExpenseId == e.Id)
                 && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end)
             .OrderByDescending(e => e.DateTime).Take(20)
-            .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime)).ToListAsync(ct);
+            .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime,
+                db.Set<Receipt>().Any(existing => existing.ExpenseId == e.Id) ||
+                db.Set<ReceiptAttachment>().Any(existing => existing.ExpenseId == e.Id))).ToListAsync(ct);
     }
     public async Task<ReceiptInboxResponse> File(Guid id, FileReceiptInboxRequest request, CancellationToken ct)
     {
@@ -226,6 +227,8 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 .WithExtension("receiptCurrency", r.Currency).WithExtension("expenseCurrency", expense.Currency);
         if (await db.Set<Receipt>().AnyAsync(other => other.ExpenseId == expense.Id, ct))
             throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has an itemized receipt.");
+        if (request.ExpenseId is not null && await db.Set<ReceiptAttachment>().AnyAsync(existing => existing.ExpenseId == expense.Id, ct))
+            throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has a receipt file.");
         if (request.ExpenseId != null && request.BankTransactionId is { } linkBankId)
             await bank.Link(linkBankId, new LinkBankTransactionRequest { TransactionId = expense.Id }, ct);
         // Linking only changes evidence. Existing allocations are never recalculated here.

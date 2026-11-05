@@ -152,7 +152,7 @@ public class ReceiptInboxEndpointTest
         Assert.Equal("Food", Assert.Single(bill.Items).Name);
     }
     [Fact]
-    public async Task An_expense_with_a_receipt_is_not_suggested_for_another_receipt()
+    public async Task An_expense_with_a_receipt_is_flagged_and_cannot_receive_another()
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -168,11 +168,11 @@ public class ReceiptInboxEndpointTest
         created.EnsureSuccessStatusCode();
         var expenseId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         var before = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
-        Assert.Contains(before!, match => match.Id == expenseId);
+        Assert.False(Assert.Single(before!, match => match.Id == expenseId).HasReceipt);
         (await host.Client.PostAsJsonAsync($"/receipts/inbox/{first}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).EnsureSuccessStatusCode();
 
         var after = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
-        Assert.DoesNotContain(after!, match => match.Id == expenseId);
+        Assert.True(Assert.Single(after!, match => match.Id == expenseId).HasReceipt);
         Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync($"/receipts/inbox/{second}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).StatusCode);
     }
 

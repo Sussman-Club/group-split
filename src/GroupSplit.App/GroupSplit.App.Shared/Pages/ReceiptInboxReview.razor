@@ -48,8 +48,8 @@
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => Create(suggestion.IsPersonal ? null : suggestion.GroupId))">@Loc["Review suggested group"]</MudButton>
                 </div>
             }
-            @if (_matches.Count > 0) { <strong>@Loc["Possible expense matches"]</strong> }
-            @foreach (var match in _matches)
+            @if (_matches.Any(match => !match.HasReceipt)) { <strong>@Loc["Possible expense matches"]</strong> }
+            @foreach (var match in _matches.Where(match => !match.HasReceipt))
             {
                 <MudButton OnClick="@(() => Attach(match.Id))" Disabled="_busy">Attach to @match.Name · @match.Amount @match.Currency · @match.DateTime.ToString("d")</MudButton>
             }

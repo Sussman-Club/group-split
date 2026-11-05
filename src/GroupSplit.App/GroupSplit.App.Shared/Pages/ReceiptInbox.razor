@@ -241,7 +241,7 @@ else if (_rows is not null)
                     {
                         var day = row.Receipt.PurchaseDate!.Value.DayNumber;
                         var matches = await Client.MatchReceiptInboxAsync(row.Id, ct);
-                        return (row.Id, Match: matches.OrderBy(match =>
+                        return (row.Id, Match: matches.Where(match => !match.HasReceipt).OrderBy(match =>
                             Math.Abs(DateOnly.FromDateTime(match.DateTime.UtcDateTime).DayNumber - day)).FirstOrDefault());
                     }
                     catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return (row.Id, Match: (ReceiptExpenseCandidate?)null); }
