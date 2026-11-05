@@ -133,6 +133,7 @@ public class TransactionService(
     IExpenseSplitter splitter,
     IGroupParticipants participants,
     IReceiptAttachmentService receiptAttachments,
+    IReceiptFiles receiptFiles,
     IReceiptService receipts,
     GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue backgroundJobs,
     TimeProvider clock,
@@ -1110,8 +1111,21 @@ public class TransactionService(
         // would come back as a payment that no longer exists.
         var returning = row is { RemovedAt: null } ? row : null;
 
+        IReadOnlyList<string> deletedReceiptFiles = [];
         if (transaction is Expense)
-            await receiptAttachments.DeleteForExpense(id, returning?.Id, ct);
+        {
+            var inboxReceipt = await dbContext.Set<Receipt>().Include(receipt => receipt.Items)
+                .FirstOrDefaultAsync(receipt => receipt.ExpenseId == id && receipt.OwnerUserId != null, ct);
+            deletedReceiptFiles = await receiptAttachments.PrepareDeleteForExpense(id, returning?.Id, inboxReceipt?.Id, ct);
+            if (inboxReceipt is not null)
+            {
+                inboxReceipt.ExpenseId = null;
+                inboxReceipt.Expense = null;
+                inboxReceipt.IsIgnored = false;
+                foreach (var item in inboxReceipt.Items)
+                    item.SplitRuleVersionId = null;
+            }
+        }
 
         // Saved with the delete rather than before it, so a delete that fails leaves the row
         // filed against the expense that is still there.
@@ -1125,6 +1139,7 @@ public class TransactionService(
             await notifications.ForGroup(PushNotificationKind.ExpenseChanged, transaction.GroupId, userContext.User.Id, ct);
 
         await dbContext.SaveChangesAsync(ct);
+        await receiptFiles.DeleteAsync(deletedReceiptFiles, "Could not remove receipt object for deleted expense.", ct);
     }
 
     /// <summary>

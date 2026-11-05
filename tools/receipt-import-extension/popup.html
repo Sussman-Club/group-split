@@ -10,21 +10,21 @@
   <main class="importer">
     <header class="importer-header">
       <div class="importer-brand"><img class="brand-mark" src="logo.svg" alt=""><span>Group Split</span></div>
-      <h1>Bring your receipts in</h1>
-      <p>Choose a store and a date range. Review the receipts before adding them to your inbox.</p>
+      <h1>Import receipts</h1>
+      <p>Find purchases from a store and add them to your inbox.</p>
     </header>
 
     <section class="importer-section" aria-labelledby="store-heading">
-      <div class="section-heading"><span class="step-number" aria-hidden="true">1</span><div><h2 id="store-heading">Choose a store</h2><p>Sign in on the store’s website if needed.</p></div></div>
+      <div class="section-heading"><h2 id="store-heading">Store</h2><p>Sign in to the store if needed.</p></div>
       <div class="store-controls">
-        <label class="field">Store<select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco</option></select></label>
+        <label class="field"><span class="sr-only">Store</span><select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco Warehouse</option><option value="costco-online">Costco Online</option></select></label>
         <button id="open-costco" class="button button-secondary" type="button">Connect store</button>
       </div>
       <p id="connection" class="connection" role="status" aria-live="polite"></p>
     </section>
 
     <section class="importer-section" aria-labelledby="dates-heading">
-      <div class="section-heading"><span class="step-number" aria-hidden="true">2</span><div><h2 id="dates-heading">Find receipts</h2><p>Choose the dates for your search.</p></div></div>
+      <div class="section-heading"><h2 id="dates-heading">Search purchases</h2><p>Choose a date range to search.</p></div>
       <div class="filter-fields">
         <label class="field">From<input type="date" id="from" required></label>
         <label class="field">To<input type="date" id="to" required></label>
@@ -33,7 +33,7 @@
         </label>
       </div>
       <div class="buyer-guidance" id="buyer-guidance">
-        <span id="buyer-note" class="field-note" role="status" aria-live="polite">Recipient names are used only for this filter and aren’t saved to receipts.</span>
+        <span id="buyer-note" class="field-note" role="status" aria-live="polite">Amazon PDFs may include recipient names and addresses.</span>
         <button id="refresh-buyers" class="text-button" type="button">Check recipients</button>
       </div>
       <button id="find" class="button button-primary" type="button">Find receipts</button>
@@ -44,7 +44,7 @@
 
     <aside class="privacy-note" aria-label="Your privacy">
       <span class="privacy-icon" aria-hidden="true">✓</span>
-      <div><strong>Review before importing</strong><p id="privacy-note">Amazon summaries omit customer, address and payment sections. Check item names for personal text.</p></div>
+      <div><strong>Review before importing</strong><p id="privacy-note">Amazon PDFs contain the full printable receipt and may include addresses, payment details and order numbers.</p></div>
     </aside>
     <button id="back-to-inbox" class="return-link" type="button" hidden>Back to receipts</button>
   </main>

@@ -5559,4 +5559,13 @@
   <data name="Ignored receipts stay here until you restore or delete them." xml:space="preserve"><value>Ignored receipts stay here until you restore or delete them.</value></data>
   <data name="Search merchants or items" xml:space="preserve"><value>Search merchants or items</value></data>
   <data name="No receipts match your filters." xml:space="preserve"><value>No receipts match your filters.</value></data>
+  <data name="PDF preview: drag or scroll to move around" xml:space="preserve"><value>PDF preview: drag or scroll to move around</value></data>
+  <data name="Your receipts are private until you add them to an expense." xml:space="preserve"><value>Your receipts are private until you add them to an expense.</value></data>
+  <data name="Review bank transactions and add them to a group or match an expense." xml:space="preserve"><value>Review bank transactions and add them to a group or match an expense.</value></data>
+  <data name="Search merchants or accounts" xml:space="preserve"><value>Search merchants or accounts</value></data>
+  <data name="No transactions match your search" xml:space="preserve"><value>No transactions match your search</value></data>
+  <data name="Try a different search." xml:space="preserve"><value>Try a different search.</value></data>
+  <data name="Could not read the receipt. You can review it and enter the details manually." xml:space="preserve"><value>Could not read the receipt. You can review it and enter the details manually.</value></data>
+  <data name="The original PDF is missing. Upload the original again to restore it." xml:space="preserve"><value>The original PDF is missing. Upload the original again to restore it.</value></data>
+  <data name="Attach this receipt to {0} ({1} {2}, {3})? The expense and its current shares will stay the same. The receipt will move to Added." xml:space="preserve"><value>Attach this receipt to {0} ({1} {2}, {3})? The expense and its current shares will stay the same. The receipt will move to Added.</value></data>
 </root>

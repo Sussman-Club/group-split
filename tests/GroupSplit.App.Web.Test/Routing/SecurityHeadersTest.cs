@@ -23,6 +23,19 @@ public sealed class SecurityHeadersTest : IAsyncLifetime
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    [Fact]
+    public void Only_valid_configured_extension_ids_are_allowed_to_frame()
+    {
+        const string edge = "aaclkbbjgicajpnjoigfjnlmpiocngmp";
+        const string chrome = "abcdefghijklmnopabcdefghijklmnop";
+        var policy = SecurityHeadersExtensions.ContentSecurityPolicy("nonce", new HostString("groupsplit.test"),
+            $"{edge}, {chrome}, invalid; https://evil.example");
+        var frames = Directive(policy, "frame-src");
+        Assert.Contains($"chrome-extension://{edge}", frames);
+        Assert.Contains($"chrome-extension://{chrome}", frames);
+        Assert.DoesNotContain("evil.example", frames);
+    }
+
     public async ValueTask InitializeAsync()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions

@@ -63,7 +63,7 @@
             <MudButton OnClick="FindBank" Disabled="_busy">Find a bank transaction</MudButton>
             </section>
             <MudButton OnClick="Delete" Disabled="_busy" Color="Color.Error">Delete private receipt</MudButton>
-        <details class="gs-receipt-review-original"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
+        <details class="gs-receipt-review-original @(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0 ? "is-unextracted" : null)" open="@(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0)"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
 
             <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" Title="@Loc["Add original receipt"]" Description="@Loc["Choose another photo or PDF to attach."]" />
             @foreach (var file in row.Attachments)

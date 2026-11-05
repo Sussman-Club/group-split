@@ -9,23 +9,20 @@ accesses a retailer only after you connect that retailer and initiate an import.
 You sign in directly with the retailer; the extension does not ask for or store
 your retailer password.
 
-For Amazon, the extension reads order dates, ship-to recipient names for the
-optional filter, and invoice item names, quantities, prices, shipping, tax and
-totals. It uses the order identifier to create a reference for duplicate
-detection. The generated summary omits the original invoice's customer,
-address and payment sections. Item names can themselves contain personal text;
-review the preview before importing. Recipient names are used for filtering and
-are not copied into the generated receipt or sent to GroupSplit.
+For Amazon, the extension reads order dates and ship-to names for the optional
+recipient filter. It verifies the order number on the printable receipt and
+renders the full page as a PDF. The PDF may include customer names, addresses,
+payment details and order numbers. Review the printable receipt before importing.
 
 For Costco warehouse purchases, the extension reads receipt listings and
 prints the displayed receipt into a PDF. These PDFs can include customer,
-membership or masked payment information. Costco online orders are not
-currently supported.
+membership or masked payment information. For Costco online orders, the
+extension generates a summary from the order date, items, prices and totals.
 
 The extension saves a copy of each PDF in your Downloads/GroupSplit folder and
 uploads it to the signed-in GroupSplit inbox when you select the import action.
-Amazon's extracted item and total details are also sent to GroupSplit for new
-receipts. GroupSplit stores uploaded receipts under your account; its own
+GroupSplit reads new attachments to suggest receipt details and stores uploaded
+receipts under your account. Its own
 privacy and retention policies apply to that stored data. You can delete local
 copies from your downloads folder.
 

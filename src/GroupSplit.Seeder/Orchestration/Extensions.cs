@@ -67,6 +67,7 @@ public static class Extensions
 
             builder.AddSeeder<CategorySeeder>();
             builder.AddSeeder<TransactionSeeder>();
+            builder.AddSeeder<ReceiptInboxSeeder>();
 
             // Repayments, after the expenses. Without them every seeded balance only ever
             // grows: the Settle page has no history and a ledger filtered to settlements

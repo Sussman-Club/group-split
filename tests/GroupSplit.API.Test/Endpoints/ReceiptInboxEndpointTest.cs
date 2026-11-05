@@ -152,6 +152,31 @@ public class ReceiptInboxEndpointTest
         Assert.Equal("Food", Assert.Single(bill.Items).Name);
     }
     [Fact]
+    public async Task An_expense_with_a_receipt_is_not_suggested_for_another_receipt()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var details = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest
+            { MerchantName = "Store", PurchaseDate = today, Subtotal = 20m, Total = 20m,
+                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20m, TotalPrice = 20m }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{first}", details, Json)).EnsureSuccessStatusCode();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{second}", details, Json)).EnsureSuccessStatusCode();
+        var created = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+            { Name = "Food", Amount = 20m, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+        created.EnsureSuccessStatusCode();
+        var expenseId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var before = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
+        Assert.Contains(before!, match => match.Id == expenseId);
+        (await host.Client.PostAsJsonAsync($"/receipts/inbox/{first}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).EnsureSuccessStatusCode();
+
+        var after = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
+        Assert.DoesNotContain(after!, match => match.Id == expenseId);
+        Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync($"/receipts/inbox/{second}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).StatusCode);
+    }
+
+    [Fact]
     public async Task Creating_from_a_draft_is_retryable_and_refuses_currency_mismatch_atomically()
     {
         await using var host = await ApiEndpointHost.StartAsync();

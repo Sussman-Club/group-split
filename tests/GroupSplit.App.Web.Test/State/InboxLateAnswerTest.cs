@@ -40,9 +40,9 @@ public class InboxLateAnswerTest
 
         _inbox
             .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<DateOnly?>(),
-                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .Returns(async (InboxStatus? status, DateOnly? _, DateOnly? _, string _, bool? _, int? _, int? _,
+            .Returns(async (InboxStatus? status, DateOnly? _, DateOnly? _, string _, string _, bool? _, int? _, int? _,
                 CancellationToken _) =>
             {
                 if (_waitingIsSlow && status == InboxStatus.New)

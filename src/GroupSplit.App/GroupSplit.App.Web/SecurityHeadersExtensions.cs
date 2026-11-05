@@ -83,7 +83,8 @@ public static class SecurityHeadersExtensions
                 {
                     var headers = context.Response.Headers;
 
-                    headers.ContentSecurityPolicy = ContentSecurityPolicy(nonce, context.Request.Host);
+                    var config = context.RequestServices.GetRequiredService<IConfiguration>();
+                    headers.ContentSecurityPolicy = ContentSecurityPolicy(nonce, context.Request.Host, config["ReceiptImporter:ExtensionIds"]);
                     headers.XFrameOptions = "DENY";
                     headers.XContentTypeOptions = "nosniff";
                     headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
@@ -124,10 +125,13 @@ public static class SecurityHeadersExtensions
     /// is a different origin in development, and browsers apply the directive to the
     /// redirect as well.
     /// </remarks>
-    internal static string ContentSecurityPolicy(string nonce, HostString host)
+    internal static string ContentSecurityPolicy(string nonce, HostString host, string? extensionIds = null)
     {
         var sockets = host.HasValue ? $" wss://{host} ws://{host}" : string.Empty;
         var logos = string.Join(' ', MerchantLogos.ProviderHosts.Order(StringComparer.Ordinal).Select(h => $"https://{h}"));
+        var extensionFrames = string.Join(' ', (extensionIds ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(id => id.Length == 32 && id.All(c => c is >= 'a' and <= 'p'))
+            .Distinct(StringComparer.Ordinal).Select(id => $"chrome-extension://{id}"));
 
         return string.Join("; ",
             "default-src 'self'",
@@ -136,7 +140,7 @@ public static class SecurityHeadersExtensions
             $"font-src 'self' data: {FontFiles}",
             $"img-src 'self' data: blob: {logos}",
             $"connect-src 'self'{sockets} {PlaidApi}",
-            $"frame-src {PlaidLink}",
+            $"frame-src {PlaidLink} {extensionFrames}",
             "frame-ancestors 'none'",
             "object-src 'none'",
             "worker-src 'self'",

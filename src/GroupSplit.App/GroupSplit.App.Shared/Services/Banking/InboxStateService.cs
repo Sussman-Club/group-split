@@ -35,6 +35,7 @@ public interface IInboxStateService
     /// anybody actually gets through a backlog.
     /// </summary>
     DateFilter Range { get; }
+    string? Search { get; }
 
     /// <summary>How many rows the filter in force has in total, not how many are loaded.</summary>
     int TotalCount { get; }
@@ -71,6 +72,7 @@ public interface IInboxStateService
 
     /// <summary>Narrows the rows to a span of days, or widens them back to all of them.</summary>
     Task SetRangeAsync(DateFilter range, CancellationToken ct = default);
+    Task SetSearchAsync(string? search, CancellationToken ct = default);
 
     /// <summary>
     /// Asks for the rows as well as the count, from here on. The nav badge needs only the
@@ -82,7 +84,7 @@ public interface IInboxStateService
     /// Asks for the rows of one filter, span and number of pages, in one read -- what a URL
     /// asks for when the page opens on it.
     /// </summary>
-    Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default);
+    Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default, string? search = null);
 
     /// <summary>Asks for the next page and adds it to what is already shown.</summary>
     Task LoadMoreAsync(CancellationToken ct = default);
@@ -194,6 +196,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
 
     public DateFilter Range { get; private set; } = DateFilter.AllTime;
+    public string? Search { get; private set; }
 
     public int TotalCount { get; private set; }
 
@@ -245,6 +248,16 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         await RefreshAsync(ct);
     }
 
+    public async Task SetSearchAsync(string? search, CancellationToken ct = default)
+    {
+        search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        if (Search == search) return;
+        Search = search;
+        _rowsWanted = true;
+        _pages = 1;
+        await RefreshAsync(ct);
+    }
+
     /// <inheritdoc />
     public Task WantDuplicateCountAsync(CancellationToken ct = default)
     {
@@ -271,10 +284,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     }
 
     /// <inheritdoc />
-    public Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default)
+    public Task LoadRowsAsync(InboxStatus status, DateFilter range, int pages, CancellationToken ct = default, string? search = null)
     {
         Filter = status;
         Range = range;
+        Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 
         // A link asks for as many pages as somebody once loaded, which is never thousands;
         // the cap is there so a hand-edited one cannot ask for thousands of reads.
@@ -306,7 +320,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             var filter = Filter;
             var range = Range;
 
-            var next = await PageAsync(filter, range.Days(_clock.Today), page, ct);
+            var next = await PageAsync(filter, range.Days(_clock.Today), Search, page, ct);
 
             if (version != _version)
                 return;
@@ -330,11 +344,12 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     /// <summary>One page of the rows the filter and span ask for.</summary>
     private Task<PagedResponseOfBankTransactionResponse> PageAsync(
-        InboxStatus filter, DayBounds days, int page, CancellationToken ct) =>
+        InboxStatus filter, DayBounds days, string? search, int page, CancellationToken ct) =>
         _inbox.GetInboxAsync(
             status: filter,
             from: days.From,
             to: days.To,
+            search: search,
             sortBy: null,
             sortDescending: null,
             page: page,
@@ -346,13 +361,13 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     /// it says how many there are; the rest that exist are read together.
     /// </summary>
     private async Task<(IReadOnlyList<BankTransactionResponse> Rows, int TotalCount)> PagesAsync(
-        InboxStatus filter, DayBounds days, int pages, CancellationToken ct)
+        InboxStatus filter, DayBounds days, string? search, int pages, CancellationToken ct)
     {
-        var first = await PageAsync(filter, days, 1, ct);
+        var first = await PageAsync(filter, days, search, 1, ct);
         var existing = Math.Min(pages, Math.Max(1, (first.TotalCount + PageSize - 1) / PageSize));
 
         var rest = await Task.WhenAll(Enumerable.Range(2, existing - 1)
-            .Select(page => PageAsync(filter, days, page, ct)));
+            .Select(page => PageAsync(filter, days, search, page, ct)));
 
         // A row arriving between two of the reads shifts every page after it by one, which
         // would show the row at the boundary twice.
@@ -381,6 +396,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 // and the rows have to be the answer to one question.
                 var filter = Filter;
                 var range = Range;
+                var search = Search;
                 var pages = _pages;
 
                 var summary = await _inbox.GetInboxSummaryAsync(_duplicatesWanted ? true : null, ct);
@@ -393,7 +409,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                     // A bank row is dated by the day the bank put on it, so the span is asked
                     // for as days. Which month "this month" is remains the person's question,
                     // which is what the clock is for.
-                    shown = await PagesAsync(filter, range.Days(_clock.Today), pages, ct);
+                    shown = await PagesAsync(filter, range.Days(_clock.Today), search, pages, ct);
                 }
 
                 // Something has been asked for since this went out. That answer is the one

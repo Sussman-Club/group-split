@@ -57,9 +57,9 @@ public class InboxPageTest : ComponentTest
 
         _inbox
             .Setup(client => client.GetInboxAsync(It.IsAny<InboxStatus?>(), It.IsAny<DateOnly?>(),
-                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
+                It.IsAny<DateOnly?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((InboxStatus? status, DateOnly? from, DateOnly? to, string _, bool? _, int? _, int? _,
+            .ReturnsAsync((InboxStatus? status, DateOnly? from, DateOnly? to, string search, string _, bool? _, int? _, int? _,
                 CancellationToken _) =>
             {
                 _asks.Add((from, to));
@@ -68,6 +68,7 @@ public class InboxPageTest : ComponentTest
                     .Where(row => row.Status == (status ?? InboxStatus.New))
                     .Where(row => from is null || row.SpentOn >= from)
                     .Where(row => to is null || row.SpentOn <= to)
+                    .Where(row => string.IsNullOrWhiteSpace(search) || row.Title.Contains(search, StringComparison.OrdinalIgnoreCase) || row.AccountName.Contains(search, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 return new PagedResponseOfBankTransactionResponse(matching, 1, 25, matching.Count);
@@ -114,7 +115,23 @@ public class InboxPageTest : ComponentTest
         // The live remaining count also appears on the queue itself.
         Assert.Equal((null, null), Assert.Single(_asks));
         Assert.DoesNotContain("to sort out", page.Markup);
-        Assert.Contains("1 transaction left to review", page.Markup);
+        Assert.DoesNotContain("left to review in this range", page.Markup);
+    }
+
+    [Fact]
+    public void Search_filters_transactions_and_updates_the_address()
+    {
+        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Row("Amazon", 12m, DateOnly.FromDateTime(Today))];
+        var page = Render<Inbox>();
+
+        page.Find("input[aria-label='Search merchants or accounts']").Input("amazon");
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.Contains("Amazon", page.Markup);
+            Assert.DoesNotContain("Lidl", page.Markup);
+            Assert.Contains("q=amazon", Services.GetRequiredService<NavigationManager>().Uri);
+        }, TimeSpan.FromSeconds(3));
     }
 
     [Fact]
@@ -154,9 +171,7 @@ public class InboxPageTest : ComponentTest
         Assert.Contains("Nothing in this range", page.Markup);
         Assert.DoesNotContain("Nothing waiting", page.Markup);
 
-        // And the heading describes the span rather than the badge, which still counts
-        // everything waiting whenever it is from.
-        Assert.Contains("0 transactions last month.", page.Markup);
+        Assert.DoesNotContain("0 transactions last month.", page.Markup);
     }
 
     [Fact]
@@ -209,16 +224,6 @@ public class InboxPageTest : ComponentTest
     private BankTransactionResponse Credit(string merchant, decimal amount) =>
         Row(merchant, -amount, DateOnly.FromDateTime(Today));
 
-    private static IReadOnlyList<IElement> Checkboxes(IRenderedComponent<Inbox> page) =>
-        page.FindAll(".gs-row input[type=checkbox]");
-
-    private static Task TickAsync(IRenderedComponent<Inbox> page, int index) =>
-        Checkboxes(page)[index].ChangeAsync(new ChangeEventArgs { Value = true });
-
-    private static Task PressAsync(IRenderedComponent<Inbox> page, string label) =>
-        page.FindAll(".gs-selection-bar button")
-            .First(button => button.TextContent.Contains(label)).ClickAsync(new());
-
     // ---- how loudly a suggestion is said --------------------------------------------
 
     /// <summary>
@@ -231,7 +236,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
-        var alert = page.Find(".gs-queue .mud-alert");
+        var alert = page.Find(".gs-bank-inbox-list .mud-alert");
 
         Assert.Contains("mud-alert-text-warning", alert.ClassName);
         Assert.Contains("You may already have recorded this", alert.TextContent);
@@ -250,7 +255,7 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
-        var alert = page.Find(".gs-queue .mud-alert");
+        var alert = page.Find(".gs-bank-inbox-list .mud-alert");
 
         Assert.DoesNotContain("mud-alert-text-warning", alert.ClassName);
         Assert.Contains("mud-alert-text-normal", alert.ClassName);
@@ -280,179 +285,20 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
 
-        var alert = page.Find(".gs-queue .mud-alert");
+        var alert = page.Find(".gs-bank-inbox-list .mud-alert");
 
-        Assert.Equal(2, page.FindAll(".gs-queue .gs-match-line").Count);
+        Assert.Equal(2, page.FindAll(".gs-bank-inbox-list .gs-match-line").Count);
         Assert.Contains("Dinner", alert.TextContent);
         Assert.Contains("Taxi home", alert.TextContent);
     }
 
-    /// <summary>
-    /// Both grades are counted in what the header says needs answering, because filing is
-    /// refused over both.
-    /// </summary>
-    [Fact]
-    public async Task The_header_counts_a_row_whose_match_is_only_possible()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        Assert.Contains("1 may already be recorded", page.Find(".gs-list-head").TextContent);
-    }
-
-    // ---- selecting several rows -----------------------------------------------------
-
-    /// <summary>
-    /// Select-all means all of them. A row with a suggestion on it is ticked like any other
-    /// -- ignoring one in bulk is perfectly safe, and it is only *adding* it that has to
-    /// wait for a person.
-    /// </summary>
-    [Fact]
-    public async Task Select_all_covers_a_row_that_may_already_be_recorded()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
-            new ChangeEventArgs { Value = true });
-
-        Assert.Contains("3 selected", page.Find(".gs-selection-bar").TextContent);
-
-        // And the header still says which of them will need answering rather than adding.
-        Assert.Contains("may already be recorded", page.Find(".gs-list-head").TextContent);
-    }
-
-    /// <summary>
-    /// The safety rule, where it now lives. Sending a flagged row in bulk would either walk
-    /// into the refusal or -- much worse -- have to assert that the same money really was
-    /// paid twice on somebody's behalf, and record it twice.
-    /// </summary>
     [Fact]
     public void Incoming_rows_offer_add_to_group()
     {
         _rows = [Credit("Amazon refund", 19.50m)];
         var page = Render<Inbox>();
         Assert.Contains(page.FindAll("button"), button => button.TextContent.Trim() == "Add to group");
-    }
-
-    [Fact]
-    public async Task Keeping_the_selection_personal_leaves_a_flagged_row_for_a_person()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
-            new ChangeEventArgs { Value = true });
-        await PressAsync(page, "Keep personal");
-
-        _bank.Verify(bank => bank.KeepPersonalManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
-                sent.Count == 1 && sent[0].Title == "Lidl"),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    /// <summary>
-    /// The same for the softer grade, which is the commoner one: filing is refused over it
-    /// too, so it is not something a bulk add may quietly push through.
-    /// </summary>
-    [Fact]
-    public async Task Keeping_the_selection_personal_leaves_a_merely_similar_row_alone_as_well()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Possibly("Trattoria da Enzo", 46m)];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
-            new ChangeEventArgs { Value = true });
-        await PressAsync(page, "Keep personal");
-
-        _bank.Verify(bank => bank.KeepPersonalManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
-                sent.Count == 1 && sent[0].Title == "Lidl"),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    /// <summary>
-    /// Ignoring is the bulk action a flagged row may take part in. It creates nothing, and
-    /// filing that row later is still checked -- so there is nothing to protect it from.
-    /// </summary>
-    [Fact]
-    public async Task Ignoring_the_selection_covers_a_flagged_row_too()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Flagged("Costco", 87.15m)];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await page.Find(".gs-list-head input[type=checkbox]").ChangeAsync(
-            new ChangeEventArgs { Value = true });
-        await PressAsync(page, "Ignore");
-
-        _bank.Verify(bank => bank.IgnoreManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent => sent.Count == 2),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task Ignoring_the_selection_sends_every_row_that_was_ticked()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Row("Uber", 12m, DateOnly.FromDateTime(Today))];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await TickAsync(page, 0);
-        await TickAsync(page, 1);
-        await PressAsync(page, "Ignore");
-
-        _bank.Verify(bank => bank.IgnoreManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent => sent.Count == 2),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task Keeping_the_selection_personal_leaves_money_coming_in_alone()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today)), Credit("Amazon", 19.50m)];
-
-        var page = Render<Inbox>();
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        await TickAsync(page, 0);
-        await TickAsync(page, 1);
-        await PressAsync(page, "Keep personal");
-
-        _bank.Verify(bank => bank.KeepPersonalManyAsync(
-            It.Is<IReadOnlyList<(Guid Id, string Title)>>(sent =>
-                sent.Count == 1 && sent[0].Title == "Lidl"),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    /// <summary>
-    /// Selecting is offered over the queue and not over decisions already taken.
-    /// </summary>
-    [Fact]
-    public async Task The_added_and_ignored_filters_offer_no_selection()
-    {
-        _rows = [Row("Lidl", 30m, DateOnly.FromDateTime(Today))];
-
-        var page = Render<Inbox>();
-
-        Assert.Empty(Checkboxes(page));
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Select").ClickAsync(new());
-        Assert.NotEmpty(Checkboxes(page));
-
-        await page.FindAll("button").First(button => button.TextContent.Trim() == "Ignored")
-            .ClickAsync(new());
-
-        Assert.Empty(Checkboxes(page));
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Trim() == "Select");
     }
 
     // ---- suggestions (#437) ---------------------------------------------------------
@@ -463,34 +309,6 @@ public class InboxPageTest : ComponentTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((SuggestFilingsRequest asked, CancellationToken _) =>
                 [.. suggestions.Where(suggestion => asked.Rows.Any(row => row.Id == suggestion.BankTransactionId))]);
-
-    [Theory]
-    [InlineData(false, 2)]
-    [InlineData(true, 1)]
-    public async Task Confirming_a_bundle_uses_individual_suggestions_and_stops_on_failure(bool failFirst, int expectedCalls)
-    {
-        var account = Guid.NewGuid();
-        var first = Row("Shop", 30, DateOnly.FromDateTime(Today)) with { AccountId = account };
-        var second = first with { Id = Guid.NewGuid() };
-        var group = Guid.NewGuid();
-        var category = Guid.NewGuid();
-        _rows = [first, second];
-        Suggests(new(first.Id, group, "Home", false, category, "Groceries", .9),
-            new(second.Id, group, "Home", false, category, "Groceries", .9));
-        _bank.Setup(bank => bank.FileAsync(It.IsAny<Guid>(), It.IsAny<FileBankTransactionRequest>(),
-                It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => failFirst ? null : new TransactionResponse { Id = Guid.NewGuid() });
-
-        var page = Render<Inbox>();
-        page.WaitForElement(".gs-inbox-bundle");
-        await page.FindAll(".gs-inbox-bundle button")
-            .Single(button => button.TextContent.Contains("Confirm 2")).ClickAsync(new());
-
-        _bank.Verify(bank => bank.FileAsync(It.IsAny<Guid>(),
-            It.Is<FileBankTransactionRequest>(request => request.GroupId == group
-                && request.CategoryId == category && !request.FileAnyway),
-            "Home · Groceries", It.IsAny<CancellationToken>()), Times.Exactly(expectedCalls));
-    }
 
     [Fact]
     public void Suggestions_are_shown_as_review_actions_without_extra_filters()
@@ -505,7 +323,7 @@ public class InboxPageTest : ComponentTest
         Assert.Contains("Review: Home · Groceries", page.Markup);
         Assert.DoesNotContain("Likely personal", page.Markup);
         Assert.DoesNotContain("Likely shared", page.Markup);
-        Assert.All(page.FindAll(".gs-inbox-row-buttons"), row => Assert.Equal(2, row.QuerySelectorAll("button").Length));
+        Assert.All(page.FindAll(".gs-bank-inbox-actions"), row => Assert.Equal(2, row.QuerySelectorAll("button").Length));
     }
 
     /// <summary>
