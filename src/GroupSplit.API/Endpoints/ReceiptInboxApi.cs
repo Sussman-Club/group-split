@@ -50,6 +50,8 @@ public static class ReceiptInboxApi
             .WithName("DeleteReceiptInbox").Produces(StatusCodes.Status204NoContent);
         group.MapGet("/inbox/{receiptId:guid}/matches", async (Guid receiptId, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.Matches(receiptId, ct)))
             .WithName("MatchReceiptInbox").Produces<IReadOnlyList<ReceiptExpenseCandidate>>();
+        group.MapPost("/inbox/{receiptId:guid}/matches/{expenseId:guid}/dismiss", async (Guid receiptId, Guid expenseId, ReceiptInboxService service, CancellationToken ct) => { await service.DismissMatch(receiptId, expenseId, ct); return Results.NoContent(); })
+            .WithName("DismissReceiptInboxMatch").Produces(StatusCodes.Status204NoContent);
         group.MapPost("/inbox/{receiptId:guid}/file", async (Guid receiptId, FileReceiptInboxRequest request, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.File(receiptId, request, ct)))
             .WithName("FileReceiptInbox").Produces<ReceiptInboxResponse>();
         group.MapPost("/inbox/{receiptId:guid}/files", async (Guid receiptId, IFormFile file, IReceiptAttachmentService service, CancellationToken ct) => Results.Ok(await service.UploadDraft(receiptId, file, ct)))

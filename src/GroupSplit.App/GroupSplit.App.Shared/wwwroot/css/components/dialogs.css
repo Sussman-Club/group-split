@@ -2,8 +2,6 @@
 
 .mud-overlay-dialog .mud-overlay-scrim {
     background: rgb(20 18 14 / 45%) !important;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
 }
 
 .mud-dialog {
@@ -27,6 +25,9 @@
 .mud-dialog .mud-dialog-content {
     padding: 12px 24px 16px;
 }
+
+.gs-receipt-upload-dialog > .mud-dialog-content { overflow-y: auto; scrollbar-gutter: stable; }
+.gs-receipt-upload-dialog .gs-file-picker-status.has-reserved-space { min-height: 32px; }
 
 .mud-dialog .mud-dialog-actions {
     padding: 8px 24px 20px;

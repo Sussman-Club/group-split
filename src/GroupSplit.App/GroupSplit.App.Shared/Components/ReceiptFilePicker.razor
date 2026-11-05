@@ -81,11 +81,14 @@
         </div>
     }
 
-    @if (IsBusy)
+    @if (IsBusy || ReserveStatusSpace)
     {
-        <div class="gs-file-picker-status" role="status">
+        <div class="gs-file-picker-status @(ReserveStatusSpace ? "has-reserved-space" : null)" role="@(IsBusy ? "status" : null)" aria-hidden="@(!IsBusy)">
+            @if (IsBusy)
+            {
             <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
             <span>@(BusyText ?? Loc["Working on receipt…"])</span>
+            }
         </div>
     }
 
@@ -147,6 +150,7 @@
     [Parameter] public bool AllowMultiple { get; set; }
     [Parameter] public string? AttachedDescription { get; set; }
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool ReserveStatusSpace { get; set; }
     [Parameter] public string? BusyText { get; set; }
     [Parameter] public bool HasTranscript { get; set; }
     [Parameter] public int TranscriptItemCount { get; set; }

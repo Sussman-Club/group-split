@@ -136,6 +136,10 @@ var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web"
     .WithHealthEndpoints()
     .WithBrowserLogs();
 
+// Each browser store (and an unpacked development build) may use a different ID.
+var receiptImporterIds = builder.AddOptionalParameter("receipt-importer-extension-ids", "aaclkbbjgicajpnjoigfjnlmpiocngmp");
+web.WithEnvironment("ReceiptImporter__ExtensionIds", receiptImporterIds);
+
 if (builder.ExecutionContext.IsRunMode)
 {
     // Local Firebase credentials stay outside the repository and reach only the API.

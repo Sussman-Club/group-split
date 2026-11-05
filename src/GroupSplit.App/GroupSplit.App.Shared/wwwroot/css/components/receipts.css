@@ -442,6 +442,8 @@
 .gs-pdf-toolbar button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; min-width: 36px; padding: 4px 8px; border: 1px solid var(--gs-line-strong); border-radius: 8px; background: var(--gs-surface-2); color: var(--gs-ink); font: 700 .75rem var(--gs-font-body); cursor: pointer; }
 .gs-pdf-toolbar button:disabled { opacity: .4; cursor: default; }
 .gs-pdf-toolbar button:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; }
-.gs-pdf-viewport { padding: 8px; overflow-x: auto; }
+.gs-pdf-viewport { max-height: min(70vh, 850px); padding: 8px; overflow: auto; cursor: grab; }
+.gs-pdf-viewport.is-panning { cursor: grabbing; user-select: none; }
+.gs-pdf-viewport:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: -2px; }
 .gs-pdf-viewport canvas { display: block; margin: 0 auto; background: white; box-shadow: var(--gs-shadow-sm); }
 .gs-pdf-status { margin: 0; padding: 16px; color: var(--gs-muted); font-size: .8125rem; }

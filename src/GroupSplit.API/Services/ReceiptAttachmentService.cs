@@ -24,14 +24,16 @@ public interface IReceiptAttachmentService
     Task Delete(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
 
     /// <summary>
-    /// Deletes an expense's receipt files ahead of the expense itself.
+    /// Stages attachment changes with the expense deletion, returning object keys for
+    /// cleanup after the database changes have been saved.
     /// </summary>
     /// <param name="returnTo">
     /// The bank row the expense is being unfiled back to, if it is. The files that were
     /// attached to that row in the inbox go back to it rather than being deleted: deleting
     /// the expense undoes the filing, and the row returns carrying what it carried.
     /// </param>
-    Task DeleteForExpense(Guid expenseId, Guid? returnTo = null, CancellationToken ct = default);
+    /// <param name="returnReceiptId">The private inbox receipt to preserve, if any.</param>
+    Task<IReadOnlyList<string>> PrepareDeleteForExpense(Guid expenseId, Guid? returnTo, Guid? returnReceiptId, CancellationToken ct = default);
     Task DeleteBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);
     Task AttachToExpense(Guid bankTransactionId, Guid expenseId, CancellationToken ct = default);
 }
@@ -118,7 +120,14 @@ public sealed class ReceiptAttachmentService(
         {
             // A retry opens the existing private draft rather than creating another one.
             if (existing.Receipt is { ExpenseId: null } draft && draft.OwnerUserId == currentUser.User.Id)
+            {
+                // The content hash identifies the same bytes. Restore the object as well as
+                // returning its existing metadata if storage was cleared independently.
+                await using var retryStream = file.OpenReadStream();
+                await storage.PutObjectAsync(new PutObjectRequest { BucketName = storageOptions.Value.BucketName,
+                    Key = existing.ObjectKey, InputStream = retryStream, ContentType = existing.ContentType }, ct);
                 return ToResponse(existing);
+            }
             throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
                 "This source file is already attached to an expense. Review the existing expense instead.")
                 .WithExtension("expenseId", existing.ExpenseId);
@@ -141,10 +150,16 @@ public sealed class ReceiptAttachmentService(
         await FindDraft(receiptId, ct);
         var attachment = await db.Set<ReceiptAttachment>().FirstOrDefaultAsync(a => a.Id == attachmentId && a.ReceiptId == receiptId && a.ExpenseId == null, ct)
             ?? throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file not found.");
-        using var response = await storage.GetObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct);
+        GetObjectResponse response;
+        try { response = await storage.GetObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct); }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        { throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file is missing. Upload the original again."); }
+        using (response)
+        {
         await using var buffer = new MemoryStream();
         await response.ResponseStream.CopyToAsync(buffer, ct);
         return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
+        }
     }
 
     private async Task FindDraft(Guid id, CancellationToken ct)
@@ -236,7 +251,7 @@ public sealed class ReceiptAttachmentService(
         await files.DeleteAsync([attachment.ObjectKey], "Could not remove deleted receipt object.", ct);
     }
 
-    public async Task DeleteForExpense(Guid expenseId, Guid? returnTo = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> PrepareDeleteForExpense(Guid expenseId, Guid? returnTo, Guid? returnReceiptId, CancellationToken ct = default)
     {
         await MineToChange(expenseId, ct);
         var attachments = await db.Set<ReceiptAttachment>()
@@ -244,30 +259,27 @@ public sealed class ReceiptAttachmentService(
             .ToListAsync(ct);
 
         if (attachments.Count == 0)
-            return;
+            return [];
 
         var returning = attachments
-            .Where(attachment => returnTo is not null && attachment.BankTransactionId == returnTo)
+            .Where(attachment => returnReceiptId is not null && attachment.ReceiptId == returnReceiptId ||
+                returnTo is not null && attachment.BankTransactionId == returnTo)
             .ToList();
 
-        // Back to how the inbox held them: owned by the row alone. The itemised receipt they
-        // belonged to is the expense's and goes with it.
         foreach (var attachment in returning)
         {
             attachment.ExpenseId = null;
-            attachment.ReceiptId = null;
+            if (returnReceiptId is not null && attachment.ReceiptId == returnReceiptId)
+                attachment.BankTransactionId = null;
+            else
+                attachment.ReceiptId = null;
         }
 
         var deleted = attachments.Except(returning).ToList();
 
         db.RemoveRange(deleted);
         files.Enqueue(deleted.Select(attachment => attachment.ObjectKey));
-        await db.SaveChangesAsync(ct);
-
-        // Removing the metadata first prevents the deleted expense from exposing stale
-        // files. Storage is cleaned up separately because it cannot share the DB transaction.
-        await files.DeleteAsync(deleted.Select(attachment => attachment.ObjectKey),
-            "Could not remove receipt object for deleted expense.", ct);
+        return deleted.Select(attachment => attachment.ObjectKey).ToArray();
     }
 
     public async Task DeleteBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default)

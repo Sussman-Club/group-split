@@ -12,6 +12,43 @@ public class ReceiptInboxEndpointTest
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
+    public async Task Filing_a_receipt_requires_an_expense_not_a_bank_transaction()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var id = Guid.NewGuid();
+        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 10, Subtotal = 10,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
+        var response = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new { BankTransactionId = Guid.NewGuid(), BankExpense = new { } }, Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json));
+    }
+    [Fact]
+    public async Task Dismissing_a_receipt_match_is_private_persistent_and_does_not_remove_other_matches()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var id = Guid.NewGuid();
+        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Total = 20, Subtotal = 20,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 20, TotalPrice = 20 }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
+        var ids = new List<Guid>();
+        foreach (var name in new[] { "First", "Second" })
+        {
+            var created = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest { Name = name, Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+            created.EnsureSuccessStatusCode();
+            ids.Add((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        }
+        using var other = host.ClientForAnotherUser();
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/receipts/inbox/{id}/matches/{ids[0]}/dismiss", null)).StatusCode);
+        var route = $"/receipts/inbox/{id}/matches/{ids[0]}/dismiss";
+        (await host.Client.PostAsync(route, null)).EnsureSuccessStatusCode();
+        (await host.Client.PostAsync(route, null)).EnsureSuccessStatusCode();
+        var matches = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{id}/matches", Json);
+        Assert.Equal(ids[1], Assert.Single(matches!).Id);
+        Assert.NotNull(await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json));
+    }
+    [Fact]
     public async Task Suggestions_are_batched_only_for_owned_waiting_receipts()
     {
         IReadOnlyList<(FilingInput Row, FilingReceipt? Receipt)>? asked = null;
@@ -151,6 +188,50 @@ public class ReceiptInboxEndpointTest
         Assert.Equal(id, bill!.Id);
         Assert.Equal("Food", Assert.Single(bill.Items).Name);
     }
+    [Fact]
+    public async Task An_expense_with_a_receipt_is_flagged_and_cannot_receive_another()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var details = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest
+            { MerchantName = "Store", PurchaseDate = today, Subtotal = 20m, Total = 20m,
+                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20m, TotalPrice = 20m }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{first}", details, Json)).EnsureSuccessStatusCode();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{second}", details, Json)).EnsureSuccessStatusCode();
+        var created = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+            { Name = "Food", Amount = 20m, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+        created.EnsureSuccessStatusCode();
+        var expenseId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var before = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
+        Assert.False(Assert.Single(before!, match => match.Id == expenseId).HasReceipt);
+        (await host.Client.PostAsJsonAsync($"/receipts/inbox/{first}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).EnsureSuccessStatusCode();
+
+        var after = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
+        Assert.True(Assert.Single(after!, match => match.Id == expenseId).HasReceipt);
+        Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync($"/receipts/inbox/{second}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Expense_matches_are_limited_to_two_days_either_side()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var id = Guid.NewGuid();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Subtotal = 42m, Total = 42m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 42m, TotalPrice = 42m }] } }, Json)).EnsureSuccessStatusCode();
+        foreach (var offset in new[] { -3, -2, 2, 3 })
+        {
+            var result = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+            { Name = $"Day {offset}", Amount = 42m, Currency = "USD", DateTime = new DateTimeOffset(day.AddDays(offset).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) }, Json);
+            result.EnsureSuccessStatusCode();
+        }
+        var matches = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{id}/matches", Json);
+        Assert.Equal(new[] { "Day -2", "Day 2" }, matches!.Select(match => match.Name).OrderBy(name => name).ToArray());
+    }
+
     [Fact]
     public async Task Creating_from_a_draft_is_retryable_and_refuses_currency_mismatch_atomically()
     {

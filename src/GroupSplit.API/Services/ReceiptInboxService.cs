@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Services;
 
 public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAccountDataGuard guard,
-    ITransactionService transactions, IInboxService bank, IReceiptFiles files)
+    ITransactionService transactions, IReceiptFiles files)
 {
     private IQueryable<Receipt> Owned() => db.Set<Receipt>().Where(r => r.OwnerUserId == user.User.Id);
     private async Task<Receipt> Find(Guid id, CancellationToken ct) =>
@@ -127,13 +127,30 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     {
         var r = await Find(id, ct);
         if (r.PurchaseDate is not { } day || r.Total == 0) return [];
-        var start = new DateTimeOffset(day.AddDays(-7).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var end = start.AddDays(15);
+        var start = new DateTimeOffset(day.AddDays(-2).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var end = start.AddDays(5);
         var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
         return await db.Set<Expense>().Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId))
-                && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end)
+                && e.Currency == r.Currency && e.Amount == r.Total && e.DateTime >= start && e.DateTime < end
+                && !db.Set<ReceiptMatchDismissal>().Any(d => d.ReceiptId == id && d.ExpenseId == e.Id))
             .OrderByDescending(e => e.DateTime).Take(20)
-            .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime)).ToListAsync(ct);
+            .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime,
+                db.Set<Receipt>().Any(existing => existing.ExpenseId == e.Id) ||
+                db.Set<ReceiptAttachment>().Any(existing => existing.ExpenseId == e.Id))).ToListAsync(ct);
+    }
+    public async Task DismissMatch(Guid id, Guid expenseId, CancellationToken ct)
+    {
+        var receipt = await Find(id, ct);
+        Unfiled(receipt);
+        if (await db.Set<ReceiptMatchDismissal>().AnyAsync(d => d.ReceiptId == id && d.ExpenseId == expenseId, ct)) return;
+        if (!(await Matches(id, ct)).Any(match => match.Id == expenseId))
+            throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt match not found.");
+        db.Add(new ReceiptMatchDismissal { ReceiptId = id, ExpenseId = expenseId });
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException exception) when (exception.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            foreach (var entry in db.ChangeTracker.Entries<ReceiptMatchDismissal>().Where(entry => entry.State == EntityState.Added)) entry.State = EntityState.Detached;
+        }
     }
     public async Task<ReceiptInboxResponse> File(Guid id, FileReceiptInboxRequest request, CancellationToken ct)
     {
@@ -157,7 +174,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             return Response(r);
         }
         if (r.IsIgnored) throw new ConflictException(ErrorCodes.ReceiptInvalid, "Restore this receipt before filing it.");
-        if (new[] { request.ExpenseId != null, request.BankTransactionId != null && request.ExpenseId == null, request.NewExpense != null }.Count(x => x) != 1)
+        if (new[] { request.ExpenseId != null, request.NewExpense != null }.Count(x => x) != 1)
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose one filing destination.");
         // A new expense may carry a reviewed allocation of previously unassigned tax.
         // Validate that draft below before applying its line taxes to the inbox receipt.
@@ -170,8 +187,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             expense = await db.Set<Expense>().FirstOrDefaultAsync(e => e.Id == expenseId && groups.Any(g => g.Id == e.GroupId), ct)
                 ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Expense not found.");
         }
-        else if (request.BankTransactionId is { } bankId)
-            expense = await bank.File(bankId, request.BankExpense ?? new(), ct);
         else
         {
             if (!request.CreateAnyway)
@@ -225,8 +240,8 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 .WithExtension("receiptCurrency", r.Currency).WithExtension("expenseCurrency", expense.Currency);
         if (await db.Set<Receipt>().AnyAsync(other => other.ExpenseId == expense.Id, ct))
             throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has an itemized receipt.");
-        if (request.ExpenseId != null && request.BankTransactionId is { } linkBankId)
-            await bank.Link(linkBankId, new LinkBankTransactionRequest { TransactionId = expense.Id }, ct);
+        if (request.ExpenseId is not null && await db.Set<ReceiptAttachment>().AnyAsync(existing => existing.ExpenseId == expense.Id, ct))
+            throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has a receipt file.");
         // Linking only changes evidence. Existing allocations are never recalculated here.
         r.ExpenseId = expense.Id;
 
@@ -242,6 +257,5 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 NormalizedName = i.NormalizedName, Description = i.Description, UnitPrice = i.UnitPrice,
                 Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
                 TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
-        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId,
-            a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList());
+        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList());
 }

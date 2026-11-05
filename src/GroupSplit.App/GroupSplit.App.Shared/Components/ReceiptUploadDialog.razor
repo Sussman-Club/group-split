@@ -1,0 +1,25 @@
+@using Microsoft.AspNetCore.Components.Forms
+@namespace GroupSplit.App.Shared.Components
+
+<MudDialog Class="gs-receipt-upload-dialog">
+    <DialogContent>
+        <ReceiptFilePicker FileChanged="OnFileChanged" IsBusy="_working" ReserveStatusSpace="true" AllowMultiple="true"
+                           Title="@Loc["Add a receipt"]" Description="@Loc["Upload photos or PDFs. Review the details when you are ready."]" />
+    </DialogContent>
+    <DialogActions><MudButton OnClick="Cancel" Disabled="_working">@Loc["Cancel"]</MudButton></DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public EventCallback<InputFileChangeEventArgs> FileChanged { get; set; }
+    private bool _working;
+
+    private async Task OnFileChanged(InputFileChangeEventArgs args)
+    {
+        if (_working) return;
+        _working = true;
+        try { await FileChanged.InvokeAsync(args); MudDialog.Close(); }
+        finally { _working = false; }
+    }
+    private void Cancel() => MudDialog.Cancel();
+}

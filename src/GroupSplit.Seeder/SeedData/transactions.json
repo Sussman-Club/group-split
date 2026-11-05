@@ -6997,5 +6997,50 @@
         }
       ]
     }
+  },
+  {
+    "Id": "D0000006-0000-4000-8000-000000000006",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0013-0000-4000-8000-000000000013",
+    "Amount": 38.73,
+    "DaysAgo": 0,
+    "Name": "Team lunch",
+    "Description": "One of two expenses matching the Cafe Central bank transaction"
+  },
+  {
+    "Id": "D0000007-0000-4000-8000-000000000007",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 38.73,
+    "DaysAgo": 1,
+    "Name": "Dinner with friends",
+    "Description": "Another expense matching the Cafe Central bank transaction"
+  },
+  {
+    "Id": "D0000008-0000-4000-8000-000000000008",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 84.12,
+    "DaysAgo": 15,
+    "Name": "Home shelves",
+    "Merchant": "IKEA"
+  },
+  {
+    "Id": "D0000009-0000-4000-8000-000000000009",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 53.49,
+    "DaysAgo": 30,
+    "Name": "Home storage",
+    "Merchant": "IKEA"
+  },
+  {
+    "Id": "D0000010-0000-4000-8000-000000000010",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0003-0000-4000-8000-000000000003",
+    "Amount": 65.28,
+    "DaysAgo": 45,
+    "Name": "Home furnishings",
+    "Merchant": "IKEA"
   }
 ]

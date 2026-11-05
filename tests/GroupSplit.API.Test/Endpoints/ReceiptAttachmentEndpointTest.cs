@@ -290,6 +290,76 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
             It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    [Fact]
+    public async Task Deleting_an_expense_returns_its_inbox_receipt_and_file_to_waiting()
+    {
+        var receiptId = Guid.NewGuid();
+        var upload = await Client.PostAsync($"/receipts/inbox/{receiptId}/files", FileContent("receipt.pdf", "application/pdf"), Ct);
+        upload.EnsureSuccessStatusCode();
+        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        var details = new SaveReceiptRequest { MerchantName = "Shop", Subtotal = 10m, Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 10m, TotalPrice = 10m }] };
+        (await Client.PutAsJsonAsync($"/receipts/inbox/{receiptId}", new SaveReceiptInboxRequest { Receipt = details }, Json, Ct)).EnsureSuccessStatusCode();
+        var file = new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest
+            { Name = "Lunch", Amount = 10m, Currency = "USD", DateTime = DateTimeOffset.UtcNow } };
+        var filedResponse = await Client.PostAsJsonAsync($"/receipts/inbox/{receiptId}/file", file, Json, Ct);
+        filedResponse.EnsureSuccessStatusCode();
+        var filed = (await filedResponse.Content.ReadFromJsonAsync<ReceiptInboxResponse>(Json, Ct))!;
+
+        (await Client.DeleteAsync($"/transactions/{filed.ExpenseId}", Ct)).EnsureSuccessStatusCode();
+
+        var waiting = Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
+        Assert.Equal(receiptId, waiting.Id);
+        Assert.Null(waiting.ExpenseId);
+        Assert.Equal("Shop", waiting.Receipt.MerchantName);
+        Assert.Equal("Lunch", Assert.Single(waiting.Receipt.Items).Name);
+        Assert.Equal(attachment.Id, Assert.Single(waiting.Attachments).Id);
+        var download = await Client.GetAsync($"/receipts/inbox/{receiptId}/files/{attachment.Id}", Ct);
+        download.EnsureSuccessStatusCode();
+        Assert.Equal(StoredFile, await download.Content.ReadAsByteArrayAsync(Ct));
+        _storage.Verify(storage => storage.DeleteObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        using var other = _host.ClientForAnotherUser();
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/receipts/inbox/{receiptId}", Ct)).StatusCode);
+        (await Client.PostAsJsonAsync($"/receipts/inbox/{receiptId}/file", file, Json, Ct)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Reuploading_a_missing_inbox_file_restores_its_object_without_a_duplicate()
+    {
+        var id = Guid.NewGuid();
+        var first = await Client.PostAsync($"/receipts/inbox/{id}/files", FileContent("receipt.pdf", "application/pdf"), Ct);
+        first.EnsureSuccessStatusCode();
+        var attachment = (await first.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        _storage.Setup(storage => storage.GetObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new AmazonS3Exception("missing") { StatusCode = HttpStatusCode.NotFound });
+        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/receipts/inbox/{id}/files/{attachment.Id}", Ct)).StatusCode);
+
+        var retry = await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", FileContent("receipt.pdf", "application/pdf"), Ct);
+        retry.EnsureSuccessStatusCode();
+        var restored = (await retry.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        Assert.Equal(attachment.Id, restored.Id);
+        Assert.Equal(id, restored.ReceiptId);
+        _storage.Verify(storage => storage.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Expense_with_an_original_file_cannot_receive_another_inbox_receipt()
+    {
+        var expenseId = await CreateExpense();
+        (await Client.PostAsync($"/transactions/{expenseId}/receipt-attachments", FileContent("first.pdf", "application/pdf"), Ct)).EnsureSuccessStatusCode();
+        var receiptId = Guid.NewGuid();
+        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest
+        { MerchantName = "Shop", PurchaseDate = DateOnly.FromDateTime(DateTime.UtcNow), Subtotal = 10m, Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] } };
+        (await Client.PutAsJsonAsync($"/receipts/inbox/{receiptId}", receipt, Json, Ct)).EnsureSuccessStatusCode();
+
+        var matches = await Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{receiptId}/matches", Json, Ct);
+        Assert.True(Assert.Single(matches!, match => match.Id == expenseId).HasReceipt);
+        var refused = await Client.PostAsJsonAsync($"/receipts/inbox/{receiptId}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json, Ct);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
+    }
+
     private async Task<Guid> CreateExpense(decimal amount = 10m)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest

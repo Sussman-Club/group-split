@@ -53,9 +53,9 @@ The source file and the itemised bill are separate. Keep them apart, as the app 
 - `groupsplit receipts attachments upload <transaction-id> <file>` attaches a source file
   to an existing expense. `list`, `download`, `transcribe` and `delete` manage that file;
   `transcribe` returns a draft and does not save the itemised bill.
-- `groupsplit inbox attachments upload <row-id> <file>` does the same for a bank row that
-  is still waiting in the inbox. Filing or linking the row moves its pending files to the
-  expense, but neither upload nor transcription files the row or chooses its group.
+- For a bank payment, first file or link the bank row to its expense. Attach the receipt
+  to that expense when ready. The older `inbox attachments` commands remain available for
+  managing files already attached to a pending bank row, but are not the preferred flow.
 - After reviewing a transcription, use `receipts set` to save the bill. A new line given
   without `@` starts on the split rule of the expense's category (or the group's default,
   then Even, when a line cannot use it), so give `@` or use `receipts rule` only for the

@@ -14,10 +14,8 @@ public sealed record SaveReceiptInboxRequest
 public sealed record FileReceiptInboxRequest
 {
     public Guid? ExpenseId { get; init; }
-    public Guid? BankTransactionId { get; init; }
     public CreateTransactionRequest? NewExpense { get; init; }
-    public FileBankTransactionRequest? BankExpense { get; init; }
     public bool CreateAnyway { get; init; }
 }
 
-public sealed record ReceiptExpenseCandidate(Guid Id, string Name, decimal Amount, string Currency, DateTimeOffset DateTime);
+public sealed record ReceiptExpenseCandidate(Guid Id, string Name, decimal Amount, string Currency, DateTimeOffset DateTime, bool HasReceipt = false);

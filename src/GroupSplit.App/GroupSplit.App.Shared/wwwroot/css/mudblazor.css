@@ -279,3 +279,6 @@
     background: var(--gs-ink) !important;
     color: var(--gs-bg) !important;
 }
+/* Keep focus and hover feedback without the animated click circles. */
+.mud-ripple-effect { display: none; }
+.mud-ripple-icon::after { content: none; }

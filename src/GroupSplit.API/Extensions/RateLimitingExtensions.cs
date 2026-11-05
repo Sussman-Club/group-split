@@ -24,7 +24,7 @@ public sealed class ApiRateLimits
     /// Reading a receipt, from a fresh upload, an expense's attachment or an inbox row's.
     /// Each one is a paid call to Veryfi or Azure OpenAI.
     /// </summary>
-    public RateLimit Transcription { get; set; } = new() { PermitLimit = 30, Window = TimeSpan.FromHours(1) };
+    public RateLimit Transcription { get; set; } = new() { PermitLimit = 500, Window = TimeSpan.FromHours(1) };
     /// <summary>Suggestion batches are limited separately from receipt transcription.</summary>
     public RateLimit Suggestions { get; set; } = new() { PermitLimit = 1000, Window = TimeSpan.FromHours(1) };
     /// <summary>Provider calls on suggestion cache misses, shared by bank and receipt suggestions.</summary>
