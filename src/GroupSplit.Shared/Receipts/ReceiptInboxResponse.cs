@@ -14,9 +14,7 @@ public sealed record SaveReceiptInboxRequest
 public sealed record FileReceiptInboxRequest
 {
     public Guid? ExpenseId { get; init; }
-    public Guid? BankTransactionId { get; init; }
     public CreateTransactionRequest? NewExpense { get; init; }
-    public FileBankTransactionRequest? BankExpense { get; init; }
     public bool CreateAnyway { get; init; }
 }
 

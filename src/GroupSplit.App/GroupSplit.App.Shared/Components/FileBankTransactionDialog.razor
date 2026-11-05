@@ -3,19 +3,15 @@
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.Shared
-@using Microsoft.AspNetCore.Components.Forms
 @namespace GroupSplit.App.Shared.Components
 @inject IGroupsClient GroupsClient
 @inject IUsersClient UsersClient
 @inject GroupSplit.App.Shared.Services.Users.IUserLogin Login
 @inject ICategoriesClient CategoriesClient
-@inject IInboxClient InboxClient
 @inject GroupSplit.App.Shared.Services.Commands.ISplitRuleCommands SplitRules
 @inject ITransactionCommands Transactions
 @inject ApiErrorPresenter Errors
 @inject LocalClock Clock
-@inject IReceiptCommands Receipts
-@inject IReceiptAttachmentCommands ReceiptAttachments
 @inject IDialogService DialogService
 @implements IDisposable
 
@@ -51,7 +47,6 @@
     </TitleContent>
 
     <DialogContent>
-        <ReceiptReadLock IsLocked="@ReceiptBusy">
         <div class="gs-stack" style="gap: 16px">
             @if (Login.User is { Onboarding.BankDismissed: false } && !_bankGuideDismissed)
             {
@@ -132,9 +127,9 @@
 
                     <div class="gs-inline" style="border-top: 1px solid var(--gs-line); margin-top: 12px; padding-top: 12px; gap: 6px">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">@Loc["Find another expense"]</MudButton>
+                                   StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnotherAsync">@Loc["Find another expense"]</MudButton>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Add" Disabled="@ReceiptBusy" OnClick="UseNewExpense">@Loc["None of these — it is new"]</MudButton>
+                                   StartIcon="@Icons.Material.Rounded.Add" OnClick="UseNewExpense">@Loc["None of these — it is new"]</MudButton>
                     </div>
                 </div>
             }
@@ -146,7 +141,7 @@
                 <div class="gs-inline" style="justify-content: space-between; align-items: center">
                     <span class="gs-muted">@Loc["Already recorded this expense?"]</span>
                     <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                               StartIcon="@Icons.Material.Rounded.Search" Disabled="@ReceiptBusy" OnClick="FindAnotherAsync">@Loc["Search existing"]</MudButton>
+                               StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnotherAsync">@Loc["Search existing"]</MudButton>
                 </div>
             }
 
@@ -211,23 +206,22 @@
             }
             }
         </div>
-        </ReceiptReadLock>
     </DialogContent>
 
     <DialogActions>
-        <MudButton Variant="Variant.Text" Disabled="@ReceiptBusy" OnClick="Cancel">@Loc["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cancel"]</MudButton>
 
         @if (SelectedExpenseId is { } transactionId && !_newExpenseChosen)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!SelectedExpenseCanAttach || ReceiptBusy)" OnClick="AttachSelected">@Loc["Attach to {0}", SelectedExpenseName].Value</MudButton>
+                       Disabled="@(!SelectedExpenseCanAttach)" OnClick="AttachSelected">@Loc["Attach to {0}", SelectedExpenseName].Value</MudButton>
         }
         else
         {
             @* Gated on having answered, not on the answer: null is "Personal", which is a
                destination like any other, so it cannot also stand for "not yet said". *@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!_chosen || ReceiptBusy)" OnClick="Submit">@(Row.IsCredit ? Loc["Add credit"].Value : Loc["Add expense"].Value)</MudButton>
+                       Disabled="@(!_chosen)" OnClick="Submit">@(Row.IsCredit ? Loc["Add credit"].Value : Loc["Add expense"].Value)</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -260,8 +254,7 @@
     /// The expense this row is the same money as. Set only when the person said so, and
     /// then nothing new is recorded: the row is attached to that one.
     /// </param>
-    public sealed record Answer(FileBankTransactionRequest? Request, string Destination, Guid? AttachTo = null,
-        ReceiptAttachmentResponse? ReceiptAttachment = null, SaveReceiptRequest? Receipt = null);
+    public sealed record Answer(FileBankTransactionRequest? Request, string Destination, Guid? AttachTo = null);
 
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
@@ -296,25 +289,19 @@
     private Guid? _categoryId;
 
     /// <summary>
-    /// Where the classifier thinks this goes, from the inbox row and then again once a
-    /// receipt has been read. Null when it abstained, or there is no model.
+    /// Where the classifier thinks this goes, or null when it abstained.
     /// </summary>
     private FilingSuggestionResponse? _suggestion;
 
     /// <summary>
     /// Whether the person has picked a group or category themselves. From then on a
-    /// suggestion arriving late -- after a receipt is read -- does not move their answer.
+    /// suggestion arriving late does not move their answer.
     /// </summary>
     private bool _pickedByHand;
 
     private string _name = string.Empty;
     private string? _description;
     private IReadOnlyList<SplitInput>? _splits;
-    private ReceiptAttachmentResponse? _receiptAttachment;
-    private SaveReceiptRequest? _receipt;
-    private bool _attachingReceipt;
-    private bool _readingReceipt;
-    private string? _receiptError;
 
     /// <summary>Whether Add expense was refused over shares that do not add up.</summary>
     private bool _saveRefused;
@@ -455,48 +442,6 @@
         _chosen = true;
 
         await OnGroupChangedAsync();
-    }
-
-    /// <summary>
-    /// Asks again with what the receipt says was bought, which is better evidence than the
-    /// bank's line: a supermarket receipt of nappies and a supermarket receipt of beer go
-    /// to different places.
-    /// </summary>
-    private async Task SuggestFromReceiptAsync(SaveReceiptRequest receipt)
-    {
-        if (HasMatches)
-            return;
-
-        try
-        {
-            var answers = await InboxClient.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
-            {
-                Rows =
-                [
-                    new SuggestFilingRow
-                    {
-                        Id = Row.Id,
-                        Receipt = new FilingReceipt
-                        {
-                            MerchantName = receipt.MerchantName,
-                            Items = [.. receipt.Items.Select(item => item.Name).Take(FilingReceipt.MaxItems)]
-                        }
-                    }
-                ]
-            });
-
-            if (answers.FirstOrDefault() is not { } suggestion)
-                return;
-
-            _suggestion = suggestion;
-        }
-        catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
-        {
-            // No suggestion is what the dialog had before there were any.
-            return;
-        }
-
-        await ApplySuggestionAsync();
     }
 
     /// <summary>Whether the suggestion is about the group currently chosen.</summary>
@@ -685,7 +630,6 @@
 
     private Guid? SelectedExpenseId => _selectedExpenseId ?? _searchedExpense?.Id;
 
-    private bool ReceiptBusy => _attachingReceipt || _readingReceipt;
 
     private bool SelectedExpenseCanAttach =>
         _searchedExpense is null || CanAttach(_searchedExpense);
@@ -706,8 +650,7 @@
 
     private void Cancel()
     {
-        if (!ReceiptBusy)
-            MudDialog.Cancel();
+        MudDialog.Cancel();
     }
 
     private void SelectMatch(ExpenseMatchResponse match)
@@ -727,24 +670,8 @@
         _newExpenseChosen = false;
     }
 
-    private async Task UseNewExpense()
+    private void UseNewExpense()
     {
-        if (ReceiptBusy)
-            return;
-
-        var parameters = new DialogParameters<ConfirmationDialog>
-        {
-            { dialog => dialog.ContentText,
-                Loc["None of the suggested expenses is this payment. Continue by recording a new expense?"].Value },
-            { dialog => dialog.ButtonText, Loc["Record new expense"].Value }
-        };
-        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
-        var reference = await DialogService.ShowAsync<ConfirmationDialog>(
-            Loc["Record a new expense"].Value, parameters, options);
-        var result = await reference.Result;
-        if (result is null || result.Canceled)
-            return;
-
         _selectedExpenseId = null;
         _searchedExpense = null;
         _newExpenseChosen = true;
@@ -774,79 +701,15 @@
     /// </summary>
     private void AttachSelected()
     {
-        if (SelectedExpenseId is not { } transactionId || !SelectedExpenseCanAttach || ReceiptBusy)
+        if (SelectedExpenseId is not { } transactionId || !SelectedExpenseCanAttach)
             return;
 
-        MudDialog.Close(DialogResult.Ok(new Answer(null, SelectedExpenseWhere, transactionId,
-            _receiptAttachment, _receipt)));
-    }
-
-    private async Task AttachReceiptAsync(InputFileChangeEventArgs args)
-    {
-        if (ReceiptBusy)
-            return;
-
-        _attachingReceipt = true;
-        _receiptError = null;
-        try
-        {
-            var attachment = await ReceiptAttachments.UploadForBankAsync(Row.Id, args.File);
-            if (attachment is null)
-            {
-                _receiptError = Loc["The receipt could not be saved for this payment."].Value;
-                return;
-            }
-
-            _receiptAttachment = attachment;
-            _receipt = null;
-        }
-        finally
-        {
-            _attachingReceipt = false;
-        }
-    }
-
-    private async Task ReadReceiptAsync()
-    {
-        if (ReceiptBusy || _receiptAttachment is not { } attachment)
-            return;
-
-        _readingReceipt = true;
-        _receiptError = null;
-        try
-        {
-            var transcription = await ReceiptAttachments.TranscribeForBankAsync(Row.Id, attachment.Id);
-            if (transcription is null)
-            {
-                _receiptError = Loc["We couldn’t read that receipt. Try again, or file the payment without scanning."].Value;
-                return;
-            }
-
-            var reference = await DialogService.ShowAsync<ReceiptDraftDialog>(Loc["Check receipt"].Value,
-                new DialogParameters<ReceiptDraftDialog>
-                {
-                    { dialog => dialog.ExpenseAmount, Row.Amount },
-                    { dialog => dialog.Currency, Row.Currency },
-                    { dialog => dialog.Transcription, transcription }
-                }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
-            var receipt = await reference.GetReturnValueAsync<SaveReceiptRequest>();
-            if (receipt is null)
-                return;
-
-            _receipt = receipt;
-            _name = string.IsNullOrWhiteSpace(_name) ? CreateTransactionDialog.SuggestedName(receipt) : _name;
-
-            await SuggestFromReceiptAsync(receipt);
-        }
-        finally
-        {
-            _readingReceipt = false;
-        }
+        MudDialog.Close(DialogResult.Ok(new Answer(null, SelectedExpenseWhere, transactionId)));
     }
 
     private void Submit()
     {
-        if (!_chosen || ReceiptBusy)
+        if (!_chosen)
             return;
 
         // Refused here, as the expense dialogs refuse it: closed over shares that do not add
@@ -872,7 +735,7 @@
             FileAnyway = HasMatches
         };
 
-        MudDialog.Close(DialogResult.Ok(new Answer(request, Destination, null, _receiptAttachment, _receipt)));
+        MudDialog.Close(DialogResult.Ok(new Answer(request, Destination)));
     }
 
     private bool CanAttach(TransactionResponse expense) =>

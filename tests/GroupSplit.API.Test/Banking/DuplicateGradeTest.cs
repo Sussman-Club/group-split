@@ -240,9 +240,9 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         // Confident: the same money, at the far edge of the window either way.
         await Expense("Groceries", 82.14m, Dinner);
-        await Row(82.14m, on: Dinner.AddDays(5), providerId: "five-days-later");
+        await Row(82.14m, on: Dinner.AddDays(2), providerId: "two-days-later");
         await Expense("Pharmacy", 12.80m, Dinner);
-        await Row(12.80m, on: Dinner.AddDays(-5), providerId: "five-days-earlier");
+        await Row(12.80m, on: Dinner.AddDays(-2), providerId: "two-days-earlier");
 
         // Confident through the authorised date, though the posting date is outside.
         await Expense("Hardware", 31.99m, Dinner);
@@ -252,7 +252,7 @@ public class DuplicateGradeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Not: a day past the window.
         await Expense("Books", 23.00m, Dinner);
-        await Row(23.00m, on: Dinner.AddDays(6), providerId: "six-days-later");
+        await Row(23.00m, on: Dinner.AddDays(3), providerId: "three-days-later");
 
         // Not: another currency, to the cent.
         await Expense("Taxi", 18.40m, Dinner);

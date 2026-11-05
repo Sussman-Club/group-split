@@ -1,26 +1,69 @@
 @using GroupSplit.Shared
 @inject GroupSplit.App.Shared.Services.LocalClock Clock
+@inject IDialogService Dialogs
 
 <MudDialog Class="gs-sheet">
-    <TitleContent><div class="gs-dialog-head"><h2 class="gs-dialog-title">@Loc["Review receipt match"]</h2></div></TitleContent>
+    <TitleContent><div class="gs-dialog-head"><h2 class="gs-dialog-title">@Loc["Which expense is this?"]</h2></div></TitleContent>
     <DialogContent>
-        <div class="gs-stack" style="gap: 12px">
-            <p>@Loc["Is this receipt for the expense below?"]</p>
-            <div class="gs-receipt-suggestion">
-                <strong>@Match.Name</strong>
-                <span>@Match.Amount.ToString("N2") @Match.Currency Â· @Clock.Day(Match.DateTime).ToString("d")</span>
+        <div class="gs-stack" style="gap: 16px">
+            <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+                <div class="gs-inline" style="justify-content: space-between">
+                    <div><div class="gs-eyebrow">@(Row.Receipt.MerchantName ?? Loc["Receipt"].Value)</div>
+                        <div class="gs-muted">@Row.Receipt.PurchaseDate?.ToString("d")</div></div>
+                    <Money Value="@Row.Receipt.Total" Currency="@Row.Currency" />
+                </div>
             </div>
-            <p class="gs-muted">@Loc["Attaching keeps the expense and its shares unchanged."]</p>
+            <div class="gs-card gs-card-pad" style="padding: 14px 12px">
+                <div class="gs-eyebrow">@Loc["Closest matches"]</div>
+                <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 6px 0 10px">@Loc["Attaching keeps the expense and its shares unchanged."]</MudText>
+                <div class="gs-list" role="radiogroup" aria-label="@Loc["Closest matches"]">
+                    @foreach (var candidate in _matches)
+                    {
+                        <button type="button" class="gs-match-choice @(_selectedId == candidate.Id ? "is-selected" : null)"
+                                role="radio" aria-checked="@(_selectedId == candidate.Id ? "true" : "false")"
+                                @onclick="@(() => _selectedId = candidate.Id)">
+                            <Avatar Name="@candidate.Name" />
+                            <span class="gs-match-choice-copy"><span class="title">@candidate.Name</span>
+                                <span class="meta">@Clock.Day(candidate.DateTime).ToString("d")</span></span>
+                            <Money Value="@candidate.Amount" Currency="@candidate.Currency" />
+                            <MudIcon Icon="@(_selectedId == candidate.Id ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                     Color="@(_selectedId == candidate.Id ? Color.Primary : Color.Default)" />
+                        </button>
+                    }
+                </div>
+                <div class="gs-inline" style="border-top: 1px solid var(--gs-line); margin-top: 12px; padding-top: 12px; gap: 6px">
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnother">@Loc["Find another expense"]</MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add" OnClick="@(() => MudDialog.Close(DialogResult.Ok(new Answer(Action.Create, null))))">@Loc["None of these — it is new"]</MudButton>
+                </div>
+            </div>
         </div>
     </DialogContent>
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Cancel())">@Loc["Cancel"]</MudButton>
-        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Close(DialogResult.Ok(false)))">@Loc["Not the same"]</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Close(DialogResult.Ok(true)))">@Loc["Attach receipt"]</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@(!Matches.Any(match => match.Id == _selectedId))" OnClick="@(() => MudDialog.Close(DialogResult.Ok(new Answer(Action.Dismiss, _selectedId))))">@Loc["Not the same"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selectedId is null)" OnClick="@(() => MudDialog.Close(DialogResult.Ok(new Answer(Action.Attach, _selectedId))))">@Loc["Attach receipt"]</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
-    [Parameter, EditorRequired] public ReceiptExpenseCandidate Match { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptInboxResponse Row { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<ReceiptExpenseCandidate> Matches { get; set; } = [];
+    [Parameter] public Guid? InitialId { get; set; }
+    private List<ReceiptExpenseCandidate> _matches = [];
+    private Guid? _selectedId;
+    public enum Action { Attach, Dismiss, Create }
+    public sealed record Answer(Action Action, Guid? ExpenseId);
+    protected override void OnInitialized() { _matches = [.. Matches]; _selectedId = InitialId ?? _matches.FirstOrDefault()?.Id; }
+    private async Task FindAnother()
+    {
+        var row = new BankTransactionResponse(Guid.Empty, Row.Receipt.PurchaseDate ?? DateOnly.FromDateTime(DateTime.Today), Row.Receipt.Total, Row.Currency, "Receipt", Row.Receipt.MerchantName, null, null, null, null, null, null, null, false, InboxStatus.New, null, null, "", "");
+        var dialog = await Dialogs.ShowAsync<FindExpenseDialog>(Loc["Find existing expense"].Value,
+            new DialogParameters<FindExpenseDialog> { { x => x.RequireUnlinkedBank, false }, { x => x.Row, row } });
+        var expense = await dialog.GetReturnValueAsync<TransactionResponse>();
+        if (expense is null) return;
+        if (_matches.All(x => x.Id != expense.Id))
+            _matches.Insert(0, new ReceiptExpenseCandidate(expense.Id, expense.Name, expense.Amount, expense.Currency, expense.DateTime));
+        _selectedId = expense.Id;
+    }
 }
