@@ -328,21 +328,28 @@ else if (_rows is not null)
     private async Task AttachMatch(ReceiptInboxResponse row, ReceiptExpenseCandidate match)
     {
         if (_busy) return;
+        IReadOnlyList<ReceiptExpenseCandidate>? matches = null;
+        if (!await Errors.TryAsync(async () => matches = (await Client.MatchReceiptInboxAsync(row.Id)).Where(candidate => !candidate.HasReceipt).ToList(), Loc["Could not check for matching expenses."].Value)) return;
+        var dialog = await Dialogs.ShowAsync<ReceiptMatchDialog>(Loc["Review receipt match"].Value,
+            new DialogParameters<ReceiptMatchDialog> { { x => x.Row, row }, { x => x.Matches, matches! }, { x => x.InitialId, match.Id } },
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+        if (await dialog.Result is not { Canceled: false, Data: ReceiptMatchDialog.Answer answer }) return;
+        if (answer.Action == ReceiptMatchDialog.Action.Create)
+        {
+            await ReviewSuggestion(row, _suggestions.GetValueOrDefault(row.Id), true);
+            return;
+        }
+        if (answer.ExpenseId is not { } expenseId) return;
         _busy = true;
         try
         {
-            var dialog = await Dialogs.ShowAsync<ReceiptMatchDialog>(Loc["Review receipt match"].Value,
-                new DialogParameters<ReceiptMatchDialog> { { x => x.Match, match } },
-                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
-            if (await dialog.Result is not { Canceled: false, Data: bool attach }) return;
-            if (!attach)
+            if (answer.Action == ReceiptMatchDialog.Action.Dismiss)
             {
-                if (await Errors.TryAsync(() => Client.DismissReceiptInboxMatchAsync(row.Id, match.Id), Loc["Could not dismiss match."].Value))
-                    await Load();
+                if (await Errors.TryAsync(() => Client.DismissReceiptInboxMatchAsync(row.Id, expenseId), Loc["Could not dismiss match."].Value)) await Load();
                 return;
             }
             if (await Errors.TryAsync(async () => await Client.FileReceiptInboxAsync(row.Id,
-                    new FileReceiptInboxRequest { ExpenseId = match.Id }), Loc["Could not file receipt."].Value))
+                    new FileReceiptInboxRequest { ExpenseId = expenseId }), Loc["Could not file receipt."].Value))
             {
                 await Changes.NotifyReceiptsChangedAsync();
                 await Changes.NotifyTransactionsChangedAsync();
@@ -351,7 +358,7 @@ else if (_rows is not null)
         }
         finally { _busy = false; }
     }
-    private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion? suggestion)
+    private async Task ReviewSuggestion(ReceiptInboxResponse row, FilingDestinationSuggestion? suggestion, bool confirmedNew = false)
     {
         if (_busy) return;
         _busy = true;
@@ -367,7 +374,7 @@ else if (_rows is not null)
                     { x => x.InboxSuggestion, suggestion }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
             if (await dialog.Result is not { Canceled: false, Data: CreateTransactionRequest request }) return;
-            var createAnyway = matches!.Count > 0 && await Dialogs.ShowMessageBoxAsync(Loc["Possible duplicate"].Value,
+            var createAnyway = confirmedNew || matches!.Count > 0 && await Dialogs.ShowMessageBoxAsync(Loc["Possible duplicate"].Value,
                 Loc["These matching expenses may already record this purchase. Create another expense?"].Value,
                 yesText: Loc["Create another"].Value, cancelText: Loc["Cancel"].Value) == true;
             if (matches.Count > 0 && !createAnyway) return;

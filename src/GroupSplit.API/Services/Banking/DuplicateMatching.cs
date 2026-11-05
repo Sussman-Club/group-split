@@ -95,7 +95,7 @@ public sealed class DuplicateMatcher(
     /// A window that only caught the same day would miss most real duplicates, which is the
     /// whole problem this exists for.
     /// </remarks>
-    private const int WindowDays = 5;
+    private const int WindowDays = 2;
 
     /// <summary>
     /// How many suggestions one row is worth raising. A person deciding between five

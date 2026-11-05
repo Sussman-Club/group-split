@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Services;
 
 public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAccountDataGuard guard,
-    ITransactionService transactions, IInboxService bank, IReceiptFiles files)
+    ITransactionService transactions, IReceiptFiles files)
 {
     private IQueryable<Receipt> Owned() => db.Set<Receipt>().Where(r => r.OwnerUserId == user.User.Id);
     private async Task<Receipt> Find(Guid id, CancellationToken ct) =>
@@ -174,7 +174,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             return Response(r);
         }
         if (r.IsIgnored) throw new ConflictException(ErrorCodes.ReceiptInvalid, "Restore this receipt before filing it.");
-        if (new[] { request.ExpenseId != null, request.BankTransactionId != null && request.ExpenseId == null, request.NewExpense != null }.Count(x => x) != 1)
+        if (new[] { request.ExpenseId != null, request.NewExpense != null }.Count(x => x) != 1)
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose one filing destination.");
         // A new expense may carry a reviewed allocation of previously unassigned tax.
         // Validate that draft below before applying its line taxes to the inbox receipt.
@@ -187,8 +187,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             expense = await db.Set<Expense>().FirstOrDefaultAsync(e => e.Id == expenseId && groups.Any(g => g.Id == e.GroupId), ct)
                 ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Expense not found.");
         }
-        else if (request.BankTransactionId is { } bankId)
-            expense = await bank.File(bankId, request.BankExpense ?? new(), ct);
         else
         {
             if (!request.CreateAnyway)
@@ -244,8 +242,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has an itemized receipt.");
         if (request.ExpenseId is not null && await db.Set<ReceiptAttachment>().AnyAsync(existing => existing.ExpenseId == expense.Id, ct))
             throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has a receipt file.");
-        if (request.ExpenseId != null && request.BankTransactionId is { } linkBankId)
-            await bank.Link(linkBankId, new LinkBankTransactionRequest { TransactionId = expense.Id }, ct);
         // Linking only changes evidence. Existing allocations are never recalculated here.
         r.ExpenseId = expense.Id;
 
@@ -261,6 +257,5 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 NormalizedName = i.NormalizedName, Description = i.Description, UnitPrice = i.UnitPrice,
                 Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
                 TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
-        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId,
-            a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList());
+        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList());
 }

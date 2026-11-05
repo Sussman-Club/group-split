@@ -149,6 +149,28 @@ public class ReceiptInboxTest : ComponentTest
     }
 
     [Fact]
+    public async Task Attach_review_allows_selecting_a_different_match()
+    {
+        var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
+        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4) }, []);
+        var first = new ReceiptExpenseCandidate(Guid.NewGuid(), "Groceries", 10m, "USD", DateTimeOffset.UtcNow);
+        var second = new ReceiptExpenseCandidate(Guid.NewGuid(), "Lunch", 10m, "USD", DateTimeOffset.UtcNow);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<ReceiptMatchDialog>("Review", new DialogParameters<ReceiptMatchDialog>
+            { { x => x.Row, receipt }, { x => x.Matches, new[] { first, second } }, { x => x.InitialId, first.Id } }));
+        provider.WaitForAssertion(() => Assert.Contains("Lunch", provider.Markup));
+        Assert.Contains("Find another expense", provider.Markup);
+        Assert.Contains("None of these", provider.Markup);
+        provider.FindAll("button[role=radio]").Single(button => button.TextContent.Contains("Lunch")).Click();
+        provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach receipt").Click();
+        var answer = await reference!.GetReturnValueAsync<ReceiptMatchDialog.Answer>();
+        Assert.Equal(ReceiptMatchDialog.Action.Attach, answer!.Action);
+        Assert.Equal(second.Id, answer.ExpenseId);
+    }
+
+    [Fact]
     public void Expense_with_receipt_is_not_offered_as_an_attachment_target()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest

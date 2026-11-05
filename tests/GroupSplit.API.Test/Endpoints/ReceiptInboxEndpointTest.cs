@@ -12,6 +12,18 @@ public class ReceiptInboxEndpointTest
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     [Fact]
+    public async Task Filing_a_receipt_requires_an_expense_not_a_bank_transaction()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var id = Guid.NewGuid();
+        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 10, Subtotal = 10,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] } };
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
+        var response = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new { BankTransactionId = Guid.NewGuid(), BankExpense = new { } }, Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json));
+    }
+    [Fact]
     public async Task Dismissing_a_receipt_match_is_private_persistent_and_does_not_remove_other_matches()
     {
         await using var host = await ApiEndpointHost.StartAsync();
