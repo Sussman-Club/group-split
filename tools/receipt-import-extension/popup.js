@@ -116,7 +116,7 @@ function updateBuyerOptions(cards) {
   add('unknown', 'Recipient not shown');
   select.value = [...select.options].some(option => option.value === previous) ? previous : 'all';
   $('buyer-note').textContent = names.length
-    ? 'Recipient names stay on this device and are not saved to receipts.'
+    ? 'Amazon PDFs may include recipient names and addresses.'
     : 'No recipient names were found for the selected dates.';
 }
 
@@ -412,6 +412,7 @@ $('back-to-inbox').addEventListener('click', async () => {
 
 $('retailer').addEventListener('change', () => {
   sourceTabId = 0;
+  $('store-state').hidden = true;
   selection = null;
   $('receipts').replaceChildren();
   $('download').hidden = true;
@@ -449,6 +450,36 @@ function setImportBusy(busy) {
     $(id).disabled = busy;
 }
 
+// Only report a signed-in state when the retailer exposes an orders view.
+function retailerSignInState(retailer) {
+  if (document.readyState !== 'complete') return 'loading';
+  const path = location.pathname.toLowerCase();
+  const password = document.querySelector('input[type="password"]');
+  if (password || /\/(?:ap\/signin|signin|sign-in|login)(?:\/|$)/i.test(path)) return 'signin';
+  if (retailer === 'amazon') {
+    const ordersPath = /^(?:\/-\/[a-z]{2}(?:-[a-z]{2})?)?\/your-orders\/orders\/?$/i.test(path) ||
+      /^\/gp\/(?:css\/order-history|your-account\/order-history)/i.test(path);
+    if (ordersPath && (document.querySelector('.js-order-card, [id="orderCard"], .order-card, .a-box-group.order, select[name="timeFilter"]') ||
+      /\b(?:no orders|no order history)\b/i.test(document.body?.innerText || ''))) return 'ready';
+  } else if (location.hash.includes('ordersandpurchases') &&
+      /\b(?:orders\s*(?:&|and)\s*purchases|warehouse|online orders)\b/i.test(document.body?.innerText || '')) return 'ready';
+  return 'unknown';
+}
+
+function showStoreState(title, detail, showButton = false) {
+  $('store-state-title').textContent = title;
+  $('store-state-detail').textContent = detail;
+  $('show-store').hidden = !showButton;
+  $('store-state').hidden = false;
+}
+
+$('show-store').addEventListener('click', async () => {
+  try {
+    const tab = await chrome.tabs.update(sourceTabId, { active: true });
+    if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
+  } catch { showStoreState('Store tab unavailable', 'Connect the store again to open a new tab.'); }
+});
+
 $('open-costco').addEventListener('click', async () => {
   try {
     const amazon = $('retailer').value === 'amazon';
@@ -457,16 +488,24 @@ $('open-costco').addEventListener('click', async () => {
     const tabs = await chrome.tabs.query({ url: `${origin}/*` });
     const ordersUrl = amazon ? `${origin}/your-orders/orders`
       : `${origin}/myaccount/#/app/4900eb1f-0c10-4bd9-99c3-c59e6c1ecebf/ordersandpurchases`;
-    const existing = amazon ? tabs[0] : tabs.find(tab => tab.url === ordersUrl);
-    const tab = existing || await chrome.tabs.create({ ...parentWindow, url: ordersUrl });
+    const existing = tabs.find(tab => amazon
+      ? tab.url?.startsWith(`${origin}/your-orders/orders`)
+      : tab.url === ordersUrl);
+    const tab = existing || await chrome.tabs.create({ ...parentWindow, url: ordersUrl, active: false });
     sourceTabId = tab.id;
-    await chrome.tabs.update(tab.id, { active: true });
-    if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
-    status.textContent = amazon
-      ? 'Sign in if needed, open your orders, then return here to find receipts.'
-        : 'Sign in if needed, then return here. Find receipts will open the selected Costco view.';
-    if (!amazon) await openCostcoView(tab.id, $('retailer').value === 'costco-online').catch(() => {});
-  } catch (error) { status.textContent = error.message; }
+    const retailer = $('retailer').value;
+    showStoreState('Checking your store connection…', 'The store is open in a background tab.');
+    let state = 'loading';
+    for (let attempt = 0; attempt < 20 && (state === 'loading' || state === 'unknown'); attempt++) {
+      if (sourceTabId !== tab.id || $('retailer').value !== retailer) return;
+      state = await execute(tab.id, retailerSignInState, [retailer]).catch(() => 'loading');
+      if (state === 'loading' || state === 'unknown') await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (sourceTabId !== tab.id || $('retailer').value !== retailer) return;
+    if (state === 'signin') showStoreState('Sign in to continue', 'Open the store tab, sign in, then come back and select Connect store again.', true);
+    else if (state === 'ready') showStoreState('Store ready', 'You are signed in. Choose a date range and find receipts.');
+    else showStoreState('Check your store sign-in', 'We could not confirm your sign-in. Open the store tab, sign in if needed, then come back and select Connect store again.', true);
+  } catch (error) { showStoreState('Could not connect store', error.message); }
 });
 
 // Only activate explicit pagination controls; never infer actions from position.

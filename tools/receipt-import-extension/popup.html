@@ -15,10 +15,15 @@
     </header>
 
     <section class="importer-section" aria-labelledby="store-heading">
-      <div class="section-heading"><h2 id="store-heading">Store</h2><p>Sign in to the store if needed.</p></div>
+      <div class="section-heading"><h2 id="store-heading">Store</h2><p>If needed, go to the store tab, sign in, and come back here.</p></div>
       <div class="store-controls">
         <label class="field"><span class="sr-only">Store</span><select id="retailer"><option value="amazon">Amazon</option><option value="costco">Costco Warehouse</option><option value="costco-online">Costco Online</option></select></label>
         <button id="open-costco" class="button button-secondary" type="button">Connect store</button>
+      </div>
+      <div id="store-state" class="store-state" role="status" aria-live="polite" hidden>
+        <strong id="store-state-title"></strong>
+        <p id="store-state-detail"></p>
+        <button id="show-store" class="button button-secondary" type="button" hidden>Open store tab</button>
       </div>
       <p id="connection" class="connection" role="status" aria-live="polite"></p>
     </section>
@@ -33,7 +38,7 @@
         </label>
       </div>
       <div class="buyer-guidance" id="buyer-guidance">
-        <span id="buyer-note" class="field-note" role="status" aria-live="polite">Recipient names stay on this device and are not saved to receipts.</span>
+        <span id="buyer-note" class="field-note" role="status" aria-live="polite">Amazon PDFs may include recipient names and addresses.</span>
         <button id="refresh-buyers" class="text-button" type="button">Check recipients</button>
       </div>
       <button id="find" class="button button-primary" type="button">Find receipts</button>
