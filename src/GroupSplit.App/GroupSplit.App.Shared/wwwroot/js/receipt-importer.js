@@ -48,7 +48,11 @@ export function openReceiptImporter() {
             frame.src = url.href;
             header.append(heading, close);
             dialog.append(header, frame);
-            dialog.addEventListener('close', () => { cleanup(); dialog.remove(); document.documentElement.classList.remove('gs-receipt-import-open'); resolve(false); }, { once: true });
+            const onComplete = event => {
+                if (event.source === frame.contentWindow && event.origin === `${url.protocol}//${url.host}` && event.data?.type === 'groupsplit-importer-complete') dialog.close();
+            };
+            window.addEventListener('message', onComplete);
+            dialog.addEventListener('close', () => { window.removeEventListener('message', onComplete); cleanup(); dialog.remove(); document.documentElement.classList.remove('gs-receipt-import-open'); resolve(false); }, { once: true });
             document.body.append(dialog);
             window.addEventListener('message', onReady);
             document.documentElement.classList.add('gs-receipt-import-open');

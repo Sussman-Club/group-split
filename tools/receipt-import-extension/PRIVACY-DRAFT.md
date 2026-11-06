@@ -19,12 +19,11 @@ prints the displayed receipt into a PDF. These PDFs can include customer,
 membership or masked payment information. For Costco online orders, the
 extension generates a summary from the order date, items, prices and totals.
 
-The extension saves a copy of each PDF in your Downloads/GroupSplit folder and
-uploads it to the signed-in GroupSplit inbox when you select the import action.
+The extension creates each PDF in the browser and uploads it to the signed-in
+GroupSplit inbox when you select the import action. It does not download a copy to your device.
 GroupSplit reads new attachments to suggest receipt details and stores uploaded
 receipts under your account. Its own
-privacy and retention policies apply to that stored data. You can delete local
-copies from your downloads folder.
+privacy and retention policies apply to that stored data.
 
 The extension uses your existing browser session to access the retailer. Its
 current code does not configure analytics or send retailer data to an additional

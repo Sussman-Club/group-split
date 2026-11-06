@@ -269,6 +269,9 @@
     overflow-y: visible;
 }
 
+/* Keep the picker scrollable for long results without an always-visible scrollbar. */
+.mud-popover.gs-merchant-picker-popover { overflow-y: auto !important; }
+
 /* ------------------------------------------------------------- tooltips ---- */
 
 .mud-tooltip {

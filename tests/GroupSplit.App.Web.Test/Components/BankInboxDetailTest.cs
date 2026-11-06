@@ -32,5 +32,24 @@ public class BankInboxDetailTest : ComponentTest
         Assert.Contains("Ignore transaction", page.Markup);
     }
 
+    [Fact]
+    public void Ignored_transaction_still_offers_filing_and_matching_actions()
+    {
+        var id = Guid.NewGuid();
+        var match = Match("Lunch");
+        var row = new BankTransactionResponse(id, new DateOnly(2026, 11, 5), 38.73m, "USD", "CAFE", "Cafe", null, null, null, null, null, null, null, false, InboxStatus.Ignored, null, null, "Checking", "Bank")
+        { PossibleDuplicates = [match] };
+        var client = new Mock<IInboxClient>();
+        client.Setup(x => x.GetBankTransactionAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
+        Services.AddSingleton(client.Object);
+        Services.AddSingleton(Mock.Of<IBankCommands>());
+        var page = Render<BankInboxDetail>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Review and add expense", page.Markup));
+        Assert.Contains("Lunch", page.Markup);
+        Assert.Contains("Find an expense", page.Markup);
+        Assert.Contains("Restore transaction", page.Markup);
+        Assert.DoesNotContain("Ignore transaction", page.Markup);
+    }
+
     private static ExpenseMatchResponse Match(string name) => new(Guid.NewGuid(), name, 38.73m, "USD", DateTimeOffset.UtcNow, null, null, "", 0m, 0, MatchConfidence.Confident);
 }

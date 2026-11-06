@@ -346,7 +346,7 @@ public sealed class InboxService(
         var rows = await Owned()
             .Include(row => row.Account)
             .Where(row => ids.Contains(row.Id)
-                          && row.Status == BankTransactionStatus.New
+                          && (row.Status == BankTransactionStatus.New || row.Status == BankTransactionStatus.Ignored)
                           && row.Amount >= 0)
             .ToListAsync(ct);
 

@@ -202,7 +202,8 @@ public partial class MerchantService(ICurrentUser userContext, AppDbContext dbCo
             .Where(row => row.Account.Connection.UserId == userId)
             .Select(row => row.MerchantId);
 
-        var places = inMyGroups.Union(paidByMe).Union(imported);
+        var receipts = dbContext.Set<Receipt>().Where(receipt => receipt.OwnerUserId == userId).Select(receipt => receipt.MerchantId);
+        var places = inMyGroups.Union(paidByMe).Union(imported).Union(receipts);
 
         return dbContext.Set<Merchant>().Where(merchant => places.Contains(merchant.Id));
     }

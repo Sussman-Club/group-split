@@ -679,6 +679,8 @@
 .gs-expense-disclosure > summary > span { display: block; color: var(--gs-muted); font-size: .8125rem; font-weight: 400; margin-top: 4px; }
 .gs-expense-disclosure > summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 2px; border-radius: 8px; }
 .gs-expense-disclosure-body { padding: 8px 0 18px; }
+.gs-expense-disclosure-body .gs-list > .gs-row { margin-inline: 0; }
+.gs-expense-disclosure + .gs-receipts { border-top: 0; padding-top: 0; }
 .gs-expandable-expense .gs-split-who > span:not(.gs-tag) { white-space: normal; overflow-wrap: anywhere; }
 .gs-expandable-expense .gs-split { min-height: 48px; }
 .gs-expandable-expense .gs-seg-labels { flex-wrap: wrap; }

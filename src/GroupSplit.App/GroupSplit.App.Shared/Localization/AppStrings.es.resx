@@ -5781,4 +5781,17 @@
   <data name="{0} day{1} apart · same amount" xml:space="preserve">
     <value>{0} día{1} de diferencia · mismo importe</value>
   </data>
+  <data name="Possible duplicate receipt" xml:space="preserve"><value>Posible recibo duplicado</value></data>
+  <data name="Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing." xml:space="preserve"><value>Posible recibo duplicado: otro recibo tiene el mismo comercio, fecha, total y moneda. Revisa ambos antes de registrarlo.</value></data>
+  <data name="Review matching receipt" xml:space="preserve"><value>Revisar recibo coincidente</value></data>
+  <data name="Upload a receipt" xml:space="preserve"><value>Subir un recibo</value></data>
+  <data name="Choose a photo or PDF to attach." xml:space="preserve"><value>Elige una foto o un PDF para adjuntar.</value></data>
+  <data name="Is this receipt for an existing expense?" xml:space="preserve"><value>¿Este recibo corresponde a un gasto existente?</value></data>
+  <data name="Is this payment for an existing expense?" xml:space="preserve"><value>¿Este pago corresponde a un gasto existente?</value></data>
+  <data name="Possible matches" xml:space="preserve"><value>Posibles coincidencias</value></data>
+  <data name="Create a new expense" xml:space="preserve"><value>Crear un gasto nuevo</value></data>
+  <data name="Attach to this expense" xml:space="preserve"><value>Adjuntar a este gasto</value></data>
+  <data name="Review and delete duplicate" xml:space="preserve"><value>Revisar y eliminar duplicado</value></data>
+  <data name="Delete possible duplicate?" xml:space="preserve"><value>¿Eliminar posible duplicado?</value></data>
+  <data name="This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Este recibo parece describir la misma compra que otro recibo. Revisa ambos antes de eliminarlo. Al eliminar este recibo también se eliminan sus archivos originales y no se puede deshacer.</value></data>
 </root>

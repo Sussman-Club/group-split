@@ -51,13 +51,24 @@
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
     <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
 </div>
-@{ var showLoading = _loading && !_uploading && (!_busy || _rows is null); }
+@{ var showLoading = _loading && !_uploading; }
 <div class="gs-inbox-results" aria-busy="@_loading">
 <div class="gs-inbox-results-content" @key="(_filter, showLoading)">
 <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(_rows is null && !_uploading)" Retry="Load">
 @if (_rows is { Count: 0 })
 {
-    <div class="gs-card gs-empty gs-receipt-empty"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3><p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then add it to an expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p></div>
+    <div class="gs-card gs-empty gs-receipt-empty">
+        <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" />
+        <h3>@(_filter == ReceiptFilter.Waiting ? Loc["Your receipts start here"] : _filter == ReceiptFilter.Added ? Loc["Nothing added yet"] : Loc["Nothing ignored"])</h3>
+        <p>@(_filter == ReceiptFilter.Waiting ? Loc["Keep a receipt now, then add it to an expense when you are ready."] : _filter == ReceiptFilter.Added ? Loc["Receipts attached to an expense appear here."] : Loc["Ignored receipts stay here until you restore or delete them."])</p>
+        @if (_filter == ReceiptFilter.Waiting)
+        {
+            <div class="gs-receipt-empty-actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="OpenUpload">@Loc["Upload a receipt"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="OpenRetailerImport">@Loc["Import from a store"]</MudButton>
+            </div>
+        }
+    </div>
 }
 else if (_rows is not null && _visibleRows.Count == 0)
 {
@@ -71,16 +82,21 @@ else if (_rows is not null)
         <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
         <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
             <div class="gs-receipt-inbox-thumb">
-                @if (source?.ContentType.StartsWith("image/") == true) { <img src="@Source(row.Id, source.Id)" alt="" loading="lazy" /> }
-                else { <MudIcon Icon="@(source is null ? Icons.Material.Rounded.ReceiptLong : Icons.Material.Rounded.PictureAsPdf)" /> }
+                <MerchantMark MerchantName="@(row.MerchantDisplayName ?? row.Receipt.MerchantName)" MerchantLogoUrl="@row.MerchantLogoUrl" />
             </div>
-            <div class="gs-receipt-inbox-copy"><strong>@(row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span></div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (row.PossibleDuplicates.Count > 0) { <span class="gs-receipt-duplicate">@Loc["Possible duplicate receipt"]</span> }</div>
             <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong></div>
         </a>
         @if (_filter != ReceiptFilter.Added)
         {
             <div class="gs-receipt-inbox-actions">
-                @if (_expenseMatches.TryGetValue(row.Id, out var match))
+                @if (_filter == ReceiptFilter.Waiting && row.SuggestedDuplicateOfId is not null)
+                {
+                    <div class="gs-receipt-inbox-shortcut">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Disabled="_busy" OnClick="@(() => ReviewDuplicate(row))">@Loc["Review and delete duplicate"]</MudButton>
+                    </div>
+                }
+                else if (_expenseMatches.TryGetValue(row.Id, out var match))
                 {
                     var label = Loc["Attach to {0} · {1} {2} · {3}", match.Name, match.Amount.ToString("N2"), match.Currency, match.DateTime.ToString("d")];
                     <div class="gs-receipt-inbox-shortcut">
@@ -172,7 +188,8 @@ else if (_rows is not null)
         var bounds = _dateRange.Days(Clock.Today);
         _visibleRows = (_rows ?? []).Where(row =>
         {
-            if (!string.IsNullOrEmpty(search) && !(row.Receipt.MerchantName?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+            if (!string.IsNullOrEmpty(search) && !(row.MerchantDisplayName?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                row.Receipt.MerchantName?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
                 row.Receipt.Items.Any(item => item.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))) return false;
             if (bounds.From is null && bounds.To is null) return true;
             return row.Receipt.PurchaseDate is { } date && (bounds.From is null || date >= bounds.From) && (bounds.To is null || date <= bounds.To);
@@ -218,6 +235,23 @@ else if (_rows is not null)
         }
         catch (JSException) { _importHelp = true; }
     }
+    private async Task ReviewDuplicate(ReceiptInboxResponse row)
+    {
+        if (_busy || row.SuggestedDuplicateOfId is null) return;
+        if (await Dialogs.ShowMessageBoxAsync(Loc["Delete possible duplicate?"].Value,
+            Loc["This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone."].Value,
+            yesText: Loc["Delete receipt"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+        _busy = true;
+        try
+        {
+            if (await Errors.TryAsync(() => Client.DeleteReceiptInboxAsync(row.Id), Loc["Could not update receipt."].Value))
+            {
+                await Changes.NotifyReceiptsChangedAsync();
+                await Load();
+            }
+        }
+        finally { _busy = false; }
+    }
     private async Task Load()
     {
         _loading = true;
@@ -238,8 +272,8 @@ else if (_rows is not null)
                 foreach (var row in _rows)
                     if (SuggestionCache.Get(row) is { } cached) _suggestions[row.Id] = cached;
                 Overview.SetReceiptCount(_rows.Count);
-                _ = LoadExpenseMatches(_rows, token);
-                _ = LoadSuggestions(_rows, SuggestionCache.Generation, token);
+                await Task.WhenAll(LoadExpenseMatches(_rows, token),
+                    LoadSuggestions(_rows, SuggestionCache.Generation, token));
             }
         }, Loc["Could not load receipts."].Value); }
         finally { if (!token.IsCancellationRequested) _loading = false; }
@@ -263,15 +297,13 @@ else if (_rows is not null)
                     catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return (row.Id, Match: (ReceiptExpenseCandidate?)null); }
                 }));
                 if (ct.IsCancellationRequested) return;
-                await InvokeAsync(async () =>
+                await InvokeAsync(() =>
                 {
                     if (ct.IsCancellationRequested) return;
                     foreach (var (id, match) in results)
                     {
                         if (match is not null) _expenseMatches[id] = match;
                     }
-                    if (_virtualize is not null) await _virtualize.RefreshDataAsync();
-                    StateHasChanged();
                 });
             }
         }
@@ -290,7 +322,7 @@ else if (_rows is not null)
                 }
                 catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { continue; }
                 if (ct.IsCancellationRequested) return;
-                await InvokeAsync(async () => {
+                await InvokeAsync(() => {
                     if (ct.IsCancellationRequested || generation != SuggestionCache.Generation) return;
                     var byId = batch.ToDictionary(row => row.Id);
                     foreach (var suggestion in suggestions)
@@ -299,8 +331,6 @@ else if (_rows is not null)
                             SuggestionCache.Remember(row, suggestion.Destination, generation);
                             _suggestions[row.Id] = suggestion.Destination;
                         }
-                    if (_virtualize is not null) await _virtualize.RefreshDataAsync();
-                    StateHasChanged();
                 });
             }
         }
@@ -369,7 +399,7 @@ else if (_rows is not null)
             var dialog = await Dialogs.ShowAsync<CreateTransactionDialog>(Loc["Create expense"].Value,
                 new DialogParameters<CreateTransactionDialog>
                 {
-                    { x => x.InboxReceipt, row.Receipt }, { x => x.InboxCurrency, row.Currency },
+                    { x => x.InboxReceipt, row.Receipt }, { x => x.InboxCurrency, row.Currency }, { x => x.InboxMerchantId, row.MerchantId },
                     { x => x.SelectedGroupId, suggestion is { IsPersonal: false } ? suggestion.GroupId : null },
                     { x => x.InboxSuggestion, suggestion }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });

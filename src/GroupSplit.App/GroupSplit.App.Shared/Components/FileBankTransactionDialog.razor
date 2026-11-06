@@ -82,10 +82,11 @@
             @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
             {
                 <div class="gs-card gs-card-pad" style="padding: 14px 12px">
-                    <div class="gs-eyebrow">@Loc["Closest matches"]</div>
+                    <div class="gs-eyebrow">@Loc["Is this payment for an existing expense?"]</div>
                     <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 6px 0 10px">@Loc["Attaching the card row to an expense you already have keeps the money from being recorded twice."]</MudText>
+                    <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 0 0 10px">@Loc["Attaching keeps the expense and its shares unchanged."]</MudText>
 
-                    <div class="gs-list">
+                    <div class="gs-list" role="radiogroup" aria-label="@Loc["Possible matches"]">
                         @if (_searchedExpense is { } searchedExpense)
                         {
                             <button type="button"
@@ -129,7 +130,7 @@
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                                    StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnotherAsync">@Loc["Find another expense"]</MudButton>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Rounded.Add" OnClick="UseNewExpense">@Loc["None of these — it is new"]</MudButton>
+                                   StartIcon="@Icons.Material.Rounded.Add" OnClick="UseNewExpense">@Loc["Create a new expense"]</MudButton>
                     </div>
                 </div>
             }
@@ -211,10 +212,10 @@
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cancel"]</MudButton>
 
-        @if (SelectedExpenseId is { } transactionId && !_newExpenseChosen)
+        @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!SelectedExpenseCanAttach)" OnClick="AttachSelected">@Loc["Attach to {0}", SelectedExpenseName].Value</MudButton>
+                       Disabled="@(SelectedExpenseId is null || !SelectedExpenseCanAttach)" OnClick="AttachSelected">@Loc["Attach to this expense"]</MudButton>
         }
         else
         {
@@ -404,8 +405,6 @@
         _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
         _newExpenseChosen = !HasMatches;
-        if ((Row.PossibleDuplicates.FirstOrDefault(match => match.IsSuggested) ?? (Row.PossibleDuplicates.Count == 1 ? Row.PossibleDuplicates[0] : null)) is { } first)
-            SelectMatch(first);
 
         var loaded = await Errors.TryAsync(async () =>
         {

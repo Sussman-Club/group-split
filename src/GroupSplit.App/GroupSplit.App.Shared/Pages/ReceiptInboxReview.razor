@@ -16,13 +16,23 @@
 @if (_row is { } row)
 {
     <header class="gs-receipt-review-heading">
-        <h1>@(row.Receipt.MerchantName ?? Loc["Review receipt"].Value)</h1>
+        <h1>@(row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["Review receipt"].Value)</h1>
         <p>@Loc["Needs review"] · @Loc["Private"] · @row.Receipt.Total.ToString("0.00") @row.Currency</p>
     </header>
+    @if (row.PossibleDuplicates.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@Loc["Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing."]
+            @foreach (var duplicate in row.PossibleDuplicates.Where(d => d.ExpenseId is null))
+            {
+                <MudButton Href="@($"/inbox/receipts/{duplicate.Id}")" Size="Size.Small">@Loc["Review matching receipt"]</MudButton>
+            }
+        </MudAlert>
+    }
     <div class="gs-receipt-review-layout">
         <div class="gs-stack gs-receipt-review-details">
             <section class="gs-card gs-card-pad gs-receipt-review-section">
             <h2>@Loc["Receipt details"]</h2>
+            <MerchantPicker Label="@Loc["Merchant"].Value" Value="row.MerchantId" ValueChanged="SetMerchant" />
             <div class="gs-receipt-currency-row"><MudTextField @bind-Value="_currency" Label="@Loc["Currency"]" MaxLength="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudButton OnClick="SaveCurrency" Disabled="_busy" Variant="Variant.Outlined">@Loc["Save currency"]</MudButton></div>
             <MudButton OnClick="Edit" Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary">@Loc["Edit receipt details and items"]</MudButton>
@@ -61,7 +71,10 @@
             <MudButton OnClick="Delete" Disabled="_busy" Color="Color.Error">@Loc["Delete private receipt"]</MudButton>
         <details class="gs-receipt-review-original @(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0 ? "is-unextracted" : null)" open="@(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0)"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
 
-            <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" Title="@Loc["Add original receipt"]" Description="@Loc["Choose another photo or PDF to attach."]" />
+            @if (row.Attachments.Count == 0)
+            {
+                <ReceiptFilePicker FileChanged="Upload" IsBusy="_busy" Title="@Loc["Add original receipt"]" Description="@Loc["Choose a photo or PDF to attach."]" />
+            }
             @foreach (var file in row.Attachments)
             {
                 <MudButton OnClick="@(() => Read(file.Id))" Disabled="_busy">@Loc["Read items from source"]</MudButton>
@@ -124,6 +137,12 @@
         try { await Errors.TryAsync(action, Loc["Could not update receipt."].Value); }
         finally { _busy = false; }
     }
+    private Task SetMerchant(Guid? merchantId) => Run(async () =>
+    {
+        await Client.SaveReceiptInboxAsync(Id, new() { Currency = _currency, UpdateMerchant = true, MerchantId = merchantId });
+        await Changes.NotifyReceiptsChangedAsync();
+        await Load();
+    });
     private Task SaveCurrency() => Run(async () => { await Client.SaveReceiptInboxAsync(Id, new() { Currency = _currency }); await Load(); });
     private async Task Read(Guid attachmentId)
     {
@@ -163,12 +182,12 @@
         var dialog = await Dialogs.ShowAsync<FindExpenseDialog>(Loc["Find existing expense"].Value, new DialogParameters<FindExpenseDialog> { { x => x.RequireUnlinkedBank, false }, { x => x.Row, new BankTransactionResponse(Guid.Empty, _row!.Receipt.PurchaseDate ?? DateOnly.FromDateTime(DateTime.Today), _row.Receipt.Total, _currency, "Receipt", _row.Receipt.MerchantName, null, null, null, null, null, null, null, false, InboxStatus.New, null, null, "", "") } });
         if (await dialog.Result is { Canceled: false, Data: TransactionResponse expense }) await Attach(expense.Id);
     }
-    private Task File(FileReceiptInboxRequest request) => Run(async () => { await Client.FileReceiptInboxAsync(Id, request); await Changes.NotifyReceiptsChangedAsync(); await Changes.NotifyTransactionsChangedAsync(); await Changes.NotifyBankDataChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });
+    private Task File(FileReceiptInboxRequest request) => Run(async () => { await Client.FileReceiptInboxAsync(Id, request); await Changes.NotifyReceiptsChangedAsync(); await Changes.NotifyTransactionsChangedAsync(); await Changes.NotifyBankDataChangedAsync(); Nav.NavigateTo("/inbox/receipts?status=added"); });
     private Task CreateDefault() => Create(null);
     private async Task Create(Guid? groupId)
     {
         var dialog = await Dialogs.ShowAsync<CreateTransactionDialog>(Loc["Create expense"].Value, new DialogParameters<CreateTransactionDialog>
-        { { x => x.InboxReceipt, _row!.Receipt }, { x => x.InboxCurrency, _currency }, { x => x.SelectedGroupId, groupId }, { x => x.InboxSuggestion, _suggestion is { } suggestion && (suggestion.IsPersonal ? groupId is null : groupId == suggestion.GroupId) ? suggestion : null } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+        { { x => x.InboxReceipt, _row!.Receipt }, { x => x.InboxCurrency, _currency }, { x => x.InboxMerchantId, _row.MerchantId }, { x => x.SelectedGroupId, groupId }, { x => x.InboxSuggestion, _suggestion is { } suggestion && (suggestion.IsPersonal ? groupId is null : groupId == suggestion.GroupId) ? suggestion : null } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
         if (await dialog.Result is { Canceled: false, Data: CreateTransactionRequest request })
         {
             var anyway = _matches.Count > 0 && await Dialogs.ShowMessageBoxAsync(Loc["Possible duplicate"].Value, Loc["These matching expenses may already record this purchase. Create another expense?"].Value, yesText: Loc["Create another"].Value, cancelText: Loc["Cancel"].Value) == true;

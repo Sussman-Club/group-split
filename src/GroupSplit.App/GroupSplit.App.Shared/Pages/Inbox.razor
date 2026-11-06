@@ -129,25 +129,29 @@
                             @if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-bank-inbox-actions">
-                                    <div class="gs-receipt-inbox-shortcut" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                                    <div class="gs-receipt-inbox-shortcut">
+                                    <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                                     <MudButton Variant="Variant.Outlined"
                                                Color="Color.Primary" Size="Size.Small"
                                                Disabled="@(_busy == row.Id)"
                                                title="@MatchActionLabel(row)"
                                                OnClick="@(() => AddToGroupAsync(row))">@MatchActionLabel(row)</MudButton>
+                                    </span>
                                     </div>
-                                    <div class="gs-receipt-inbox-state-action" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                                    <div class="gs-receipt-inbox-state-action">
+                                    <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                                     <MudButton Variant="Variant.Text" Size="Size.Small"
                                                Disabled="@(_busy == row.Id)"
                                                OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore"]</MudButton>
+                                    </span>
                                     </div>
                                 </div>
                             }
                             else if (row.Status == InboxStatus.Ignored)
                             {
-                                <div class="gs-bank-inbox-actions"><div class="gs-receipt-inbox-state-action" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Text" Size="Size.Small"
+                                <div class="gs-bank-inbox-actions"><div class="gs-receipt-inbox-state-action"><span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Text" Size="Size.Small"
                                            Disabled="@(_busy == row.Id)"
-                                           OnClick="@(() => RestoreAsync(row))">@Loc["Restore"]</MudButton></div></div>
+                                           OnClick="@(() => RestoreAsync(row))">@Loc["Restore"]</MudButton></span></div></div>
                             }
                     </div>
 

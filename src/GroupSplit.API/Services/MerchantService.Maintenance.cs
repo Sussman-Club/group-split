@@ -89,6 +89,7 @@ public partial class MerchantService
         if (dbContext.Database.IsRelational())
         {
             await dbContext.Set<Transaction>().Where(t => t.MerchantId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MerchantId, request.TargetId), ct);
+            await dbContext.Set<Receipt>().Where(t => t.MerchantId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MerchantId, request.TargetId), ct);
             await dbContext.Set<BankTransaction>().Where(t => t.MerchantId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MerchantId, request.TargetId), ct);
             await dbContext.Set<MerchantAlias>().Where(t => t.MerchantId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MerchantId, request.TargetId), ct);
             await dbContext.Set<MerchantRedirect>().Where(t => t.MerchantId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MerchantId, request.TargetId), ct);
@@ -96,6 +97,7 @@ public partial class MerchantService
         else
         {
             foreach (var row in await dbContext.Set<Transaction>().Where(t => t.MerchantId == sourceId).ToListAsync(ct)) row.MerchantId = request.TargetId;
+            foreach (var row in await dbContext.Set<Receipt>().Where(t => t.MerchantId == sourceId).ToListAsync(ct)) row.MerchantId = request.TargetId;
             foreach (var row in await dbContext.Set<BankTransaction>().Where(t => t.MerchantId == sourceId).ToListAsync(ct)) row.MerchantId = request.TargetId;
             foreach (var row in await dbContext.Set<MerchantAlias>().Where(t => t.MerchantId == sourceId).ToListAsync(ct)) { row.MerchantId = request.TargetId; row.Merchant = target!; }
             foreach (var row in await dbContext.Set<MerchantRedirect>().Where(t => t.MerchantId == sourceId).ToListAsync(ct)) row.MerchantId = request.TargetId;

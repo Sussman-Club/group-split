@@ -136,6 +136,17 @@ public class DuplicateExpenseTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task Attaching_an_ignored_bank_row_moves_it_to_filed()
+    {
+        var typed = await Expense("Dinner", 40m, Dinner);
+        var row = await Row(40m, on: Dinner);
+        await Inbox.Ignore(row.Id, Ct);
+        var linked = await Inbox.Link(row.Id, new LinkBankTransactionRequest { TransactionId = typed.Id }, Ct);
+        Assert.Equal(typed.Id, linked.Id);
+        Assert.Equal(BankTransactionStatus.Filed, (await Reload(row)).Status);
+    }
+
+    [Fact]
     public async Task An_attached_row_is_not_suggested_against_anything_else()
     {
         var typed = await Expense("Dinner", 40m, Dinner);

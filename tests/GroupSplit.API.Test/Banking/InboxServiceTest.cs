@@ -67,6 +67,16 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task Filing_an_ignored_bank_row_moves_it_to_filed()
+    {
+        var row = await Row(amount: 12.50m);
+        await Inbox.Ignore(row.Id, Ct);
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+        Assert.Equal(row.Id, expense.BankTransactionId);
+        Assert.Equal(BankTransactionStatus.Filed, (await Reload(row)).Status);
+    }
+
+    [Fact]
     public async Task Filing_with_no_group_is_a_personal_expense_owed_entirely_by_the_payer()
     {
         var row = await Row(amount: 9.99m);

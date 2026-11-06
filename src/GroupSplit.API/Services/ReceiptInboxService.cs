@@ -10,25 +10,25 @@ using Microsoft.EntityFrameworkCore;
 namespace GroupSplit.API.Services;
 
 public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAccountDataGuard guard,
-    ITransactionService transactions, IReceiptFiles files)
+    ITransactionService transactions, IReceiptFiles files, IMerchantService merchants, IReceiptDuplicateDiscriminator duplicateDiscriminator)
 {
     private IQueryable<Receipt> Owned() => db.Set<Receipt>().Where(r => r.OwnerUserId == user.User.Id);
     private async Task<Receipt> Find(Guid id, CancellationToken ct) =>
-        await Owned().Include(r => r.Items).Include(r => r.Attachments).FirstOrDefaultAsync(r => r.Id == id, ct)
+        await Owned().Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant).FirstOrDefaultAsync(r => r.Id == id, ct)
         ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
     private static void Unfiled(Receipt r)
     {
         if (r.ExpenseId != null) throw new ConflictException(ErrorCodes.ReceiptAlreadyFiled, "This receipt is already filed.");
     }
     public async Task<IReadOnlyList<ReceiptInboxResponse>> List(CancellationToken ct) =>
-        (await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments)
-            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+        await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
+            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct, classify: true);
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct) =>
-        (await Owned().Where(r => r.ExpenseId != null).Include(r => r.Items).Include(r => r.Attachments)
-            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+        await WithDuplicates((await Owned().Where(r => r.ExpenseId != null).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
+            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListIgnored(CancellationToken ct) =>
-        (await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments)
-            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)).Select(Response).ToList();
+        await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
+            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
     public async Task<IReadOnlyList<ReceiptInboxSuggestion>> Suggest(ReceiptInboxSuggestionsRequest request, IFilingSuggester suggester, CancellationToken ct)
     {
         if (request.ReceiptIds is null || request.ReceiptIds.Count is 0 or > ReceiptInboxSuggestionsRequest.MaxRows)
@@ -50,7 +50,46 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         receipt.IsIgnored = ignored;
         await db.SaveChangesAsync(ct);
     }
-    public async Task<ReceiptInboxResponse> Get(Guid id, CancellationToken ct) => Response(await Find(id, ct));
+    public async Task<ReceiptInboxResponse> Get(Guid id, CancellationToken ct) => (await WithDuplicates([await Find(id, ct)], ct))[0];
+
+    private async Task<IReadOnlyList<ReceiptInboxResponse>> WithDuplicates(IReadOnlyList<Receipt> receipts, CancellationToken ct, bool classify = false)
+    {
+        var dates = receipts.Where(r => r.PurchaseDate != null && r.Total > 0 && !string.IsNullOrWhiteSpace(r.MerchantName))
+            .Select(r => r.PurchaseDate!.Value).Distinct().ToArray();
+        if (dates.Length == 0) return receipts.Select(Response).ToArray();
+        var candidates = await Owned().Where(r => r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0)
+            .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName }).ToListAsync(ct);
+        var responses = receipts.Select(r => Response(r) with { PossibleDuplicates = candidates
+            .Where(c => c.Id != r.Id && c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
+                !string.IsNullOrWhiteSpace(r.MerchantName) && !string.IsNullOrWhiteSpace(c.MerchantName) &&
+                string.Equals(c.Currency, r.Currency, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(c => new ReceiptDuplicateCandidate(c.Id, c.ExpenseId)).ToArray() }).ToArray();
+        if (!classify) return responses;
+
+        // Never suggest deleting both sides. Prefer a filed receipt as the copy to keep;
+        // otherwise use a stable ordering without claiming either copy is newer or better.
+        var pairs = responses.Select((response, index) => new
+        {
+            Index = index,
+            Other = response.PossibleDuplicates
+                .Where(c => candidates.Any(candidate => candidate.Id == c.Id && !candidate.IsIgnored) &&
+                            (c.ExpenseId != null || c.Id.CompareTo(response.Id) < 0))
+                .OrderByDescending(c => c.ExpenseId != null).ThenBy(c => c.Id).FirstOrDefault()
+        }).Where(pair => pair.Other is not null && receipts[pair.Index].Items.Count > 0).Take(10).ToArray();
+        if (pairs.Length == 0) return responses;
+        var ids = pairs.Select(pair => pair.Other!.Id).Distinct().ToArray();
+        var others = await Owned().AsNoTracking().Include(r => r.Items)
+            .Where(r => ids.Contains(r.Id)).ToDictionaryAsync(r => r.Id, ct);
+        var userId = user.User.Id;
+        await Parallel.ForEachAsync(pairs, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (pair, token) =>
+        {
+            if (others.TryGetValue(pair.Other!.Id, out var other) &&
+                await duplicateDiscriminator.IsDuplicate(receipts[pair.Index], other, userId, token))
+                responses[pair.Index] = responses[pair.Index] with { SuggestedDuplicateOfId = other.Id };
+        });
+        return responses;
+    }
     public async Task<ReceiptInboxResponse> Save(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)
     {
         await using var lease = await guard.Acquire(user.User.Id, ct: ct);
@@ -69,7 +108,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     }
     private async Task<ReceiptInboxResponse> SaveCore(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)
     {
-        var r = await Owned().Include(r => r.Items).Include(r => r.Attachments).FirstOrDefaultAsync(r => r.Id == id, ct);
+        var r = await Owned().Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant).FirstOrDefaultAsync(r => r.Id == id, ct);
         var importingDetails = r is null || r.Items.Count == 0 && string.IsNullOrWhiteSpace(r.MerchantName)
             && r.PurchaseDate is null && r.Total == 0 && r.Subtotal == 0 && r.Tax == 0 && r.Tip == 0;
         var details = request.Receipt;
@@ -89,6 +128,14 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         }
         Unfiled(r);
         r.Currency = request.Currency.ToUpperInvariant();
+        if (request.UpdateMerchant)
+        {
+            r.Merchant = request.MerchantId is { } merchantId
+                ? await db.Set<Merchant>().FirstOrDefaultAsync(m => m.Id == merchantId, ct)
+                    ?? throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.")
+                : null;
+            r.MerchantId = r.Merchant?.Id;
+        }
         if (request.Receipt is { } input)
         {
             if (input.Items.Any(i => i.SplitRuleVersionId != null))
@@ -110,6 +157,17 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                     for (var index = 0; index < lines.Length; index++) lines[index].TaxAmount = taxes[index];
             }
             db.AddRange(r.Items);
+        }
+        if (!request.UpdateMerchant && r.MerchantId is null && !string.IsNullOrWhiteSpace(r.MerchantName) && r.MerchantName.Trim().Length >= 2)
+        {
+            var name = r.MerchantName.Trim();
+            var candidates = await merchants.List(name, ct);
+            var match = (await candidates.ToListAsync(ct)).FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                r.MerchantId = match.Id;
+                r.Merchant = await db.Set<Merchant>().FirstAsync(m => m.Id == match.Id, ct);
+            }
         }
         await db.SaveChangesAsync(ct);
         return Response(r);
@@ -136,7 +194,12 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             .OrderByDescending(e => e.DateTime).Take(20)
             .Select(e => new ReceiptExpenseCandidate(e.Id, e.Name, e.Amount, e.Currency, e.DateTime,
                 db.Set<Receipt>().Any(existing => existing.ExpenseId == e.Id) ||
-                db.Set<ReceiptAttachment>().Any(existing => existing.ExpenseId == e.Id))).ToListAsync(ct);
+                db.Set<ReceiptAttachment>().Any(existing => existing.ExpenseId == e.Id))
+            {
+                GroupName = e.GroupId == e.UserId ? null : e.Group.Name,
+                PaidByUserName = e.User.FirstName == null && e.User.LastName == null
+                    ? e.User.Email : e.User.FirstName + (e.User.LastName != null ? " " + e.User.LastName : "")
+            }).ToListAsync(ct);
     }
     public async Task DismissMatch(Guid id, Guid expenseId, CancellationToken ct)
     {
@@ -173,7 +236,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 throw new ConflictException(ErrorCodes.ReceiptAlreadyFiled, "This receipt was filed elsewhere.");
             return Response(r);
         }
-        if (r.IsIgnored) throw new ConflictException(ErrorCodes.ReceiptInvalid, "Restore this receipt before filing it.");
         if (new[] { request.ExpenseId != null, request.NewExpense != null }.Count(x => x) != 1)
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose one filing destination.");
         // A new expense may carry a reviewed allocation of previously unassigned tax.
@@ -244,6 +306,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             throw new ConflictException(ErrorCodes.ReceiptAlreadyAttached, "This expense already has a receipt file.");
         // Linking only changes evidence. Existing allocations are never recalculated here.
         r.ExpenseId = expense.Id;
+        r.IsIgnored = false;
 
         foreach (var a in r.Attachments) a.ExpenseId = expense.Id;
         await db.SaveChangesAsync(ct);
@@ -257,5 +320,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 NormalizedName = i.NormalizedName, Description = i.Description, UnitPrice = i.UnitPrice,
                 Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
                 TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
-        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList());
+        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList())
+        { MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
 }

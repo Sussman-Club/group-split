@@ -72,6 +72,7 @@ public static class BankingServiceExtensions
             services.AddHttpClient<IDecisionClient, DecisionClient>();
             services.AddSingleton<SuggestionModelLimiter>();
             services.AddScoped<IFilingSuggester, FilingSuggester>();
+            services.AddScoped<IReceiptDuplicateDiscriminator, ReceiptDuplicateDiscriminator>();
 
             services.AddJobs()
                 .Handlers

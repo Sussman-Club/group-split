@@ -86,6 +86,23 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Suggested_expense_must_be_selected_before_attaching()
+    {
+        var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,
+            Trip.Id, Trip.Name, "Ana", 0m, 0, MatchConfidence.Confident) { IsSuggested = true };
+        var (provider, reference) = await OpenAsync(Row with { PossibleDuplicates = [candidate] });
+        Assert.Contains("Suggested match", provider.Markup);
+        Assert.Contains("Create a new expense", provider.Markup);
+        var attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
+        Assert.True(attach.HasAttribute("disabled"));
+        await provider.Find("button[role=radio]").ClickAsync(new MouseEventArgs());
+        attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
+        Assert.False(attach.HasAttribute("disabled"));
+        await attach.ClickAsync(new MouseEventArgs());
+        Assert.Equal(candidate.TransactionId, (await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>())!.AttachTo);
+    }
+
+    [Fact]
     public async Task Bank_tips_can_be_skipped_and_save_the_preference()
     {
         var login = new Mock<IUserLogin>();

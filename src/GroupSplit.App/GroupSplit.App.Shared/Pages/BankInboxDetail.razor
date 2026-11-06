@@ -30,7 +30,7 @@
         <div class="gs-stack gs-receipt-review-sidebar">
             <section class="gs-card gs-card-pad gs-receipt-review-section">
                 <h2>@Loc["Manage transaction"]</h2>
-                @if (row.Status == InboxStatus.New)
+                @if (row.Status is InboxStatus.New or InboxStatus.Ignored)
                 {
                     <p>@Loc["Add this payment as an expense or attach it to an existing one."]</p>
                     @if (row.PossibleDuplicates.Count > 0)
@@ -50,12 +50,14 @@
                     }
                     <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => FindExpenseAsync(row))">@Loc["Find an expense"]</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="@(() => FileAsync(row))">@Loc["Review and add expense"]</MudButton>
-                    <MudButton Disabled="_busy" OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore transaction"]</MudButton>
-                }
-                else if (row.Status == InboxStatus.Ignored)
-                {
-                    <p>@Loc["This transaction is ignored."]</p>
-                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => RestoreAsync(row))">@Loc["Restore transaction"]</MudButton>
+                    @if (row.Status == InboxStatus.New)
+                    {
+                        <MudButton Disabled="_busy" OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore transaction"]</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Disabled="_busy" OnClick="@(() => RestoreAsync(row))">@Loc["Restore transaction"]</MudButton>
+                    }
                 }
                 else if (row.TransactionId is { } expenseId)
                 {
@@ -81,8 +83,18 @@
         {
             await Errors.TryAsync(async () => {
                 _row = await Client.GetBankTransactionAsync(Id);
-                if (_row.Status == InboxStatus.New && _row.PossibleDuplicates.Count > 1)
+                if (_row.Status is InboxStatus.New or InboxStatus.Ignored && _row.PossibleDuplicates.Count > 1)
                     _row = _row with { PossibleDuplicates = (await Client.GetBankTransactionMatchesAsync(Id)).ToList() };
+                if (_row.Status == InboxStatus.Ignored && !_row.IsCredit && _row.PossibleDuplicates.Count == 0)
+                {
+                    try
+                    {
+                        var suggestions = await Client.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
+                        { Rows = [new SuggestFilingRow { Id = Id }] });
+                        _row = _row with { Suggestion = suggestions.FirstOrDefault(suggestion => suggestion.BankTransactionId == Id) };
+                    }
+                    catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { }
+                }
             }, Loc["Could not load transaction."].Value);
         }
         finally { _loading = false; }
@@ -95,7 +107,7 @@
             Loc["Attach {0} ({1} {2}, {3}) to {4}? The expense and its shares will stay the same.", row.Title, row.Amount.ToString("N2"), row.Currency, row.SpentOn.ToString("d"), name].Value,
             yesText: Loc["Attach"].Value, cancelText: Loc["Cancel"].Value) != true) return;
         _busy = true;
-        try { if (await Bank.AttachAsync(row.Id, expenseId) is not null) Nav.NavigateTo("/inbox"); }
+        try { if (await Bank.AttachAsync(row.Id, expenseId) is not null) Nav.NavigateTo("/inbox?status=added"); }
         finally { _busy = false; }
     }
     private async Task FindExpenseAsync(BankTransactionResponse row)
@@ -115,7 +127,7 @@
         {
             var result = answer.AttachTo is { } id ? await Bank.AttachAsync(row.Id, id)
                 : answer.Request is { } request ? await Bank.FileAsync(row.Id, request, answer.Destination) : null;
-            if (result is not null) Nav.NavigateTo("/inbox");
+            if (result is not null) Nav.NavigateTo("/inbox?status=added");
         }
         finally { _busy = false; }
     }
