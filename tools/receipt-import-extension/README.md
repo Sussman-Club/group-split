@@ -1,5 +1,10 @@
 # Receipt importer preview
 
+Successful production deployments publish a versioned receipt importer ZIP in
+the repository's GitHub Releases. Extract it before loading the folder as an
+unpacked extension. This preview requires manual updates; browser store
+installations are the recommended distribution for regular users.
+
 Load this folder as an unpacked extension in Chrome or Edge. Open the
 GroupSplit receipts inbox and select **Import from a store**. Choose Amazon
 or Costco, select Connect store, and sign in yourself. For Amazon, open your
