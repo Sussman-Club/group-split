@@ -160,10 +160,14 @@ public class CreateTransactionDialogTest : ComponentTest
         await reading;
         await ChooseSplitAsync(provider, "Receipt items");
         provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<BillDivision>()));
-        Assert.True(provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
-            .HasAttribute("disabled"));
         var division = provider.FindComponent<BillDivision>();
         division.WaitForAssertion(() => Assert.Single(division.FindComponents<MudSelect<Guid?>>()));
+        Assert.Equal(evenVersion, division.FindComponent<MudSelect<Guid?>>().Instance.Value);
+        Assert.False(provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
+            .HasAttribute("disabled"));
+        await division.InvokeAsync(() => division.FindComponent<MudSelect<Guid?>>().Instance.ValueChanged.InvokeAsync(null));
+        provider.WaitForAssertion(() => Assert.True(provider.FindAll(".mud-dialog-actions button")
+            .Single(button => button.TextContent.Trim() == "Add expense").HasAttribute("disabled")));
         await division.InvokeAsync(() => division.FindComponent<MudSelect<Guid?>>().Instance.ValueChanged.InvokeAsync(evenVersion));
         await provider.FindAll(".mud-dialog-actions button").Single(button => button.TextContent.Trim() == "Add expense")
             .ClickAsync(new MouseEventArgs());
