@@ -1,8 +1,8 @@
 name: Deploy
 
 # Merging to main deploys production. The release number is claimed here rather than
-# typed by hand: the job derives the next app-vMAJOR.MINOR.PATCH from existing tags.
-# Once deployment succeeds, a GitHub Release carries the matching extension ZIP.
+# typed by hand: there is no GitHub Release to carry it, so the job derives the next
+# app-vMAJOR.MINOR.PATCH from the tags already on the repository and writes its own.
 #
 # A push is a patch. A minor or major release has to be asked for, which is what the
 # manual run is for -- nothing in a commit says "this one is a breaking change".
@@ -62,9 +62,6 @@ jobs:
           # Full history and every tag: the version below is derived from them.
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Test receipt importer
-        run: node --test tools/receipt-import-extension/*.test.cjs
 
       # Keep Komodo credentials out of the image-build environment.
       - name: Validate Komodo credentials
@@ -254,25 +251,3 @@ jobs:
           jq -e --arg expected "$origin/idp/realms/group-split" '.issuer == $expected' <<<"$oidc_metadata" > /dev/null
 
           echo "Public web and OIDC discovery endpoints are healthy."
-
-      # Publish the unpacked extension from the same commit only after deployment succeeds.
-      # Keep app releases out of GitHub's latest-release pointer (used by other products).
-      - name: Publish receipt importer ZIP
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.deployment.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          zip_path="$RUNNER_TEMP/groupsplit-receipt-importer-${RELEASE_TAG}.zip"
-          (cd tools/receipt-import-extension && zip -q "$zip_path" \
-            manifest.json app-bridge.js background.js popup.html popup.js popup.css \
-            logo.svg select-chevron.svg icon16.png icon48.png icon128.png)
-          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" "$zip_path" --verify-tag --draft \
-              --title "GroupSplit $RELEASE_TAG" \
-              --notes "Receipt importer preview for this deployment. Extract the ZIP and load the folder as an unpacked extension in Chrome or Edge. Store installations are recommended for regular users."
-          else
-            gh release upload "$RELEASE_TAG" "$zip_path" --clobber
-          fi
-          gh release edit "$RELEASE_TAG" --draft=false --latest=false
