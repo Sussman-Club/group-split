@@ -2,9 +2,10 @@
 
 Load this folder as an unpacked extension in Chrome or Edge. Open the
 GroupSplit receipts inbox and select **Import from a store**. Choose Amazon
-or Costco, select Connect store, and sign in yourself. For Amazon, open your
-orders. For Costco, the importer opens Orders & Purchases and selects the
-chosen warehouse or online view. Return to the importer and find receipts.
+or Costco and select Connect store. The store opens in a background tab. If
+you need to sign in, go to that tab, sign in, and return to the importer.
+For Costco, the importer selects the chosen warehouse or online view when
+you find receipts.
 Review the list before saving receipts as PDFs and uploading them to the
 inbox. Keep the GroupSplit tab open and signed in.
 
