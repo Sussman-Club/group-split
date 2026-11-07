@@ -75,7 +75,7 @@
                    It changes the figure and the groups it lands in, so both are read again. *@
                 @if (_choosingPeriod)
                 {
-                    <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
+                    <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="@ThroughChanged"
                                    Label="@Loc["Only activity up to"]"
                                    Variant="Variant.Outlined"
                                    Clearable="true"
@@ -92,7 +92,7 @@
                     </MudButton>
                 }
 
-                <MudDatePicker Date="_date" DateChanged="@DateChanged"
+                <MudDatePicker ShowToolbar="false" Date="_date" DateChanged="@DateChanged"
                                Label="@Loc["When"]"
                                Variant="Variant.Outlined"
                                Clearable="true"

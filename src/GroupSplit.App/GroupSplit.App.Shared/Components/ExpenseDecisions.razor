@@ -153,7 +153,7 @@
                     @* Both report: the version of a rule that divides an expense is the one
                        that stood on the day it was spent, so the day is part of the
                        division. *@
-                    <MudDatePicker Date="@(UseSelectionSheets ? _sheetDate : Date)" DateChanged="@OnSheetDateChangedAsync" Label="@Loc["Date"]"
+                    <MudDatePicker ShowToolbar="false" Date="@(UseSelectionSheets ? _sheetDate : Date)" DateChanged="@OnSheetDateChangedAsync" Label="@Loc["Date"]"
                                    Variant="Variant.Outlined"/>
                     <MudTimePicker Time="@(UseSelectionSheets ? _sheetTime : Time)" TimeChanged="@OnSheetTimeChangedAsync" Label="@Loc["Time"]"
                                    Variant="Variant.Outlined" AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')"/>

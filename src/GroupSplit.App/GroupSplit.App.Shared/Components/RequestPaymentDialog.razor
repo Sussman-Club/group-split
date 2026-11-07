@@ -23,7 +23,7 @@
         {
             <MudStack Spacing="2">
                 <MudText>@(_through is { } day ? Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, RecipientName, CurrentDebt.ToMoney()].Value : Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney()].Value)</MudText>
-                <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync" Label="@Loc["Up to a date"]"
+                <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="ThroughChangedAsync" Label="@Loc["Up to a date"]"
                                Variant="Variant.Outlined" Clearable="true" MaxDate="@Clock.Today"
                                Disabled="@(_busy || _readingPeriod)"
                                HelperText="@Loc["Leave empty to request the full balance."]" />

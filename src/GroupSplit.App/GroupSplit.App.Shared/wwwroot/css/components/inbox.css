@@ -159,11 +159,6 @@
     DateRangeFilter), so what is left is the two months and the days.
 */
 
-/* The same compact calendar on every date field, including an empty date. */
-.mud-picker-datepicker-toolbar {
-    display: none;
-}
-
 .mud-picker-paper,
 .mud-picker-container {
     background: var(--gs-surface);
