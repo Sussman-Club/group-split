@@ -2,9 +2,9 @@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 
 <Virtualize TItem="TItem" @ref="_virtualize" ItemsProvider="ItemsProvider"
-            ItemSize="128" OverscanCount="5" Context="item">
+            ItemSize="96" OverscanCount="5" Context="item">
     <ItemContent>@ItemContent(item)</ItemContent>
-    <Placeholder><div style="height:128px" aria-hidden="true"></div></Placeholder>
+    <Placeholder><div style="height:96px" aria-hidden="true"></div></Placeholder>
     <EmptyContent>@EmptyContent</EmptyContent>
 </Virtualize>
 

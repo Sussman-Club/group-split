@@ -5781,4 +5781,17 @@
   <data name="{0} day{1} apart · same amount" xml:space="preserve">
     <value>{0} day{1} apart · same amount</value>
   </data>
+  <data name="Possible duplicate receipt" xml:space="preserve"><value>Possible duplicate receipt</value></data>
+  <data name="Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing." xml:space="preserve"><value>Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing.</value></data>
+  <data name="Review matching receipt" xml:space="preserve"><value>Review matching receipt</value></data>
+  <data name="Upload a receipt" xml:space="preserve"><value>Upload a receipt</value></data>
+  <data name="Choose a photo or PDF to attach." xml:space="preserve"><value>Choose a photo or PDF to attach.</value></data>
+  <data name="Is this receipt for an existing expense?" xml:space="preserve"><value>Is this receipt for an existing expense?</value></data>
+  <data name="Is this payment for an existing expense?" xml:space="preserve"><value>Is this payment for an existing expense?</value></data>
+  <data name="Possible matches" xml:space="preserve"><value>Possible matches</value></data>
+  <data name="Create a new expense" xml:space="preserve"><value>Create a new expense</value></data>
+  <data name="Attach to this expense" xml:space="preserve"><value>Attach to this expense</value></data>
+  <data name="Review and delete duplicate" xml:space="preserve"><value>Review and delete duplicate</value></data>
+  <data name="Delete possible duplicate?" xml:space="preserve"><value>Delete possible duplicate?</value></data>
+  <data name="This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone.</value></data>
 </root>

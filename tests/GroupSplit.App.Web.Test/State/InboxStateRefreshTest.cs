@@ -42,6 +42,10 @@ public class InboxStateRefreshTest
 
     public InboxStateRefreshTest()
     {
+        _inboxClient.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<FilingSuggestionResponse>());
+        _inboxClient.Setup(client => client.GetBankTransactionMatchesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ExpenseMatchResponse>());
         _rows =
         [
             // The first one is showing a suggestion: an expense already recorded that it

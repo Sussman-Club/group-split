@@ -88,7 +88,6 @@ public class ReceiptInboxEndpointTest
         Assert.Equal(id, Assert.Single((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/ignored", Json))!).Id);
         Assert.Empty((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/ignored", Json))!);
         var file = new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest { Name = "Purchase", Amount = 10, Currency = "USD", DateTime = DateTimeOffset.UtcNow } };
-        Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", file, Json)).StatusCode);
         (await host.Client.PostAsync($"/receipts/inbox/{id}/restore", null)).EnsureSuccessStatusCode();
         Assert.Equal(id, Assert.Single((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json))!).Id);
         (await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", file, Json)).EnsureSuccessStatusCode();
@@ -151,6 +150,33 @@ public class ReceiptInboxEndpointTest
         Assert.Equal(HttpStatusCode.NotFound, (await host.Client.PutAsJsonAsync($"/receipts/inbox/{Guid.NewGuid()}/extracted", replacement, Json)).StatusCode);
     }
     [Fact]
+    public async Task Receipt_merchant_can_be_selected_and_cleared_without_changing_the_source_name()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var id = Guid.NewGuid();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { Receipt = new SaveReceiptRequest { MerchantName = "Printed name", Total = 10, Subtotal = 10, Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] } }, Json)).EnsureSuccessStatusCode();
+        var created = await host.Client.PostAsJsonAsync("/merchants", new CreateMerchantRequest { Name = "Chosen store", LogoUrl = "https://plaid-merchant-logos.plaid.com/store.png" }, Json);
+        created.EnsureSuccessStatusCode();
+        var merchant = await created.Content.ReadFromJsonAsync<MerchantResponse>(Json);
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { UpdateMerchant = true, MerchantId = merchant!.Id }, Json)).EnsureSuccessStatusCode();
+        var saved = await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json);
+        Assert.Equal(merchant.Id, saved!.MerchantId);
+        Assert.Equal("Chosen store", saved.MerchantDisplayName);
+        Assert.Equal("https://plaid-merchant-logos.plaid.com/store.png", saved.MerchantLogoUrl);
+        Assert.Equal("Printed name", saved.Receipt.MerchantName);
+        (await host.Client.GetAsync($"/merchants/{merchant.Id}")).EnsureSuccessStatusCode();
+        using var other = host.ClientForAnotherUser();
+        Assert.Equal(HttpStatusCode.BadRequest, (await other.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { UpdateMerchant = true, MerchantId = merchant.Id }, Json)).StatusCode);
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { UpdateMerchant = true }, Json)).EnsureSuccessStatusCode();
+        saved = await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json);
+        Assert.Null(saved!.MerchantId);
+        Assert.Equal("Printed name", saved.Receipt.MerchantName);
+    }
+
+    [Fact]
     public async Task Draft_is_private_persistent_and_deletable()
     {
         await using var host = await ApiEndpointHost.StartAsync();
@@ -167,6 +193,43 @@ public class ReceiptInboxEndpointTest
         (await host.Client.DeleteAsync($"/receipts/inbox/{id}")).EnsureSuccessStatusCode();
         Assert.Empty((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json))!);
     }
+    [Fact]
+    public async Task Ignored_receipt_can_be_filed_and_moves_to_added()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var id = Guid.NewGuid();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 20, Subtotal = 20,
+            Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }] } }, Json)).EnsureSuccessStatusCode();
+        (await host.Client.PostAsync($"/receipts/inbox/{id}/ignore", null)).EnsureSuccessStatusCode();
+        var refused = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest(), Json);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/ignored", Json))!, row => row.Id == id);
+        var result = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest
+        { NewExpense = new CreateTransactionRequest { Name = "Food", Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow } }, Json);
+        result.EnsureSuccessStatusCode();
+        Assert.DoesNotContain((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/ignored", Json))!, row => row.Id == id);
+        Assert.Contains((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json))!, row => row.Id == id);
+    }
+
+    [Fact]
+    public async Task Ignored_receipt_can_be_attached_to_an_existing_expense()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var id = Guid.NewGuid();
+        (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
+        { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 20, Subtotal = 20,
+            Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }] } }, Json)).EnsureSuccessStatusCode();
+        (await host.Client.PostAsync($"/receipts/inbox/{id}/ignore", null)).EnsureSuccessStatusCode();
+        var expense = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
+        { Name = "Food", Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+        expense.EnsureSuccessStatusCode();
+        var expenseId = (await expense.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest { ExpenseId = expenseId }, Json)).EnsureSuccessStatusCode();
+        Assert.DoesNotContain((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/ignored", Json))!, row => row.Id == id);
+        Assert.Contains((await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json))!, row => row.Id == id && row.ExpenseId == expenseId);
+    }
+
     [Fact]
     public async Task Filing_is_retryable_and_preserves_existing_expense()
     {

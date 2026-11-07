@@ -37,6 +37,10 @@ public class InboxLoadMoreTest
 
     public InboxLoadMoreTest()
     {
+        _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<FilingSuggestionResponse>());
+        _inbox.Setup(client => client.GetBankTransactionMatchesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ExpenseMatchResponse>());
         // Ten pages and a bit: well past the eight a 200-row ceiling allowed.
         _rows = [.. Enumerable.Range(0, 260).Select(index => Row($"Row {index}"))];
 
@@ -70,6 +74,22 @@ public class InboxLoadMoreTest
 
         _state = new InboxStateService(_inbox.Object, _connections.Object, new LoadGuard(presenter),
             _changes, new LocalClock(Mock.Of<IJSRuntime>()));
+    }
+
+    [Fact]
+    public async Task Waits_for_suggestions_before_publishing_bank_rows()
+    {
+        var pending = new TaskCompletionSource<ICollection<FilingSuggestionResponse>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(pending.Task);
+        var loading = _state.LoadRowsAsync(Ct);
+        Assert.False(loading.IsCompleted);
+        Assert.Empty(_state.Rows);
+        Assert.True(_state.IsLoading);
+        pending.SetResult([]);
+        await loading;
+        Assert.Equal(PageSize, _state.Rows.Count);
+        Assert.False(_state.IsLoading);
     }
 
     [Fact]

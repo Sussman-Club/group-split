@@ -34,6 +34,11 @@ public class InboxLateAnswerTest
 
     public InboxLateAnswerTest()
     {
+        _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<FilingSuggestionResponse>());
+        _inbox.Setup(client => client.GetBankTransactionMatchesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ExpenseMatchResponse>());
+
         _inbox
             .Setup(client => client.GetInboxSummaryAsync(It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new InboxSummaryResponse(1));

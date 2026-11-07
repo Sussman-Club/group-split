@@ -1,5 +1,6 @@
 using Bunit;
 using GroupSplit.App.Shared.Pages;
+using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -8,6 +9,8 @@ namespace GroupSplit.App.Web.Test.Components;
 
 public class ReceiptInboxReviewTest : ComponentTest
 {
+    public ReceiptInboxReviewTest() => Services.AddSingleton(Mock.Of<IMerchantCommands>());
+
     [Fact]
     public void A_match_can_be_dismissed_without_removing_the_receipt()
     {

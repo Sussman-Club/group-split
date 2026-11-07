@@ -262,6 +262,7 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-receipt-inbox-end { display: flex; flex-direction: column; align-items: end; gap: 8px; font-variant-numeric: tabular-nums; }
 .gs-receipt-inbox-end > span { display: flex; align-items: center; color: var(--gs-teal-deep); font-size: .85rem; }
 .gs-receipt-empty { padding: 32px 20px; }
+.gs-receipt-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
 .gs-receipt-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .gs-receipt-review-original { min-width: 0; }
 .gs-receipt-review-original.is-unextracted { order: -1; }
@@ -310,15 +311,17 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-receipt-suggestion > span { color: var(--gs-ink-2); }
 .gs-receipt-inbox-entry { position: relative; height: 120px; box-sizing: border-box; border-bottom: 1px solid var(--gs-line); }
 .gs-receipt-inbox-entry .gs-receipt-inbox-row { height: 100%; box-sizing: border-box; padding: 14px 20px; align-items: flex-start; border-bottom: 0; }
+.gs-receipt-inbox-entry .gs-receipt-inbox-row::after { content: ""; position: absolute; inset: 0; }
 .gs-receipt-inbox-copy > strong, .gs-receipt-inbox-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gs-receipt-inbox-shortcut .mud-button-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-receipt-inbox-shortcut .mud-button-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap !important; }
 .gs-receipt-inbox-entry:last-child { border-bottom: 0; }
 .gs-receipt-inbox-end > strong { white-space: nowrap; }
 .gs-receipt-inbox-end small { display: inline; margin-left: 3px; font-size: .72em; font-weight: 400; color: var(--gs-muted); }
-.gs-receipt-inbox-actions { position: absolute; left: 84px; right: 20px; bottom: 10px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; pointer-events: none; }
+.gs-receipt-inbox-actions { position: absolute; z-index: 1; left: 84px; right: 20px; bottom: 10px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; pointer-events: none; }
 .gs-receipt-inbox-actions .mud-button-root { pointer-events: auto; }
 .gs-receipt-inbox-entry:not(.has-suggestion) .gs-receipt-inbox-actions { justify-content: flex-end; }
 .gs-receipt-inbox-shortcut { min-width: 0; max-width: min(260px, calc(100% - 70px)); }
+.gs-bank-inbox-actions .gs-receipt-inbox-shortcut > span { display: inline-flex; max-width: 100%; vertical-align: middle; }
 .gs-receipt-inbox-shortcut .mud-button-root { max-width: 100%; min-width: 0; min-height: 40px; overflow: hidden; white-space: nowrap; text-align: left; }
 .gs-receipt-filters { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 16px 0; }
 .gs-receipt-filters .mud-button-root { min-height: 40px; padding-inline: 16px; white-space: nowrap; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
@@ -348,6 +351,18 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-bank-inbox-amount { text-align: right; white-space: nowrap; }
 .gs-bank-inbox-actions { grid-column: 2 / 4; display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; }
 .gs-bank-inbox-actions .mud-button-root { min-height: 40px; }
+@media (min-width: 768px) {
+    .gs-receipt-inbox-entry { display: flex; align-items: center; height: 88px; }
+    .gs-receipt-inbox-entry:hover, .gs-receipt-inbox-entry:focus-within { background: var(--gs-teal-soft); }
+    .gs-receipt-inbox-entry .gs-receipt-inbox-row:hover { background: transparent; }
+    .gs-receipt-inbox-entry .gs-receipt-inbox-row { flex: 1 1 auto; min-width: 0; align-items: center; padding: 10px 8px 10px 20px; }
+    .gs-receipt-inbox-actions { position: relative; inset: auto; flex: 0 1 280px; min-width: 0; max-width: 42%; padding-right: 20px; }
+    .gs-receipt-inbox-shortcut { flex: 1 1 auto; max-width: none; }
+    .gs-receipt-inbox-shortcut .mud-button-root { width: 100%; }
+    .gs-bank-inbox-entry { grid-template-columns: 48px minmax(0, 1fr) auto minmax(0, 320px); align-items: center; padding-block: 10px; }
+    .gs-bank-inbox-entry > :first-child { grid-row: auto; }
+    .gs-bank-inbox-actions { grid-column: 4; }
+}
 @media (max-width: 600px) {
     .gs-receipt-inbox-entry .gs-receipt-inbox-row { padding: 12px; }
     .gs-receipt-filters .mud-button-root { flex: 1 1 0; min-width: 0; padding-inline: 6px; }
@@ -356,3 +371,5 @@ html.gs-receipt-import-open { overflow: hidden; }
     .gs-bank-inbox-entry { grid-template-columns: 36px minmax(0, 1fr) auto; column-gap: 10px; padding: 12px; }
     .gs-bank-inbox-actions { justify-content: flex-start; }
 }
+
+.gs-receipt-inbox-copy > .gs-receipt-duplicate { color: var(--mud-palette-warning-darken); font-weight: 600; }

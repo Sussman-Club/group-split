@@ -10,6 +10,7 @@ namespace GroupSplit.Seeder.Seeders;
 public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
 {
     private static readonly Guid ReceiptId = Guid.Parse("e6a8651b-1c59-4ef0-b57f-0aa1e0ecaf01");
+    private static readonly Guid DuplicateReceiptId = Guid.Parse("e6a8651b-1c59-4ef0-b57f-0aa1e0ecaf06");
     private static readonly Guid ExpenseId = Guid.Parse("d0000005-0000-4000-8000-000000000005");
 
     public async Task SeedAsync(CancellationToken ct = default)
@@ -48,6 +49,23 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
                 MerchantName = merchant, PurchaseDate = today.AddDays(-daysAgo), Subtotal = total, Total = total, IsIgnored = ignored };
             receipt.Items.Add(new ReceiptItem { Name = item, NormalizedName = item.ToLowerInvariant(), UnitPrice = total, TotalPrice = total });
             db.Add(receipt);
+        }
+        // Copy the seeded receipt's current details, including its date, so rerunning the
+        // seeder on another day still produces a match without changing existing receipts.
+        if (!await db.Set<Receipt>().AnyAsync(r => r.Id == DuplicateReceiptId, ct))
+        {
+            var original = db.Set<Receipt>().Local.FirstOrDefault(r => r.Id == ReceiptId)
+                ?? await db.Set<Receipt>().Include(r => r.Items).SingleAsync(r => r.Id == ReceiptId, ct);
+            var duplicate = new Receipt
+            {
+                Id = DuplicateReceiptId, OwnerUserId = original.OwnerUserId, Currency = original.Currency,
+                MerchantName = original.MerchantName, PurchaseDate = original.PurchaseDate,
+                Subtotal = original.Subtotal, Tax = original.Tax, Tip = original.Tip, Total = original.Total
+            };
+            foreach (var item in original.Items)
+                duplicate.Items.Add(new ReceiptItem { Name = item.Name, NormalizedName = item.NormalizedName,
+                    UnitPrice = item.UnitPrice, Quantity = item.Quantity, TotalPrice = item.TotalPrice });
+            db.Add(duplicate);
         }
         await db.SaveChangesAsync(ct);
     }

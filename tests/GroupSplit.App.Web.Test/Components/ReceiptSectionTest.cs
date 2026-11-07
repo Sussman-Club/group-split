@@ -49,6 +49,9 @@ public class ReceiptSectionTest : ComponentTest
         dialogs.WaitForAssertion(() => Assert.Contains("Original receipt", dialogs.Markup));
         Assert.Contains("Original receipt", dialogs.Markup);
         Assert.Contains("dinner.jpg", dialogs.Markup);
+        Assert.DoesNotContain("Add another original file", dialogs.Markup);
+        Assert.DoesNotContain("Add receipt", dialogs.Markup);
+        Assert.Empty(dialogs.FindComponents<ReceiptFilePicker>());
         Assert.Contains("Itemized receipt", dialogs.Markup);
 
         Assert.Contains("Chicken burrito", dialogs.Markup);

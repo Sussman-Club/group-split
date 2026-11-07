@@ -8,8 +8,8 @@ the results before importing them. Amazon imports use the full printable receipt
 Costco supports in-warehouse receipts and online order summaries.
 
 The importer needs a signed-in GroupSplit inbox. Retailer access is requested
-when you connect the store. A copy of each imported PDF is saved to your
-Downloads/GroupSplit folder. Amazon and Costco warehouse PDFs may contain customer or payment
+when you connect the store. PDFs are created in the browser and uploaded to your inbox
+without downloading a copy. Amazon and Costco warehouse PDFs may contain customer or payment
 information; review them before sharing.
 
 ## Permissions
@@ -19,7 +19,6 @@ information; review them before sharing.
 - Optional Amazon and Costco site access: read the signed-in retailer pages
   after the user connects a store.
 - `debugger`: render Amazon and Costco warehouse receipts to PDF.
-- `downloads`: save a copy of each generated receipt.
 - GroupSplit site access: offer the inbox shortcut and send approved receipts
   to the signed-in inbox.
 

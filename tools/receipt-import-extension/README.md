@@ -13,7 +13,7 @@ or Costco and select Connect store. The store opens in a background tab. If
 you need to sign in, go to that tab, sign in, and return to the importer.
 For Costco, the importer selects the chosen warehouse or online view when
 you find receipts.
-Review the list before saving receipts as PDFs and uploading them to the
+Review the list before importing receipts as PDFs to the
 inbox. Keep the GroupSplit tab open and signed in.
 
 The inbox shortcut requires this extension to be reloaded after updates and
@@ -47,7 +47,6 @@ to or click purchase, payment, return, cancellation, or print controls.
 
 The preview sends receipt PDFs only to the GroupSplit inbox tab it was
 opened from, restricted to the official GroupSplit domain or a local app.
-It saves a copy in Downloads/GroupSplit. Costco PDFs can contain membership or
-masked payment information. Protect and remove
-downloaded copies when you no longer need them. No separate analytics or external
+The extension does not download a copy to your device. Costco PDFs can contain membership or
+masked payment information. No separate analytics or external
 sync service is configured in the extension.

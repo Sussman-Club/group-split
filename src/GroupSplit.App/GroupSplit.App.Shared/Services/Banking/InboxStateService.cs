@@ -331,13 +331,13 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             // last one shown onto this page as well. Shown once.
             var shown = Rows.Select(row => row.Id).ToHashSet();
 
-            Rows = WithSuggestions([.. Rows, .. next.Items.Where(row => !shown.Contains(row.Id))]);
+            var combined = Rows.Concat(next.Items.Where(row => !shown.Contains(row.Id))).ToArray();
+            await Task.WhenAll(SuggestAsync(combined, version, ct), SuggestMatchesAsync(combined, version, ct));
+            if (version != _version) return;
+            Rows = WithSuggestions(combined);
             TotalCount = next.TotalCount;
             _written = version;
-
             Announce();
-            _ = SuggestAsync();
-            _ = SuggestMatchesAsync();
         }, UiText.Get("your bank inbox"));
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
         // than the one after it.
@@ -426,6 +426,8 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
                 if (shown is { } read)
                 {
+                    await Task.WhenAll(SuggestAsync(read.Rows, version, ct), SuggestMatchesAsync(read.Rows, version, ct));
+                    if (version != _version) return;
                     RowsLoaded = true;
                     Rows = WithSuggestions(read.Rows);
                     TotalCount = read.TotalCount;
@@ -434,8 +436,6 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 _written = version;
 
                 Announce();
-                _ = SuggestAsync();
-                _ = SuggestMatchesAsync();
             }, UiText.Get("your bank inbox"));
         }
         finally
@@ -452,61 +452,36 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             PossibleDuplicates = [.. row.PossibleDuplicates.Select(match => match with { IsSuggested = _matchSuggestions.GetValueOrDefault(row.Id) == match.TransactionId })]
         })];
 
-    private async Task SuggestMatchesAsync()
+    private async Task SuggestMatchesAsync(IReadOnlyList<BankTransactionResponse> rows, long version, CancellationToken ct)
     {
-        foreach (var row in Rows.Where(row => row.Status == InboxStatus.New))
+        foreach (var row in rows.Where(row => row.Status == InboxStatus.New))
         {
             var key = string.Join(",", row.PossibleDuplicates.Select(match => match.TransactionId).OrderBy(id => id));
-            if (_matchCandidateKeys.GetValueOrDefault(row.Id) == key) continue;
-            _matchCandidateKeys[row.Id] = key;
-            _matchSuggestions.Remove(row.Id);
+            if (_matchCandidateKeys.GetValueOrDefault(row.Id) != key) _matchSuggestions.Remove(row.Id);
         }
-        var wanted = Rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 1 && !_matchSuggestions.ContainsKey(row.Id)).Select(row => row.Id).ToList();
-        foreach (var id in wanted) _matchSuggestions[id] = null;
-        foreach (var id in wanted)
+        foreach (var row in rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 1))
         {
-            var key = _matchCandidateKeys[id];
+            var key = string.Join(",", row.PossibleDuplicates.Select(match => match.TransactionId).OrderBy(id => id));
+            if (_matchCandidateKeys.GetValueOrDefault(row.Id) == key && _matchSuggestions.ContainsKey(row.Id)) continue;
             try
             {
-                var matches = await _inbox.GetBankTransactionMatchesAsync(id);
-                if (_matchCandidateKeys.GetValueOrDefault(id) != key) continue;
-                _matchSuggestions[id] = matches.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
-                Rows = WithSuggestions(Rows);
-                Announce();
+                var matches = await _inbox.GetBankTransactionMatchesAsync(row.Id, ct);
+                if (version != _version) return;
+                _matchCandidateKeys[row.Id] = key;
+                _matchSuggestions[row.Id] = matches.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
             }
             catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
             {
-                if (_matchCandidateKeys.GetValueOrDefault(id) == key) _matchSuggestions.Remove(id);
+                if (ct.IsCancellationRequested) throw;
             }
         }
     }
 
-    /// <summary>
-    /// Asks where the waiting rows on screen probably go, after they are shown rather than
-    /// before: the inbox never waits on the model. The row carries the answer to the filing
-    /// dialog, which opens with it preselected.
-    /// </summary>
-    /// <remarks>
-    /// Not for a row that could already be recorded -- the question there is whether to
-    /// record anything -- nor for money coming in, which cannot be filed. A failure is the
-    /// same as no suggestion, which is how the inbox looked before there were any.
-    /// </remarks>
-    private async Task SuggestAsync()
+    // Suggestions are advisory: a failed request leaves the row usable without a suggestion.
+    private async Task SuggestAsync(IReadOnlyList<BankTransactionResponse> rows, long version, CancellationToken ct)
     {
-        var wanted = Rows
-            .Where(row => row.Status == InboxStatus.New
-                          && !row.IsCredit
-                          && row.PossibleDuplicates.Count == 0
-                          && !_suggestions.ContainsKey(row.Id))
-            .Select(row => row.Id)
-            .ToList();
-
-        if (wanted.Count == 0)
-            return;
-
-        foreach (var id in wanted)
-            _suggestions[id] = null;
-
+        var wanted = rows.Where(row => row.Status == InboxStatus.New && !row.IsCredit &&
+            row.PossibleDuplicates.Count == 0 && !_suggestions.ContainsKey(row.Id)).Select(row => row.Id).ToArray();
         foreach (var chunk in wanted.Chunk(SuggestFilingsRequest.MaxRows))
         {
             try
@@ -514,18 +489,15 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 var answers = await _inbox.SuggestBankTransactionFilingsAsync(new SuggestFilingsRequest
                 {
                     Rows = [.. chunk.Select(id => new SuggestFilingRow { Id = id })]
-                });
-
-                foreach (var answer in answers)
-                    _suggestions[answer.BankTransactionId] = answer;
+                }, ct);
+                if (version != _version) return;
+                foreach (var id in chunk) _suggestions[id] = null;
+                foreach (var answer in answers) _suggestions[answer.BankTransactionId] = answer;
             }
             catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
             {
-                continue;
+                if (ct.IsCancellationRequested) throw;
             }
-
-            Rows = WithSuggestions(Rows);
-            Announce();
         }
     }
 

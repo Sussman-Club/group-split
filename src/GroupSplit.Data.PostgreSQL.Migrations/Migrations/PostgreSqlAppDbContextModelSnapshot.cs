@@ -806,6 +806,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<bool>("IsIgnored")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -836,6 +839,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.HasIndex("ExpenseId")
                         .IsUnique();
+
+                    b.HasIndex("MerchantId");
 
                     b.HasIndex("OwnerUserId");
 
@@ -1995,12 +2000,19 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupSplit.Data.Entities.Receipt", "ExpenseId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("GroupSplit.Data.Entities.Merchant", "Merchant")
+                        .WithMany()
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GroupSplit.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Expense");
+
+                    b.Navigation("Merchant");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>

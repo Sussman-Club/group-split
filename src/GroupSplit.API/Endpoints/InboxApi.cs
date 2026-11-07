@@ -79,7 +79,7 @@ public static class InboxApi
                 var rows = await inbox.List(new InboxFilter(status), ct);
                 var row = await rows.Where(item => item.Id == id).SelectDto().FirstOrDefaultAsync(ct);
                 if (row is null) continue;
-                var matches = status == InboxStatus.New ? (await inbox.Matches(id, ct)).ToResponses() : [];
+                var matches = status is InboxStatus.New or InboxStatus.Ignored ? (await inbox.Matches(id, ct)).ToResponses() : [];
                 return Results.Ok(row with { PossibleDuplicates = matches });
             }
             return Results.NotFound();

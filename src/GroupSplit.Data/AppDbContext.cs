@@ -853,6 +853,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.Property(r => r.Subtotal).HasPrecision(18, 2);
             entity.Property(r => r.MerchantName).HasMaxLength(128);
+            entity.HasOne(r => r.Merchant).WithMany().HasForeignKey(r => r.MerchantId).OnDelete(DeleteBehavior.SetNull);
             entity.Property(r => r.Tax).HasPrecision(18, 2);
             entity.Property(r => r.Tip).HasPrecision(18, 2);
             entity.Property(r => r.Total).HasPrecision(18, 2);

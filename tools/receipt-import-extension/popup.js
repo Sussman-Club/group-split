@@ -21,6 +21,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   });
 }
 
+function closeCompletedImporter() {
+  if (embedded) window.parent.postMessage({ type: 'groupsplit-importer-complete' }, '*');
+  else window.close();
+}
+
 function localDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -755,12 +760,11 @@ async function cleanupReceipt() {
   return { closed: true };
 }
 
-async function saveReceiptFile(data, fileName, receipt = null) {
+async function uploadReceiptFile(data, fileName, receipt = null) {
   await chrome.tabs.get(inbox.tabId);
   const page = await execute(inbox.tabId, tabLocation);
   if (page?.origin !== inbox.origin || page.pathname !== '/inbox/receipts')
     throw new Error('Return to your GroupSplit receipts inbox and start the import again.');
-  await chrome.downloads.download({ url: `data:application/pdf;base64,${data}`, filename: `GroupSplit/${fileName}`, conflictAction: 'uniquify' });
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId: inbox.tabId }, world: 'ISOLATED', func: uploadToInbox, args: [data, fileName, inbox.origin, receipt]
   });
@@ -1166,22 +1170,23 @@ $('download').addEventListener('click', async () => {
     if (tab.id !== selection.tabId) throw new Error('Return to the original Costco tab and find receipts again.');
     if (selection.retailer === 'amazon' || selection.retailer === 'costco-online') {
       for (let i = 0; i < selection.rows.length; i++) {
-        status.textContent = `Saving ${i + 1} of ${selection.rows.length}…`;
+        status.textContent = `Importing ${i + 1} of ${selection.rows.length}…`;
         try {
           const row = selection.rows[i];
           const { pdf, receipt } = row.summary;
           const fileName = `${receipt?.merchantName || 'Amazon'}-${row.date}-${i + 1}.pdf`;
-          const result = await saveReceiptFile(pdf, fileName, receipt);
+          const result = await uploadReceiptFile(pdf, fileName, receipt);
           saved++;
           if (result.alreadyImported) duplicates++; else imported++;
           if (!result.alreadyImported && !result.detailsSaved)
-            failures.push(`Order ${i + 1}: ${result.detail || 'The file was saved, but receipt details need review.'}`);
+            failures.push(`Order ${i + 1}: ${result.detail || 'The receipt was uploaded, but its details need review.'}`);
         } catch (error) { failures.push(`Order ${i + 1}: ${error.message}`); }
       }
-      status.textContent = `${saved} files saved and uploaded, ${imported} new, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+      status.textContent = `${saved} receipts uploaded, ${imported} new, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
       if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
       selection = null;
       $('download').hidden = true;
+      if (saved > 0 && failures.length === 0 && duplicates === 0) closeCompletedImporter();
       return;
     }
     if (selection.retailer !== 'costco') throw new Error('Choose a supported store and find receipts again.');
@@ -1205,7 +1210,7 @@ $('download').addEventListener('click', async () => {
         if (!currentRows || JSON.stringify(currentRows) !== JSON.stringify(period.pages[currentPage]))
           throw new Error('The receipt list changed. Find receipts again.');
       }
-      status.textContent = `Saving ${saved + 1} of ${selection.rows.length}…`;
+      status.textContent = `Importing ${saved + 1} of ${selection.rows.length}…`;
       try {
         const opened = await execute(tab.id, openReceipt, [row.index, row.label]);
         if (!opened?.opened) throw new Error(opened?.error || 'Could not open the selected receipt.');
@@ -1216,7 +1221,7 @@ $('download').addEventListener('click', async () => {
         if (!result?.data) throw new Error('The browser did not produce a PDF.');
         const fileName = `Costco-${row.date}-${row.periodIndex + 1}-${row.pageIndex + 1}-${row.index + 1}.pdf`;
         try {
-          const upload = await saveReceiptFile(result.data, fileName);
+          const upload = await uploadReceiptFile(result.data, fileName);
           saved++;
           if (upload.alreadyImported) duplicates++; else imported++;
           if (!upload.alreadyImported && !upload.detailsSaved)
@@ -1227,10 +1232,11 @@ $('download').addEventListener('click', async () => {
         if (cleanup?.closed === false) throw new Error('The Costco receipt did not close. Close it before retrying.');
       }
     }
-    status.textContent = `${saved} saved, ${imported} imported, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+    status.textContent = `${saved} uploaded, ${imported} imported, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
     if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
     selection = null;
     $('download').hidden = true;
+    if (saved > 0 && failures.length === 0 && duplicates === 0) closeCompletedImporter();
   } catch (error) {
     status.textContent = `Stopped after ${saved} receipt(s): ${error.message}`;
     selection = null;
