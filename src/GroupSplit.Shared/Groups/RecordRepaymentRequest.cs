@@ -52,6 +52,9 @@ public record RecordRepaymentRequest
     /// </remarks>
     public DateTimeOffset? Date { get; set; }
 
+    /// <summary>The last day of activity this repayment covers.</summary>
+    public DateOnly? Through { get; set; }
+
     /// <summary>
     /// What to remember about it -- "cash", "end of September 2024".
     /// </summary>

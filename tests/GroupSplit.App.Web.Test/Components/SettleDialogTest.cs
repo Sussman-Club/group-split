@@ -38,7 +38,7 @@ public class SettleDialogTest : ComponentTest
                 OwedToYou = amount > 0 ? [new DebtInfo { UserId = Omar, UserName = "Omar", Amount = amount }] : []
             });
 
-    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Dialog)> Open()
+    private async Task<(IRenderedComponent<MudDialogProvider> Provider, IDialogReference Dialog)> Open(DateTime? initialThrough = null)
     {
         Render<MudPopoverProvider>();
         var provider = Render<MudDialogProvider>();
@@ -52,7 +52,8 @@ public class SettleDialogTest : ComponentTest
                     { d => d.UserId, Omar },
                     { d => d.Username, "Omar" },
                     { d => d.TotalDebt, 70m },
-                    { d => d.Direction, SettlementDirection.TheyPaidYou }
+                    { d => d.Direction, SettlementDirection.TheyPaidYou },
+                    { d => d.InitialThrough, initialThrough }
                 }));
 
         return (provider, dialog);
@@ -105,6 +106,19 @@ public class SettleDialogTest : ComponentTest
 
         Assert.Equal(50m, request!.Amount);
         Assert.Equal(EndOfAugust, request.Through);
+    }
+
+    [Fact]
+    public async Task Opening_from_a_filtered_plan_preserves_amount_cutoff_and_payment_date()
+    {
+        var (provider, dialog) = await Open(EndOfAugust.ToDateTime(TimeOnly.MinValue));
+        Assert.Contains("For activity up to 31 Aug", provider.Markup);
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Confirm")
+            .ClickAsync(new MouseEventArgs());
+        var request = await dialog.GetReturnValueAsync<SettleRequest>();
+        Assert.Equal(70m, request!.Amount);
+        Assert.Equal(EndOfAugust, request.Through);
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.Zero), request.Date);
     }
 
     private static Task TypeAsync(IRenderedComponent<MudDialogProvider> provider, decimal amount)

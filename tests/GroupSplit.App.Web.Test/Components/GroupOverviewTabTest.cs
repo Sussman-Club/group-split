@@ -77,6 +77,45 @@ public class GroupOverviewTabTest : ComponentTest
             .Add(component => component.GroupName, Group.Name)
             .Add(component => component.UserId, userId));
 
+    [Fact]
+    public async Task Selecting_and_clearing_a_date_changes_balances_and_the_settlement_plan()
+    {
+        var day = new DateTime(2026, 8, 31);
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Current", Balance = 20m }]
+        };
+        _groups.Setup(client => client.GetGroupUserBalanceAsync(Group.Id, DateOnly.FromDateTime(day),
+                It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserGroupBalanceResponse
+            {
+                NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Historical", Balance = -10m }],
+                YouOwed = [new DebtInfo { UserId = Omar, UserName = "Omar", Amount = 10m }],
+                Plan = [new SettlementPayment { FromUserId = Me, FromUserName = "Historical", ToUserId = Omar, ToUserName = "Omar", Amount = 10m }]
+            });
+
+        (DebtInfo Debt, SettlementDirection Direction, DateTime? Through)? selected = null;
+        var view = Render<GroupOverviewTab>(parameters => parameters
+            .Add(component => component.GroupId, Group.Id)
+            .Add(component => component.GroupName, Group.Name)
+            .Add(component => component.UserId, Me)
+            .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) => selected = line));
+        var picker = view.FindComponent<MudDatePicker>();
+        await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(day));
+        Assert.Contains("Historical", view.Markup);
+        Assert.DoesNotContain("Current", view.Markup);
+        Assert.Contains("Clear this group with one payment", view.Markup);
+        await view.FindAll("button").Single(button => button.TextContent.Trim() == "I paid them").ClickAsync(new());
+        Assert.Equal(day, selected!.Value.Through);
+        Assert.Equal(10m, selected.Value.Debt.Amount);
+
+        await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(null));
+        Assert.DoesNotContain("Historical", view.Markup);
+        Assert.Contains("Current", view.Markup);
+        _groups.Verify(client => client.GetGroupUserBalanceAsync(Group.Id, DateOnly.FromDateTime(day),
+            It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
     /// <summary>
     /// A guest who owes the reader is one of the people they are owed by, counted with the
     /// members, and their row says they are a guest -- with a button that says whose payment
@@ -258,7 +297,7 @@ public class GroupOverviewTabTest : ComponentTest
             .Add(component => component.GroupId, Group.Id)
             .Add(component => component.GroupName, Group.Name)
             .Add(component => component.UserId, Me)
-            .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction) line) =>
+            .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) =>
                 commands.SettleAsync(Group.Id, new SettleRequest
                 {
                     UserId = line.Debt.UserId,

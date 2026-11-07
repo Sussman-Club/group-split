@@ -1,4 +1,5 @@
 @using GroupSplit.App.Shared.Extensions
+@using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using GroupSplit.App.Shared.Services.Groups
 @using GroupSplit.Shared
@@ -22,6 +23,21 @@
     activity -- are one, for the same reason the two tabs became one ledger.
 *@
 
+<div class="gs-card gs-card-pad" style="margin-bottom: 16px">
+    <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync"
+                   Label="@Loc["Balances through"]" Clearable="true" MaxDate="@Clock.Today"
+                   Variant="Variant.Outlined" HelperText="@Loc["Leave empty for current balances"].Value" />
+</div>
+@if (_balanceLoading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_through is not null && _historicalBalance is null)
+{
+    <MudButton OnClick="LoadHistoricalAsync">@Loc["Retry"]</MudButton>
+}
+else
+{
 <div class="gs-two-col">
     <div class="gs-stack">
         @if (Balance is { } balance)
@@ -48,13 +64,13 @@
                                    their behalf, so the button says whose payment it is. *@
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                               OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou)))">
+                                               OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou, _through)))">
                                         @(guest ? Loc["{0} paid", owed.UserName].Value : Loc["They paid"].Value)
                                     </MudButton>
                                     @if (!guest)
                                     {
                                         <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                                   OnClick="@(() => OnRequestPayment.InvokeAsync(owed))">
+                                                   OnClick="@(() => OnRequestPayment.InvokeAsync((owed, _through)))">
                                             @Loc["Request payment"]
                                         </MudButton>
                                     }
@@ -80,7 +96,7 @@
                                 <Money Value="owing.Amount" Animate />
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                               OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem)))">
+                                               OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem, _through)))">
                                         @Loc["I paid"]
                                     </MudButton>
                                 </div>
@@ -149,6 +165,8 @@
             </section>
         }
 
+        @if (_through is null)
+        {
         <div class="gs-card gs-card-pad gs-reveal" style="--i: 2">
             <div class="gs-card-title">
                 <h2>@Loc["Recent activity"]</h2>
@@ -164,6 +182,7 @@
                 <div class="gs-muted" style="font-size: .8125rem; padding: 8px 4px 0">@Loc["Showing the {0} newest of {1}.", ledger.Items.Count, ledger.TotalCount].Value</div>
             }
         </div>
+        }
     </div>
 
     <div class="gs-stack">
@@ -218,6 +237,7 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     /// <summary>How many entries the overview shows before sending somebody to the ledger.</summary>
@@ -234,11 +254,39 @@
     /// Settling with one person, which the page owns because it owns the dialog and the
     /// write. The tab knows which line was pressed and nothing else.
     /// </summary>
-    [Parameter] public EventCallback<(DebtInfo Debt, SettlementDirection Direction)> OnSettle { get; set; }
-    [Parameter] public EventCallback<DebtInfo> OnRequestPayment { get; set; }
+    [Parameter] public EventCallback<(DebtInfo Debt, SettlementDirection Direction, DateTime? Through)> OnSettle { get; set; }
+    [Parameter] public EventCallback<(DebtInfo Debt, DateTime? Through)> OnRequestPayment { get; set; }
 
     private PagedResponse<GroupLedgerEntryResponse>? _recent;
     private Guid _loadedFor;
+    private DateTime? _through;
+    private UserGroupBalanceResponse? _historicalBalance;
+    private bool _balanceLoading;
+    private int _balanceVersion;
+
+
+    private async Task ThroughChangedAsync(DateTime? date)
+    {
+        _through = date;
+        await LoadHistoricalAsync();
+    }
+
+    private async Task LoadHistoricalAsync()
+    {
+        var version = ++_balanceVersion;
+        _historicalBalance = null;
+        _balanceLoading = _through is not null;
+        if (_through is not { } date) return;
+
+        UserGroupBalanceResponse? result = null;
+        var loaded = await Errors.TryAsync(async () => result = await GroupsClient.GetGroupUserBalanceAsync(
+            GroupId, DateOnly.FromDateTime(date), Clock.CutoffOffsetMinutes),
+            Loc["Could not load balances for this date."].Value);
+        if (version != _balanceVersion) return;
+        _balanceLoading = false;
+        if (loaded) _historicalBalance = result;
+        await InvokeAsync(StateHasChanged);
+    }
 
     /// <summary>
     /// Counts reads of the recent entries, so the answer to an older one -- a change
@@ -254,7 +302,7 @@
     /// previous group's balances are the wrong thing to hang this group's name on.
     /// </summary>
     private UserGroupBalanceResponse? Balance =>
-        GroupsService.SelectedGroup?.Id == GroupId ? GroupsService.Balance : null;
+        GroupsService.SelectedGroup?.Id == GroupId ? (_through is null ? GroupsService.Balance : _historicalBalance) : null;
 
     private IReadOnlyList<GroupLedgerEntryResponse> Recent => _recent?.Items ?? [];
 
@@ -338,7 +386,7 @@
         return OnSettle.InvokeAsync((debt,
             payment.FromUserId == UserId
                 ? SettlementDirection.YouPaidThem
-                : SettlementDirection.TheyPaidYou));
+                : SettlementDirection.TheyPaidYou, _through));
     }
 
     /// <summary>
@@ -360,13 +408,15 @@
     {
         // The group the question is about, kept for the answer (#323).
         var groupId = GroupId;
+        var through = _through;
 
         var parameters = new DialogParameters<ConfirmationDialog>
         {
             {
                 x => x.ContentText,
                 Loc["Record that {0} paid {1} {2}? ", payment.FromUserName, payment.ToUserName, payment.Amount.ToMoney()].Value +
-                Loc["Both of them are guests, so this goes in the group's ledger for them."].Value
+                Loc["Both of them are guests, so this goes in the group's ledger for them."].Value +
+                (through is { } paymentDay ? " " + Loc["Payment date: {0:d}.", paymentDay].Value : "")
             },
             { x => x.ButtonText, Loc["Record"].Value }
         };
@@ -383,7 +433,9 @@
         {
             FromUserId = payment.FromUserId,
             ToUserId = payment.ToUserId,
-            Amount = payment.Amount
+            Amount = payment.Amount,
+            Date = through is { } day ? TransactionDay.Stored(day) : null,
+            Through = through is { } cutoff ? DateOnly.FromDateTime(cutoff) : null
         }, payment.FromUserName, payment.ToUserName);
     }
 
@@ -393,6 +445,10 @@
 
         _loadedFor = GroupId;
         _recent = null;
+        _through = null;
+        _historicalBalance = null;
+        _balanceLoading = false;
+        ++_balanceVersion;
 
         await LoadRecentAsync();
     }
@@ -424,7 +480,11 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private Task ReloadAsync() => _loadedFor == Guid.Empty ? Task.CompletedTask : LoadRecentAsync();
+    private async Task ReloadAsync()
+    {
+        if (_loadedFor == Guid.Empty) return;
+        await Task.WhenAll(LoadRecentAsync(), LoadHistoricalAsync());
+    }
 
     /// <summary>
     /// Redraws when the state service's figures land. The balances above are read from it

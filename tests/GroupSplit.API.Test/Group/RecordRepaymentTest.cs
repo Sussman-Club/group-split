@@ -117,6 +117,7 @@ public class RecordRepaymentTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             ToUserId = third.Id,
             Amount = 40,
             Date = endOfAugust,
+            Through = new DateOnly(2024, 8, 31),
             Description = "  Settle up August 2024  "
         }, Ct);
 
@@ -125,6 +126,7 @@ public class RecordRepaymentTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .ToListAsync(Ct));
 
         Assert.Equal(endOfAugust, transfer.DateTime);
+        Assert.Equal(new DateOnly(2024, 8, 31), transfer.CoversThrough);
         Assert.Equal("Settle up August 2024", transfer.Description);
     }
 

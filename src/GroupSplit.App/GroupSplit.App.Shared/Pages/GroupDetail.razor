@@ -332,15 +332,17 @@ else if (NotFound)
     /// page owns it because it owns the dialog and the write; the tab knows only which line
     /// was pressed.
     /// </summary>
-    private Task OnSettleAsync((DebtInfo Debt, SettlementDirection Direction) line) =>
-        SettleAsync(line.Debt, line.Direction);
+    private Task OnSettleAsync((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) =>
+        SettleAsync(line.Debt, line.Direction, line.Through);
 
-    private async Task RequestPaymentAsync(DebtInfo debt)
+    private async Task RequestPaymentAsync((DebtInfo Debt, DateTime? Through) selection)
     {
+        var debt = selection.Debt;
         var parameters = new DialogParameters<RequestPaymentDialog>
         {
             { x => x.GroupId, GroupId }, { x => x.RecipientUserId, debt.UserId },
-            { x => x.RecipientName, debt.UserName }, { x => x.CurrentDebt, debt.Amount }
+            { x => x.RecipientName, debt.UserName }, { x => x.CurrentDebt, debt.Amount },
+            { x => x.InitialThrough, selection.Through }
         };
         await DialogService.ShowAsync<RequestPaymentDialog>(Loc["Request payment"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
@@ -420,7 +422,7 @@ else if (NotFound)
         }
     }
 
-    private async Task SettleAsync(DebtInfo debt, SettlementDirection direction)
+    private async Task SettleAsync(DebtInfo debt, SettlementDirection direction, DateTime? through)
     {
         // The group the dialog is about, kept for its answer: the route can move on to
         // another group while it is open, and the repayment belongs to this one (#323).
@@ -434,7 +436,8 @@ else if (NotFound)
             { x => x.UserId, debt.UserId },
             { x => x.Username, debt.UserName },
             { x => x.TotalDebt, debt.Amount },
-            { x => x.Direction, direction }
+            { x => x.Direction, direction },
+            { x => x.InitialThrough, through }
         };
 
         var dialog = await DialogService.ShowAsync<SettleDialog>(Loc["Settle with {0}", debt.UserName].Value, parameters, options);
