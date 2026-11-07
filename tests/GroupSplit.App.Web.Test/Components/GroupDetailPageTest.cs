@@ -432,13 +432,14 @@ public class GroupDetailPageTest : ComponentTest
         var page = Open(Lisbon.Id);
         var settle = page.FindComponent<Stub<GroupOverviewTab>>().Instance.Parameters.Get(tab => tab.OnSettle);
 
-        await page.InvokeAsync(() => settle.InvokeAsync((omar, SettlementDirection.YouPaidThem)));
+        await page.InvokeAsync(() => settle.InvokeAsync((omar, SettlementDirection.YouPaidThem, new DateTime(2026, 8, 31))));
 
         Assert.NotNull(asked);
         Assert.Equal(Lisbon.Id, asked.Get<Guid>(nameof(SettleDialog.GroupId)));
         Assert.Equal(omar.UserId, asked.Get<Guid>(nameof(SettleDialog.UserId)));
         Assert.Equal(25m, asked.Get<decimal>(nameof(SettleDialog.TotalDebt)));
         Assert.Equal(SettlementDirection.YouPaidThem, asked.Get<SettlementDirection>(nameof(SettleDialog.Direction)));
+        Assert.Equal(new DateTime(2026, 8, 31), asked.Get<DateTime?>(nameof(SettleDialog.InitialThrough)));
 
         _state.Verify(state => state.SettleAsync(Lisbon.Id, request, "Omar Rivero", It.IsAny<CancellationToken>()),
             Times.Once);
@@ -465,7 +466,7 @@ public class GroupDetailPageTest : ComponentTest
         var settle = page.FindComponent<Stub<GroupOverviewTab>>().Instance.Parameters.Get(tab => tab.OnSettle);
 
         // Held rather than awaited: the handler is waiting on the dialog it just opened.
-        var settling = page.InvokeAsync(() => settle.InvokeAsync((omar, SettlementDirection.TheyPaidYou)));
+        var settling = page.InvokeAsync(() => settle.InvokeAsync((omar, SettlementDirection.TheyPaidYou, null)));
 
         page.Render(parameters => parameters.Add(component => component.GroupId, Flat.Id));
         Assert.Equal(Flat, _state.Object.SelectedGroup);

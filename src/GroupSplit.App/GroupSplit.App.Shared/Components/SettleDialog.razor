@@ -104,6 +104,7 @@
     /// when one is picked.
     /// </summary>
     [Parameter] public Guid GroupId { get; set; }
+    [Parameter] public DateTime? InitialThrough { get; set; }
 
     /// <summary>What stands between the two of them, whichever way round it is.</summary>
     [Parameter] public decimal TotalDebt { get; set; }
@@ -150,8 +151,14 @@
         {
             UserId = UserId,
             Amount = TotalDebt,
-            Direction = Direction
+            Direction = Direction,
+            Through = InitialThrough is { } cutoff ? DateOnly.FromDateTime(cutoff) : null,
+            Date = InitialThrough is { } date ? TransactionDay.Stored(date) : null
         };
+        _through = InitialThrough;
+        _date = InitialThrough;
+        _choosingPeriod = InitialThrough is not null;
+        _owedForPeriod = InitialThrough is not null ? TotalDebt : null;
     }
 
     /// <summary>

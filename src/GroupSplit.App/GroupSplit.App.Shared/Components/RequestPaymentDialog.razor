@@ -22,7 +22,7 @@
         else
         {
             <MudStack Spacing="2">
-                <MudText>@Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney()].Value</MudText>
+                <MudText>@(_through is { } day ? Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, RecipientName, CurrentDebt.ToMoney()].Value : Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney()].Value)</MudText>
                 <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync" Label="@Loc["Up to a date"]"
                                Variant="Variant.Outlined" Clearable="true" MaxDate="@Clock.Today"
                                Disabled="@(_busy || _readingPeriod)"
@@ -58,6 +58,7 @@
     [Parameter] public Guid RecipientUserId { get; set; }
     [Parameter] public string RecipientName { get; set; } = "";
     [Parameter] public decimal CurrentDebt { get; set; }
+    [Parameter] public DateTime? InitialThrough { get; set; }
 
     private decimal _amount;
     private string? _link;
@@ -66,7 +67,12 @@
     private DateTime? _through;
     private int? _periodOffset;
 
-    protected override void OnInitialized() => _amount = CurrentDebt;
+    protected override void OnInitialized()
+    {
+        _amount = CurrentDebt;
+        _through = InitialThrough;
+        _periodOffset = InitialThrough is null ? null : Clock.CutoffOffsetMinutes;
+    }
 
     private async Task CreateAsync()
     {
