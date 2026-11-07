@@ -4,7 +4,6 @@
 @using GroupSplit.App.Shared.Models
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.AspNetCore.Components.Web.Virtualization
 @inject IReceiptsClient Client
 @inject IDialogService Dialogs
 @inject ApiErrorPresenter Errors
@@ -77,8 +76,9 @@ else if (_rows is not null && _visibleRows.Count == 0)
 else if (_rows is not null)
 {
     <div class="gs-card gs-receipt-inbox-list">
-    <Virtualize @ref="_virtualize" Items="_pageRows" Context="row" ItemSize="120" OverscanCount="5">
-        @{ var source = row.Attachments.FirstOrDefault(); }
+    @foreach (var row in _pageRows)
+    {
+        var source = row.Attachments.FirstOrDefault();
         <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
         <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
             <div class="gs-receipt-inbox-thumb">
@@ -119,7 +119,7 @@ else if (_rows is not null)
             </div>
         }
         </div>
-    </Virtualize>
+    }
     @if (_pageRows.Count < _visibleRows.Count)
     {
         <div class="gs-inbox-show-more">
@@ -151,7 +151,6 @@ else if (_rows is not null)
     private readonly Dictionary<Guid, FilingDestinationSuggestion> _suggestions = [];
     private readonly Dictionary<Guid, ReceiptExpenseCandidate> _expenseMatches = [];
     private CancellationTokenSource? _suggestionLoad;
-    private Virtualize<ReceiptInboxResponse>? _virtualize;
     [SupplyParameterFromQuery(Name = "status")] public string? StatusParameter { get; set; }
     [SupplyParameterFromQuery(Name = "q")] public string? SearchParameter { get; set; }
     [SupplyParameterFromQuery(Name = "range")] public string? RangeParameter { get; set; }

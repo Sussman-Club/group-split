@@ -34,11 +34,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   }
   if (!['open-receipt-importer', 'open-receipt-importer-window'].includes(message?.type) || sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab?.id)
     return false;
-  let url;
-  try { url = new URL(sender.url); } catch { return false; }
+  let url, bridgeUrl;
+  try { url = new URL(sender.tab.url); bridgeUrl = new URL(sender.url); } catch { return false; }
   const local = ['localhost', '127.0.0.1'].includes(url.hostname) && ['http:', 'https:'].includes(url.protocol);
   const official = url.origin === 'https://groupsplit.sussman.win';
-  if ((!local && !official) || url.pathname !== '/inbox/receipts') return false;
+  if ((!local && !official) || bridgeUrl.origin !== url.origin || url.pathname !== '/inbox/receipts') return false;
   const theme = message.theme === 'dark' ? 'dark' : 'light';
   if (message.type === 'open-receipt-importer') {
     respond({ opened: true, url: chrome.runtime.getURL(`popup.html?embedded=1&theme=${theme}`) });
