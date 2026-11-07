@@ -126,7 +126,6 @@ public sealed class BankConnectionService(
     IJobDispatcher jobs,
     IBackgroundJobQueue backgroundJobs,
     PushNotificationQueue notifications,
-    IReceiptFiles receiptFiles,
     IAccountDataGuard accountData,
     TimeProvider clock,
     IOptions<BankingOptions> options,
@@ -826,26 +825,6 @@ public sealed class BankConnectionService(
             transaction.BankTransactionId = null;
         }
 
-        // The receipt files go the same two ways. One that went on to an expense is the
-        // expense's, and keeps everything but the row it came from. One still waiting in the
-        // inbox belongs to a row that is about to stop existing, and goes with it -- stored
-        // object and all, because it is a picture of somebody's receipt and nothing else
-        // would ever delete it.
-        var attachments = await dbContext.Set<ReceiptAttachment>()
-            .Where(attachment => attachment.BankTransactionId != null
-                                 && importedIds.Contains(attachment.BankTransactionId.Value))
-            .ToListAsync(ct);
-
-        var discarded = attachments.Where(attachment => attachment.ExpenseId is null).ToList();
-
-        foreach (var attachment in attachments.Except(discarded))
-        {
-            attachment.BankTransaction = null;
-            attachment.BankTransactionId = null;
-        }
-
-        dbContext.RemoveRange(discarded);
-
         // Told first, deleted second. A provider that refuses leaves the connection here,
         // which the person can try again; deleting first and failing to tell them would
         // leave an item nobody owns still being billed for and still sending webhooks.
@@ -879,11 +858,8 @@ public sealed class BankConnectionService(
         // The expenses filed from this connection's rows keep everything but the link: the
         // relationship is SetNull, so they are spending history rather than an import.
         dbContext.Remove(connection);
-        receiptFiles.Enqueue(discarded.Select(attachment => attachment.ObjectKey));
         await dbContext.SaveChangesAsync(ct);
 
-        await receiptFiles.DeleteAsync(discarded.Select(attachment => attachment.ObjectKey),
-            "Could not remove the receipt object of a bank row whose bank was unlinked.", ct);
     }
 
     private void RecordProviderCleanup(BankConnection connection, string reason) =>

@@ -853,9 +853,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("BankTransactionId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -887,8 +884,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("BankTransactionId");
 
                     b.HasIndex("ExpenseId");
 
@@ -2017,11 +2012,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
-                        .WithMany("ReceiptAttachments")
-                        .HasForeignKey("BankTransactionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
                         .WithMany("ReceiptAttachments")
                         .HasForeignKey("ExpenseId")
@@ -2031,8 +2021,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .WithMany("Attachments")
                         .HasForeignKey("ReceiptId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("BankTransaction");
 
                     b.Navigation("Expense");
 
@@ -2427,8 +2415,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>
                 {
                     b.Navigation("FiledAs");
-
-                    b.Navigation("ReceiptAttachments");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>

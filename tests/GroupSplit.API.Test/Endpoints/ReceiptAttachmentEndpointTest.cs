@@ -67,23 +67,6 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
                         TotalPrice = 4m
                     }]
                 }));
-        _transcription
-            .Setup(service => service.TranscribeBank(
-                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid _, Guid attachmentId, CancellationToken _) =>
-                new ReceiptTranscriptionResponse(attachmentId, "stub", new SaveReceiptRequest
-                {
-                    Subtotal = 4m,
-                    Total = 4m,
-                    Items = [new ReceiptItemInput
-                    {
-                        Name = "Bank receipt item",
-                        UnitPrice = 4m,
-                        Quantity = 1m,
-                        TotalPrice = 4m
-                    }]
-                }));
-
         _host = await ApiEndpointHost.StartAsync(services =>
         {
             services.AddSingleton(_storage.Object);
@@ -185,76 +168,10 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_bank_attachment_can_be_downloaded_and_deleted_before_filing()
+    public async Task Bank_row_receipt_attachment_routes_are_removed()
     {
-        var row = await CreateBankRow();
-
-        var upload = await Client.PostAsync(
-            $"/inbox/{row.Id}/receipt-attachments", FileContent("statement.pdf", "application/pdf"), Ct);
-
-        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
-        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
-        Assert.Equal(row.Id, attachment.BankTransactionId);
-        Assert.Null(attachment.ExpenseId);
-
-        var listed = await Client.GetFromJsonAsync<List<ReceiptAttachmentResponse>>(
-            $"/inbox/{row.Id}/receipt-attachments", Json, Ct);
-        Assert.Equal(attachment, Assert.Single(listed!));
-
-        var downloaded = await Client.GetAsync(
-            $"/inbox/{row.Id}/receipt-attachments/{attachment.Id}", Ct);
-        Assert.Equal(HttpStatusCode.OK, downloaded.StatusCode);
-        Assert.Equal("application/pdf", downloaded.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(StoredFile, await downloaded.Content.ReadAsByteArrayAsync(Ct));
-
-        _storage.Verify(storage => storage.GetObjectAsync(
-            "receipts-test",
-            It.Is<string>(key => key.StartsWith($"{row.Id:N}/", StringComparison.Ordinal)),
-            It.IsAny<CancellationToken>()), Times.Once);
-
-        var transcribed = await Client.PostAsync(
-            $"/inbox/{row.Id}/receipt-attachments/{attachment.Id}/transcribe", null, Ct);
-        Assert.Equal(HttpStatusCode.OK, transcribed.StatusCode);
-        var draft = (await transcribed.Content.ReadFromJsonAsync<ReceiptTranscriptionResponse>(Json, Ct))!;
-        Assert.Equal(attachment.Id, draft.AttachmentId);
-        Assert.Equal("Bank receipt item", Assert.Single(draft.Receipt.Items).Name);
-
-        var deleted = await Client.DeleteAsync(
-            $"/inbox/{row.Id}/receipt-attachments/{attachment.Id}", Ct);
-        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-
-        var afterDelete = await Client.GetFromJsonAsync<List<ReceiptAttachmentResponse>>(
-            $"/inbox/{row.Id}/receipt-attachments", Json, Ct);
-        Assert.Empty(afterDelete!);
-        _transcription.Verify(service => service.TranscribeBank(
-            row.Id, attachment.Id, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task A_bank_attachment_moves_to_the_expense_when_the_row_is_linked()
-    {
-        var row = await CreateBankRow();
-        var expenseId = await CreateExpense();
-
-        var upload = await Client.PostAsync(
-            $"/inbox/{row.Id}/receipt-attachments", FileContent("pending.png", "image/png"), Ct);
-        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
-
-        var linked = await Client.PostAsJsonAsync($"/inbox/{row.Id}/link",
-            new LinkBankTransactionRequest { TransactionId = expenseId }, Json, Ct);
-
-        Assert.Equal(HttpStatusCode.OK, linked.StatusCode);
-
-        var inboxFiles = await Client.GetFromJsonAsync<List<ReceiptAttachmentResponse>>(
-            $"/inbox/{row.Id}/receipt-attachments", Json, Ct);
-        Assert.Empty(inboxFiles!);
-
-        var expenseFiles = await Client.GetFromJsonAsync<List<ReceiptAttachmentResponse>>(
-            $"/transactions/{expenseId}/receipt-attachments", Json, Ct);
-        var moved = Assert.Single(expenseFiles!);
-        Assert.Equal(attachment.Id, moved.Id);
-        Assert.Equal(expenseId, moved.ExpenseId);
-        Assert.Equal(row.Id, moved.BankTransactionId);
+        var response = await Client.GetAsync($"/inbox/{Guid.NewGuid()}/receipt-attachments", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

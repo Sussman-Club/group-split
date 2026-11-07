@@ -49,7 +49,6 @@ public sealed class PersonalDataArchiveWriter(IReceiptAttachmentService receiptF
     {
         var receipt = attachment.ExpenseId is { } expenseId
             ? await receiptFiles.Download(expenseId, attachment.Id, ct)
-            : attachment.BankTransactionId is { } bankId ? await receiptFiles.DownloadBank(bankId, attachment.Id, ct)
             : await receiptFiles.DownloadDraft(attachment.ReceiptId!.Value, attachment.Id, ct);
         if (receipt.Content.LongLength != attachment.Length)
             throw new IOException("A receipt changed during export. Retry the export.");

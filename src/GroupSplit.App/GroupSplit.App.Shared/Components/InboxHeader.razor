@@ -10,7 +10,7 @@ else
 {
     <div class="gs-page-head gs-inbox-head">
         <div class="gs-inbox-heading"><div class="gs-inbox-topline"><div class="gs-eyebrow">@Loc["Your purchases"]</div>@HeaderActions</div><h1>@Loc["Inbox"]</h1>
-            <p role="status" aria-live="polite">@(Overview.Total is { } total ? Loc["{0} purchases waiting for review", total].Value : Loc["Review receipts and bank payments in one place."].Value)</p>
+            <p role="status" aria-live="polite">@(Overview.Total is { } total ? (total == 1 ? Loc["{0} purchase waiting for review", total].Value : Loc["{0} purchases waiting for review", total].Value) : Loc["Review receipts and bank payments in one place."].Value)</p>
         </div>
     </div>
     <nav class="gs-inbox-tabs" aria-label="@Loc["Inbox views"]">

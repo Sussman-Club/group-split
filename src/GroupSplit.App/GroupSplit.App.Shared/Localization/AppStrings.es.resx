@@ -5798,4 +5798,10 @@
 <data name="Leave empty for current balances" xml:space="preserve"><value>Deja la fecha vacía para ver los balances actuales</value></data>
 <data name="Could not load balances for this date." xml:space="preserve"><value>No se pudieron cargar los balances para esta fecha.</value></data>
 <data name="Payment date: {0:d}." xml:space="preserve"><value>Fecha de pago: {0:d}.</value></data>
+  <data name="Your purchases" xml:space="preserve"><value>Tus compras</value></data>
+  <data name="{0} purchase waiting for review" xml:space="preserve"><value>{0} compra pendiente de revisión</value></data>
+  <data name="{0} purchases waiting for review" xml:space="preserve"><value>{0} compras pendientes de revisión</value></data>
+  <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Revisa recibos y pagos bancarios en un solo lugar.</value></data>
+  <data name="Inbox views" xml:space="preserve"><value>Vistas de la bandeja de entrada</value></data>
+  <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} pendientes en la bandeja de entrada</value></data>
 </root>

@@ -5798,4 +5798,10 @@
   <data name="Could not load balances for this date." xml:space="preserve"><value>Could not load balances for this date.</value></data>
   <data name="Leave empty for current balances" xml:space="preserve"><value>Leave empty for current balances</value></data>
   <data name="Payment date: {0:d}." xml:space="preserve"><value>Payment date: {0:d}.</value></data>
+  <data name="Your purchases" xml:space="preserve"><value>Your purchases</value></data>
+  <data name="{0} purchase waiting for review" xml:space="preserve"><value>{0} purchase waiting for review</value></data>
+  <data name="{0} purchases waiting for review" xml:space="preserve"><value>{0} purchases waiting for review</value></data>
+  <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Review receipts and bank payments in one place.</value></data>
+  <data name="Inbox views" xml:space="preserve"><value>Inbox views</value></data>
+  <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} waiting in inbox</value></data>
 </root>

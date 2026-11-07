@@ -64,7 +64,6 @@ public static class InboxApi
             group.MapDismissMatch();
             group.MapIgnore();
             group.MapRestore();
-            group.MapReceiptAttachments();
 
             return group;
         }
@@ -327,71 +326,6 @@ public static class InboxApi
                 .ProducesProblem(StatusCodes.Status404NotFound);
         }
 
-        private void MapReceiptAttachments()
-        {
-            group.MapGet("{id:guid}/receipt-attachments", async (
-                    Guid id,
-                    IReceiptAttachmentService attachments,
-                    CancellationToken ct) =>
-                    Results.Ok(await attachments.ListBank(id, ct)))
-                .WithName("GetBankReceiptAttachments")
-                .Produces<IReadOnlyList<ReceiptAttachmentResponse>>()
-                .ProducesProblem(StatusCodes.Status404NotFound);
-
-            group.MapPost("{id:guid}/receipt-attachments", async (
-                    Guid id,
-                    IFormFile file,
-                    IReceiptAttachmentService attachments,
-                    CancellationToken ct) =>
-                    Results.Ok(await attachments.UploadBank(id, file, ct)))
-                .WithName("UploadBankReceiptAttachment")
-                .Accepts<IFormFile>("multipart/form-data")
-                .Produces<ReceiptAttachmentResponse>()
-                .ProducesProblem(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .DisableAntiforgery()
-                .WithMetadata(new RequestSizeLimitAttribute(ReceiptAttachmentsApi.MaximumRequestLength));
-
-            group.MapGet("{id:guid}/receipt-attachments/{attachmentId:guid}", async (
-                    Guid id,
-                    Guid attachmentId,
-                    IReceiptAttachmentService attachments,
-                    CancellationToken ct) =>
-                {
-                    var file = await attachments.DownloadBank(id, attachmentId, ct);
-                    return Results.File(file.Content, file.ContentType, file.FileName);
-                })
-                .WithName("DownloadBankReceiptAttachment")
-                .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
-                .ProducesProblem(StatusCodes.Status404NotFound);
-
-            group.MapPost("{id:guid}/receipt-attachments/{attachmentId:guid}/transcribe", async (
-                    Guid id,
-                    Guid attachmentId,
-                    IReceiptTranscriptionService transcription,
-                    CancellationToken ct) =>
-                Results.Ok(await transcription.TranscribeBank(id, attachmentId, ct)))
-                .WithName("TranscribeBankReceiptAttachment")
-                .Produces<ReceiptTranscriptionResponse>()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status502BadGateway)
-                .RateLimitedAs(ApiRateLimitPolicies.Transcription);
-
-            group.MapDelete("{id:guid}/receipt-attachments/{attachmentId:guid}", async (
-                    Guid id,
-                    Guid attachmentId,
-                    IReceiptAttachmentService attachments,
-                    CancellationToken ct) =>
-                {
-                    await attachments.DeleteBank(id, attachmentId, ct);
-                    return Results.NoContent();
-                })
-                .WithName("DeleteBankReceiptAttachment")
-                .Produces(StatusCodes.Status204NoContent)
-                .ProducesProblem(StatusCodes.Status404NotFound);
-        }
     }
 
     extension(IQueryable<BankTransaction> rows)
