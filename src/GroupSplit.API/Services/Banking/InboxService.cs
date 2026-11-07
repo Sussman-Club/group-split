@@ -99,7 +99,6 @@ public sealed class InboxService(
     AppDbContext dbContext,
     ITransactionService transactions,
     IDuplicateMatcher matcher,
-    IReceiptAttachmentService receiptAttachments,
     IFilingSuggester suggester) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
@@ -204,7 +203,6 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
-        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }
@@ -287,7 +285,6 @@ public sealed class InboxService(
         row.Status = BankTransactionStatus.Filed;
 
         await dbContext.SaveChangesAsync(ct);
-        await receiptAttachments.AttachToExpense(row.Id, expense.Id, ct);
 
         return expense;
     }
@@ -322,16 +319,6 @@ public sealed class InboxService(
             row.Replaces = previous;
             row.ReplacesId = previous.Id;
         }
-
-        var attachments = await dbContext.Set<ReceiptAttachment>()
-            .Where(attachment => attachment.BankTransactionId == previous.Id && attachment.ExpenseId == expense.Id)
-            .ToListAsync(ct);
-
-        foreach (var attachment in attachments)
-        {
-            attachment.BankTransaction = row;
-            attachment.BankTransactionId = row.Id;
-        }
     }
 
     public async Task<IReadOnlyList<FilingSuggestionResponse>> Suggest(
@@ -346,7 +333,7 @@ public sealed class InboxService(
         var rows = await Owned()
             .Include(row => row.Account)
             .Where(row => ids.Contains(row.Id)
-                          && row.Status == BankTransactionStatus.New
+                          && (row.Status == BankTransactionStatus.New || row.Status == BankTransactionStatus.Ignored)
                           && row.Amount >= 0)
             .ToListAsync(ct);
 

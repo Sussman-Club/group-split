@@ -10,7 +10,7 @@
         else
         {
             <MudStack Spacing="4">
-                <MudDatePicker @bind-Date="_date" Label="@Loc["Date"]" Variant="Variant.Outlined" />
+                <MudDatePicker ShowToolbar="false" @bind-Date="_date" Label="@Loc["Date"]" Variant="Variant.Outlined" />
                 <MudTimePicker @bind-Time="_time" Label="@Loc["Time"]" Variant="Variant.Outlined" AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')" />
             </MudStack>
         }

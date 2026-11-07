@@ -44,7 +44,7 @@ test('returns an embedded importer only for the trusted receipts inbox', async (
   const { handler, opened } = background();
   let response;
   const result = handler({ type: 'open-receipt-importer' },
-    { id: 'our-extension', frameId: 0, tab: { id: 42, windowId: 9 }, url: 'https://localhost:7287/inbox/receipts' },
+    { id: 'our-extension', frameId: 0, tab: { id: 42, windowId: 9, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/inbox/receipts' },
     value => { response = value; });
   assert.equal(result, false);
   await new Promise(resolve => setImmediate(resolve));
@@ -53,13 +53,23 @@ test('returns an embedded importer only for the trusted receipts inbox', async (
   assert.equal(response.url, 'chrome-extension://our-extension/popup.html?embedded=1&theme=light');
 });
 
+test('opens after navigating to the receipts inbox within the app', () => {
+  const { handler } = background();
+  let response;
+  handler({ type: 'open-receipt-importer' },
+    { id: 'our-extension', frameId: 0, tab: { id: 42, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/' },
+    value => { response = value; });
+  assert.equal(response.opened, true);
+});
+
 test('refuses unknown origins, subframes, and other pages', () => {
   const { handler, opened } = background();
   for (const sender of [
-    { id: 'our-extension', frameId: 0, tab: { id: 42 }, url: 'https://untrusted.example/inbox/receipts' },
-    { id: 'our-extension', frameId: 1, tab: { id: 42 }, url: 'https://localhost:7287/inbox/receipts' },
-    { id: 'our-extension', frameId: 0, tab: { id: 42 }, url: 'https://localhost:7287/settings' },
-    { id: 'other-extension', frameId: 0, tab: { id: 42 }, url: 'https://localhost:7287/inbox/receipts' }
+    { id: 'our-extension', frameId: 0, tab: { id: 42, url: 'https://untrusted.example/inbox/receipts' }, url: 'https://untrusted.example/inbox/receipts' },
+    { id: 'our-extension', frameId: 1, tab: { id: 42, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/inbox/receipts' },
+    { id: 'our-extension', frameId: 0, tab: { id: 42, url: 'https://localhost:7287/settings' }, url: 'https://localhost:7287/inbox/receipts' },
+    { id: 'our-extension', frameId: 0, tab: { id: 42, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://untrusted.example/' },
+    { id: 'other-extension', frameId: 0, tab: { id: 42, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/inbox/receipts' }
   ]) {
     assert.equal(handler({ type: 'open-receipt-importer' }, sender, () => {}), false);
     assert.equal(handler({ type: 'open-receipt-importer-window' }, sender, () => {}), false);
@@ -84,7 +94,7 @@ test('carries the app theme without carrying receipt or account information', as
   const { handler, opened } = background();
   let response;
   handler({ type: 'open-receipt-importer', theme: 'dark' },
-    { id: 'our-extension', frameId: 0, tab: { id: 42 }, url: 'https://localhost:7287/inbox/receipts' }, value => { response = value; });
+    { id: 'our-extension', frameId: 0, tab: { id: 42, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/inbox/receipts' }, value => { response = value; });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(opened.length, 0);
   assert.equal(response.url, 'chrome-extension://our-extension/popup.html?embedded=1&theme=dark');
@@ -92,7 +102,7 @@ test('carries the app theme without carrying receipt or account information', as
 
 test('opens a separate window when embedding is unavailable and rate limits repeats', async () => {
   const { handler, opened } = background();
-  const sender = { id: 'our-extension', frameId: 0, tab: { id: 42, windowId: 9 }, url: 'https://localhost:7287/inbox/receipts' };
+  const sender = { id: 'our-extension', frameId: 0, tab: { id: 42, windowId: 9, url: 'https://localhost:7287/inbox/receipts' }, url: 'https://localhost:7287/inbox/receipts' };
   let first;
   assert.equal(handler({ type: 'open-receipt-importer-window', theme: 'dark' }, sender, value => { first = value; }), true);
   await new Promise(resolve => setImmediate(resolve));

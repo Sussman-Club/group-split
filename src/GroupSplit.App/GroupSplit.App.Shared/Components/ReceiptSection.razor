@@ -149,7 +149,7 @@
                     </div>
             }
 
-            @if (_showUploader)
+            @if (Attachments.Count == 0 && _showUploader)
             {
                 <div class="gs-receipts-uploader">
                     <ReceiptFilePicker FileChanged="UploadRequested"
@@ -163,10 +163,10 @@
                                OnClick="CloseUploader">@Loc["Cancel"]</MudButton>
                 </div>
             }
-            else
+            else if (Attachments.Count == 0)
             {
                 <div class="gs-receipts-add">
-                    <span>@(Attachments.Count > 0 ? Loc["Add another original file"].Value : Loc["Keep the original source with this expense"].Value)</span>
+                    <span>@Loc["Keep the original source with this expense"]</span>
                     <MudButton Variant="Variant.Text"
                                Size="Size.Small"
                                Class="gs-btn-quiet"
@@ -275,6 +275,7 @@
     }
     private async Task OpenUploader()
     {
+        if (Attachments.Count > 0) return;
         _showUploader = true;
         _refreshWorkspace?.Invoke();
         await OpenWorkspaceAsync();

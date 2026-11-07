@@ -853,6 +853,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.Property(r => r.Subtotal).HasPrecision(18, 2);
             entity.Property(r => r.MerchantName).HasMaxLength(128);
+            entity.HasOne(r => r.Merchant).WithMany().HasForeignKey(r => r.MerchantId).OnDelete(DeleteBehavior.SetNull);
             entity.Property(r => r.Tax).HasPrecision(18, 2);
             entity.Property(r => r.Tip).HasPrecision(18, 2);
             entity.Property(r => r.Total).HasPrecision(18, 2);
@@ -870,12 +871,9 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(attachment => attachment.UploadedAt).IsRequired();
             entity.HasOne(attachment => attachment.Expense).WithMany(expense => expense.ReceiptAttachments)
                 .HasForeignKey(attachment => attachment.ExpenseId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(attachment => attachment.BankTransaction).WithMany(row => row.ReceiptAttachments)
-                .HasForeignKey(attachment => attachment.BankTransactionId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(attachment => attachment.Receipt).WithMany(receipt => receipt.Attachments)
                 .HasForeignKey(attachment => attachment.ReceiptId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(attachment => attachment.ExpenseId);
-            entity.HasIndex(attachment => attachment.BankTransactionId);
             entity.HasIndex(attachment => attachment.ReceiptId);
             entity.HasIndex(attachment => attachment.ObjectKey).IsUnique();
         });

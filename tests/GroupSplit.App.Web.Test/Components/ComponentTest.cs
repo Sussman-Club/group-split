@@ -80,9 +80,6 @@ public abstract class ComponentTest : BunitContext
         ReceiptAttachments
             .Setup(client => client.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<ReceiptAttachmentResponse>());
-        ReceiptAttachments
-            .Setup(client => client.GetForBankAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ReceiptAttachmentResponse>());
         Services.AddSingleton(ReceiptAttachments.Object);
 
         // And the rules a bill's lines divide by, for the same reason: the split control now

@@ -1,0 +1,54 @@
+name: Release receipt importer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: receipt-importer-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Publish only code that has reached the production branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Test receipt importer
+        run: node --test tools/receipt-import-extension/*.test.cjs
+
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./tools/receipt-import-extension/manifest.json').version")
+          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+            echo "::error::Invalid extension version in manifest.json."
+            exit 1
+          fi
+          tag="receipt-importer-v$version"
+          zip_path="$RUNNER_TEMP/groupsplit-receipt-importer-$version.zip"
+          (cd tools/receipt-import-extension && zip -q "$zip_path" \
+            manifest.json app-bridge.js background.js popup.html popup.js popup.css \
+            logo.svg select-chevron.svg icon16.png icon48.png icon128.png)
+          # A version must never replace an existing release or move an existing tag.
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            echo "::error::Tag $tag already exists. Increase the manifest version before releasing."
+            exit 1
+          fi
+          gh release create "$tag" "$zip_path" --target "$RELEASE_COMMIT" \
+            --title "GroupSplit receipt importer $version" --draft \
+            --notes "Receipt importer preview from commit $RELEASE_COMMIT. Extract the ZIP and load the folder as an unpacked extension in Chrome or Edge. Store installations are recommended for regular users."
+          gh release edit "$tag" --draft=false --latest=false

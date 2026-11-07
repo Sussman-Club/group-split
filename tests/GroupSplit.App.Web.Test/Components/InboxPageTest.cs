@@ -49,6 +49,10 @@ public class InboxPageTest : ComponentTest
     public InboxPageTest()
     {
         Services.AddSingleton(Mock.Of<IBankLinkLauncher>());
+        _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<FilingSuggestionResponse>());
+        _inbox.Setup(client => client.GetBankTransactionMatchesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ExpenseMatchResponse>());
         _rows = [Row("Lidl", 30m, new DateOnly(2026, 9, 1))];
 
         _inbox

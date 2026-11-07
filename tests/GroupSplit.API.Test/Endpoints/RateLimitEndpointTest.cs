@@ -122,10 +122,9 @@ public class RateLimitEndpointTest : IAsyncLifetime
     [Theory]
     [InlineData("/receipts/transcribe")]
     [InlineData("/transactions/7b0f9c3e-0000-4000-8000-000000000001/receipt-attachments/7b0f9c3e-0000-4000-8000-000000000002/transcribe")]
-    [InlineData("/inbox/7b0f9c3e-0000-4000-8000-000000000001/receipt-attachments/7b0f9c3e-0000-4000-8000-000000000002/transcribe")]
     public async Task Every_transcription_route_is_limited(string path)
     {
-        // Only the draft takes a file; the other two name one already stored.
+        // The draft takes a file; the expense route names one already stored.
         HttpContent? Body() => path == "/receipts/transcribe" ? ReceiptForm() : null;
 
         using var first = await Client.PostAsync(path, Body(), Ct);

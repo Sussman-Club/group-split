@@ -49,7 +49,7 @@
                    settling the whole of it is still what most people want. *@
                 @if (_choosingPeriod)
                 {
-                    <MudDatePicker Date="_through" DateChanged="@ThroughChanged"
+                    <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="@ThroughChanged"
                                    Label="@Loc["Only activity up to"]"
                                    Variant="Variant.Outlined"
                                    Clearable="true"
@@ -70,7 +70,7 @@
                    The date is what lets a payment made on the 30th and typed in on the 3rd
                    land in the month it settled, instead of the month somebody got round
                    to it. *@
-                <MudDatePicker Date="_date" DateChanged="@DateChanged"
+                <MudDatePicker ShowToolbar="false" Date="_date" DateChanged="@DateChanged"
                                Label="@Loc["When"]"
                                Variant="Variant.Outlined"
                                Clearable="true"
@@ -104,6 +104,7 @@
     /// when one is picked.
     /// </summary>
     [Parameter] public Guid GroupId { get; set; }
+    [Parameter] public DateTime? InitialThrough { get; set; }
 
     /// <summary>What stands between the two of them, whichever way round it is.</summary>
     [Parameter] public decimal TotalDebt { get; set; }
@@ -150,8 +151,14 @@
         {
             UserId = UserId,
             Amount = TotalDebt,
-            Direction = Direction
+            Direction = Direction,
+            Through = InitialThrough is { } cutoff ? DateOnly.FromDateTime(cutoff) : null,
+            Date = InitialThrough is { } date ? TransactionDay.Stored(date) : null
         };
+        _through = InitialThrough;
+        _date = InitialThrough;
+        _choosingPeriod = InitialThrough is not null;
+        _owedForPeriod = InitialThrough is not null ? TotalDebt : null;
     }
 
     /// <summary>

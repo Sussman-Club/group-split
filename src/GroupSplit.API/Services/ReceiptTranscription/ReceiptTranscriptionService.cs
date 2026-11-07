@@ -8,7 +8,6 @@ namespace GroupSplit.API.Services.ReceiptTranscription;
 public interface IReceiptTranscriptionService
 {
     Task<ReceiptTranscriptionResponse> Transcribe(Guid expenseId, Guid attachmentId, CancellationToken ct = default);
-    Task<ReceiptTranscriptionResponse> TranscribeBank(Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default);
     Task<ReceiptDraftResponse> Transcribe(IFormFile file, CancellationToken ct = default);
 }
 
@@ -65,13 +64,6 @@ public sealed class ReceiptTranscriptionService(
         Guid expenseId, Guid attachmentId, CancellationToken ct = default)
     {
         var source = await attachments.Download(expenseId, attachmentId, ct);
-        return await Transcribe(source, attachmentId, ct);
-    }
-
-    public async Task<ReceiptTranscriptionResponse> TranscribeBank(
-        Guid bankTransactionId, Guid attachmentId, CancellationToken ct = default)
-    {
-        var source = await attachments.DownloadBank(bankTransactionId, attachmentId, ct);
         return await Transcribe(source, attachmentId, ct);
     }
 

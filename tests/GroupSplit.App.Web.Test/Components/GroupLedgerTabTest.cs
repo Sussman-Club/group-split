@@ -210,7 +210,9 @@ public class GroupLedgerTabTest : ComponentTest
         void AssertOrder() => tab.WaitForAssertion(() =>
         {
             Assert.Equal(expected, tab.FindAll(".gs-feed-copy strong").Select(entry => entry.TextContent));
-            Assert.Equal(2, tab.FindAll(".gs-virtual-date").Count);
+            Assert.Empty(tab.FindAll(".gs-virtual-date"));
+            Assert.Equal(3, tab.FindAll(".gs-feed-mobile-time").Count);
+            Assert.Equal(3, tab.FindAll(".gs-feed-date").Count);
             Assert.NotEmpty(_orders);
             Assert.All(_orders, order => Assert.Equal(("dateTime", (bool?)descending),
                 (order.Key, order.Descending)));

@@ -29,6 +29,41 @@ function page(rowText, href = 'https://example.test/?tab=1') {
   return context;
 }
 
+test('connects a store in the background without focusing its window', async () => {
+  const context = page('');
+  context.document.getElementById('retailer').value = 'amazon';
+  let created;
+  context.chrome = {
+    permissions: { request: async () => true },
+    tabs: {
+      query: async () => [],
+      create: async options => { created = options; return { id: 7 }; },
+      update: async () => assert.fail('store tab should not be activated')
+    },
+    scripting: { executeScript: async () => [{ result: 'signin' }] },
+    windows: { update: async () => assert.fail('store window should not be focused') }
+  };
+  await context.document.getElementById('open-costco').click();
+  assert.equal(created.active, false);
+  assert.equal(created.url, 'https://www.amazon.com/your-orders/orders');
+  assert.match(context.document.getElementById('store-state-title').textContent, /sign in/i);
+  assert.equal(context.document.getElementById('show-store').hidden, false);
+});
+
+test('recognizes sign-in and confirmed orders pages without assuming an unknown page is signed in', () => {
+  const context = page('');
+  context.document.readyState = 'complete';
+  context.location.pathname = '/ap/signin';
+  context.document.querySelector = () => null;
+  assert.equal(context.retailerSignInState('amazon'), 'signin');
+  context.location.pathname = '/your-orders/orders';
+  context.document.querySelector = selector => selector === 'input[type="password"]' ? null : ({});
+  assert.equal(context.retailerSignInState('amazon'), 'ready');
+  context.document.querySelector = () => null;
+  context.document.body.innerText = 'Loading';
+  assert.equal(context.retailerSignInState('amazon'), 'unknown');
+});
+
 test('finds a visible receipt and normalizes its date', () => {
   const rows = page('Warehouse 9/5/2026 $266.39 View Receipt').scanPage();
   assert.equal(rows.length, 1);
@@ -512,13 +547,13 @@ test('Costco saving requires a connected inbox', async () => {
   assert.match(context.document.getElementById('status').textContent, /signed-in GroupSplit receipts inbox/i);
 });
 
-test('does not download a receipt when the connected inbox has changed', async () => {
+test('does not upload a receipt when the connected inbox has changed', async () => {
   const context = page('');
   vm.runInContext('inbox = { tabId: 7, origin: "https://groupsplit.sussman.win" }', context);
-  context.chrome = { tabs: { get: async () => ({ id: 7 }) }, downloads: { download: () => assert.fail('must not download') } };
+  context.chrome = { tabs: { get: async () => ({ id: 7 }) }, scripting: { executeScript: () => assert.fail('must not upload') } };
   context.testExecute = async () => ({ origin: 'https://other.example', pathname: '/inbox/receipts' });
   vm.runInContext('execute = testExecute', context);
-  await assert.rejects(context.saveReceiptFile('data', 'receipt.pdf'), /inbox/);
+  await assert.rejects(context.uploadReceiptFile('data', 'receipt.pdf'), /inbox/);
 });
 
 test('uploads to the connected inbox using an isolated script world', async () => {
@@ -526,11 +561,10 @@ test('uploads to the connected inbox using an isolated script world', async () =
   vm.runInContext('inbox = { tabId: 7, origin: "https://groupsplit.sussman.win" }', context);
   let upload;
   context.chrome = { tabs: { get: async () => ({ id: 7 }) },
-    downloads: { download: async () => 1 },
     scripting: { executeScript: async options => { upload = options; return [{ result: { ok: true } }]; } } };
   context.testExecute = async () => ({ origin: 'https://groupsplit.sussman.win', pathname: '/inbox/receipts' });
   vm.runInContext('execute = testExecute', context);
-  await context.saveReceiptFile('data', 'receipt.pdf');
+  await context.uploadReceiptFile('data', 'receipt.pdf');
   assert.equal(upload.world, 'ISOLATED');
   assert.equal(upload.target.tabId, 7);
 });
@@ -627,4 +661,13 @@ test('verifies the printed order number and final total on English, Spanish, and
   }
   context.document.body.innerText = 'Pedido ' + orderId + '\nTotal antes de impuestos: US$68.92';
   assert.equal(context.verifyAmazonInvoice(orderId), false);
+});
+
+
+test('closes a separate importer after successful completion', () => {
+  const context = page('');
+  let closed = false;
+  context.window = { close: () => { closed = true; } };
+  context.closeCompletedImporter();
+  assert.equal(closed, true);
 });

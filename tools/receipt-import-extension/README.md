@@ -1,11 +1,19 @@
 # Receipt importer preview
 
+To publish a preview ZIP, run the **Release receipt importer** GitHub Actions
+workflow on `main`. It tests the extension and publishes a GitHub Release using
+the version in `manifest.json`. Increase that version before each release.
+Extract the ZIP before loading the folder as an unpacked extension. This preview
+requires manual updates; browser store installations are recommended for regular
+users.
+
 Load this folder as an unpacked extension in Chrome or Edge. Open the
 GroupSplit receipts inbox and select **Import from a store**. Choose Amazon
-or Costco, select Connect store, and sign in yourself. For Amazon, open your
-orders. For Costco, the importer opens Orders & Purchases and selects the
-chosen warehouse or online view. Return to the importer and find receipts.
-Review the list before saving receipts as PDFs and uploading them to the
+or Costco and select Connect store. The store opens in a background tab. If
+you need to sign in, go to that tab, sign in, and return to the importer.
+For Costco, the importer selects the chosen warehouse or online view when
+you find receipts.
+Review the list before importing receipts as PDFs to the
 inbox. Keep the GroupSplit tab open and signed in.
 
 The inbox shortcut requires this extension to be reloaded after updates and
@@ -39,7 +47,6 @@ to or click purchase, payment, return, cancellation, or print controls.
 
 The preview sends receipt PDFs only to the GroupSplit inbox tab it was
 opened from, restricted to the official GroupSplit domain or a local app.
-It saves a copy in Downloads/GroupSplit. Costco PDFs can contain membership or
-masked payment information. Protect and remove
-downloaded copies when you no longer need them. No separate analytics or external
+The extension does not download a copy to your device. Costco PDFs can contain membership or
+masked payment information. No separate analytics or external
 sync service is configured in the extension.

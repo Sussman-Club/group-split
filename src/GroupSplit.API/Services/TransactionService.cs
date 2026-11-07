@@ -1116,7 +1116,7 @@ public class TransactionService(
         {
             var inboxReceipt = await dbContext.Set<Receipt>().Include(receipt => receipt.Items)
                 .FirstOrDefaultAsync(receipt => receipt.ExpenseId == id && receipt.OwnerUserId != null, ct);
-            deletedReceiptFiles = await receiptAttachments.PrepareDeleteForExpense(id, returning?.Id, inboxReceipt?.Id, ct);
+            deletedReceiptFiles = await receiptAttachments.PrepareDeleteForExpense(id, inboxReceipt?.Id, ct);
             if (inboxReceipt is not null)
             {
                 inboxReceipt.ExpenseId = null;

@@ -38,13 +38,7 @@ protocol all apply here unchanged.
 
 File or link the bank row to an expense first, then use `groupsplit receipts attachments`
 to add its receipt when the user is ready. Use `groupsplit receipts set` for a reviewed
-itemised bill. The older `inbox attachments` commands can still manage files already on a
-pending row; filing or linking that row moves those files to the resulting expense.
-
-A file attached to a *pending* row is not lost when the charge posts: it moves to the
-posted row that takes over, so list the attachments on the row the inbox shows now. A file
-on a row the bank withdraws, or on a row whose bank is unlinked, is deleted with the row.
-Say so before somebody unlinks a bank with receipts still waiting in its inbox.
+itemised bill.
 
 ## The loop
 
@@ -104,7 +98,7 @@ groupsplit inbox file <row-id> --accept-suggestion        # files it in groupId 
   suggestion; then ask.
 - A row with a possible duplicate never gets one. Answer the match first.
 - A receipt makes it better. Reading one is not stored until the row is filed, so pass its
-  items back: run `inbox attachments transcribe <row-id> <attachment-id> --json`, then
+  items back: run `receipts transcribe <file> --json`, then
   `inbox suggest <row-id> --receipt-merchant <merchant> --receipt-item <name> ...` with the
   item names it printed.
 

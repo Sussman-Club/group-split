@@ -104,26 +104,6 @@ public class ReceiptTranscriptionServiceTest
     }
 
     [Fact]
-    public async Task It_can_read_a_receipt_that_is_still_attached_to_a_bank_row()
-    {
-        var bankTransactionId = Guid.NewGuid();
-        var attachmentId = Guid.NewGuid();
-        var attachments = new Mock<IReceiptAttachmentService>(MockBehavior.Strict);
-        attachments.Setup(service => service.DownloadBank(bankTransactionId, attachmentId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ReceiptAttachmentDownload([4, 5, 6], "application/pdf", "ikea.pdf"));
-        var provider = new StubProvider(new TranscribedReceipt(100m, 20m, 0m, 120m,
-            [new TranscribedReceiptItem("Shelf", 100m, 1m, 100m, 20m)]));
-
-        var response = await new ReceiptTranscriptionService(attachments.Object, provider)
-            .TranscribeBank(bankTransactionId, attachmentId, TestContext.Current.CancellationToken);
-
-        Assert.Equal(attachmentId, response.AttachmentId);
-        Assert.Equal(120m, response.Receipt.Total);
-        Assert.Equal("ikea.pdf", provider.Document!.FileName);
-        attachments.VerifyAll();
-    }
-
-    [Fact]
     public async Task It_keeps_receipt_metadata_signed_lines_and_tax_context_in_the_editable_draft()
     {
         var attachmentId = Guid.NewGuid();

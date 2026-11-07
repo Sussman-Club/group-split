@@ -5781,4 +5781,27 @@
   <data name="{0} day{1} apart · same amount" xml:space="preserve">
     <value>{0} dia{1} de diferença · mesmo valor</value>
   </data>
+  <data name="Possible duplicate receipt" xml:space="preserve"><value>Possível recibo duplicado</value></data>
+  <data name="Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing." xml:space="preserve"><value>Possível recibo duplicado: outro recibo tem o mesmo estabelecimento, data, total e moeda. Confira os dois antes de registrar.</value></data>
+  <data name="Review matching receipt" xml:space="preserve"><value>Revisar recibo correspondente</value></data>
+  <data name="Upload a receipt" xml:space="preserve"><value>Enviar um recibo</value></data>
+  <data name="Choose a photo or PDF to attach." xml:space="preserve"><value>Escolha uma foto ou um PDF para anexar.</value></data>
+  <data name="Is this receipt for an existing expense?" xml:space="preserve"><value>Este recibo corresponde a uma despesa existente?</value></data>
+  <data name="Is this payment for an existing expense?" xml:space="preserve"><value>Este pagamento corresponde a uma despesa existente?</value></data>
+  <data name="Possible matches" xml:space="preserve"><value>Possíveis correspondências</value></data>
+  <data name="Create a new expense" xml:space="preserve"><value>Criar uma nova despesa</value></data>
+  <data name="Attach to this expense" xml:space="preserve"><value>Anexar a esta despesa</value></data>
+  <data name="Review and delete duplicate" xml:space="preserve"><value>Revisar e excluir duplicado</value></data>
+  <data name="Delete possible duplicate?" xml:space="preserve"><value>Excluir possível duplicado?</value></data>
+  <data name="This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Este recibo parece descrever a mesma compra que outro recibo. Confira os dois antes de excluir. Excluir este recibo também exclui seus arquivos originais e não pode ser desfeito.</value></data>
+<data name="Balances through" xml:space="preserve"><value>Saldos até</value></data>
+<data name="Leave empty for current balances" xml:space="preserve"><value>Deixe a data vazia para ver os saldos atuais</value></data>
+<data name="Could not load balances for this date." xml:space="preserve"><value>Não foi possível carregar os saldos para esta data.</value></data>
+<data name="Payment date: {0:d}." xml:space="preserve"><value>Data do pagamento: {0:d}.</value></data>
+  <data name="Your purchases" xml:space="preserve"><value>As suas compras</value></data>
+  <data name="{0} purchase waiting for review" xml:space="preserve"><value>{0} compra por rever</value></data>
+  <data name="{0} purchases waiting for review" xml:space="preserve"><value>{0} compras por rever</value></data>
+  <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Reveja recibos e pagamentos bancários num só lugar.</value></data>
+  <data name="Inbox views" xml:space="preserve"><value>Vistas da caixa de entrada</value></data>
+  <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} por rever na caixa de entrada</value></data>
 </root>

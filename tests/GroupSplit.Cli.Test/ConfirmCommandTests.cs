@@ -140,10 +140,6 @@ public sealed class ConfirmCommandTests : IDisposable
         new("invitations.decline", ["invitations", "decline", "token-omar"], api =>
             api.Returns("/api/invitations/claims/token-omar", Claim(), method: "GET")),
 
-        new("inbox.attachments.delete", ["inbox", "attachments", "delete", $"{Thing}", $"{Other}"], api =>
-            api.Returns($"/api/inbox/{Thing}/receipt-attachments",
-                new[] { Attachment(Other, expenseId: null, bankTransactionId: Thing) }, method: "GET")),
-
         new("receipts.attachments.delete", ["receipts", "attachments", "delete", $"{Thing}", $"{Other}"], api =>
             api.Returns($"/api/transactions/{Thing}/receipt-attachments",
                 new[] { Attachment(Other, expenseId: Thing, bankTransactionId: null) }, method: "GET")),

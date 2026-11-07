@@ -87,12 +87,14 @@ public class LocalClockTest
             .Returns(ValueTask.FromResult(BrowserOffsetMinutes));
 
         var clock = new LocalClock(js.Object);
+        var fallbackOffset = clock.Offset;
 
         Assert.False(await clock.InitializeAsync());
 
         // Not marked resolved by a failure, so the render that does have a browser gets it.
-        Assert.True(await clock.InitializeAsync());
+        Assert.Equal(fallbackOffset != TimeSpan.FromMinutes(BrowserOffsetMinutes), await clock.InitializeAsync());
         Assert.Equal(TimeSpan.FromMinutes(BrowserOffsetMinutes), clock.Offset);
+        js.Verify(runtime => runtime.InvokeAsync<int>("gs.tzOffsetMinutes", It.IsAny<object?[]?>()), Times.Exactly(2));
     }
 
     /// <summary>WebAssembly's runtime, which answers synchronously.</summary>

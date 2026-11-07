@@ -806,6 +806,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<bool>("IsIgnored")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -837,6 +840,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("ExpenseId")
                         .IsUnique();
 
+                    b.HasIndex("MerchantId");
+
                     b.HasIndex("OwnerUserId");
 
                     b.ToTable("Receipt");
@@ -846,9 +851,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BankTransactionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ContentType")
@@ -882,8 +884,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("BankTransactionId");
 
                     b.HasIndex("ExpenseId");
 
@@ -1995,21 +1995,23 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupSplit.Data.Entities.Receipt", "ExpenseId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("GroupSplit.Data.Entities.Merchant", "Merchant")
+                        .WithMany()
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GroupSplit.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Expense");
+
+                    b.Navigation("Merchant");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.ReceiptAttachment", b =>
                 {
-                    b.HasOne("GroupSplit.Data.Entities.BankTransaction", "BankTransaction")
-                        .WithMany("ReceiptAttachments")
-                        .HasForeignKey("BankTransactionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("GroupSplit.Data.Entities.Expense", "Expense")
                         .WithMany("ReceiptAttachments")
                         .HasForeignKey("ExpenseId")
@@ -2019,8 +2021,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .WithMany("Attachments")
                         .HasForeignKey("ReceiptId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("BankTransaction");
 
                     b.Navigation("Expense");
 
@@ -2415,8 +2415,6 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
             modelBuilder.Entity("GroupSplit.Data.Entities.BankTransaction", b =>
                 {
                     b.Navigation("FiledAs");
-
-                    b.Navigation("ReceiptAttachments");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.Group", b =>

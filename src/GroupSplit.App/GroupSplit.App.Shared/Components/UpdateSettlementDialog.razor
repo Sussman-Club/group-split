@@ -32,7 +32,7 @@
                     HideSpinButtons="true"/>
 
                 <MudStack Row="true" Spacing="4" Class="gs-field-pair">
-                    <MudDatePicker @bind-Date="_selectedDate"
+                    <MudDatePicker ShowToolbar="false" @bind-Date="_selectedDate"
                                    Label="@Loc["When"]"
                                    Variant="Variant.Outlined"/>
 
@@ -72,7 +72,7 @@
                 @* What the payment was for, which nothing adds up: correcting it, or
                    clearing it on a payment that was never meant as a period, moves no
                    balance. *@
-                <MudDatePicker @bind-Date="_coversThrough"
+                <MudDatePicker ShowToolbar="false" @bind-Date="_coversThrough"
                                Label="@Loc["Covers activity up to"]"
                                Variant="Variant.Outlined"
                                Clearable="true"

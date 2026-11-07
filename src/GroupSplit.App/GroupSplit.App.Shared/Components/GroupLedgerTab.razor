@@ -190,14 +190,10 @@
 
     <div class="gs-reveal gs-ledger-listing @(_mobileEntries.Count > 0 ? "has-entries" : "")" style="--i: 2">
         <div class="gs-mobile-ledger" aria-label="@Loc["Transactions"]">
-            <ScrollFeed TItem="DayGroupedItem<GroupLedgerEntryResponse>" @key="_gridGeneration" @ref="_virtualFeed" ItemsProvider="ProvideItemsAsync" Context="row">
+            <ScrollFeed TItem="GroupLedgerEntryResponse" @key="_gridGeneration" @ref="_virtualFeed" ItemsProvider="ProvideItemsAsync" Context="row">
                 <ItemContent>
-                    @{ var entry = row.Entry; }
+                    @{ var entry = row; }
                     <div class="gs-virtual-row" @key="entry.Id">
-                        @if (row.StartsDay)
-                        {
-                            <h3 class="gs-virtual-date">@Clock.Day(entry.DateTime).ToString("d MMMM")</h3>
-                        }
                         <div class="gs-feed-row">
                 <button type="button" class="gs-feed-entry" disabled="@(!Opens(entry))"
                         aria-label="@(Loc["Details for {0}", Headline(entry)].Value)"
@@ -215,22 +211,12 @@
                         <strong>@(entry.Kind is ActivityKind.Transfer ? $"{entry.PaidByUserName} → {entry.PaidToUserName}" : Headline(entry))</strong>
                         <span class="gs-muted">
                             @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() : Detail(entry))
-                            @if (Clock.TimeOf(entry.DateTime) is { } time)
-                            {
-                                <span class="gs-feed-mobile-time"> · @time.ToString("t")</span>
-                            }
                         </span>
-                        @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } share)
-                        {
-                            <span class="gs-muted gs-feed-mobile-share">@Loc["Your share {0}", share.ToMoney()].Value</span>
-                        }
+                        <span class="gs-muted gs-feed-mobile-time">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } time) { <text> · @time.ToString("t")</text> }</span>
                     </span>
                     <span class="gs-feed-desktop-meta">
                         <span class="gs-feed-category">@(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value : string.IsNullOrWhiteSpace(entry.Category) ? Loc["Uncategorized"].Value : entry.Category)</span>
-                        @if (Clock.TimeOf(entry.DateTime) is { } desktopTime)
-                        {
-                            <span class="gs-muted">@desktopTime.ToString("t")</span>
-                        }
+                        <span class="gs-muted gs-feed-date">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } desktopTime) { <text> · @desktopTime.ToString("t")</text> }</span>
                     </span>
                     <span class="gs-feed-money">
                         <Money Value="entry.Amount" Class="gs-feed-amount" />
@@ -534,7 +520,7 @@
     private bool _ledgerLoaded;
     private long _feedVersion;
     private TransactionPageCache<GroupLedgerEntryResponse> _pageCache = new();
-    private ScrollFeed<DayGroupedItem<GroupLedgerEntryResponse>>? _virtualFeed;
+    private ScrollFeed<GroupLedgerEntryResponse>? _virtualFeed;
     private bool _virtualFailed;
     private CategorySpendingSummaryResponse? _byCategory;
     private SummaryKey? _asked;
@@ -697,7 +683,7 @@
         };
     }
 
-    private async ValueTask<ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>> ProvideItemsAsync(ItemsProviderRequest request)
+    private async ValueTask<ItemsProviderResult<GroupLedgerEntryResponse>> ProvideItemsAsync(ItemsProviderRequest request)
     {
         var group = GroupId;
         var bounds = _range.Bounds(Clock.Offset, Clock.Today);
@@ -708,21 +694,21 @@
         var payer = _paidBy;
         var sort = _sort;
         var version = _feedVersion;
-        ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>> result = default;
+        ItemsProviderResult<GroupLedgerEntryResponse> result = default;
         var cache = _pageCache;
         var loaded = await Errors.TryAsync(async () =>
         {
-            result = await DayGroupedItemsProvider.GetAsync<GroupLedgerEntryResponse>(request,
+            result = await PagedItemsProvider.GetAsync<GroupLedgerEntryResponse>(request,
                 (page, size, ct) => cache.GetAsync(page, size, ct, async (page, size, ct) => await GroupsClient.GetGroupActivityAsync(
                     group, from: bounds.From, to: bounds.To, kind: (int?)kind, search: search,
                     categoryId: category, uncategorized: uncategorized ? true : null, paidBy: payer,
                     sortBy: sort.Key, sortDescending: sort.Descending, page: page, pageSize: size,
-                    cancellationToken: ct)), entry => Clock.Day(entry.DateTime));
+                    cancellationToken: ct)));
         }, Loc["Could not load this group's ledger."].Value);
         request.CancellationToken.ThrowIfCancellationRequested();
-        if (_disposed || version != _feedVersion) return new ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>([], 0);
+        if (_disposed || version != _feedVersion) return new ItemsProviderResult<GroupLedgerEntryResponse>([], 0);
         _virtualFailed = !loaded;
-        return loaded ? result : new ItemsProviderResult<DayGroupedItem<GroupLedgerEntryResponse>>([], 0);
+        return loaded ? result : new ItemsProviderResult<GroupLedgerEntryResponse>([], 0);
     }
 
     private async Task RetryVirtualAsync()

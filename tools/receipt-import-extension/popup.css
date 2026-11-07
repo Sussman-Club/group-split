@@ -41,6 +41,10 @@ p { margin: 0; line-height: 1.5; }
 .section-heading p { margin-top: 2px; color: var(--muted); font-size: .8rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .store-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.store-state { margin-top: 14px; padding: 14px; border: 2px solid var(--teal); border-radius: 10px; background: var(--teal-soft); color: var(--ink); font-size: .86rem; }
+.store-state strong { display: block; font-size: .95rem; }
+.store-state p { margin-top: 4px; }
+.store-state .button { margin-top: 10px; }
 .filter-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .field { display: grid; gap: 7px; color: var(--secondary); font-size: .8rem; font-weight: 650; }
 .buyer-guidance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }

@@ -14,6 +14,9 @@ public class Receipt : Entity
     /// merchant matching: a receipt is evidence, so an uncertain reading remains visible.</summary>
     public string? MerchantName { get; set; }
 
+    public Guid? MerchantId { get; set; }
+    public virtual Merchant? Merchant { get; set; }
+
     /// <summary>The calendar day printed on the receipt, when the provider can read one.</summary>
     public DateOnly? PurchaseDate { get; set; }
 

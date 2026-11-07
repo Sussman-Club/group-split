@@ -241,6 +241,7 @@
         SaveReceiptRequest? Receipt);
 
     [Parameter] public SaveReceiptRequest? InboxReceipt { get; set; }
+    [Parameter] public Guid? InboxMerchantId { get; set; }
     [Parameter] public FilingDestinationSuggestion? InboxSuggestion { get; set; }
     [Parameter] public string? InboxCurrency { get; set; }
     [Parameter] public bool ShowFirstExpenseGuide { get; set; }
@@ -708,7 +709,11 @@
             _model.Amount = inbox.Total;
             _currency = InboxCurrency ?? _currency;
             if (inbox.PurchaseDate is { } day) _selectedDate = day.ToDateTime(TimeOnly.MinValue);
-            if (!string.IsNullOrWhiteSpace(inbox.MerchantName))
+            if (InboxMerchantId is { } receiptMerchantId)
+            {
+                await OnMerchantChangedAsync(receiptMerchantId);
+            }
+            else if (!string.IsNullOrWhiteSpace(inbox.MerchantName))
             {
                 var name = inbox.MerchantName.Trim();
                 var matches = await Merchants.SearchAsync(name);
