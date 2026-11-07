@@ -347,6 +347,28 @@
 
 /* ---------------------------------------------------------- balance bars -- */
 
+.gs-balances-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.gs-balances-heading h2 { margin: 0; }
+
+.gs-balances-date {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gs-muted);
+}
+
+.gs-balances-date .gs-capitalize { text-transform: capitalize; }
+
+.gs-balances-date .mud-picker { width: 190px; max-width: 100%; }
+
 .gs-balances {
     display: flex;
     flex-direction: column;

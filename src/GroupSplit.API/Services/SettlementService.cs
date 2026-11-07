@@ -236,7 +236,7 @@ public class SettlementService(
         RecordRepaymentRequest request, CancellationToken cancellationToken = default)
     {
         var (from, to) = await Record(groupId, request.FromUserId, request.ToUserId, request.Amount,
-            request.Date, request.Description, null, cancellationToken);
+            request.Date, request.Description, request.Through, cancellationToken);
 
         return new SettlementPayment
         {

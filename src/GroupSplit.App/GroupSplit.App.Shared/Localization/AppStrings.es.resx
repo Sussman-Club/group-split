@@ -5794,4 +5794,8 @@
   <data name="Review and delete duplicate" xml:space="preserve"><value>Revisar y eliminar duplicado</value></data>
   <data name="Delete possible duplicate?" xml:space="preserve"><value>¿Eliminar posible duplicado?</value></data>
   <data name="This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Este recibo parece describir la misma compra que otro recibo. Revisa ambos antes de eliminarlo. Al eliminar este recibo también se eliminan sus archivos originales y no se puede deshacer.</value></data>
+<data name="Balances through" xml:space="preserve"><value>Balances hasta</value></data>
+<data name="Leave empty for current balances" xml:space="preserve"><value>Deja la fecha vacía para ver los balances actuales</value></data>
+<data name="Could not load balances for this date." xml:space="preserve"><value>No se pudieron cargar los balances para esta fecha.</value></data>
+<data name="Payment date: {0:d}." xml:space="preserve"><value>Fecha de pago: {0:d}.</value></data>
 </root>

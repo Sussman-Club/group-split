@@ -38,7 +38,7 @@
 
             <header class="gs-editable-receipt-head">
                 <MudTextField @bind-Value="_merchantName" Label="@Loc["Merchant"]" Variant="Variant.Text" Margin="Margin.Dense" Class="gs-editable-receipt-merchant" />
-                <MudDatePicker @bind-Date="_purchaseDate" Label="@Loc["Purchase date"]" Variant="Variant.Text" Margin="Margin.Dense" Class="gs-editable-receipt-date" />
+                <MudDatePicker ShowToolbar="false" @bind-Date="_purchaseDate" Label="@Loc["Purchase date"]" Variant="Variant.Text" Margin="Margin.Dense" Class="gs-editable-receipt-date" />
             </header>
 
             <div class="gs-muted" style="font-size: .85rem">
