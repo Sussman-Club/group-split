@@ -7,6 +7,7 @@ using GroupSplit.App.Web.Test.Errors;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Components;
 using Moq;
 using MudBlazor;
 
@@ -102,6 +103,7 @@ public class GroupOverviewTabTest : ComponentTest
             .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) => selected = line));
         var picker = view.FindComponent<MudDatePicker>();
         await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(day));
+        Assert.Contains("through=2026-08-31", Services.GetRequiredService<NavigationManager>().Uri);
         Assert.Contains("Historical", view.Markup);
         Assert.DoesNotContain("Current", view.Markup);
         Assert.Contains("Clear this group with one payment", view.Markup);
@@ -110,10 +112,31 @@ public class GroupOverviewTabTest : ComponentTest
         Assert.Equal(10m, selected.Value.Debt.Amount);
 
         await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(null));
+        Assert.DoesNotContain("through=", Services.GetRequiredService<NavigationManager>().Uri);
         Assert.DoesNotContain("Historical", view.Markup);
         Assert.Contains("Current", view.Markup);
         _groups.Verify(client => client.GetGroupUserBalanceAsync(Group.Id, DateOnly.FromDateTime(day),
             It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public void A_link_with_a_cutoff_loads_the_historical_balances()
+    {
+        var day = new DateOnly(2026, 8, 31);
+        _groups.Setup(client => client.GetGroupUserBalanceAsync(Group.Id, day,
+                It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserGroupBalanceResponse
+            {
+                NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Historical", Balance = 10m }]
+            });
+        Services.GetRequiredService<NavigationManager>().NavigateTo("?through=2026-08-31");
+        var view = Render<GroupOverviewTab>(parameters => parameters
+            .Add(component => component.GroupId, Group.Id)
+            .Add(component => component.GroupName, Group.Name)
+            .Add(component => component.UserId, Me));
+
+        view.WaitForAssertion(() => Assert.Contains("Historical", view.Markup));
+        Assert.Equal(day.ToDateTime(TimeOnly.MinValue), view.FindComponent<MudDatePicker>().Instance.Date);
     }
 
     /// <summary>

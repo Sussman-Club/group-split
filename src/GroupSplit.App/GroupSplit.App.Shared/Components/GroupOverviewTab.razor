@@ -10,6 +10,7 @@
 @inject DataChangeNotifier Changes
 @inject IDialogService DialogService
 @inject LocalClock Clock
+@inject NavigationManager Navigation
 @implements IDisposable
 
 @*
@@ -26,7 +27,7 @@
 <div class="gs-balances-heading">
     <h2>@Loc["Balances"]</h2>
     <div class="gs-balances-date">
-        <span>@Loc["Through"]</span>
+        <span class="gs-capitalize">@Loc["through"]</span>
         <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="ThroughChangedAsync"
                        aria-label="@Loc["Balances through"]" Placeholder="@Loc["All time"]"
                        Clearable="true" MaxDate="@Clock.Today" Margin="Margin.Dense"
@@ -255,6 +256,8 @@ else
     /// <summary>Who is reading, so the plan can say "you" and offer the lines they may record.</summary>
     [Parameter] public Guid? UserId { get; set; }
 
+    [Parameter, SupplyParameterFromQuery(Name = "through")] public string? ThroughQuery { get; set; }
+
     /// <summary>
     /// Settling with one person, which the page owns because it owns the dialog and the
     /// write. The tab knows which line was pressed and nothing else.
@@ -273,6 +276,8 @@ else
     private async Task ThroughChangedAsync(DateTime? date)
     {
         _through = date;
+        var value = date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("through", value), replace: true);
         await LoadHistoricalAsync();
     }
 
@@ -446,16 +451,28 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedFor == GroupId) return;
+        var groupChanged = _loadedFor != GroupId;
+        if (groupChanged)
+        {
+            _loadedFor = GroupId;
+            _recent = null;
+            _historicalBalance = null;
+            _balanceLoading = false;
+            ++_balanceVersion;
+        }
 
-        _loadedFor = GroupId;
-        _recent = null;
-        _through = null;
-        _historicalBalance = null;
-        _balanceLoading = false;
-        ++_balanceVersion;
+        var date = DateTime.TryParseExact(ThroughQuery, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None,
+            out var parsed) ? parsed : (DateTime?)null;
+        var dateChanged = _through != date;
+        _through = date;
 
-        await LoadRecentAsync();
+        if (groupChanged && date is not null)
+            await Task.WhenAll(LoadRecentAsync(), LoadHistoricalAsync());
+        else if (groupChanged)
+            await LoadRecentAsync();
+        else if (dateChanged)
+            await LoadHistoricalAsync();
     }
 
     private async Task LoadRecentAsync()

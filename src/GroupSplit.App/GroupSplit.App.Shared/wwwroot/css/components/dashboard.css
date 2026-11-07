@@ -365,6 +365,8 @@
     color: var(--gs-muted);
 }
 
+.gs-balances-date .gs-capitalize { text-transform: capitalize; }
+
 .gs-balances-date .mud-picker { width: 190px; max-width: 100%; }
 
 .gs-balances {
