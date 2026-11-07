@@ -174,7 +174,18 @@
                            Href="@($"/groups/{GroupId}/people")"
                            EndIcon="@Icons.Material.Rounded.ArrowForward">@Loc["View people"]</MudButton>
             </div>
-            @if (Balance is { } b && b.NetBalances.Any())
+            <MudDatePicker Date="_through" DateChanged="ThroughChangedAsync"
+                           Label="@Loc["Balances through"]" Clearable="true"
+                           Variant="Variant.Outlined" HelperText="@Loc["Leave empty for current balances"].Value" />
+            @if (_balanceLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_through is not null && _historicalBalance is null)
+            {
+                <MudButton OnClick="LoadHistoricalAsync">@Loc["Retry"]</MudButton>
+            }
+            else if (PeopleBalance is { } b && b.NetBalances.Any())
             {
                 var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
                 var i = 0;
@@ -239,6 +250,35 @@
 
     private PagedResponse<GroupLedgerEntryResponse>? _recent;
     private Guid _loadedFor;
+    private DateTime? _through;
+    private UserGroupBalanceResponse? _historicalBalance;
+    private bool _balanceLoading;
+    private int _balanceVersion;
+
+    private UserGroupBalanceResponse? PeopleBalance => _through is null ? Balance : _historicalBalance;
+
+    private async Task ThroughChangedAsync(DateTime? date)
+    {
+        _through = date;
+        await LoadHistoricalAsync();
+    }
+
+    private async Task LoadHistoricalAsync()
+    {
+        var version = ++_balanceVersion;
+        _historicalBalance = null;
+        _balanceLoading = _through is not null;
+        if (_through is not { } date) return;
+
+        UserGroupBalanceResponse? result = null;
+        var loaded = await Errors.TryAsync(async () => result = await GroupsClient.GetGroupUserBalanceAsync(
+            GroupId, DateOnly.FromDateTime(date), Clock.CutoffOffsetMinutes),
+            Loc["Could not load balances for this date."].Value);
+        if (version != _balanceVersion) return;
+        _balanceLoading = false;
+        if (loaded) _historicalBalance = result;
+        await InvokeAsync(StateHasChanged);
+    }
 
     /// <summary>
     /// Counts reads of the recent entries, so the answer to an older one -- a change
@@ -393,6 +433,10 @@
 
         _loadedFor = GroupId;
         _recent = null;
+        _through = null;
+        _historicalBalance = null;
+        _balanceLoading = false;
+        ++_balanceVersion;
 
         await LoadRecentAsync();
     }
@@ -424,7 +468,11 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private Task ReloadAsync() => _loadedFor == Guid.Empty ? Task.CompletedTask : LoadRecentAsync();
+    private async Task ReloadAsync()
+    {
+        if (_loadedFor == Guid.Empty) return;
+        await Task.WhenAll(LoadRecentAsync(), LoadHistoricalAsync());
+    }
 
     /// <summary>
     /// Redraws when the state service's figures land. The balances above are read from it

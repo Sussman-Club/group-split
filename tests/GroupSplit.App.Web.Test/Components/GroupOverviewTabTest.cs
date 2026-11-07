@@ -77,6 +77,34 @@ public class GroupOverviewTabTest : ComponentTest
             .Add(component => component.GroupName, Group.Name)
             .Add(component => component.UserId, userId));
 
+    [Fact]
+    public async Task Selecting_and_clearing_a_date_changes_only_the_people_balances()
+    {
+        var day = new DateTime(2026, 8, 31);
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Current", Balance = 20m }]
+        };
+        _groups.Setup(client => client.GetGroupUserBalanceAsync(Group.Id, DateOnly.FromDateTime(day),
+                It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserGroupBalanceResponse
+            {
+                NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Historical", Balance = 10m }]
+            });
+
+        var view = RenderFor(Me);
+        var picker = view.FindComponent<MudDatePicker>();
+        await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(day));
+        Assert.Contains("Historical", view.Markup);
+        Assert.Contains("20", view.Markup);
+
+        await view.InvokeAsync(() => picker.Instance.DateChanged.InvokeAsync(null));
+        Assert.DoesNotContain("Historical", view.Markup);
+        Assert.Contains("Current", view.Markup);
+        _groups.Verify(client => client.GetGroupUserBalanceAsync(Group.Id, DateOnly.FromDateTime(day),
+            It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
     /// <summary>
     /// A guest who owes the reader is one of the people they are owed by, counted with the
     /// members, and their row says they are a guest -- with a button that says whose payment
