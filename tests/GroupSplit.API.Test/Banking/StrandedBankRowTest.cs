@@ -94,34 +94,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(0, (await Inbox.Summary(ct: Ct)).NewCount);
     }
 
-    [Fact]
-    public async Task The_receipt_files_a_row_carried_into_its_expense_come_back_with_it()
-    {
-        var row = await Row(12.50m);
-        var fromInbox = await Attach(row.Id, expenseId: null);
-        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
-        var addedLater = await Attach(bankTransactionId: null, expenseId: expense.Id);
-
-        await Transactions.Delete(expense.Id, Ct);
-
-        var kept = await Attachment(fromInbox);
-        Assert.NotNull(kept);
-        Assert.Equal(row.Id, kept.BankTransactionId);
-        Assert.Null(kept.ExpenseId);
-
-        // Listed on the row again, where it was before filing.
-        Assert.Equal(fromInbox, Assert.Single(
-            await GetService<IReceiptAttachmentService>().ListBank(row.Id, Ct)).Id);
-
-        // One uploaded to the expense itself was the expense's, and goes with it -- object
-        // and all.
-        Assert.Null(await Attachment(addedLater));
-        _storage.Verify(storage => storage.DeleteObjectAsync(
-            "receipts-test", $"key-{addedLater:N}", It.IsAny<CancellationToken>()), Times.Once);
-        _storage.Verify(storage => storage.DeleteObjectAsync(
-            It.IsAny<string>(), $"key-{fromInbox:N}", It.IsAny<CancellationToken>()), Times.Never);
-    }
-
     // ---- an expense whose row was withdrawn is not spoken for --------------------------------
 
     /// <summary>
@@ -168,7 +140,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Linking_the_reposted_row_moves_the_expense_onto_it_and_retires_the_withdrawn_one()
     {
         var pending = await Row(12.50m, providerId: "pending-1");
-        var receipt = await Attach(pending.Id, expenseId: null);
         var expense = await Inbox.File(pending.Id, new FileBankTransactionRequest(), Ct);
         await Withdraw(pending);
 
@@ -185,8 +156,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(BankTransactionStatus.Superseded, before.Status);
         Assert.Equal(reposted.Id, linked.BankTransactionId);
 
-        // The file the expense carried names the row the expense now points at.
-        Assert.Equal(reposted.Id, (await Attachment(receipt))!.BankTransactionId);
     }
 
     [Fact]
@@ -209,29 +178,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// spending. When the row goes, the picture goes -- the stored object as well as the row
     /// that named it.
     /// </summary>
-    [Fact]
-    public async Task Unlinking_deletes_the_receipt_files_of_rows_still_in_the_inbox_and_keeps_the_expenses()
-    {
-        var waiting = await Row(12.50m, providerId: "t1");
-        var filed = await Row(30m, providerId: "t2");
-        var waitingFile = await Attach(waiting.Id, expenseId: null);
-        var filedFile = await Attach(filed.Id, expenseId: null);
-        var expense = await Inbox.File(filed.Id, new FileBankTransactionRequest(), Ct);
-
-        await GetService<IBankConnectionService>().Unlink(await ConnectionId(), Ct);
-
-        Assert.Null(await Attachment(waitingFile));
-        _storage.Verify(storage => storage.DeleteObjectAsync(
-            "receipts-test", $"key-{waitingFile:N}", It.IsAny<CancellationToken>()), Times.Once);
-
-        var kept = await Attachment(filedFile);
-        Assert.NotNull(kept);
-        Assert.Equal(expense.Id, kept.ExpenseId);
-        Assert.Null(kept.BankTransactionId);
-        _storage.Verify(storage => storage.DeleteObjectAsync(
-            It.IsAny<string>(), $"key-{filedFile:N}", It.IsAny<CancellationToken>()), Times.Never);
-    }
-
     [Fact]
     public async Task Unlinking_an_item_the_provider_no_longer_knows_succeeds()
     {
@@ -359,30 +305,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal(BackgroundJobStatus.AwaitingOperator, work.Status);
     }
 
-    [Fact]
-    public async Task Storage_failure_keeps_durable_work_after_bank_rows_are_removed()
-    {
-        var row = await Row(12.50m);
-        var file = await Attach(row.Id, null);
-        _storage.Setup(storage => storage.DeleteObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new IOException("storage unavailable"));
-        await GetService<IBankConnectionService>().Unlink(await ConnectionId(), Ct);
-        Assert.Null(await Attachment(file));
-        var work = await DbContext.Set<BackgroundJob>().SingleAsync(Ct);
-        var command = System.Text.Json.JsonSerializer.Deserialize<GroupSplit.API.Services.BackgroundJobs.DeleteReceiptFile>(work.Payload)!;
-        Assert.Equal("delete-receipt-file", work.Type);
-        Assert.Equal($"key-{file:N}", command.ObjectKey);
-        Assert.Equal(BackgroundJobStatus.Pending, work.Status);
-        Assert.False(await DbContext.Set<BankConnection>().AnyAsync(Ct));
-
-        // Resolve the real handler registration, as the durable worker does, once storage recovers.
-        _storage.Setup(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DeleteObjectResponse());
-        await GetService<GroupSplit.Jobs.IJobExecutor>().ExecuteAsync(command, Ct);
-        _storage.Verify(storage => storage.DeleteObjectAsync(It.IsAny<string>(), command.ObjectKey,
-            It.IsAny<CancellationToken>()), Times.Exactly(2));
-    }
-
     private async Task<Guid> ConnectionId() =>
         (await DbContext.Set<BankConnection>().AsNoTracking().SingleAsync(Ct)).Id;
 
@@ -401,7 +323,6 @@ public class StrandedBankRowTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         DbContext.Add(new ReceiptAttachment
         {
             Id = id,
-            BankTransactionId = bankTransactionId,
             ExpenseId = expenseId,
             ObjectKey = $"key-{id:N}",
             FileName = "receipt.jpg",

@@ -320,6 +320,6 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 NormalizedName = i.NormalizedName, Description = i.Description, UnitPrice = i.UnitPrice,
                 Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
                 TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
-        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, a.BankTransactionId, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList())
+        r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, null, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList())
         { MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
 }

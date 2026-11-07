@@ -16,6 +16,12 @@ public sealed class LanguageResourcesTest
     [InlineData("pt", "Find an expense", "Procurar uma despesa")]
     [InlineData("es", "Review matches", "Revisar coincidencias")]
     [InlineData("pt", "Review matches", "Rever correspondências")]
+    [InlineData("es", "Your purchases", "Tus compras")]
+    [InlineData("pt", "Your purchases", "As suas compras")]
+    [InlineData("es", "{0} purchase waiting for review", "{0} compra pendiente de revisión")]
+    [InlineData("es", "{0} purchases waiting for review", "{0} compras pendientes de revisión")]
+    [InlineData("pt", "{0} purchase waiting for review", "{0} compra por rever")]
+    [InlineData("pt", "{0} purchases waiting for review", "{0} compras por rever")]
     public void Inbox_review_actions_have_translations(string language, string key, string expected)
     {
         var manager = new ResourceManager(typeof(AppStrings));

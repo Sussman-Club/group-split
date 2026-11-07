@@ -27,10 +27,9 @@ public sealed class PersonalDataReader(AppDbContext db, ICurrentUser currentUser
         // Materialise only the file inventory: the writer needs it after streaming JSON.
         var attachments = await db.Set<ReceiptAttachment>().Where(file =>
                 file.Receipt != null && file.Receipt.OwnerUserId == user.Id && file.ExpenseId == null ||
-                file.ExpenseId != null && visibleExpenses.Any(expense => expense.Id == file.ExpenseId) ||
-                file.ExpenseId == null && file.BankTransactionId != null && ownRows.Any(row => row.Id == file.BankTransactionId))
+                file.ExpenseId != null && visibleExpenses.Any(expense => expense.Id == file.ExpenseId))
             .OrderBy(file => file.Id).Select(file => new ExportAttachment(file.Id, file.ExpenseId,
-                file.ExpenseId == null ? file.BankTransactionId : null, file.FileName,
+                null, file.FileName,
                 file.ContentType, file.Length, file.UploadedAt) { ReceiptId = file.ReceiptId }).ToListAsync(ct);
 
         return new ExportRecords(
