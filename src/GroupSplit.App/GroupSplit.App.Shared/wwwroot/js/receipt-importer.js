@@ -1,5 +1,9 @@
 export function openReceiptImporter() {
     return new Promise(resolve => {
+        // Allow a cold extension worker to answer, but don't make an absent extension
+        // consume the longer timeout reserved for loading its embedded interface.
+        const responseTimeout = 1200;
+        const frameTimeout = 4000;
         let timer;
         let dialog;
         let frame;
@@ -15,7 +19,7 @@ export function openReceiptImporter() {
             window.removeEventListener('message', onReady);
             if (dialog) { dialog.remove(); dialog = null; frame = null; document.documentElement.classList.remove('gs-receipt-import-open'); }
             window.addEventListener('groupsplit:receipt-importer-window-opened', onWindowOpened, { once: true });
-            timer = setTimeout(() => { cleanup(); resolve(false); }, 4000);
+            timer = setTimeout(() => { cleanup(); resolve(false); }, responseTimeout);
             window.dispatchEvent(new Event('groupsplit:open-receipt-importer-window'));
         };
         const onReady = event => {
@@ -29,6 +33,8 @@ export function openReceiptImporter() {
             let url;
             try { url = new URL(event.detail); } catch { return; }
             if (url.protocol !== 'chrome-extension:' || !/^[a-p]{32}$/.test(url.hostname) || url.pathname !== '/popup.html' || url.searchParams.get('embedded') !== '1') return;
+            clearTimeout(timer);
+            timer = setTimeout(fallback, frameTimeout);
             dialog = document.createElement('dialog');
             dialog.className = 'gs-receipt-import-dialog';
             dialog.setAttribute('aria-labelledby', 'gs-receipt-import-title');
@@ -59,7 +65,7 @@ export function openReceiptImporter() {
             dialog.showModal();
         };
         window.addEventListener('groupsplit:receipt-importer-opened', onOpened, { once: true });
-        timer = setTimeout(fallback, 4000);
+        timer = setTimeout(fallback, responseTimeout);
         window.dispatchEvent(new Event('groupsplit:open-receipt-importer'));
     });
 }

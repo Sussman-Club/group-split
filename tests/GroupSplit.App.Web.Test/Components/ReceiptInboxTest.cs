@@ -15,6 +15,23 @@ namespace GroupSplit.App.Web.Test.Components;
 public class ReceiptInboxTest : ComponentTest
 {
     [Fact]
+    public async Task Unavailable_importer_offers_installation_instructions()
+    {
+        var module = JSInterop.SetupModule("./_content/GroupSplit.App.Shared/js/receipt-importer.js");
+        module.Setup<bool>("openReceiptImporter", _ => true).SetResult(false);
+        var page = Render<ReceiptInbox>();
+
+        await page.Find(".gs-receipt-import-action button").ClickAsync(new MouseEventArgs());
+
+        var link = page.Find(".gs-receipt-import-help a");
+        Assert.Equal("/receipt-importer/install", link.GetAttribute("href"));
+        Assert.Contains("Install or update", link.TextContent);
+        var instructions = Render<ReceiptImporterInstall>();
+        Assert.Contains("receipt-importer-v", instructions.Find("a[target='_blank']").GetAttribute("href"));
+        Assert.Contains("Reload", instructions.Markup);
+    }
+
+    [Fact]
     public async Task Empty_waiting_inbox_offers_upload_and_store_import()
     {
         var client = new Mock<IReceiptsClient>();
