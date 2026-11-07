@@ -5798,4 +5798,5 @@
 <data name="Leave empty for current balances" xml:space="preserve"><value>Deja la fecha vacía para ver los balances actuales</value></data>
 <data name="Could not load balances for this date." xml:space="preserve"><value>No se pudieron cargar los balances para esta fecha.</value></data>
 <data name="Payment date: {0:d}." xml:space="preserve"><value>Fecha de pago: {0:d}.</value></data>
+  <data name="Through" xml:space="preserve"><value>Hasta</value></data>
 </root>

@@ -5794,4 +5794,5 @@
   <data name="Review and delete duplicate" xml:space="preserve"><value>Review and delete duplicate</value></data>
   <data name="Delete possible duplicate?" xml:space="preserve"><value>Delete possible duplicate?</value></data>
   <data name="This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>This receipt appears to describe the same purchase as another receipt. Check both before deleting. Deleting this receipt also deletes its original files and cannot be undone.</value></data>
+  <data name="Through" xml:space="preserve"><value>Through</value></data>
 </root>

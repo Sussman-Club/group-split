@@ -23,10 +23,15 @@
     activity -- are one, for the same reason the two tabs became one ledger.
 *@
 
-<div class="gs-card gs-card-pad" style="margin-bottom: 16px">
-    <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="ThroughChangedAsync"
-                   Label="@Loc["Balances through"]" Clearable="true" MaxDate="@Clock.Today"
-                   Variant="Variant.Outlined" HelperText="@Loc["Leave empty for current balances"].Value" />
+<div class="gs-balances-heading">
+    <h2>@Loc["Balances"]</h2>
+    <div class="gs-balances-date">
+        <span>@Loc["Through"]</span>
+        <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="ThroughChangedAsync"
+                       aria-label="@Loc["Balances through"]" Placeholder="@Loc["All time"]"
+                       Clearable="true" MaxDate="@Clock.Today" Margin="Margin.Dense"
+                       Variant="Variant.Outlined" />
+    </div>
 </div>
 @if (_balanceLoading)
 {
