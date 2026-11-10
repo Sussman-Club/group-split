@@ -40,7 +40,7 @@
         <AppBar />
         <main class="gs-content">
             <AndroidUpdateNotice />
-            <div class="gs-page" @key="(_path, Clock.Offset)">
+            <div class="gs-page" @key="(PageKey(_path), Clock.Offset)">
                 @* The last resort, for bugs. Rejected requests never reach it: the API's
                    refusals are read by ApiErrorPresenter and shown as messages, so what
                    lands here is an exception nothing expected. Re-keyed with the page, so
@@ -92,7 +92,9 @@
     // animation, which is what makes route changes feel like transitions.
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        _path = PathOf(e.Location);
+        var nextPath = PathOf(e.Location);
+        if (_path != nextPath) _errorBoundary?.Recover();
+        _path = nextPath;
         InvokeAsync(StateHasChanged);
     }
 
@@ -112,6 +114,17 @@
         var cut = uri.IndexOfAny(['?', '#']);
 
         return cut < 0 ? uri : uri[..cut];
+    }
+
+    // Keep a shared page alive while switching views within the inbox or one group.
+    private static string PageKey(string path)
+    {
+        var localPath = new Uri(path).AbsolutePath.TrimEnd('/');
+        if (localPath is "/inbox" or "/inbox/receipts" or "/inbox/bank") return "/inbox";
+        var segments = localPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length is 2 or 3 && segments[0].Equals("groups", StringComparison.OrdinalIgnoreCase)
+            && Guid.TryParse(segments[1], out var groupId)) return $"/groups/{groupId}";
+        return path;
     }
 
     // The collapse works before the runtime arrives (gs.js), so pick up

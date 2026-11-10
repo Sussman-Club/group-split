@@ -10,7 +10,7 @@
 @inject NavigationManager Nav
 
 <PageTitle>@Loc["Bank transaction - Group Split"]</PageTitle>
-<div class="gs-receipt-review-back"><MudButton Href="@($"/inbox{new Uri(Nav.Uri).Query}")">@Loc["Back to bank transactions"]</MudButton></div>
+<div class="gs-receipt-review-back"><MudButton Href="@($"/inbox/bank{new Uri(Nav.Uri).Query}")">@Loc["Back to bank transactions"]</MudButton></div>
 <LoadView Loading="_loading" Failed="@(_row is null)" Retry="LoadAsync">
 @if (_row is { } row)
 {
@@ -50,14 +50,6 @@
                     }
                     <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => FindExpenseAsync(row))">@Loc["Find an expense"]</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="@(() => FileAsync(row))">@Loc["Review and add expense"]</MudButton>
-                    @if (row.Status == InboxStatus.New)
-                    {
-                        <MudButton Disabled="_busy" OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore transaction"]</MudButton>
-                    }
-                    else
-                    {
-                        <MudButton Disabled="_busy" OnClick="@(() => RestoreAsync(row))">@Loc["Restore transaction"]</MudButton>
-                    }
                 }
                 else if (row.TransactionId is { } expenseId)
                 {
@@ -65,6 +57,15 @@
                     <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => OpenExpenseAsync(expenseId))">@Loc["View expense"]</MudButton>
                 }
             </section>
+            @if (row.Status is InboxStatus.New or InboxStatus.Ignored)
+            {
+                <section class="gs-card gs-card-pad gs-receipt-review-section">
+                    <h2>@Loc["Inbox status"]</h2>
+                    <p>@Loc["Ignored items can be restored later."]</p>
+                    @if (row.Status == InboxStatus.New) { <MudButton Disabled="_busy" OnClick="@(() => IgnoreAsync(row))">@Loc["Ignore transaction"]</MudButton> }
+                    else { <MudButton Disabled="_busy" OnClick="@(() => RestoreAsync(row))">@Loc["Restore transaction"]</MudButton> }
+                </section>
+            }
         </div>
     </div>
 }
@@ -107,7 +108,7 @@
             Loc["Attach {0} ({1} {2}, {3}) to {4}? The expense and its shares will stay the same.", row.Title, row.Amount.ToString("N2"), row.Currency, row.SpentOn.ToString("d"), name].Value,
             yesText: Loc["Attach"].Value, cancelText: Loc["Cancel"].Value) != true) return;
         _busy = true;
-        try { if (await Bank.AttachAsync(row.Id, expenseId) is not null) Nav.NavigateTo("/inbox?status=added"); }
+        try { if (await Bank.AttachAsync(row.Id, expenseId) is not null) Nav.NavigateTo("/inbox/bank?status=added"); }
         finally { _busy = false; }
     }
     private async Task FindExpenseAsync(BankTransactionResponse row)
@@ -127,11 +128,11 @@
         {
             var result = answer.AttachTo is { } id ? await Bank.AttachAsync(row.Id, id)
                 : answer.Request is { } request ? await Bank.FileAsync(row.Id, request, answer.Destination) : null;
-            if (result is not null) Nav.NavigateTo("/inbox?status=added");
+            if (result is not null) Nav.NavigateTo("/inbox/bank?status=added");
         }
         finally { _busy = false; }
     }
-    private async Task IgnoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.IgnoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox"); } finally { _busy = false; } }
+    private async Task IgnoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.IgnoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox/bank?status=ignored"); } finally { _busy = false; } }
     private async Task DismissAsync(BankTransactionResponse row, ExpenseMatchResponse match)
     {
         _busy = true;
@@ -142,7 +143,7 @@
         }
         finally { _busy = false; }
     }
-    private async Task RestoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.RestoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox?status=ignored"); } finally { _busy = false; } }
+    private async Task RestoreAsync(BankTransactionResponse row) { _busy = true; try { if (await Bank.RestoreAsync(row.Id, row.Title)) Nav.NavigateTo("/inbox/bank"); } finally { _busy = false; } }
     private Task OpenExpenseAsync(Guid id) => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
         new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
 }

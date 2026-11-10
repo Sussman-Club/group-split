@@ -5804,4 +5804,70 @@
   <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Revisa recibos y pagos bancarios en un solo lugar.</value></data>
   <data name="Inbox views" xml:space="preserve"><value>Vistas de la bandeja de entrada</value></data>
   <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} pendientes en la bandeja de entrada</value></data>
+  <data name="Ignored items can be restored later." xml:space="preserve">
+    <value>Los elementos ignorados se pueden restaurar más tarde.</value>
+  </data>
+  <data name="Suggested destination: {0} — Review" xml:space="preserve">
+    <value>Destino sugerido: {0} — Revisar</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Attach" xml:space="preserve">
+    <value>Posible coincidencia: {0} · {1} {2} · {3} — Adjuntar</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Review" xml:space="preserve">
+    <value>Posible coincidencia: {0} · {1} {2} · {3} — Revisar</value>
+  </data>
+  <data name="Added to: {0}" xml:space="preserve">
+    <value>Añadido a: {0}</value>
+  </data>
+  <data name="Review possible matches" xml:space="preserve">
+    <value>Revisar posibles coincidencias</value>
+  </data>
+  <data name="Review purchases and decide where they belong." xml:space="preserve">
+    <value>Revisa las compras y decide dónde guardarlas.</value>
+  </data>
+  <data name="{0} waiting" xml:space="preserve">
+    <value>{0} pendientes</value>
+  </data>
+  <data name="Add receipts to expenses or create a new expense." xml:space="preserve">
+    <value>Añade recibos a gastos o crea un gasto nuevo.</value>
+  </data>
+  <data name="Review receipts" xml:space="preserve">
+    <value>Revisar recibos</value>
+  </data>
+  <data name="Add transactions to a group or match an expense." xml:space="preserve">
+    <value>Añade transacciones a un grupo o vincúlalas a un gasto.</value>
+  </data>
+  <data name="Review transactions" xml:space="preserve">
+    <value>Revisar transacciones</value>
+  </data>
+  <data name="Possible match" xml:space="preserve">
+    <value>Posible coincidencia</value>
+  </data>
+  <data name="Review possible match: {0}" xml:space="preserve">
+    <value>Revisar posible coincidencia: {0}</value>
+  </data>
+  <data name="Review suggested destination: {0}" xml:space="preserve">
+    <value>Revisar destino sugerido: {0}</value>
+  </data>
+  <data name="Choose an existing expense to avoid recording this payment twice." xml:space="preserve">
+    <value>Elige un gasto existente para no registrar este pago dos veces.</value>
+  </data>
+  <data name="Choose an expense to attach this receipt." xml:space="preserve">
+    <value>Elige un gasto al que adjuntar este recibo.</value>
+  </data>
+  <data name="Inbox status" xml:space="preserve">
+    <value>Estado en la bandeja</value>
+  </data>
+  <data name="Ignore receipt" xml:space="preserve">
+    <value>Ignorar recibo</value>
+  </data>
+  <data name="Restore receipt" xml:space="preserve">
+    <value>Restaurar recibo</value>
+  </data>
+  <data name="Added to expense" xml:space="preserve">
+    <value>Añadido al gasto</value>
+  </data>
+  <data name="No itemized details" xml:space="preserve">
+    <value>Sin detalles de artículos</value>
+  </data>
 </root>

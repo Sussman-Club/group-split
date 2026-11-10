@@ -3,6 +3,8 @@ namespace GroupSplit.Shared;
 public sealed record ReceiptInboxResponse(Guid Id, Guid? ExpenseId, string Currency,
     SaveReceiptRequest Receipt, IReadOnlyList<ReceiptAttachmentResponse> Attachments)
 {
+    public string? ExpenseName { get; init; }
+    public bool IsIgnored { get; init; }
     public Guid? MerchantId { get; init; }
     public string? MerchantLogoUrl { get; init; }
     public string? MerchantDisplayName { get; init; }

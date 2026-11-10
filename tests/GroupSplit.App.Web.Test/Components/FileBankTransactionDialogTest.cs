@@ -86,7 +86,7 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
-    public async Task Suggested_expense_must_be_selected_before_attaching()
+    public async Task Suggested_expense_is_preselected_before_attaching()
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,
             Trip.Id, Trip.Name, "Ana", 0m, 0, MatchConfidence.Confident) { IsSuggested = true };
@@ -94,9 +94,7 @@ public class FileBankTransactionDialogTest : ComponentTest
         Assert.Contains("Suggested match", provider.Markup);
         Assert.Contains("Create a new expense", provider.Markup);
         var attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
-        Assert.True(attach.HasAttribute("disabled"));
-        await provider.Find("button[role=radio]").ClickAsync(new MouseEventArgs());
-        attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
+        Assert.Equal("true", provider.Find("button[role=radio]").GetAttribute("aria-checked"));
         Assert.False(attach.HasAttribute("disabled"));
         await attach.ClickAsync(new MouseEventArgs());
         Assert.Equal(candidate.TransactionId, (await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>())!.AttachTo);

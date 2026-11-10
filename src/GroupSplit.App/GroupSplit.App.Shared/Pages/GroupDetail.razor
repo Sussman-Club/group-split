@@ -391,16 +391,21 @@ else if (NotFound)
     /// </remarks>
     private bool _initializing = true;
     private int _initializationVersion;
+    private Guid? _loadedGroupId;
 
     private async Task ReloadAsync()
     {
         _initializing = true;
+        _loadedGroupId = null;
         await GroupsService.RefreshAsync();
         await OnParametersSetAsync();
     }
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!_initializing && _loadedGroupId == GroupId && GroupsService.SelectedGroup?.Id == GroupId)
+            return;
+
         _initializing = true;
         var version = ++_initializationVersion;
         await GroupsService.IsReadyTask;
@@ -417,6 +422,7 @@ else if (NotFound)
 
         if (version == _initializationVersion)
         {
+            _loadedGroupId = GroupId;
             _initializing = false;
             await CompleteChecklistIfDoneAsync();
         }

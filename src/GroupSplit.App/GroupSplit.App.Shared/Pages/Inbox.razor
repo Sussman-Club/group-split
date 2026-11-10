@@ -1,4 +1,5 @@
-@page "/inbox"
+@layout InboxLayout
+@page "/inbox/bank"
 @page "/transactions/not-filed"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
@@ -26,7 +27,6 @@
 *@
 
 <PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
-<InboxHeader />
 <div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review bank transactions and add them to a group or match an expense."]</span></div>
 <div>
     <nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Bank transaction status"]">
@@ -39,6 +39,7 @@
                        OnClick="@(() => SetFilterAsync(choice))">@Label(choice)</MudButton>
         }
     </nav>
+    @if (State.Filter == InboxStatus.New) { <p class="gs-muted">@Loc["Ignored items can be restored later."]</p> }
     <div class="gs-receipt-search-bar">
         <MudTextField @bind-Value="_search" @bind-Value:after="SearchChangedAsync" T="string" Immediate="true" DebounceInterval="200" Clearable="true"
                       Placeholder="@Loc["Search merchants or accounts"]" aria-label="@Loc["Search merchants or accounts"]"
@@ -81,6 +82,7 @@
             <MudIcon Icon="@Icons.Material.Rounded.DoneAll" />
             <h3>@(State.Search is not null ? Loc["No transactions match your search"].Value : EmptyTitle)</h3>
             <span>@(State.Search is not null ? Loc["Try a different search."].Value : EmptyHint)</span>
+            @if (State.Search is not null || !State.Range.IsAllTime) { <MudButton OnClick="ClearFiltersAsync">@Loc["Clear filters"]</MudButton> }
         </div>
     }
     else
@@ -90,7 +92,7 @@
                 @foreach (var item in VisibleRows)
                 {
                     var row = item;
-                    <div class="gs-bank-inbox-entry @(CanOpenRow(row) ? "is-clickable" : null)"
+                    <div class="gs-bank-inbox-entry @(row.Status == InboxStatus.Filed ? "is-added" : null) @(CanOpenRow(row) ? "is-clickable" : null)"
                          role="@(CanOpenRow(row) ? "button" : null)"
                          tabindex="@(CanOpenRow(row) ? "0" : null)"
                          @onclick="@(() => OpenRowAsync(row))" @onkeydown="@(args => OpenRowWithKeyboardAsync(row, args))" @key="row.Id">
@@ -129,15 +131,24 @@
                             @if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-bank-inbox-actions">
-                                    <div class="gs-receipt-inbox-shortcut">
-                                    <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                                    <MudButton Variant="Variant.Outlined"
-                                               Color="Color.Primary" Size="Size.Small"
-                                               Disabled="@(_busy == row.Id)"
-                                               title="@MatchActionLabel(row)"
-                                               OnClick="@(() => AddToGroupAsync(row))">@MatchActionLabel(row)</MudButton>
-                                    </span>
-                                    </div>
+                                    @if (SuggestedMatch(row) is { } match)
+                                    {
+                                        <div class="gs-inbox-suggestion is-highlighted">
+                                            <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.CompareArrows" Size="Size.Small" />@Loc["Possible match"]</span><strong>@match.Name</strong><small>@match.Amount.ToString("N2") @match.Currency · @Clock.Day(match.DateTime).ToString("d")</small></div>
+                                            <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Disabled="@(_busy == row.Id)" aria-label="@Loc["Review possible match: {0}", match.Name]" OnClick="@(() => AddToGroupAsync(row))">@Loc["Review"]</MudButton></span>
+                                        </div>
+                                    }
+                                    else if (row.PossibleDuplicates.Count == 0 && row.Suggestion is { } suggestion)
+                                    {
+                                        <div class="gs-inbox-suggestion is-highlighted">
+                                            <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />@Loc["Suggested destination"]</span><strong>@suggestion.Destination</strong></div>
+                                            <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Disabled="@(_busy == row.Id)" aria-label="@Loc["Review suggested destination: {0}", suggestion.Destination]" OnClick="@(() => AddToGroupAsync(row))">@Loc["Review"]</MudButton></span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="gs-receipt-inbox-shortcut"><span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Disabled="@(_busy == row.Id)" OnClick="@(() => AddToGroupAsync(row))">@(row.PossibleDuplicates.Count > 0 ? Loc["Review possible matches"] : Loc["Add to group"])</MudButton></span></div>
+                                    }
                                     <div class="gs-receipt-inbox-state-action">
                                     <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                                     <MudButton Variant="Variant.Text" Size="Size.Small"
@@ -146,6 +157,10 @@
                                     </span>
                                     </div>
                                 </div>
+                            }
+                            else if (row.Status == InboxStatus.Filed && row.TransactionId is { } expenseId)
+                            {
+                                <div class="gs-bank-inbox-actions gs-inbox-added-actions"><span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" aria-label="@Loc["View expense"]" OnClick="@(() => OpenExpenseAsync(expenseId))">@Loc["View expense"]</MudButton></span></div>
                             }
                             else if (row.Status == InboxStatus.Ignored)
                             {
@@ -182,14 +197,11 @@
         Nav.NavigateTo($"/inbox/bank/{row.Id}{new Uri(Nav.Uri).Query}");
         return Task.CompletedTask;
     }
-    private string MatchActionLabel(BankTransactionResponse row)
-    {
-        var match = row.PossibleDuplicates.FirstOrDefault(candidate => candidate.IsSuggested)
+    private static ExpenseMatchResponse? SuggestedMatch(BankTransactionResponse row) =>
+        row.PossibleDuplicates.FirstOrDefault(candidate => candidate.IsSuggested)
             ?? (row.PossibleDuplicates.Count == 1 ? row.PossibleDuplicates[0] : null);
-        if (match is not null) return Loc["Attach to {0} · {1} {2} · {3}", match.Name, match.Amount.ToString("N2"), match.Currency, Clock.Day(match.DateTime).ToString("d")].Value;
-        if (row.PossibleDuplicates.Count > 0) return Loc["Review matches"].Value;
-        return row.Suggestion is { } suggestion ? Loc["Review: {0}", suggestion.Destination].Value : Loc["Add to group"].Value;
-    }
+    private Task OpenExpenseAsync(Guid id) => DialogService.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
     private Task OpenRowWithKeyboardAsync(BankTransactionResponse row, KeyboardEventArgs args) =>
         args.Key is "Enter" or " " ? OpenRowAsync(row) : Task.CompletedTask;
     private bool _loadingMore;
@@ -339,6 +351,13 @@
     private async Task SearchChangedAsync()
     {
         await State.SetSearchAsync(_search);
+        WriteUrl();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _search = null;
+        await State.LoadRowsAsync(State.Filter, DateFilter.AllTime, 1, search: null);
         WriteUrl();
     }
 

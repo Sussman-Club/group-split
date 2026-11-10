@@ -62,6 +62,27 @@ public class GroupDetailPageTest : ComponentTest
             .Add(page => page.Tab, tab));
 
     [Fact]
+    public void Switching_tabs_keeps_the_group_header_and_does_not_reload_the_group()
+    {
+        var page = Open(Lisbon.Id);
+        page.Render(parameters => parameters.Add(x => x.GroupId, Lisbon.Id).Add(x => x.Tab, "activity"));
+        Assert.Equal("Weekend in Lisbon", page.Find(".gs-group-heading h1").TextContent.Trim());
+        Assert.Empty(page.FindAll("[role='status'][aria-busy='true']"));
+        Assert.Equal("activity", Section(page));
+        _state.Verify(state => state.EnsureSelectedLoadedAsync(), Times.Once);
+    }
+
+    [Fact]
+    public void Switching_groups_still_loads_the_new_group()
+    {
+        var page = Open(Lisbon.Id);
+        page.Render(parameters => parameters.Add(x => x.GroupId, Flat.Id).Add(x => x.Tab, "activity"));
+        Assert.Equal(Flat, _state.Object.SelectedGroup);
+        Assert.Equal("The flat", page.Find("h1").TextContent.Trim());
+        _state.Verify(state => state.EnsureSelectedLoadedAsync(), Times.Exactly(2));
+    }
+
+    [Fact]
     public void First_group_checklist_uses_the_group_and_its_progress()
     {
         var user = new UserInfo(Guid.NewGuid(), "Ana", null, null, OnboardingGroupId: Lisbon.Id);

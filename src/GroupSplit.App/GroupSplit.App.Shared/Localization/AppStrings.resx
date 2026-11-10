@@ -5804,4 +5804,70 @@
   <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Review receipts and bank payments in one place.</value></data>
   <data name="Inbox views" xml:space="preserve"><value>Inbox views</value></data>
   <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} waiting in inbox</value></data>
+  <data name="Ignored items can be restored later." xml:space="preserve">
+    <value>Ignored items can be restored later.</value>
+  </data>
+  <data name="Suggested destination: {0} — Review" xml:space="preserve">
+    <value>Suggested destination: {0} — Review</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Attach" xml:space="preserve">
+    <value>Possible match: {0} · {1} {2} · {3} — Attach</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Review" xml:space="preserve">
+    <value>Possible match: {0} · {1} {2} · {3} — Review</value>
+  </data>
+  <data name="Added to: {0}" xml:space="preserve">
+    <value>Added to: {0}</value>
+  </data>
+  <data name="Review possible matches" xml:space="preserve">
+    <value>Review possible matches</value>
+  </data>
+  <data name="Review purchases and decide where they belong." xml:space="preserve">
+    <value>Review purchases and decide where they belong.</value>
+  </data>
+  <data name="{0} waiting" xml:space="preserve">
+    <value>{0} waiting</value>
+  </data>
+  <data name="Add receipts to expenses or create a new expense." xml:space="preserve">
+    <value>Add receipts to expenses or create a new expense.</value>
+  </data>
+  <data name="Review receipts" xml:space="preserve">
+    <value>Review receipts</value>
+  </data>
+  <data name="Add transactions to a group or match an expense." xml:space="preserve">
+    <value>Add transactions to a group or match an expense.</value>
+  </data>
+  <data name="Review transactions" xml:space="preserve">
+    <value>Review transactions</value>
+  </data>
+  <data name="Possible match" xml:space="preserve">
+    <value>Possible match</value>
+  </data>
+  <data name="Review possible match: {0}" xml:space="preserve">
+    <value>Review possible match: {0}</value>
+  </data>
+  <data name="Review suggested destination: {0}" xml:space="preserve">
+    <value>Review suggested destination: {0}</value>
+  </data>
+  <data name="Choose an existing expense to avoid recording this payment twice." xml:space="preserve">
+    <value>Choose an existing expense to avoid recording this payment twice.</value>
+  </data>
+  <data name="Choose an expense to attach this receipt." xml:space="preserve">
+    <value>Choose an expense to attach this receipt.</value>
+  </data>
+  <data name="Inbox status" xml:space="preserve">
+    <value>Inbox status</value>
+  </data>
+  <data name="Ignore receipt" xml:space="preserve">
+    <value>Ignore receipt</value>
+  </data>
+  <data name="Restore receipt" xml:space="preserve">
+    <value>Restore receipt</value>
+  </data>
+  <data name="Added to expense" xml:space="preserve">
+    <value>Added to expense</value>
+  </data>
+  <data name="No itemized details" xml:space="preserve">
+    <value>No itemized details</value>
+  </data>
 </root>

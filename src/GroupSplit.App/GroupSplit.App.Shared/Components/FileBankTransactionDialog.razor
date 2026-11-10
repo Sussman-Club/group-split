@@ -65,10 +65,10 @@
                 <MudAlert Severity="Severity.Info" Dense="true">@Loc["Money received. Its shares reduce spending and adjust the group balances for the person who received it."]</MudAlert>
             }
 
-            <div class="gs-card gs-card-pad" style="padding: 14px 16px">
+            <div class="gs-match-source">
                 <div class="gs-inline" style="justify-content: space-between">
                     <div>
-                        <div class="gs-eyebrow">@Row.Title</div>
+                        <div class="gs-match-source-name">@Row.Title</div>
                         <div class="gs-muted" style="font-size: .8125rem">@Where</div>
                     </div>
                     <Money Value="@Row.Amount" Currency="@Row.Currency" Signed="@Row.IsCredit" Absolute="@Row.IsCredit" Class="gs-money" />
@@ -81,21 +81,19 @@
                a warning buried in a long create form. *@
             @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
             {
-                <div class="gs-card gs-card-pad" style="padding: 14px 12px">
-                    <div class="gs-eyebrow">@Loc["Is this payment for an existing expense?"]</div>
-                    <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 6px 0 10px">@Loc["Attaching the card row to an expense you already have keeps the money from being recorded twice."]</MudText>
-                    <MudText Typo="Typo.body2" Class="gs-muted" Style="display: block; margin: 0 0 10px">@Loc["Attaching keeps the expense and its shares unchanged."]</MudText>
+                <div class="gs-match-section">
+                    <h3>@Loc["Possible matches"]</h3>
+                    <p>@Loc["Choose an existing expense to avoid recording this payment twice."]</p>
 
                     <div class="gs-list" role="radiogroup" aria-label="@Loc["Possible matches"]">
                         @if (_searchedExpense is { } searchedExpense)
                         {
                             <button type="button"
-                                    class="gs-match-choice @(_selectedExpenseId is null && CanAttach(searchedExpense) ? "is-selected" : null)"
+                                    class="gs-match-choice gs-match-choice-simple @(_selectedExpenseId is null && CanAttach(searchedExpense) ? "is-selected" : null)"
                                     role="radio"
                                     aria-checked="@(_selectedExpenseId is null && CanAttach(searchedExpense) ? "true" : "false")"
                                     disabled="@(!CanAttach(searchedExpense))"
                                     @onclick="@(() => SelectSearchedExpense(searchedExpense))">
-                                <Avatar Name="@searchedExpense.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@searchedExpense.Name</span>
                                     <span class="meta">@(searchedExpense.GroupName ?? Loc["Personal"].Value) · @Clock.Day(searchedExpense.DateTime).ToString("d") · @Loc["{0} paid", searchedExpense.PaidByUserName ?? ""]</span>
@@ -109,24 +107,23 @@
                         @foreach (var candidate in Row.PossibleDuplicates)
                         {
                             <button type="button"
-                                    class="gs-match-choice @(_selectedExpenseId == candidate.TransactionId ? "is-selected" : null)"
+                                    class="gs-match-choice gs-match-choice-simple @(_selectedExpenseId == candidate.TransactionId ? "is-selected" : null)"
                                     role="radio"
                                     aria-checked="@(_selectedExpenseId == candidate.TransactionId ? "true" : "false")"
                                     @onclick="@(() => SelectMatch(candidate))">
-                                <Avatar Name="@candidate.Name" />
                                 <span class="gs-match-choice-copy">
                                     <span class="title">@candidate.Name</span>
                                     <span class="meta">@candidate.Where · @Clock.Day(candidate.DateTime).ToString("d") · @Loc["{0} paid", candidate.PaidByUserName ?? ""]</span>
-                                    <span class="gs-tag neutral">@(candidate.IsSuggested ? Loc["Suggested match"].Value + " · " : "")@MatchHint(candidate)</span>
                                 </span>
                                 <Money Value="@candidate.Amount" Currency="@candidate.Currency" />
                                 <MudIcon Icon="@(_selectedExpenseId == candidate.TransactionId ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
                                          Color="@(_selectedExpenseId == candidate.TransactionId ? Color.Primary : Color.Default)" />
+                                <span class="gs-match-choice-hint">@(candidate.IsSuggested ? Loc["Suggested match"].Value + " · " : "")@MatchHint(candidate)</span>
                             </button>
                         }
                     </div>
 
-                    <div class="gs-inline" style="border-top: 1px solid var(--gs-line); margin-top: 12px; padding-top: 12px; gap: 6px">
+                    <div class="gs-match-other-actions">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                                    StartIcon="@Icons.Material.Rounded.Search" OnClick="FindAnotherAsync">@Loc["Find another expense"]</MudButton>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
@@ -405,6 +402,7 @@
         _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
         _newExpenseChosen = !HasMatches;
+        _selectedExpenseId = Row.PossibleDuplicates.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
 
         var loaded = await Errors.TryAsync(async () =>
         {
