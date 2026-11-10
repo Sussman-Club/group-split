@@ -268,9 +268,9 @@ html.gs-receipt-import-open { overflow: hidden; }
 @media (max-width: 600px) {
     .gs-inbox-head { flex-wrap: wrap; }
     .gs-inbox-head > .mud-button-root { width: 100%; min-height: 48px; }
-    .gs-inbox-tabs { gap: 4px; margin-bottom: 20px; }
-    .gs-inbox-tab { flex: 1 0 auto; padding: 12px 6px; gap: 6px; font-size: .85rem; }
-    .gs-inbox-tab .mud-icon-root { width: 19px; }
+    .gs-inbox-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 20px; overflow: visible; }
+    .gs-inbox-tab { min-width: 0; min-height: 44px; padding: 6px 4px; flex-direction: row; gap: 4px; text-align: center; white-space: nowrap; line-height: 1.1; font-size: .75rem; overflow-wrap: normal; }
+    .gs-inbox-tab .mud-icon-root { flex: 0 0 16px; width: 16px; height: 16px; }
     .gs-inbox-head > div:first-child { flex: 1; }
     .gs-receipt-review-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .gs-receipt-review-details .mud-button-root { min-height: 48px; }
@@ -380,18 +380,10 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-inbox-suggestion .mud-button-root { pointer-events: auto; flex: 0 0 auto; min-height: 40px; }
 @media (max-width: 600px) { .gs-inbox-suggestion { align-items: center; } }
 
-@media (max-width: 600px) {
-    .gs-inbox-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; }
-    .gs-inbox-tab { min-width: 0; min-height: 44px; padding: 6px 4px; flex-direction: row; gap: 4px; text-align: center; white-space: normal; line-height: 1.1; font-size: .75rem; overflow-wrap: normal; }
-    .gs-inbox-tab .mud-icon-root { flex: 0 0 16px; width: 16px; height: 16px; }
-    .gs-inbox-count { font-size: .72rem; }
-}
-
 .gs-inbox-bank-short { display: none; }
 @media (max-width: 600px) {
     .gs-inbox-bank-full { display: none; }
     .gs-inbox-bank-short { display: inline; }
-    .gs-inbox-tab { white-space: nowrap; }
 }
 
 .gs-inbox-suggestion-copy .gs-inbox-suggestion-label { display: inline-flex; align-items: center; gap: 4px; color: var(--gs-teal); font-weight: 700; }
