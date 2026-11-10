@@ -1,5 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Pages;
+using Microsoft.AspNetCore.Components;
 using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.Shared;
@@ -30,8 +32,30 @@ public class InboxHeaderTest : ComponentTest
         Assert.Equal("8", badge.Find(".gs-nav-badge").TextContent);
         Assert.Single(header.FindAll("a[href='/inbox']"));
         Assert.Single(header.FindAll("a[href='/inbox/receipts']"));
+        Assert.Single(header.FindAll("a[href='/inbox/bank']"));
         await header.InvokeAsync(() => Services.GetRequiredService<InboxOverview>().SetReceiptCount(2));
         header.WaitForAssertion(() => Assert.Contains("7 purchases waiting", header.Markup));
         Assert.Equal("7", badge.Find(".gs-nav-badge").TextContent);
+    }
+    [Fact]
+    public void Overview_links_both_queues_and_shows_waiting_counts()
+    {
+        var bank = new Mock<IInboxStateService>();
+        bank.SetupGet(x => x.NewCount).Returns(3);
+        Services.AddSingleton(bank.Object);
+        var page = Render<InboxHome>();
+        page.WaitForAssertion(() => Assert.Contains("3 waiting", page.Markup));
+        Assert.Contains("0 waiting", page.Markup);
+        Assert.NotEmpty(page.FindAll("a[href='/inbox/receipts']"));
+        Assert.NotEmpty(page.FindAll("a[href='/inbox/bank']"));
+    }
+
+    [Fact]
+    public void Old_filtered_inbox_links_open_the_bank_queue()
+    {
+        var nav = Services.GetRequiredService<NavigationManager>();
+        nav.NavigateTo("/inbox?status=added&q=coffee");
+        Render<InboxHome>();
+        Assert.EndsWith("/inbox/bank?status=added&q=coffee", nav.Uri);
     }
 }

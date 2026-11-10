@@ -1,3 +1,4 @@
+@layout InboxLayout
 @page "/inbox/receipts"
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Components
@@ -16,14 +17,11 @@
 @implements IAsyncDisposable
 
 <PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
-<InboxHeader>
-    <HeaderActions>
-        <div class="gs-receipt-import-action">
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.ShoppingBag" OnClick="OpenRetailerImport" Disabled="_busy">@Loc["Import from a store"]</MudButton>
-        </div>
-    </HeaderActions>
-</InboxHeader>
-<div class="gs-inbox-context"><h2>@Loc["Receipts"]</h2><span class="gs-muted">@Loc["Your receipts are private until you add them to an expense."]</span></div>
+<div class="gs-inbox-context gs-receipt-context">
+    <h2>@Loc["Receipts"]</h2>
+    <MudButton Class="gs-receipt-import-action" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.ShoppingBag" OnClick="OpenRetailerImport" Disabled="_busy">@Loc["Import from a store"]</MudButton>
+    <span class="gs-muted">@Loc["Your receipts are private until you add them to an expense."]</span>
+</div>
 @if (_importHelp)
 {
     <div class="gs-receipt-import-help" role="status">
@@ -45,6 +43,7 @@
                    Size="Size.Small" Class="gs-btn-pill" Disabled="_busy" aria-pressed="@(_filter == status)" OnClick="@(() => SetFilter(status))">@FilterLabel(status)</MudButton>
     }
 </nav>
+@if (_filter == ReceiptFilter.Waiting) { <p class="gs-muted">@Loc["Ignored items can be restored later."]</p> }
 <div class="gs-receipt-search-bar">
     <MudTextField @bind-Value="_search" @bind-Value:after="SearchChanged" T="string" Immediate="true" DebounceInterval="200" Clearable="true"
                   Placeholder="@Loc["Search merchants or items"]" aria-label="@Loc["Search merchants or items"]"
@@ -80,15 +79,19 @@ else if (_rows is not null)
     @foreach (var row in _pageRows)
     {
         var source = row.Attachments.FirstOrDefault();
-        <div class="gs-receipt-inbox-entry @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
-        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="@(() => OpenAdded(row))" @onclick:preventDefault="@(_filter == ReceiptFilter.Added)">
+        <div class="gs-receipt-inbox-entry @(_filter == ReceiptFilter.Added ? "is-added" : null) @(_suggestions.ContainsKey(row.Id) || _expenseMatches.ContainsKey(row.Id) ? "has-suggestion" : null)" @key="row.Id">
+        <a class="gs-receipt-inbox-row" href="@($"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")">
             <div class="gs-receipt-inbox-thumb">
                 <MerchantMark MerchantName="@(row.MerchantDisplayName ?? row.Receipt.MerchantName)" MerchantLogoUrl="@row.MerchantLogoUrl" />
             </div>
-            <div class="gs-receipt-inbox-copy"><strong>@(row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (row.PossibleDuplicates.Count > 0) { <span class="gs-receipt-duplicate">@Loc["Possible duplicate receipt"]</span> }</div>
-            <div class="gs-receipt-inbox-end"><strong>@row.Receipt.Total.ToString("N2") <small>@row.Currency</small></strong></div>
+            <div class="gs-receipt-inbox-copy"><strong>@(row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["New receipt"].Value)</strong><span>@(row.Receipt.PurchaseDate?.ToString("MMM d, yyyy") ?? Loc["Add purchase date"].Value) · @(source is null ? Loc["Manual entry"].Value : source.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value)</span>@if (_filter == ReceiptFilter.Added && row.ExpenseName is not null) { <span>@Loc["Added to: {0}", row.ExpenseName]</span> }@if (row.PossibleDuplicates.Count > 0) { <span class="gs-receipt-duplicate">@Loc["Possible duplicate receipt"]</span> }</div>
+            <div class="gs-receipt-inbox-end"><Money Value="@row.Receipt.Total" Currency="@row.Currency" /></div>
         </a>
-        @if (_filter != ReceiptFilter.Added)
+        @if (_filter == ReceiptFilter.Added && row.ExpenseId is { } expenseId)
+        {
+            <div class="gs-receipt-inbox-actions gs-inbox-added-actions"><MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" aria-label="@Loc["View expense"]" OnClick="@(() => OpenExpense(expenseId))">@Loc["View expense"]</MudButton></div>
+        }
+        else if (_filter != ReceiptFilter.Added)
         {
             <div class="gs-receipt-inbox-actions">
                 @if (_filter == ReceiptFilter.Waiting && row.SuggestedDuplicateOfId is not null)
@@ -99,15 +102,16 @@ else if (_rows is not null)
                 }
                 else if (_expenseMatches.TryGetValue(row.Id, out var match))
                 {
-                    var label = Loc["Attach to {0} · {1} {2} · {3}", match.Name, match.Amount.ToString("N2"), match.Currency, match.DateTime.ToString("d")];
-                    <div class="gs-receipt-inbox-shortcut">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@label.Value" OnClick="@(() => AttachMatch(row, match))">@label</MudButton>
+                    <div class="gs-inbox-suggestion is-highlighted">
+                        <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.CompareArrows" Size="Size.Small" />@Loc["Possible match"]</span><strong>@match.Name</strong><small>@match.Amount.ToString("N2") @match.Currency · @match.DateTime.ToString("d")</small></div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" aria-label="@Loc["Review possible match: {0}", match.Name]" OnClick="@(() => AttachMatch(row, match))">@Loc["Review"]</MudButton>
                     </div>
                 }
                 else if (_suggestions.TryGetValue(row.Id, out var destination))
                 {
-                    <div class="gs-receipt-inbox-shortcut">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" title="@destination.Destination" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review: {0}", destination.Destination]</MudButton>
+                    <div class="gs-inbox-suggestion is-highlighted">
+                        <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />@Loc["Suggested destination"]</span><strong>@destination.Destination</strong></div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" aria-label="@Loc["Review suggested destination: {0}", destination.Destination]" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review"]</MudButton>
                     </div>
                 }
                 else if (_filter == ReceiptFilter.Waiting)
@@ -202,11 +206,8 @@ else if (_rows is not null)
     private void ClearFilters() { _shownCount = PageSize; _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
     private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
     private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; _filter = status; _shownCount = PageSize; _rows = null; WriteUrl(); await Load(); }
-    private async Task OpenAdded(ReceiptInboxResponse row)
-    {
-        if (_filter == ReceiptFilter.Added && row.ExpenseId is { } id)
-            await Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value, new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
-    }
+    private Task OpenExpense(Guid id) => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
     private async Task SetIgnored(ReceiptInboxResponse row, bool ignored)
     {
         if (_busy) return;

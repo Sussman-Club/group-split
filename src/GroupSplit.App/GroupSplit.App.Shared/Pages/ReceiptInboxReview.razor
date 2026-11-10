@@ -17,9 +17,9 @@
 {
     <header class="gs-receipt-review-heading">
         <h1>@(row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["Review receipt"].Value)</h1>
-        <p>@Loc["Needs review"] · @Loc["Private"] · @row.Receipt.Total.ToString("0.00") @row.Currency</p>
+        <p>@(row.ExpenseId is not null ? Loc["Added"].Value : row.IsIgnored ? Loc["Ignored"].Value : Loc["Needs review"].Value) · @row.Receipt.Total.ToString("0.00") @row.Currency</p>
     </header>
-    @if (row.PossibleDuplicates.Count > 0)
+    @if (row.ExpenseId is null && row.PossibleDuplicates.Count > 0)
     {
         <MudAlert Severity="Severity.Warning" Class="mb-4">@Loc["Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing."]
             @foreach (var duplicate in row.PossibleDuplicates.Where(d => d.ExpenseId is null))
@@ -28,6 +28,36 @@
             }
         </MudAlert>
     }
+    @if (row.ExpenseId is { } expenseId)
+    {
+        <div class="gs-receipt-review-layout">
+            <section class="gs-card gs-card-pad gs-receipt-review-section">
+                <h2>@Loc["Receipt details"]</h2>
+                @if (_bill is { Items.Count: > 0 } addedBill) { <BillSheet Receipt="addedBill" Title="@row.Receipt.MerchantName" /> }
+                else { <p>@Loc["No itemized details"]</p> }
+            </section>
+            <div class="gs-stack gs-receipt-review-sidebar">
+                <section class="gs-card gs-card-pad gs-receipt-review-section">
+                    <h2>@Loc["Added to expense"]</h2>
+                    @if (!string.IsNullOrWhiteSpace(row.ExpenseName)) { <p>@row.ExpenseName</p> }
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenExpense(expenseId))">@Loc["View expense"]</MudButton>
+                </section>
+                @if (row.Attachments.Count > 0)
+                {
+                    <details class="gs-receipt-review-original"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
+                    @foreach (var file in row.Attachments)
+                    {
+                        <MudButton Href="@Source(file.Id)" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton>
+                        @if (file.ContentType.StartsWith("image/")) { <img src="@Source(file.Id)" alt="@Loc["Original receipt"]" style="max-width:100%" /> }
+                        else { <PdfReceiptPreview @key="file.Id" Url="@Source(file.Id)" DownloadUrl="@Source(file.Id)" FileName="@file.FileName" /> }
+                    }
+                    </div></details>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
     <div class="gs-receipt-review-layout">
         <div class="gs-stack gs-receipt-review-details">
             <section class="gs-card gs-card-pad gs-receipt-review-section">
@@ -68,6 +98,11 @@
             <MudButton OnClick="AttachEntered" Disabled="_busy">@Loc["Find existing expense"]</MudButton>
             <MudButton OnClick="CreateDefault" Disabled="_busy">@Loc["Create expense"]</MudButton>
             </section>
+            <section class="gs-card gs-card-pad gs-receipt-review-section">
+                <h2>@Loc["Inbox status"]</h2>
+                <p>@Loc["Ignored items can be restored later."]</p>
+                <MudButton OnClick="SetIgnored" Disabled="_busy">@(row.IsIgnored ? Loc["Restore receipt"] : Loc["Ignore receipt"])</MudButton>
+            </section>
             <MudButton OnClick="Delete" Disabled="_busy" Color="Color.Error">@Loc["Delete private receipt"]</MudButton>
         <details class="gs-receipt-review-original @(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0 ? "is-unextracted" : null)" open="@(row.Receipt.Items.Count == 0 && row.Attachments.Count > 0)"><summary>@Loc["Original receipt"]</summary><div class="gs-stack">
 
@@ -85,6 +120,7 @@
         </div></details>
         </div>
     </div>
+    }
 }
 @if (_busy) { <MudProgressLinear Indeterminate="true" /> }
 @code {
@@ -103,10 +139,10 @@
             _row = await Client.GetReceiptInboxAsync(Id);
             _bill = BillOf(_row);
             _currency = _row.Currency;
-            _matches = (await Client.MatchReceiptInboxAsync(Id)).ToList();
+            _matches = _row.ExpenseId is null ? (await Client.MatchReceiptInboxAsync(Id)).ToList() : [];
 
         }, Loc["Could not load receipt."].Value);
-        if (_row is { Receipt.Items.Count: > 0 } receipt)
+        if (_row is { ExpenseId: null, Receipt.Items.Count: > 0 } receipt)
         {
             _suggestion = SuggestionCache.Get(receipt);
             var generation = SuggestionCache.Generation;
@@ -129,7 +165,19 @@
                 Description = item.Description, TaxRate = item.TaxRate, IsTaxable = item.IsTaxable
             }).ToList())
         { MerchantName = row.Receipt.MerchantName, PurchaseDate = row.Receipt.PurchaseDate };
-    private string Source(Guid a) => Nav.BaseUri + $"api/receipts/inbox/{Id}/files/{a}";
+    private Task OpenExpense(Guid id) => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+    private Task SetIgnored() => Run(async () =>
+    {
+        if (_row is not { ExpenseId: null } row) return;
+        if (row.IsIgnored) await Client.RestoreInboxReceiptAsync(Id);
+        else await Client.IgnoreInboxReceiptAsync(Id);
+        await Changes.NotifyReceiptsChangedAsync();
+        Nav.NavigateTo(row.IsIgnored ? "/inbox/receipts" : "/inbox/receipts?status=ignored");
+    });
+    private string Source(Guid a) => _row?.ExpenseId is { } expenseId
+        ? Nav.BaseUri + $"api/transactions/{expenseId}/receipt-attachments/{a}?inline=true"
+        : Nav.BaseUri + $"api/receipts/inbox/{Id}/files/{a}";
     private async Task Run(Func<Task> action)
     {
         if (_busy) return;

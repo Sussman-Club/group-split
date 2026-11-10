@@ -14,7 +14,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
 {
     private IQueryable<Receipt> Owned() => db.Set<Receipt>().Where(r => r.OwnerUserId == user.User.Id);
     private async Task<Receipt> Find(Guid id, CancellationToken ct) =>
-        await Owned().Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant).FirstOrDefaultAsync(r => r.Id == id, ct)
+        await Owned().Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant).Include(r => r.Expense).FirstOrDefaultAsync(r => r.Id == id, ct)
         ?? throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
     private static void Unfiled(Receipt r)
     {
@@ -24,7 +24,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct, classify: true);
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct) =>
-        await WithDuplicates((await Owned().Where(r => r.ExpenseId != null).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
+        await WithDuplicates((await Owned().Where(r => r.ExpenseId != null).Include(r => r.Expense).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListIgnored(CancellationToken ct) =>
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
@@ -321,5 +321,5 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
                 TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
         r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, null, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList())
-        { MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
+        { ExpenseName = r.Expense?.Name, IsIgnored = r.IsIgnored, MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
 }

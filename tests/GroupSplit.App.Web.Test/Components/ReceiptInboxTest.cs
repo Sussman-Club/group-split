@@ -21,7 +21,7 @@ public class ReceiptInboxTest : ComponentTest
         module.Setup<bool>("openReceiptImporter", _ => true).SetResult(false);
         var page = Render<ReceiptInbox>();
 
-        await page.Find(".gs-receipt-import-action button").ClickAsync(new MouseEventArgs());
+        await page.Find("button.gs-receipt-import-action").ClickAsync(new MouseEventArgs());
 
         var link = page.Find(".gs-receipt-import-help a");
         Assert.Equal("/receipt-importer/install", link.GetAttribute("href"));
@@ -205,7 +205,7 @@ public class ReceiptInboxTest : ComponentTest
         matches.SetResult([new ReceiptExpenseCandidate(Guid.NewGuid(), "Groceries", 10m, "USD", new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero))]);
         Assert.DoesNotContain("Shop", page.Markup);
         suggestions.SetResult([]);
-        page.WaitForAssertion(() => Assert.Contains("Attach to Groceries", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
         Assert.Contains("Shop", page.Markup);
         Assert.DoesNotContain("Add to group", page.Markup);
     }
@@ -223,7 +223,7 @@ public class ReceiptInboxTest : ComponentTest
 
         var page = Render<ReceiptInbox>();
 
-        page.WaitForAssertion(() => Assert.Contains("Attach to Groceries", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
         Assert.DoesNotContain("Add to group", page.Markup);
     }
 
@@ -243,7 +243,8 @@ public class ReceiptInboxTest : ComponentTest
         Assert.Contains("Find another expense", provider.Markup);
         Assert.Contains("Create a new expense", provider.Markup);
         Assert.Contains("Suggested match", provider.Markup);
-        Assert.True(provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense").HasAttribute("disabled"));
+        Assert.Equal("true", provider.FindAll("button[role=radio]").Single(button => button.TextContent.Contains("Groceries")).GetAttribute("aria-checked"));
+        Assert.False(provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense").HasAttribute("disabled"));
         provider.FindAll("button[role=radio]").Single(button => button.TextContent.Contains("Lunch")).Click();
         provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense").Click();
         var answer = await reference!.GetReturnValueAsync<ReceiptMatchDialog.Answer>();
@@ -264,7 +265,7 @@ public class ReceiptInboxTest : ComponentTest
         var page = Render<ReceiptInbox>();
 
         page.WaitForAssertion(() => Assert.Contains("Add to group", page.Markup));
-        Assert.DoesNotContain("Attach to Groceries", page.Markup);
+        Assert.DoesNotContain("Groceries", page.Markup);
     }
 
     [Fact]
@@ -283,6 +284,6 @@ public class ReceiptInboxTest : ComponentTest
         var page = Render<ReceiptInbox>();
         Assert.DoesNotContain("Amazon", page.Markup);
         pending.SetResult([new ReceiptInboxSuggestion(receipt.Id, new FilingDestinationSuggestion(Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", .95))]);
-        page.WaitForAssertion(() => Assert.Contains("Review: Home", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Home · Groceries", page.Markup));
     }
 }

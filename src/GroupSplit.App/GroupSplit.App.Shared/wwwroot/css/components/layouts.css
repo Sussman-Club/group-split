@@ -58,8 +58,19 @@
     white-space: nowrap;
 }
 
-.gs-match-choice-copy .gs-tag {
-    margin-top: 2px;
+.gs-match-choice-copy .gs-tag, .gs-match-choice-tag {
+    max-width: 100%;
+    height: auto;
+    min-height: 22px;
+    padding-block: 3px;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.gs-match-choice-tag {
+    grid-column: 2 / -1;
+    justify-self: start;
 }
 
 /* The receipt has two deliberate states: keep the original file first, then read it.
@@ -330,3 +341,14 @@
         flex-basis: 100%;
     }
 }
+
+/* Matching is one decision: source, choices, then alternatives. */
+.gs-match-source { padding: 0 0 14px; border-bottom: 1px solid var(--gs-line); }
+.gs-match-source-name { font-weight: 700; }
+.gs-match-section h3 { margin: 0; font-size: 1rem; }
+.gs-match-section > p { margin: 4px 0 12px; color: var(--gs-muted); font-size: .875rem; line-height: 1.4; }
+.gs-match-choice-simple { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 10px; }
+.gs-match-choice-simple .title { font-weight: 700; overflow-wrap: anywhere; }
+.gs-match-choice-hint, .gs-match-recommended { color: var(--gs-muted); font-size: .75rem; line-height: 1.35; }
+.gs-match-choice-hint { grid-column: 1 / -1; }
+.gs-match-other-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
