@@ -371,6 +371,108 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         }
     }
 
+    [Fact(Timeout = 120_000)]
+    public async Task Notifications_follow_commit_and_only_signal_pending_work()
+    {
+        await using var db = Context();
+        await db.Database.ExecuteSqlRawAsync(BackgroundJobNotifications.CreateSql, Ct);
+        await db.Database.OpenConnectionAsync(Ct);
+        var sender = ((NpgsqlConnection)db.Database.GetDbConnection()).ProcessID;
+        await using var listener = new NpgsqlConnection(_connectionString);
+        await listener.OpenAsync(Ct);
+        var notifications = 0;
+        listener.Notification += (_, args) =>
+        {
+            // Other tests share this database but use independent schemas and sessions.
+            if (args.PID != sender) return;
+            Assert.Equal(BackgroundJobNotifications.Channel, args.Channel);
+            Assert.Empty(args.Payload);
+            notifications++;
+        };
+        await using (var listen = new NpgsqlCommand($"LISTEN {BackgroundJobNotifications.Channel}", listener))
+            await listen.ExecuteNonQueryAsync(Ct);
+
+        await using (var transaction = await db.Database.BeginTransactionAsync(Ct))
+        {
+            Queue(db).Enqueue(new TestJob(Guid.NewGuid()));
+            await db.SaveChangesAsync(Ct);
+            await listener.WaitAsync(100, Ct);
+            Assert.Equal(0, notifications);
+            await transaction.RollbackAsync(Ct);
+        }
+        db.ChangeTracker.Clear();
+        await listener.WaitAsync(100, Ct);
+        Assert.Equal(0, notifications);
+
+        Guid id;
+        await using (var transaction = await db.Database.BeginTransactionAsync(Ct))
+        {
+            id = Queue(db).Enqueue(new TestJob(Guid.NewGuid())).Id;
+            Queue(db).Enqueue(new TestJob(Guid.NewGuid()));
+            await db.SaveChangesAsync(Ct);
+            await listener.WaitAsync(100, Ct);
+            Assert.Equal(0, notifications);
+            await transaction.CommitAsync(Ct);
+        }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        while (notifications < 1) await listener.WaitAsync(timeout.Token);
+        Assert.Equal(1, notifications); // Identical, payload-free hints coalesce per transaction.
+
+        await db.Set<BackgroundJob>().Where(j => j.Id == id)
+            .ExecuteUpdateAsync(u => u.SetProperty(j => j.Status, BackgroundJobStatus.Completed), Ct);
+        await listener.WaitAsync(100, Ct);
+        Assert.Equal(1, notifications);
+        await db.Set<BackgroundJob>().Where(j => j.Id == id)
+            .ExecuteUpdateAsync(u => u.SetProperty(j => j.Status, BackgroundJobStatus.Pending), Ct);
+        while (notifications < 2) await listener.WaitAsync(timeout.Token);
+        Assert.Equal(2, notifications);
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task Notification_listener_drains_a_backlog_through_the_existing_worker_without_a_scheduler_tick()
+    {
+        await using (var db = Context())
+        {
+            await db.Database.ExecuteSqlRawAsync(BackgroundJobNotifications.CreateSql, Ct);
+            for (var i = 0; i < 25; i++) Queue(db).Enqueue(new TestJob(Guid.NewGuid()));
+            await db.SaveChangesAsync(Ct);
+        }
+        var calls = 0;
+        var services = new ServiceCollection();
+        services.AddScoped<AppDbContext>(_ => Context());
+        services.AddSingleton<TimeProvider>(_clock);
+        services.AddSingleton(_registry);
+        services.AddBackgroundJobs();
+        services.AddBackgroundJobNotifications();
+        services.AddJobs().Handlers.Add<TestJob>(_ => new Handler(_ => Interlocked.Increment(ref calls)));
+        await using var provider = services.BuildServiceProvider();
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        var worker = Assert.Single(hosted, h => h.GetType().Name == "DefaultJobWorker");
+        var listener = Assert.Single(hosted, h => h.GetType().Name == "BackgroundJobNotificationListener");
+        // No scheduler is started: startup notification scan and continuations must suffice.
+        await worker.StartAsync(Ct);
+        await listener.StartAsync(Ct);
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(15));
+            while (true)
+            {
+                await using var reader = Context();
+                if (await reader.Set<BackgroundJob>().CountAsync(j => j.Status == BackgroundJobStatus.Completed, timeout.Token) == 25)
+                    break;
+                await Task.Delay(25, timeout.Token);
+            }
+            Assert.Equal(25, calls);
+        }
+        finally
+        {
+            using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await listener.StopAsync(shutdown.Token);
+            await worker.StopAsync(shutdown.Token);
+        }
+    }
     private PostgreSqlAppDbContext Context() => new(new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
         .UseNpgsql(_connectionString).Options);
 
