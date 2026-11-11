@@ -27,8 +27,8 @@ public class ReceiptInboxTest : ComponentTest
         Assert.Equal("/receipt-importer/install", link.GetAttribute("href"));
         Assert.Contains("Install or update", link.TextContent);
         var instructions = Render<ReceiptImporterInstall>();
-        Assert.Contains("receipt-importer-v", instructions.Find("a[target='_blank']").GetAttribute("href"));
-        Assert.Contains("Reload", instructions.Markup);
+        Assert.Equal("https://microsoftedge.microsoft.com/addons/detail/aaclkbbjgicajpnjoigfjnlmpiocngmp", instructions.Find("a[target='_blank']").GetAttribute("href"));
+        Assert.Contains("Microsoft Edge", instructions.Markup);
     }
 
     [Fact]
