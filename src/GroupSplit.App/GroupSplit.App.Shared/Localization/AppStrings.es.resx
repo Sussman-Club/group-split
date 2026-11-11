@@ -5870,4 +5870,16 @@
   <data name="No itemized details" xml:space="preserve">
     <value>Sin detalles de artículos</value>
   </data>
+  <data name="Time zone" xml:space="preserve"><value>Zona horaria</value></data>
+  <data name="Dates and times use this device's time zone unless you choose another." xml:space="preserve"><value>Las fechas y horas usan la zona horaria de este dispositivo, a menos que elijas otra.</value></data>
+  <data name="Follow device" xml:space="preserve"><value>Usar la del dispositivo</value></data>
+  <data name="Time format" xml:space="preserve"><value>Formato de hora</value></data>
+  <data name="Choose how times are displayed on this device." xml:space="preserve"><value>Elige cómo se muestran las horas en este dispositivo.</value></data>
+  <data name="Follow language" xml:space="preserve"><value>Seguir el idioma</value></data>
+  <data name="12-hour" xml:space="preserve"><value>12 horas</value></data>
+  <data name="24-hour" xml:space="preserve"><value>24 horas</value></data>
+  <data name="Search time zones" xml:space="preserve"><value>Buscar zonas horarias</value></data>
+  <data name="No matching time zones" xml:space="preserve"><value>No hay zonas horarias coincidentes</value></data>
+  <data name="{0} receipt waiting" xml:space="preserve"><value>{0} recibo pendiente</value></data>
+  <data name="{0} receipts waiting" xml:space="preserve"><value>{0} recibos pendientes</value></data>
 </root>

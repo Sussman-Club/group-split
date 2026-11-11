@@ -103,7 +103,7 @@ else if (_rows is not null)
                 else if (_expenseMatches.TryGetValue(row.Id, out var match))
                 {
                     <div class="gs-inbox-suggestion is-highlighted">
-                        <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.CompareArrows" Size="Size.Small" />@Loc["Possible match"]</span><strong>@match.Name</strong><small>@match.Amount.ToString("N2") @match.Currency · @match.DateTime.ToString("d")</small></div>
+                        <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.CompareArrows" Size="Size.Small" />@Loc["Possible match"]</span><strong>@match.Name</strong><small>@match.Amount.ToString("N2") @match.Currency · @Clock.Day(match.DateTime).ToString("d")</small></div>
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" aria-label="@Loc["Review possible match: {0}", match.Name]" OnClick="@(() => AttachMatch(row, match))">@Loc["Review"]</MudButton>
                     </div>
                 }

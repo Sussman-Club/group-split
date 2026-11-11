@@ -1,6 +1,8 @@
 @page "/help"
+@using GroupSplit.App.Shared.Components
 @using GroupSplit.Shared
 @inject ISupportReportsClient Reports
+@inject LocalClock Clock
 
 <PageTitle>@Loc["Help & feedback - Group Split"]</PageTitle>
 <div class="gs-page-head">
@@ -31,7 +33,7 @@
                 @foreach (var report in _reports)
                 {
                     <details class="support-report" @key="report.Id">
-                        <summary><span><strong>@report.Title</strong><small>@TypeLabel(report.Type) · @report.CreatedAt.ToLocalTime().ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
+                        <summary><span><strong>@report.Title</strong><small>@TypeLabel(report.Type) · @Clock.Local(report.CreatedAt).ToString("d")</small></span><span class="gs-tag neutral">@StatusLabel(report.Status)</span></summary>
                         <p class="support-description">@report.Description</p>
                         <small class="gs-muted">@Loc["Report ID"]: @report.Id</small>
                         <button class="staff-button" type="button" @onclick="() => _opened = report.Id">@Loc["Open conversation"]</button>

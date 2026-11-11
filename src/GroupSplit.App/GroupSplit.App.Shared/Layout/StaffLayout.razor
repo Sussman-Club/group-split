@@ -2,6 +2,7 @@
 @using GroupSplit.Shared
 @inherits LayoutComponentBase
 @inject IStaffClient Staff
+@inject LocalClock Clock
 
 <AppThemeProvider />
 <div class="staff-shell">
@@ -49,6 +50,10 @@
 @code {
     private bool _checking = true, _allowed, _failed;
     protected override Task OnInitializedAsync() => CheckAccessAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && await Clock.InitializeAsync()) StateHasChanged();
+    }
 
     private async Task CheckAccessAsync()
     {

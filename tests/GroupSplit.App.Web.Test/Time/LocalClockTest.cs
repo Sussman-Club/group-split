@@ -18,6 +18,49 @@ namespace GroupSplit.App.Web.Test.Time;
 /// </remarks>
 public class LocalClockTest
 {
+    [Theory]
+    [InlineData("12", "h:mm tt", true)]
+    [InlineData("24", "HH:mm", false)]
+    public void Time_format_applies_to_display_and_input(string preference, string pattern, bool amPm)
+    {
+        var clock = new LocalClock(InProcess());
+        clock.ApplyTimeFormat(preference);
+        var time = new TimeOnly(13, 5);
+        Assert.Equal(time.ToString(pattern), clock.FormatTime(time));
+        Assert.Equal(amPm, clock.UseAmPm);
+    }
+    [Fact]
+    public void Named_zone_uses_the_offset_at_each_instant()
+    {
+        var clock = new LocalClock(InProcess());
+        clock.ApplyZone("America/New_York");
+        var winter = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero);
+        var summer = new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
+        Assert.Equal(7, clock.Local(winter).Hour);
+        Assert.Equal(8, clock.Local(summer).Hour);
+        Assert.Equal(8, clock.TimeOf(summer)?.Hour);
+    }
+
+    [Fact]
+    public async Task Saved_zone_is_used_in_both_hosting_modes()
+    {
+        var inProcess = new Mock<IJSInProcessRuntime>();
+        inProcess.Setup(js => js.Invoke<int>("gs.tzOffsetMinutes", It.IsAny<object?[]?>())).Returns(0);
+        inProcess.Setup(js => js.Invoke<string?>("gs.timeZone", It.IsAny<object?[]?>())).Returns("America/New_York");
+        inProcess.Setup(js => js.Invoke<string?>("gs.timeFormat", It.IsAny<object?[]?>())).Returns("12");
+        var server = new Mock<IJSRuntime>();
+        server.Setup(js => js.InvokeAsync<int>("gs.tzOffsetMinutes", It.IsAny<object?[]?>())).ReturnsAsync(0);
+        server.Setup(js => js.InvokeAsync<string?>("gs.timeZone", It.IsAny<object?[]?>())).ReturnsAsync("America/New_York");
+        server.Setup(js => js.InvokeAsync<string?>("gs.timeFormat", It.IsAny<object?[]?>())).ReturnsAsync("12");
+        var wasm = new LocalClock(inProcess.Object);
+        var bff = new LocalClock(server.Object);
+        await bff.InitializeAsync();
+        var instant = new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
+        Assert.Equal(8, wasm.Local(instant).Hour);
+        Assert.Equal(wasm.Local(instant), bff.Local(instant));
+        Assert.True(wasm.UseAmPm);
+        Assert.True(bff.UseAmPm);
+    }
     /// <summary>What the browser reports for UTC-5, as <c>gs.tzOffsetMinutes</c> signs it.</summary>
     private const int BrowserOffsetMinutes = -300;
 

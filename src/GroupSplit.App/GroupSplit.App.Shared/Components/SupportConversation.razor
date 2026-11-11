@@ -1,4 +1,5 @@
 @using GroupSplit.Shared
+@inject LocalClock Clock
 @inject IStaffClient Staff
 @inject ISupportReportsClient Reports
 @inject IJSRuntime Browser
@@ -16,7 +17,7 @@
         @foreach (var message in _messages)
         {
             <article class="staff-message @(message.Visibility == "Internal" ? "internal" : "public")" @key="message.Id">
-                <header><strong>@(message.FromReporter ? Loc["Customer"].Value + " · " + message.AuthorName : message.AuthorName)</strong><span class="staff-message-visibility">@(message.Visibility == "Internal" ? Loc["Internal note · staff only"] : Loc["Reply · visible to customer"])</span><time>@message.CreatedAt.ToLocalTime().ToString("g")</time></header>
+                <header><strong>@(message.FromReporter ? Loc["Customer"].Value + " · " + message.AuthorName : message.AuthorName)</strong><span class="staff-message-visibility">@(message.Visibility == "Internal" ? Loc["Internal note · staff only"] : Loc["Reply · visible to customer"])</span><time>@Clock.DisplayInstant(message.CreatedAt)</time></header>
                 <p>@message.Body</p>
             </article>
         }

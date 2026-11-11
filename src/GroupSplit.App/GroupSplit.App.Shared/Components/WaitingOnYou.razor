@@ -7,6 +7,7 @@
 @namespace GroupSplit.App.Shared.Components
 @inject ISettleStateService Settling
 @inject IInboxStateService Inbox
+@inject InboxOverview Overview
 @inject IInvitationsClient InvitationsClient
 @inject ApiErrorPresenter Errors
 @inject DataChangeNotifier Changes
@@ -60,7 +61,20 @@
                     @* Not gs-btn-glass: every rule of that class is scoped to .gs-hero,
                        so out here it styled nothing and "Review" rendered as bare text. *@
                     <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
-                               Href="/transactions/not-filed">@Loc["Review"]</MudButton>
+                               Href="/inbox/bank">@Loc["Review"]</MudButton>
+                </div>
+            }
+
+            @if (Overview.ReceiptCount is > 0 and var receiptCount)
+            {
+                <div class="gs-row" style="cursor: default">
+                    <span class="gs-row-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+                    <div style="min-width: 0">
+                        <div class="title"><span>@(receiptCount == 1 ? Loc["{0} receipt waiting", receiptCount] : Loc["{0} receipts waiting", receiptCount])</span></div>
+                        <div class="meta">@Loc["Add receipts to expenses or create a new expense."]</div>
+                    </div>
+                    <MudButton Variant="Variant.Text" Class="gs-btn-quiet" Size="Size.Small"
+                               Href="/inbox/receipts">@Loc["Review"]</MudButton>
                 </div>
             }
 
@@ -114,6 +128,7 @@
     private int Items =>
         (Plan is { } plan && (plan.YouPay.Count > 0 || plan.OwedToYou.Count > 0) ? 1 : 0)
         + (Inbox.NewCount > 0 ? 1 : 0)
+        + (Overview.ReceiptCount > 0 ? 1 : 0)
         + _invitations.Count;
 
     /// <summary>
@@ -163,6 +178,7 @@
         // first render missed whatever the reads below announced before it.
         Settling.OnChanged += ReRender;
         Inbox.OnChanged += ReRender;
+        Overview.Changed += ReRender;
     }
 
     protected override async Task OnInitializedAsync()
@@ -171,6 +187,7 @@
         // one screen that says the duplicate count out loud, so it is the one that asks.
         await Settling.EnsureLoadedAsync();
         await Inbox.WantDuplicateCountAsync();
+        await Overview.EnsureLoaded();
         await ReloadAsync();
     }
 
@@ -195,5 +212,6 @@
         Changes.GroupsChanged -= ReloadAsync;
         Settling.OnChanged -= ReRender;
         Inbox.OnChanged -= ReRender;
+        Overview.Changed -= ReRender;
     }
 }

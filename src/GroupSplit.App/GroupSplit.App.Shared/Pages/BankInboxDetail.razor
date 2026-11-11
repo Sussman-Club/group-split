@@ -3,6 +3,7 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services.Commands
 @using GroupSplit.App.Shared.Services.Errors
+@inject LocalClock Clock
 @inject IInboxClient Client
 @inject IBankCommands Bank
 @inject IDialogService Dialogs
@@ -40,7 +41,7 @@
                         {
                             <div class="gs-receipt-suggestion">
                                 <strong>@(match.IsSuggested ? Loc["Suggested: {0}", match.Name].Value : match.Name)</strong>
-                                <span>@match.Where · @match.DateTime.ToString("d") · @match.Amount.ToString("N2") @match.Currency</span>
+                                <span>@match.Where · @Clock.Day(match.DateTime).ToString("d") · @match.Amount.ToString("N2") @match.Currency</span>
                                 <div class="gs-inline">
                                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => AttachAsync(row, match.TransactionId))">@Loc["Attach"]</MudButton>
                                     <MudButton Disabled="_busy" OnClick="@(() => DismissAsync(row, match))">@Loc["Not the same"]</MudButton>
