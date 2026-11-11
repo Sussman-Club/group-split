@@ -20,7 +20,6 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         // Ensure user exists (creates personal group implicitly)
 
-        // Create an additional group for the current user
         var created = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
             TestContext.Current.CancellationToken);
 

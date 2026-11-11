@@ -51,13 +51,10 @@ public class ApiUnitTest : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        // Generate unique identifiers for this specific test
         var databaseName = $"TestDb_{Guid.NewGuid()}";
 
-        // Clone the service collection template from the fixture
         var services = CloneServiceCollection(Fixture.ServiceCollectionTemplate);
 
-        // Register test-specific services (things that must be unique per test)
 
         // 1. Register the database with in-memory provider (unique database per test)
         // The provider has no transactions, and says so by throwing. The services that open
@@ -73,7 +70,6 @@ public class ApiUnitTest : IAsyncLifetime
         // Allow derived classes to add more test-specific services
         ConfigureTestServices(services);
 
-        // Build the service provider for this test
         _serviceProviderInstance = services.BuildServiceProvider();
         ServiceProvider = _serviceProviderInstance;
 

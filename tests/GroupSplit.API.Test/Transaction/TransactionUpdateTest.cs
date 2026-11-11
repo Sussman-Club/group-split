@@ -23,7 +23,6 @@ public class TransactionUpdateTest(ApiTestFixture fixture) : ApiUnitTest(fixture
 
         var currentUser = userService.User;
 
-        // Create a transaction
         var transaction = await transactionService.Create(new CreateTransactionRequest
         {
             Name = "Old Transaction",

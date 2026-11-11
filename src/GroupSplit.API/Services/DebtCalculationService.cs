@@ -258,7 +258,6 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
                 Amount = payment
             });
 
-            // Update amounts
             debtor.Balance += payment;
             creditor.Balance -= payment;
 

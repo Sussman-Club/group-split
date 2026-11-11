@@ -5,18 +5,14 @@ using MudBlazor.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
-// Add MudBlazor services
 builder.Services.AddMudServices();
 
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
-// Add shared services
 builder.Services.AddSharedServices(ServiceLifetime.Singleton);
 
-// Add Auth client
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// Add authorization services
 builder.Services.AddAuthorizationCore();
 
 var host = builder.Build();

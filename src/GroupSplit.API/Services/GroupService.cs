@@ -299,7 +299,6 @@ public class GroupService(
     {
         var user = userContext.User;
 
-        // Load the user's groups
         return GroupsOf(user.Id);
     }
 
