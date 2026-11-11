@@ -37,7 +37,10 @@ public class DepartedParticipantTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     private Guid Self => GetService<ICurrentUser>().User.Id;
 
     private static SharesSplitRuleDto Shares(params (Guid UserId, int Weight)[] weights) =>
-        new() { Shares = weights.ToDictionary(pair => pair.UserId, pair => pair.Weight) };
+        new()
+        {
+            Shares = weights.ToDictionary(pair => pair.UserId, pair => pair.Weight)
+        };
 
     private async Task<(Guid GroupId, Guid Other)> GroupOfTwo()
     {

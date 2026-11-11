@@ -293,7 +293,9 @@ public class MerchantServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_listing_stops_at_twenty()
     {
         for (var i = 0; i < 25; i++)
+        {
             await Mine($"Shop {i:00}");
+        }
 
         var listed = await (await Merchants.List("shop", Ct)).ToListAsync(Ct);
 

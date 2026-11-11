@@ -24,7 +24,13 @@ public sealed class NativeOptionsBuildTest
             ("NativeWebUrl", "https://example.test/"),
             ("NativeAndroidBuild", value)
         })
-            if (text is not null) assembly.SetCustomAttribute(new CustomAttributeBuilder(constructor, [key, text]));
+        {
+            if (text is not null)
+            {
+                assembly.SetCustomAttribute(new CustomAttributeBuilder(constructor, [key, text]));
+            }
+        }
+
         var options = NativeOptions.FromAssembly(assembly, false);
         Assert.Equal(expected, options.AndroidBuild);
         var services = new ServiceCollection();

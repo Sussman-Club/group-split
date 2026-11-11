@@ -174,7 +174,9 @@ public sealed record BankTransactionResponse(
     private static string? Readable(string? providerCategory)
     {
         if (string.IsNullOrWhiteSpace(providerCategory))
+        {
             return null;
+        }
 
         var words = providerCategory.Replace('_', ' ').Trim().ToLowerInvariant();
 

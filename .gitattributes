@@ -2,3 +2,6 @@
 # carriage return as part of the command. With core.autocrlf on -- the default on Windows --
 # a checkout would hand `sh` a file it cannot run, so keep these at LF whatever the platform.
 *.sh text eol=lf
+
+# Keep C# formatting consistent across Windows and Linux.
+*.cs text eol=lf

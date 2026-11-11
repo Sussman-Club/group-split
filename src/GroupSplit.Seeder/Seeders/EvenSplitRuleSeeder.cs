@@ -41,7 +41,9 @@ public sealed class EvenSplitRuleSeeder(
             var rule = await evenRule.EnsureFor(group, ct);
 
             if (group.DefaultSplitRuleId is not null)
+            {
                 continue;
+            }
 
             group.DefaultSplitRule = rule;
             defaulted++;

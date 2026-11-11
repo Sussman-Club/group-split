@@ -291,7 +291,10 @@ public class GuestEndpointTest : IAsyncLifetime
 
         var expense = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         {
-            GroupId = group, Amount = 10m, DateTime = DateTimeOffset.UtcNow, Name = "Bread"
+            GroupId = group,
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow,
+            Name = "Bread"
         }, Json, Ct);
         expense.EnsureSuccessStatusCode();
         var expenseId = (await expense.Content.ReadFromJsonAsync<JsonElement>(Json, Ct)).GetProperty("id").GetGuid();
@@ -303,12 +306,15 @@ public class GuestEndpointTest : IAsyncLifetime
             var context = scope.ServiceProvider.GetRequiredService<GroupSplit.Data.AppDbContext>();
             var user = new GroupSplit.Data.Entities.User
             {
-                FirstName = "Old Dani", Kind = GroupSplit.Data.Entities.UserKind.StandIn
+                FirstName = "Old Dani",
+                Kind = GroupSplit.Data.Entities.UserKind.StandIn
             };
             context.Add(user);
             context.Add(new GroupSplit.Data.Entities.TransactionSplit
             {
-                TransactionId = expenseId, UserId = user.Id, Amount = 0m
+                TransactionId = expenseId,
+                UserId = user.Id,
+                Amount = 0m
             });
             await context.SaveChangesAsync(Ct);
             leftover = user.Id;

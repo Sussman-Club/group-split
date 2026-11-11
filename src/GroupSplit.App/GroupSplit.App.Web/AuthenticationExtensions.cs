@@ -286,7 +286,10 @@ public static class AuthenticationExtensions
 
         if (!HttpMethods.IsGet(context.Request.Method)
                 || context.Request.Path.StartsWithSegments("/_blazor")
-                || context.Request.Path.StartsWithSegments("/api")) return;
+                || context.Request.Path.StartsWithSegments("/api"))
+        {
+            return;
+        }
 
         SlideSession(properties, context.Options.TimeProvider ?? TimeProvider.System);
         // The default handler renews only halfway through the window. Renew here
@@ -304,7 +307,11 @@ public static class AuthenticationExtensions
     {
         var now = time.GetUtcNow();
         var deadline = SessionDeadline(properties, now);
-        if (now >= deadline) return false;
+        if (now >= deadline)
+        {
+            return false;
+        }
+
         properties.Items[SessionDeadlineItem] = deadline.ToString("O");
         properties.IsPersistent = true;
         properties.AllowRefresh = true;

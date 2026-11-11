@@ -34,7 +34,10 @@ public class GroupInvitationTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Groups.CreateGroup(new CreateGroupRequest { Name = name }, Ct).AsTask();
 
     private static InviteToGroupRequest Asking(params string[] names) =>
-        new() { Names = [.. names] };
+        new()
+        {
+            Names = [.. names]
+        };
 
     /// <summary>
     /// Everything the invitee does -- opening their link, claiming it -- happens as them. A

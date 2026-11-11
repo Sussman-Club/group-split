@@ -103,7 +103,9 @@ public class ReceiptInboxTest : ComponentTest
     {
         var client = new Mock<IReceiptsClient>();
         var row = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "Shop" }, [])
-        { PossibleDuplicates = [new ReceiptDuplicateCandidate(Guid.NewGuid(), null)] };
+        {
+            PossibleDuplicates = [new ReceiptDuplicateCandidate(Guid.NewGuid(), null)]
+        };
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([row]);
         Services.AddSingleton(client.Object);
         var page = Render<ReceiptInbox>();
@@ -115,7 +117,9 @@ public class ReceiptInboxTest : ComponentTest
     {
         var client = new Mock<IReceiptsClient>();
         var row = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "Shop" }, [])
-        { SuggestedDuplicateOfId = Guid.NewGuid() };
+        {
+            SuggestedDuplicateOfId = Guid.NewGuid()
+        };
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([row]);
         Services.AddSingleton(client.Object);
         var page = Render<ReceiptInbox>();
@@ -191,8 +195,12 @@ public class ReceiptInboxTest : ComponentTest
     public void Waits_for_both_suggestions_and_expense_matches_before_showing_receipts()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
-        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4),
-            Items = [new ReceiptItemInput { Name = "Milk" }] }, []);
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4),
+            Items = [new ReceiptItemInput { Name = "Milk" }]
+        }, []);
         var matches = new TaskCompletionSource<ICollection<ReceiptExpenseCandidate>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var suggestions = new TaskCompletionSource<ICollection<ReceiptInboxSuggestion>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new Mock<IReceiptsClient>();
@@ -214,7 +222,11 @@ public class ReceiptInboxTest : ComponentTest
     public void Matching_expense_replaces_add_to_group()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
-        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4) }, []);
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4)
+        }, []);
         var client = new Mock<IReceiptsClient>();
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
         client.Setup(x => x.MatchReceiptInboxAsync(receipt.Id, It.IsAny<CancellationToken>()))
@@ -231,7 +243,11 @@ public class ReceiptInboxTest : ComponentTest
     public async Task Attach_review_allows_selecting_a_different_match()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
-        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4) }, []);
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4)
+        }, []);
         var first = new ReceiptExpenseCandidate(Guid.NewGuid(), "Groceries", 10m, "USD", DateTimeOffset.UtcNow);
         var second = new ReceiptExpenseCandidate(Guid.NewGuid(), "Lunch", 10m, "USD", DateTimeOffset.UtcNow);
         var provider = Render<MudDialogProvider>();
@@ -256,7 +272,11 @@ public class ReceiptInboxTest : ComponentTest
     public void Expense_with_receipt_is_not_offered_as_an_attachment_target()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
-        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4) }, []);
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4)
+        }, []);
         var client = new Mock<IReceiptsClient>();
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
         client.Setup(x => x.MatchReceiptInboxAsync(receipt.Id, It.IsAny<CancellationToken>()))
@@ -272,8 +292,12 @@ public class ReceiptInboxTest : ComponentTest
     public void Suggestion_is_shown_with_receipt_after_loading()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD",
-            new SaveReceiptRequest { MerchantName = "Amazon", Total = 19.34m,
-                Items = [new ReceiptItemInput { Name = "Storage bins" }] }, []);
+            new SaveReceiptRequest
+            {
+                MerchantName = "Amazon",
+                Total = 19.34m,
+                Items = [new ReceiptItemInput { Name = "Storage bins" }]
+            }, []);
         var client = new Mock<IReceiptsClient>();
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
         Services.AddSingleton(client.Object);

@@ -16,7 +16,10 @@ public sealed class RealmDefinitionTests
         Assert.True(client["publicClient"]!.GetValue<bool>());
         Assert.True(client["standardFlowEnabled"]!.GetValue<bool>());
         foreach (var flow in new[] { "implicitFlowEnabled", "directAccessGrantsEnabled", "serviceAccountsEnabled" })
+        {
             Assert.False(client[flow]!.GetValue<bool>());
+        }
+
         Assert.Equal(["groupsplit://auth/callback"], Strings(client["redirectUris"]));
         Assert.Empty(Strings(client["webOrigins"]));
         Assert.Equal("S256", client["attributes"]!["pkce.code.challenge.method"]!.GetValue<string>());

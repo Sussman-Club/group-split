@@ -34,7 +34,9 @@ public sealed class DepartedDeleteGuard(ITransactionsClient transactions, IGroup
         CancellationToken ct = default)
     {
         if (groupId is not { } expected)
+        {
             return null;
+        }
 
         try
         {
@@ -49,7 +51,9 @@ public sealed class DepartedDeleteGuard(ITransactionsClient transactions, IGroup
             var details = await reading;
 
             if (details.GroupId is not { } groupOf)
+            {
                 return null;
+            }
 
             // Moved since the row was read: ask about the group it is in now.
             var people = groupOf == expected
@@ -61,7 +65,9 @@ public sealed class DepartedDeleteGuard(ITransactionsClient transactions, IGroup
             var roster = people.Select(person => person.Id).ToHashSet();
 
             if (!roster.Contains(details.PaidByUserId))
+            {
                 return details.PaidByUserName;
+            }
 
             // A share of nothing is no position, and the server lets such an entry go; so
             // must this, or the page refuses a delete the API would make.

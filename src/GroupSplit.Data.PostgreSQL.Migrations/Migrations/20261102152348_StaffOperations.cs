@@ -207,7 +207,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                 """);
 
 
-        migrationBuilder.Sql("""
+            migrationBuilder.Sql("""
             CREATE EXTENSION IF NOT EXISTS pg_trgm;
             CREATE INDEX "IX_SupportTicket_UpdatedAt_Id" ON "SupportTicket" ("UpdatedAt" DESC, "Id" DESC);
             CREATE INDEX "IX_SupportTicket_Status_UpdatedAt_Id" ON "SupportTicket" ("Status", "UpdatedAt" DESC, "Id" DESC);
@@ -225,7 +225,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-        migrationBuilder.Sql("""
+            migrationBuilder.Sql("""
             DROP INDEX "IX_User_FullName_Trgm";
             DROP INDEX "IX_User_Email_Trgm";
             DROP INDEX "IX_MerchantAlias_Name_Trgm";

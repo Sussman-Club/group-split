@@ -11,7 +11,10 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
 
     public async Task<FilingDestinationSuggestion?> SuggestFilingAsync(SuggestReceiptFilingRequest request, CancellationToken ct = default)
     {
-        try { return await receipts.SuggestReceiptFilingAsync(request, ct); }
+        try
+        {
+            return await receipts.SuggestReceiptFilingAsync(request, ct);
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception exception) when (ApiErrors.IsApiFailure(exception)) { return null; }
     }
@@ -39,7 +42,10 @@ public sealed class ReceiptCommands(IReceiptsClient receipts, ApiErrorPresenter 
 
     public async Task<ReceiptResponse?> GetAsync(Guid transactionId, CancellationToken ct = default)
     {
-        try { return await receipts.GetReceiptAsync(transactionId, ct); }
+        try
+        {
+            return await receipts.GetReceiptAsync(transactionId, ct);
+        }
         catch (OperationCanceledException) { throw; }
         // A 404 is an expense with no bill, which is most of them. Anything else is reported.
         catch (ApiException api) when (api.StatusCode == 404) { return null; }

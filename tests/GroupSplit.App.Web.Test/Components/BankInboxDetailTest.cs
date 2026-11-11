@@ -14,9 +14,14 @@ public class BankInboxDetailTest : ComponentTest
     {
         var id = Guid.NewGuid();
         var first = Match("Team lunch");
-        var second = Match("Dinner") with { IsSuggested = true };
+        var second = Match("Dinner") with
+        {
+            IsSuggested = true
+        };
         var row = new BankTransactionResponse(id, new DateOnly(2026, 11, 5), 38.73m, "USD", "CAFE", "Cafe", null, null, null, null, null, null, null, false, InboxStatus.New, null, null, "Checking", "Bank")
-        { PossibleDuplicates = [first, second] };
+        {
+            PossibleDuplicates = [first, second]
+        };
         var client = new Mock<IInboxClient>();
         client.Setup(x => x.GetBankTransactionAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
         client.Setup(x => x.GetBankTransactionMatchesAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
@@ -38,7 +43,9 @@ public class BankInboxDetailTest : ComponentTest
         var id = Guid.NewGuid();
         var match = Match("Lunch");
         var row = new BankTransactionResponse(id, new DateOnly(2026, 11, 5), 38.73m, "USD", "CAFE", "Cafe", null, null, null, null, null, null, null, false, InboxStatus.Ignored, null, null, "Checking", "Bank")
-        { PossibleDuplicates = [match] };
+        {
+            PossibleDuplicates = [match]
+        };
         var client = new Mock<IInboxClient>();
         client.Setup(x => x.GetBankTransactionAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
         Services.AddSingleton(client.Object);

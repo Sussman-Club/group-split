@@ -724,7 +724,10 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         _transactions
             .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId) with { SplitRuleId = departedRule });
+            .ReturnsAsync(Details(transactionId) with
+            {
+                SplitRuleId = departedRule
+            });
 
         _splitRules
             .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
@@ -1200,19 +1203,19 @@ public class UpdateTransactionDialogTest : ComponentTest
 
     private static TransactionDetailsResponse Details(
         Guid id, Guid? merchantId = null, Guid? splitRuleVersionId = null) => new()
-    {
-        SplitRuleVersionId = splitRuleVersionId,
-        Id = id,
-        Name = "Dinner",
-        Amount = 100m,
-        DateTime = DateTimeOffset.UtcNow,
-        GroupId = GroupId,
-        PaidByUserId = MeId,
-        CategoryId = FoodCategoryId,
-        Category = "Food",
-        MerchantId = merchantId,
-        Splits = [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)]
-    };
+        {
+            SplitRuleVersionId = splitRuleVersionId,
+            Id = id,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food",
+            MerchantId = merchantId,
+            Splits = [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)]
+        };
 
     private static TransactionResponse Row(Guid id) => new()
     {
@@ -1389,11 +1392,17 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         _transactions
             .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId) with { DateTime = PostedOnTheNinth });
+            .ReturnsAsync(Details(transactionId) with
+            {
+                DateTime = PostedOnTheNinth
+            });
 
         Render<MudPopoverProvider>();
 
-        return await OpenAsync(Row(transactionId) with { DateTime = PostedOnTheNinth });
+        return await OpenAsync(Row(transactionId) with
+        {
+            DateTime = PostedOnTheNinth
+        });
     }
 
     /// <summary>

@@ -52,7 +52,11 @@ public partial class AppDbContext
     private List<MerchantAlias> RecordMerchantNames()
     {
         var merchants = ChangedMerchantNames();
-        if (merchants.Count == 0) return [];
+        if (merchants.Count == 0)
+        {
+            return [];
+        }
+
         var names = merchants.Select(m => m.NormalizedName).ToArray();
         return AddCanonicalNames(merchants, Set<MerchantAlias>().Where(a => names.Contains(a.NormalizedName)).ToList());
     }
@@ -60,7 +64,11 @@ public partial class AppDbContext
     private async Task<List<MerchantAlias>> RecordMerchantNamesAsync(CancellationToken ct)
     {
         var merchants = ChangedMerchantNames();
-        if (merchants.Count == 0) return [];
+        if (merchants.Count == 0)
+        {
+            return [];
+        }
+
         var names = merchants.Select(m => m.NormalizedName).ToArray();
         return AddCanonicalNames(merchants, await Set<MerchantAlias>().Where(a => names.Contains(a.NormalizedName)).ToListAsync(ct));
     }
@@ -70,9 +78,19 @@ public partial class AppDbContext
         var added = new List<MerchantAlias>();
         foreach (var merchant in merchants)
         {
-            if (existing.Concat(Set<MerchantAlias>().Local).Any(a => a.NormalizedName == merchant.NormalizedName && a.MerchantId == merchant.Id)) continue;
-            var alias = new MerchantAlias { MerchantId = merchant.Id, Merchant = merchant, Name = merchant.Name,
-                NormalizedName = merchant.NormalizedName, CreatedAt = DateTimeOffset.UtcNow };
+            if (existing.Concat(Set<MerchantAlias>().Local).Any(a => a.NormalizedName == merchant.NormalizedName && a.MerchantId == merchant.Id))
+            {
+                continue;
+            }
+
+            var alias = new MerchantAlias
+            {
+                MerchantId = merchant.Id,
+                Merchant = merchant,
+                Name = merchant.Name,
+                NormalizedName = merchant.NormalizedName,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
             Add(alias);
             added.Add(alias);
         }

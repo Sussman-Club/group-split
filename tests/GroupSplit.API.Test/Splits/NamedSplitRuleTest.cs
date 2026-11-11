@@ -88,7 +88,9 @@ public class NamedSplitRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .FirstAsync(Ct);
 
         if (version is null)
+        {
             return null;
+        }
 
         return await DbContext.Set<SplitRuleVersion>()
             .Where(candidate => candidate.Id == version)

@@ -69,9 +69,17 @@ public sealed class AmountFormatTests : IDisposable
         On(culture);
         _api.Returns("/api/transactions", new
         {
-            id = Guid.NewGuid(), name = "Cena", description = (string?)null, amount = 12.50m,
-            dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
-            paidByUserId = Ana, paidByUserName = "Ana", categoryId = (Guid?)null, category = (string?)null
+            id = Guid.NewGuid(),
+            name = "Cena",
+            description = (string?)null,
+            amount = 12.50m,
+            dateTime = DateTimeOffset.UtcNow,
+            groupId = (Guid?)null,
+            groupName = (string?)null,
+            paidByUserId = Ana,
+            paidByUserName = "Ana",
+            categoryId = (Guid?)null,
+            category = (string?)null
         });
 
         var result = await Cli.RunAsync(

@@ -29,7 +29,10 @@ public class MerchantImageEditorTest : ComponentTest
         var url = MerchantLogos.BundledPath + "lidl.svg";
         Assert.Equal(url, editor.Find(".staff-logo-preview img").GetAttribute("src"));
         Assert.True(editor.Instance.HasUnsavedChanges);
-        await editor.Find(".staff-field input").ChangeAsync(new() { Value = "Lidl Market" });
+        await editor.Find(".staff-field input").ChangeAsync(new()
+        {
+            Value = "Lidl Market"
+        });
         await editor.Find("form").SubmitAsync();
         _staff.Verify(s => s.SaveMerchantAsync(merchant.Id, It.Is<UpdateMerchantRequest>(r => r.Name == "Lidl Market" && r.LogoUrl == url)), Times.Once);
     }
@@ -37,7 +40,10 @@ public class MerchantImageEditorTest : ComponentTest
     [Fact]
     public async Task Removing_the_image_saves_a_null_logo_and_shows_initials()
     {
-        var merchant = Merchant with { LogoUrl = MerchantLogos.BundledPath + "lidl.svg" };
+        var merchant = Merchant with
+        {
+            LogoUrl = MerchantLogos.BundledPath + "lidl.svg"
+        };
         var editor = Render<MerchantDirectoryEditor>(p => p.Add(c => c.Merchant, merchant));
         await editor.Find(".staff-logo-remove").ClickAsync(new());
         Assert.Empty(editor.FindAll(".staff-logo-preview img"));

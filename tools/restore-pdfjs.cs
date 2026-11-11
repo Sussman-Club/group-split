@@ -4,7 +4,9 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 
 if (args.Length != 4)
+{
     throw new ArgumentException("Expected version, SHA-512 integrity, asset directory, and cache directory.");
+}
 
 var (version, integrity, destination, cache) = (args[0], args[1], Path.GetFullPath(args[2]), Path.GetFullPath(args[3]));
 var marker = Path.Combine(destination, ".restored");
@@ -13,7 +15,9 @@ if (File.Exists(marker))
     var manifest = File.ReadAllLines(marker);
     if (manifest.Length > 2 && manifest[0] == version && manifest[1] == integrity
         && manifest.Skip(2).All(name => File.Exists(Path.Combine(destination, name))))
+    {
         return;
+    }
 }
 
 Directory.CreateDirectory(cache);
@@ -39,7 +43,10 @@ try
     while (tar.GetNextEntry() is { } entry)
     {
         if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+        {
             continue;
+        }
+
         var name = entry.Name;
         string? relative = name switch
         {
@@ -51,19 +58,32 @@ try
                 || name.StartsWith("package/wasm/", StringComparison.Ordinal) => name[8..],
             _ => null
         };
-        if (relative is null) continue;
+        if (relative is null)
+        {
+            continue;
+        }
+
         var output = Path.GetFullPath(Path.Combine(staging, relative));
         if (!output.StartsWith(staging + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
             throw new InvalidDataException("Package asset escapes its extraction directory.");
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         entry.ExtractToFile(output, overwrite: false);
         File.SetLastWriteTimeUtc(output, DateTime.UtcNow);
     }
     if (!File.Exists(Path.Combine(staging, "pdf.min.mjs"))
         || !File.Exists(Path.Combine(staging, "pdf.worker.min.mjs")))
+    {
         throw new InvalidDataException("PDF.js package is missing the renderer or worker.");
+    }
     // Only this dedicated, generated asset directory is replaced.
-    if (Directory.Exists(destination)) Directory.Delete(destination, recursive: true);
+    if (Directory.Exists(destination))
+    {
+        Directory.Delete(destination, recursive: true);
+    }
+
     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
     Directory.Move(staging, destination);
     File.WriteAllLines(marker, new[] { version, integrity }.Concat(
@@ -73,11 +93,16 @@ try
 }
 finally
 {
-    if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+    if (Directory.Exists(staging))
+    {
+        Directory.Delete(staging, recursive: true);
+    }
 }
 
 void Verify(byte[] bytes)
 {
     if (!CryptographicOperations.FixedTimeEquals(SHA512.HashData(bytes), Convert.FromBase64String(integrity)))
+    {
         throw new InvalidDataException("PDF.js package SHA-512 integrity check failed. Remove the cached archive and retry.");
+    }
 }

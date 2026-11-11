@@ -55,8 +55,11 @@ public class BillDivisionTest : ComponentTest
         _rules.Setup(r => r.GetAsync(_ruleId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleDetailsResponse
             {
-                Id = _ruleId, GroupId = _group, Name = "Everyone evenly",
-                VersionId = _versionId, Definition = new EvenSplitRuleDto()
+                Id = _ruleId,
+                GroupId = _group,
+                Name = "Everyone evenly",
+                VersionId = _versionId,
+                Definition = new EvenSplitRuleDto()
             });
     }
 
@@ -65,7 +68,10 @@ public class BillDivisionTest : ComponentTest
 
     private ReceiptResponse Bill(params ReceiptItemResponse[] items) =>
         new(Guid.NewGuid(), _expense, items.Sum(i => i.TotalPrice), 0, 0, items.Sum(i => i.TotalPrice),
-            items.Count(i => i.SplitRuleVersionId is null), false, true, items) { CanEdit = true };
+            items.Count(i => i.SplitRuleVersionId is null), false, true, items)
+        {
+            CanEdit = true
+        };
 
     private IRenderedComponent<BillDivision> Open(ReceiptResponse bill, decimal? amount = null) =>
         Render<BillDivision>(p => p
@@ -221,8 +227,11 @@ public class BillDivisionTest : ComponentTest
         _rules.Setup(r => r.GetAsync(billRule, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleDetailsResponse
             {
-                Id = billRule, GroupId = _group, Name = "Divide by the bill",
-                VersionId = billVersion, Definition = new ItemizedSplitRuleDto()
+                Id = billRule,
+                GroupId = _group,
+                Name = "Divide by the bill",
+                VersionId = billVersion,
+                Definition = new ItemizedSplitRuleDto()
             });
 
         var page = Open(Bill(Line("Bacalhau", 22, null, null)));
@@ -263,8 +272,11 @@ public class BillDivisionTest : ComponentTest
             .Setup(r => r.GetAsync(departedRule, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleDetailsResponse
             {
-                Id = departedRule, GroupId = _group, Name = "All for departed",
-                VersionId = departedVersion, Definition = new SoleSplitRuleDto(departed)
+                Id = departedRule,
+                GroupId = _group,
+                Name = "All for departed",
+                VersionId = departedVersion,
+                Definition = new SoleSplitRuleDto(departed)
             });
 
         var page = Open(Bill(Line("Bacalhau", 22, null, null)));
@@ -295,8 +307,11 @@ public class BillDivisionTest : ComponentTest
         _rules.Setup(r => r.GetAsync(rule, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitRuleDetailsResponse
             {
-                Id = rule, GroupId = _group, Name = "Groceries split",
-                VersionId = version, Definition = new EvenSplitRuleDto()
+                Id = rule,
+                GroupId = _group,
+                Name = "Groceries split",
+                VersionId = version,
+                Definition = new EvenSplitRuleDto()
             });
 
         return (rule, version);

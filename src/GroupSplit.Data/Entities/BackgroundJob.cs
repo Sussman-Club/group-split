@@ -1,6 +1,13 @@
 namespace GroupSplit.Data.Entities;
 
-public enum BackgroundJobStatus { Pending, Running, Completed, Failed, AwaitingOperator }
+public enum BackgroundJobStatus
+{
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    AwaitingOperator
+}
 
 /// <summary>A durable invocation. Payloads contain identifiers, never credentials.</summary>
 public sealed class BackgroundJob : Entity

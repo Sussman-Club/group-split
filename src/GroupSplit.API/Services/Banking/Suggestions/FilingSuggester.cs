@@ -87,14 +87,18 @@ public sealed class FilingSuggester(
         var settings = options.Value;
 
         if (!settings.IsConfigured || rows.Count == 0)
+        {
             return [];
+        }
 
         // Everything from the database first, in sequence: the context is not one to share
         // between the calls below, which are the slow part and go out together.
         var destinations = await DestinationsAsync(ct);
 
         if (destinations.Count == 0)
+        {
             return [];
+        }
 
         var history = await HistoryAsync(rows.Select(item => item.Row), destinations, settings.HistoryLimit, ct);
 
@@ -120,12 +124,20 @@ public sealed class FilingSuggester(
     {
         var settings = options.Value;
         if (!settings.IsConfigured)
+        {
             return null;
+        }
+
         var destinations = await DestinationsAsync(ct);
         if (request.GroupId is { } groupId)
+        {
             destinations = destinations.Where(destination => destination.GroupId == groupId).ToList();
+        }
+
         if (destinations.Count == 0)
+        {
             return null;
+        }
 
         var row = new FilingInput(Guid.Empty, request.Receipt.PurchaseDate, request.Receipt.Total,
             request.Currency, request.Receipt.MerchantName ?? "Receipt", request.Receipt.MerchantName);
@@ -157,7 +169,9 @@ public sealed class FilingSuggester(
             .ToList();
 
         if (fitting.Count == 0)
+        {
             return null;
+        }
 
         var labelled = Label(fitting);
 
@@ -174,7 +188,10 @@ public sealed class FilingSuggester(
                 async token =>
                 {
                     if (!modelLimiter.TryAcquire(userContext.User.Id))
+                    {
                         throw new DecisionFailedException();
+                    }
+
                     modelWasCalled = true;
                     return new CachedSuggestion(await AskAsync(row, receipt, earlier, labelled, choices, settings, token));
                 },
@@ -251,7 +268,10 @@ public sealed class FilingSuggester(
             Instructions,
             // The source id identifies the result, but does not change the decision.
             // Normalizing it lets receipt list and detail requests share the same cache entry.
-            input = row with { Id = Guid.Empty },
+            input = row with
+            {
+                Id = Guid.Empty
+            },
             // The entire caller-visible set participates too. A newly added category gets a
             // fresh answer even if the request's size cap would not offer it this time.
             allDestinations = allDestinations.Select(destination => new
@@ -277,7 +297,11 @@ public sealed class FilingSuggester(
                 destination.CategoryDescription
             }),
             earlier = earlier.Select(destination => new { destination.GroupId, destination.CategoryId }),
-            receipt = receipt is null ? null : new { receipt.MerchantName, receipt.Items },
+            receipt = receipt is null ? null : new
+            {
+                receipt.MerchantName,
+                receipt.Items
+            },
             settings.Deployment,
             settings.Threshold
         });
@@ -310,7 +334,11 @@ public sealed class FilingSuggester(
                 .ToList(),
         receipt = receipt is null
             ? null
-            : new { merchant = receipt.MerchantName, items = receipt.Items }
+            : new
+            {
+                merchant = receipt.MerchantName,
+                items = receipt.Items
+            }
     };
 
     private static string Merchant(FilingInput row) =>
@@ -329,7 +357,9 @@ public sealed class FilingSuggester(
             var label = destination.Label;
 
             for (var n = 2; labelled.ContainsKey(label) || label == CannotTell; n++)
+            {
                 label = $"{destination.Label} ({n})";
+            }
 
             labelled[label] = destination;
         }
@@ -383,7 +413,9 @@ public sealed class FilingSuggester(
         var merchants = rows.Select(row => row.MerchantId).OfType<Guid>().Distinct().ToList();
 
         if (merchants.Count == 0 || limit <= 0)
+        {
             return new Dictionary<Guid, IReadOnlyList<Destination>>();
+        }
 
         var me = userContext.User.Id;
 

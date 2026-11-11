@@ -90,15 +90,25 @@ public record PersonSettlement(
         foreach (var @group in Groups.OrderByDescending(@group => @group.Amount))
         {
             if (remaining <= 0)
+            {
                 break;
+            }
 
             var part = Math.Min(remaining, @group.Amount);
-            allocations.Add(@group with { Amount = part });
+            allocations.Add(@group with
+            {
+                Amount = part
+            });
             remaining -= part;
         }
 
         if (remaining > 0 && allocations.Count > 0)
-            allocations[0] = allocations[0] with { Amount = allocations[0].Amount + remaining };
+        {
+            allocations[0] = allocations[0] with
+            {
+                Amount = allocations[0].Amount + remaining
+            };
+        }
 
         return allocations;
     }

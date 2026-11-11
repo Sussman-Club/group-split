@@ -210,7 +210,9 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var dollars = await Row(amount: 9m, currency: "USD", providerId: "usd");
 
         foreach (var row in new[] { euros, pounds, dollars })
+        {
             await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+        }
 
         var filed = await DbContext.Set<Expense>().AsNoTracking()
             .ToDictionaryAsync(expense => expense.BankTransactionId!.Value, expense => expense.Currency, Ct);
@@ -384,7 +386,10 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal("waiting", Assert.Single(await Listed(september)).ProviderTransactionId);
 
         Assert.Equal("ignored",
-            Assert.Single(await Listed(september with { Status = InboxStatus.Ignored })).ProviderTransactionId);
+            Assert.Single(await Listed(september with
+            {
+                Status = InboxStatus.Ignored
+            })).ProviderTransactionId);
     }
 
     /// <summary>

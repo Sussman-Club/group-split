@@ -92,11 +92,30 @@ public sealed class DefinitionOptions
 
         var chosen = new List<string>();
 
-        if (parse.GetValue(_even) || parse.GetResult(_among) is not null) chosen.Add("--even");
-        if (parse.GetResult(_sole) is not null) chosen.Add("--sole");
-        if (parse.GetValue(_payer)) chosen.Add("--payer");
-        if (parse.GetResult(_percent) is not null) chosen.Add("--percent");
-        if (parse.GetResult(_shares) is not null) chosen.Add("--shares");
+        if (parse.GetValue(_even) || parse.GetResult(_among) is not null)
+        {
+            chosen.Add("--even");
+        }
+
+        if (parse.GetResult(_sole) is not null)
+        {
+            chosen.Add("--sole");
+        }
+
+        if (parse.GetValue(_payer))
+        {
+            chosen.Add("--payer");
+        }
+
+        if (parse.GetResult(_percent) is not null)
+        {
+            chosen.Add("--percent");
+        }
+
+        if (parse.GetResult(_shares) is not null)
+        {
+            chosen.Add("--shares");
+        }
 
         if (chosen.Count > 1)
         {

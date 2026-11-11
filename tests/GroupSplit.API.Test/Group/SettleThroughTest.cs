@@ -123,8 +123,11 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense(group, 100, On(8, 20));
         await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
-            UserId = other.Id, Amount = 40, Direction = SettlementDirection.TheyPaidYou,
-            Date = On(9, 2), Through = EndOfAugust
+            UserId = other.Id,
+            Amount = 40,
+            Direction = SettlementDirection.TheyPaidYou,
+            Date = On(9, 2),
+            Through = EndOfAugust
         }, Ct);
         var august = Assert.Single(await Transfers(group));
 
@@ -150,7 +153,10 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Settlements().RecordRepayment(group, new RecordRepaymentRequest
         {
-            FromUserId = third.Id, ToUserId = other.Id, Amount = 30, Date = On(9, 5)
+            FromUserId = third.Id,
+            ToUserId = other.Id,
+            Amount = 30,
+            Date = On(9, 5)
         }, Ct);
         await TheyPaidMe(group, other, 30, On(9, 6));
 
@@ -198,7 +204,10 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await TheyPaidMe(group.Id, second, 50, On(9, 2));
         await Settlements().RecordRepayment(group.Id, new RecordRepaymentRequest
         {
-            FromUserId = first.Id, ToUserId = bystander.Id, Amount = 50, Date = On(9, 3)
+            FromUserId = first.Id,
+            ToUserId = bystander.Id,
+            Amount = 50,
+            Date = On(9, 3)
         }, Ct);
 
         var owedToMe = (await Settlements().GetPlan(new Cutoff(EndOfAugust), Ct)).OwedToYou;
@@ -247,8 +256,11 @@ public class SettleThroughTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Expense(group, 100, On(9, 20));
         await GetService<ISettlementService>().Settle(group, new SettleRequest
         {
-            UserId = other.Id, Amount = 50, Direction = SettlementDirection.TheyPaidYou,
-            Date = On(10, 9), Through = EndOfSeptember
+            UserId = other.Id,
+            Amount = 50,
+            Direction = SettlementDirection.TheyPaidYou,
+            Date = On(10, 9),
+            Through = EndOfSeptember
         }, Ct);
 
         var refused = await Assert.ThrowsAsync<ConflictException>(() =>

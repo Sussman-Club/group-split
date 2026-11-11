@@ -27,11 +27,11 @@ public class EvenSplitRuleHandler
             ? ruleVersion.Participants.Select(participant => participant.UserId)
             : members;
 
-        return [..among.Select(userId => new SplitWeight(userId, 1))];
+        return [.. among.Select(userId => new SplitWeight(userId, 1))];
     }
 
     public override SplitRuleDto ToDto(EvenSplitRuleVersion ruleVersion) =>
-        new EvenSplitRuleDto([..ruleVersion.Participants.Select(participant => participant.UserId)]);
+        new EvenSplitRuleDto([.. ruleVersion.Participants.Select(participant => participant.UserId)]);
 
     public SplitRuleVersion FromDto(EvenSplitRuleDto definition) =>
         Naming(new EvenSplitRuleVersion(),

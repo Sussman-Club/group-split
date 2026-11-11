@@ -25,12 +25,10 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var currentUser = userService.User;
 
-        // Create a new group with current user
         var group = await groupService.CreateGroup(
             new CreateGroupRequest { Name = "Settle Group" },
             TestContext.Current.CancellationToken);
 
-        // Add another member
         var otherUser = await CreateNewUser();
 
         await JoinGroup(group.Id, otherUser);
@@ -171,7 +169,6 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var groupService = GetService<IGroupService>();
 
-        // Create group with only current user
         var group = await groupService.CreateGroup(
             new CreateGroupRequest { Name = "Settle Group" },
             TestContext.Current.CancellationToken);

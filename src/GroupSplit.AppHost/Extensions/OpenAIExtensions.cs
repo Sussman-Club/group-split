@@ -36,10 +36,8 @@ public static class OpenAIExtensions
 
             defaultApiKeyParameter.WithParentRelationship(resource);
 
-            // Register the health check
             var healthCheckKey = $"{name}_check";
 
-            // Ensure IHttpClientFactory is available by registering HTTP client services
             builder.Services.AddHttpClient();
 
             builder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
@@ -367,7 +365,6 @@ public static class OpenAIExtensions
                     ["endpoint"] = s_statusPageUri.ToString()
                 };
 
-                // Map indicator -> HealthStatus
                 return indicator switch
                 {
                     "none" => HealthCheckResult.Healthy(description.Length > 0

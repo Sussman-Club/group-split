@@ -87,8 +87,10 @@ public partial class MerchantService(ICurrentUser userContext, AppDbContext dbCo
             var needle = search.Trim().ToLowerInvariant();
 
             if (needle.Length < MinimumSearchLength)
+            {
                 throw new ValidationException(ErrorCodes.MerchantSearchTooShort,
                     $"Search for at least {MinimumSearchLength} characters, or leave the search out.");
+            }
 
             query = query.Where(merchant => merchant.NormalizedName.Contains(needle));
         }
@@ -235,11 +237,15 @@ public partial class MerchantService(ICurrentUser userContext, AppDbContext dbCo
     private static string? AllowedLogo(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             return null;
+        }
 
         if (!MerchantLogos.IsAllowed(value))
+        {
             throw new ValidationException(ErrorCodes.MerchantLogoNotAllowed,
                 "A merchant's logo must be an uploaded image, a bundled image, or a supported provider logo.");
+        }
 
         return value.Trim();
     }

@@ -66,8 +66,12 @@ public class SeededItemizedExpenseTest
         var bill = Bill();
         var doesNotAddUp = new TransactionSeedDto
         {
-            Id = bill.Id, PayerId = bill.PayerId, CategoryId = bill.CategoryId, Amount = bill.Amount,
-            Name = bill.Name, DateTime = bill.DateTime,
+            Id = bill.Id,
+            PayerId = bill.PayerId,
+            CategoryId = bill.CategoryId,
+            Amount = bill.Amount,
+            Name = bill.Name,
+            DateTime = bill.DateTime,
             Receipt = new ReceiptSeedDto { Tax = 2m, Items = bill.Receipt!.Items }
         };
 

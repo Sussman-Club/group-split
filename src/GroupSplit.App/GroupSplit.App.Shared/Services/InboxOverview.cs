@@ -28,7 +28,15 @@ public sealed class InboxOverview(IReceiptsClient receipts, IInboxStateService b
         await errors.TryAsync(async () => ReceiptCount = (await receipts.ListReceiptInboxAsync()).Count, "Could not load receipt count.");
         Notify();
     }
-    public void SetReceiptCount(int count) { ReceiptCount = count; Notify(); }
+    public void SetReceiptCount(int count)
+    {
+        ReceiptCount = count;
+        Notify();
+    }
     private void Notify() => Changed?.Invoke();
-    public void Dispose() { bank.OnChanged -= Notify; changes.ReceiptsChanged -= Refresh; }
+    public void Dispose()
+    {
+        bank.OnChanged -= Notify;
+        changes.ReceiptsChanged -= Refresh;
+    }
 }

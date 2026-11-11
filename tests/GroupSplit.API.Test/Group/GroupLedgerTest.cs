@@ -260,13 +260,21 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group, PaidByUserId = Me.Id, CategoryId = food,
-            Name = "Dinner", Amount = 100, DateTime = DateTimeOffset.UtcNow
+            GroupId = group,
+            PaidByUserId = Me.Id,
+            CategoryId = food,
+            Name = "Dinner",
+            Amount = 100,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group, PaidByUserId = friend.Id, CategoryId = travel,
-            Name = "Taxi", Amount = 20, DateTime = DateTimeOffset.UtcNow
+            GroupId = group,
+            PaidByUserId = friend.Id,
+            CategoryId = travel,
+            Name = "Taxi",
+            Amount = 20,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         await Expense(group, 10, "Loose change", paidBy: friend);
         await Settle(group, friend, 5);

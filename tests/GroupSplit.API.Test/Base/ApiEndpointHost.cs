@@ -233,7 +233,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
                 SchemeName);
 
             if (Request.Headers.TryGetValue("X-Test-Realm-Access", out var realmAccess))
+            {
                 identity.AddClaim(new Claim("realm_access", realmAccess.ToString()));
+            }
 
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));

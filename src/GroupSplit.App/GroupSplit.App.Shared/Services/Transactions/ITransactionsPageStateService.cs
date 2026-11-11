@@ -11,28 +11,46 @@ namespace GroupSplit.App.Shared.Services.Transactions;
 public interface ITransactionsPageStateService
 {
     /// <summary>The page on screen, or null before the first one has landed.</summary>
-    PagedResponse<TransactionResponse>? Page { get; }
+    PagedResponse<TransactionResponse>? Page
+    {
+        get;
+    }
 
     /// <summary>The question <see cref="Page"/> is the answer to.</summary>
-    TransactionQuery Query { get; }
+    TransactionQuery Query
+    {
+        get;
+    }
 
     /// <summary>
     /// Everything the person has recorded, counted and totalled by the server. The tiles
     /// read these rather than adding up <see cref="Page"/>, which holds one page of it.
     /// </summary>
-    TransactionSummaryResponse? Summary { get; }
+    TransactionSummaryResponse? Summary
+    {
+        get;
+    }
 
     /// <summary>The same, for the calendar month in progress.</summary>
-    TransactionSummaryResponse? MonthSummary { get; }
+    TransactionSummaryResponse? MonthSummary
+    {
+        get;
+    }
 
     /// <summary>
     /// The same again for what the current search matches, or null when nothing is being
     /// searched for.
     /// </summary>
-    TransactionSummaryResponse? MatchesSummary { get; }
+    TransactionSummaryResponse? MatchesSummary
+    {
+        get;
+    }
 
     event Action? OnTransactionsChanged;
-    Task IsReadyTask { get; }
+    Task IsReadyTask
+    {
+        get;
+    }
 
     /// <summary>
     /// Reads the page <paramref name="query"/> asks for. A query equal to the one already

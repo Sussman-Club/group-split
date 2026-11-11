@@ -26,7 +26,9 @@ internal class AuthDelegatingHandler(
         var user = await userAccessor.GetCurrentUserAsync(cancellationToken);
 
         if (user.Identity?.IsAuthenticated is not true)
+        {
             return Unauthorized(request);
+        }
 
         var result = await tokenManager.GetAccessTokenAsync(user, ct: cancellationToken);
 
@@ -71,5 +73,8 @@ internal class AuthDelegatingHandler(
     }
 
     private static HttpResponseMessage Unauthorized(HttpRequestMessage request) =>
-        new(HttpStatusCode.Unauthorized) { RequestMessage = request };
+        new(HttpStatusCode.Unauthorized)
+        {
+            RequestMessage = request
+        };
 }

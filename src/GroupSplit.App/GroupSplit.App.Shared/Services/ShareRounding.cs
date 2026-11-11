@@ -48,15 +48,21 @@ public static class ShareRounding
     public static string? Unbalanced(decimal amount, IReadOnlyCollection<SplitInput>? shares)
     {
         if (shares is null)
+        {
             return null;
+        }
 
         var remaining = Remaining(amount, shares);
 
         if (remaining > 0m)
+        {
             return UiText.Format($"{remaining.ToMoney()} still to assign.");
+        }
 
         if (remaining < 0m)
+        {
             return UiText.Format($"{(-remaining).ToMoney()} more than the expense comes to.");
+        }
 
         return shares.All(share => IsWholeCents(share.Amount))
             ? null

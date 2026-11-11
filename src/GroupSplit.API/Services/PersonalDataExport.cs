@@ -24,7 +24,11 @@ public sealed class PersonalDataExport(AppDbContext db, IPersonalDataReader read
         var archive = await writer.Write(records, ct);
         try
         {
-            if (snapshot is not null) await snapshot.CommitAsync(ct);
+            if (snapshot is not null)
+            {
+                await snapshot.CommitAsync(ct);
+            }
+
             return archive;
         }
         catch

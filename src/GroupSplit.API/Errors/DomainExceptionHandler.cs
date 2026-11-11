@@ -33,7 +33,9 @@ internal sealed class DomainExceptionHandler(
         CancellationToken cancellationToken)
     {
         if (exception is not DomainException domainException)
+        {
             return false;
+        }
 
         if (domainException is LeftBehindException)
         {

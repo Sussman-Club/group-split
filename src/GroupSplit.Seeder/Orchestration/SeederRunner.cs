@@ -21,7 +21,9 @@ public class SeederRunner : BackgroundService, IAsyncDisposable
             var scope = scopeFactory.CreateAsyncScope();
             _scopes.Add(scope);
             if (scope.ServiceProvider.GetRequiredService(seederType) is ISeeder seeder)
+            {
                 _seeders.Add(seeder);
+            }
         }
     }
 

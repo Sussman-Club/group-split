@@ -244,7 +244,11 @@ public class SchedulingTests
         public Task<IJobHandle> DispatchAsync(IJob job, CancellationToken cancellationToken = default)
         {
             Attempts++;
-            if (FailNext) { FailNext = false; throw new InvalidOperationException("Scripted failure"); }
+            if (FailNext)
+            {
+                FailNext = false;
+                throw new InvalidOperationException("Scripted failure");
+            }
             Jobs.Add(job);
             return Task.FromResult<IJobHandle>(new DefaultJobHandle(Task.CompletedTask));
         }

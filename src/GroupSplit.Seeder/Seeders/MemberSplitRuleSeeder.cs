@@ -45,7 +45,9 @@ public class MemberSplitRuleSeeder(
             // Find-or-create, so running the seeder twice writes nothing the second time --
             // the same property every other seeder here has.
             foreach (var member in group.Users)
+            {
                 await memberRules.EnsureFor(group, member, ct);
+            }
         }
 
         // And every guest, who has one as well from the moment they are added. The seeded
@@ -57,7 +59,9 @@ public class MemberSplitRuleSeeder(
             .ToListAsync(ct);
 
         foreach (var guest in guests)
+        {
             await memberRules.EnsureFor(guest.Group, guest.Participant, ct);
+        }
 
         logger.LogInformation("Seeded {Count} {Entity}", await Provisioned(ct) - before, "MemberSplitRule");
     }

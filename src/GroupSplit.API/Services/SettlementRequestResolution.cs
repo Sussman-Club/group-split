@@ -19,6 +19,8 @@ internal static class SettlementRequestResolution
         foreach (var request in candidates.Where(request => request.Groups.Count == payments.Count &&
             request.Groups.All(part => payments.Any(payment => payment.GroupId == part.GroupId &&
                 payment.Amount == part.RequestedAmount))))
+        {
             request.ResolvedAt = now;
+        }
     }
 }

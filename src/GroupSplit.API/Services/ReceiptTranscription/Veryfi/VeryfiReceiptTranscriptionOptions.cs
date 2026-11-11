@@ -1,4 +1,4 @@
-﻿namespace GroupSplit.API.Services.ReceiptTranscription.Veryfi;
+namespace GroupSplit.API.Services.ReceiptTranscription.Veryfi;
 
 /// <summary>Veryfi's credentials and endpoint, kept at the provider boundary.</summary>
 public sealed class VeryfiReceiptTranscriptionOptions

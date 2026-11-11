@@ -9,12 +9,17 @@ namespace GroupSplit.Shared;
 /// </summary>
 public record SaveReceiptRequest
 {
-    [MaxDecimalPlaces(2)] public decimal Subtotal { get; init; }
-    [MaxDecimalPlaces(2)] public decimal Tax { get; init; }
-    [MaxDecimalPlaces(2)] public decimal Tip { get; init; }
-    [MaxDecimalPlaces(2)] public decimal Total { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal Subtotal { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal Tax { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal Tip { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal Total { get; init; }
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
-    [StringLength(128)] public string? MerchantName { get; init; }
+    [StringLength(128)]
+    public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
 }
 
@@ -28,18 +33,24 @@ public record ReceiptItemInput
     /// </summary>
     public Guid? Id { get; init; }
     [Required, StringLength(NameLength)] public string Name { get; init; } = null!;
-    [StringLength(128)] public string? NormalizedName { get; init; }
+    [StringLength(128)]
+    public string? NormalizedName { get; init; }
     /// <summary>
     /// The source wording. On an existing line, null leaves the saved wording unchanged;
     /// an empty string explicitly clears it.
     /// </summary>
-    [StringLength(1000)] public string? Description { get; init; }
-    [MaxDecimalPlaces(2)] public decimal UnitPrice { get; init; }
+    [StringLength(1000)]
+    public string? Description { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal UnitPrice { get; init; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
-    [MaxDecimalPlaces(2)] public decimal TotalPrice { get; init; }
-    [MaxDecimalPlaces(2)] public decimal TaxAmount { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal TotalPrice { get; init; }
+    [MaxDecimalPlaces(2)]
+    public decimal TaxAmount { get; init; }
     /// <summary>Percentage points: 7.5 means 7.5%, rather than a ratio of 0.075.</summary>
-    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; init; }
+    [Range(0, 100), MaxDecimalPlaces(4)]
+    public decimal? TaxRate { get; init; }
     public bool? IsTaxable { get; init; }
     /// <summary>
     /// The exact saved version to use. Null on a new line starts it on the first rule a line
@@ -56,12 +67,17 @@ public record ReceiptItemInput
 public sealed class ReceiptItemPatch
 {
     [Required, StringLength(128)] public string Name { get; set; } = string.Empty;
-    [StringLength(1000)] public string? Description { get; set; }
-    [MaxDecimalPlaces(2)] public decimal UnitPrice { get; set; }
+    [StringLength(1000)]
+    public string? Description { get; set; }
+    [MaxDecimalPlaces(2)]
+    public decimal UnitPrice { get; set; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; set; } = 1;
-    [MaxDecimalPlaces(2)] public decimal TotalPrice { get; set; }
-    [MaxDecimalPlaces(2)] public decimal TaxAmount { get; set; }
-    [Range(0, 100), MaxDecimalPlaces(4)] public decimal? TaxRate { get; set; }
+    [MaxDecimalPlaces(2)]
+    public decimal TotalPrice { get; set; }
+    [MaxDecimalPlaces(2)]
+    public decimal TaxAmount { get; set; }
+    [Range(0, 100), MaxDecimalPlaces(4)]
+    public decimal? TaxRate { get; set; }
     public bool? IsTaxable { get; set; }
     public Guid? SplitRuleVersionId { get; set; }
 }

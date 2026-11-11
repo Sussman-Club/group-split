@@ -214,11 +214,24 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var upload = await Client.PostAsync($"/receipts/inbox/{receiptId}/files", FileContent("receipt.pdf", "application/pdf"), Ct);
         upload.EnsureSuccessStatusCode();
         var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
-        var details = new SaveReceiptRequest { MerchantName = "Shop", Subtotal = 10m, Total = 10m,
-            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 10m, TotalPrice = 10m }] };
+        var details = new SaveReceiptRequest
+        {
+            MerchantName = "Shop",
+            Subtotal = 10m,
+            Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 10m, TotalPrice = 10m }]
+        };
         (await Client.PutAsJsonAsync($"/receipts/inbox/{receiptId}", new SaveReceiptInboxRequest { Receipt = details }, Json, Ct)).EnsureSuccessStatusCode();
-        var file = new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest
-            { Name = "Lunch", Amount = 10m, Currency = "USD", DateTime = DateTimeOffset.UtcNow } };
+        var file = new FileReceiptInboxRequest
+        {
+            NewExpense = new CreateTransactionRequest
+            {
+                Name = "Lunch",
+                Amount = 10m,
+                Currency = "USD",
+                DateTime = DateTimeOffset.UtcNow
+            }
+        };
         var filedResponse = await Client.PostAsJsonAsync($"/receipts/inbox/{receiptId}/file", file, Json, Ct);
         filedResponse.EnsureSuccessStatusCode();
         var filed = (await filedResponse.Content.ReadFromJsonAsync<ReceiptInboxResponse>(Json, Ct))!;
@@ -265,9 +278,17 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var expenseId = await CreateExpense();
         (await Client.PostAsync($"/transactions/{expenseId}/receipt-attachments", FileContent("first.pdf", "application/pdf"), Ct)).EnsureSuccessStatusCode();
         var receiptId = Guid.NewGuid();
-        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest
-        { MerchantName = "Shop", PurchaseDate = DateOnly.FromDateTime(DateTime.UtcNow), Subtotal = 10m, Total = 10m,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] } };
+        var receipt = new SaveReceiptInboxRequest
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Shop",
+                PurchaseDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Subtotal = 10m,
+                Total = 10m,
+                Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+            }
+        };
         (await Client.PutAsJsonAsync($"/receipts/inbox/{receiptId}", receipt, Json, Ct)).EnsureSuccessStatusCode();
 
         var matches = await Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{receiptId}/matches", Json, Ct);
@@ -336,7 +357,10 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var content = new MultipartFormDataContent();
         var file = new ByteArrayContent(StoredFile);
         if (!string.IsNullOrWhiteSpace(contentType))
+        {
             file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        }
+
         content.Add(file, "file", name);
         return content;
     }

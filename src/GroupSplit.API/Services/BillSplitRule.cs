@@ -60,7 +60,9 @@ public sealed class BillSplitRule(AppDbContext context) : IBillSplitRule
                     version.SupersededAt == null && version is ItemizedSplitRuleVersion), ct);
 
         if (existing is not null)
+        {
             return existing;
+        }
 
         var rule = new SplitRule
         {
@@ -93,14 +95,18 @@ public sealed class BillSplitRule(AppDbContext context) : IBillSplitRule
             .ToListAsync(ct);
 
         if (!taken.Contains(Name, StringComparer.OrdinalIgnoreCase))
+        {
             return Name;
+        }
 
         for (var suffix = 2; ; suffix++)
         {
             var candidate = $"{Name} ({suffix})";
 
             if (!taken.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
                 return candidate;
+            }
         }
     }
 }

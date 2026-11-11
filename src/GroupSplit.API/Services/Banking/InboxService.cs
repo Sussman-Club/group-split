@@ -136,7 +136,9 @@ public sealed class InboxService(
         var count = await waiting.CountAsync(ct);
 
         if (!withDuplicates)
+        {
             return new InboxSummaryResponse(count);
+        }
 
         return new InboxSummaryResponse(count, await matcher.CountConfident(waiting, ct));
     }
@@ -228,7 +230,9 @@ public sealed class InboxService(
         IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
     {
         if (ids.Count == 0)
+        {
             return new Dictionary<Guid, IReadOnlyList<DuplicateMatch>>();
+        }
 
         // Through the caller's own rows, like every other read here: ids that are not
         // theirs simply do not come back, and nothing says whether they exist.
@@ -304,15 +308,21 @@ public sealed class InboxService(
     private async Task TakeOverFromAsync(Expense expense, BankTransaction row, CancellationToken ct)
     {
         if (expense.BankTransactionId is not { } previousId)
+        {
             return;
+        }
 
         var previous = await dbContext.Set<BankTransaction>().FirstOrDefaultAsync(old => old.Id == previousId, ct);
 
         if (previous is null)
+        {
             return;
+        }
 
         if (previous.Status is BankTransactionStatus.Filed)
+        {
             previous.Status = BankTransactionStatus.Superseded;
+        }
 
         if (row.ReplacesId is null)
         {
@@ -426,7 +436,9 @@ public sealed class InboxService(
     private async Task RefuseCurrencyMismatch(BankTransaction row, Guid? groupId, CancellationToken ct)
     {
         if (groupId is not { } id || id == userContext.User.Id)
+        {
             return;
+        }
 
         var currency = await dbContext.Entry(userContext.User).Collection(user => user.Groups).Query()
             .Where(group => group.Id == id)
@@ -434,7 +446,9 @@ public sealed class InboxService(
             .FirstOrDefaultAsync(ct);
 
         if (currency is null || string.Equals(currency, row.Currency, StringComparison.OrdinalIgnoreCase))
+        {
             return;
+        }
 
         throw new ConflictException(ErrorCodes.CurrencyMismatch,
                 $"This is in {row.Currency} and the group keeps its balances in {currency}.")

@@ -18,7 +18,10 @@ public interface IReceiptTranscriptionService
 /// </summary>
 public interface IReceiptTranscriptionProvider
 {
-    string Name { get; }
+    string Name
+    {
+        get;
+    }
     Task<TranscribedReceipt> Transcribe(ReceiptSourceDocument document, CancellationToken ct = default);
 }
 

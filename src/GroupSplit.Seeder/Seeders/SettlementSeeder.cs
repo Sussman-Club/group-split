@@ -36,14 +36,18 @@ public class SettlementSeeder(
         CancellationToken ct = default)
     {
         if (dto.FromUserId == dto.ToUserId)
+        {
             return null;
+        }
 
         var group = await DbContext.Set<Group>().FindAsync([dto.GroupId], ct);
         var from = await DbContext.Set<User>().FindAsync([dto.FromUserId], ct);
         var to = await DbContext.Set<User>().FindAsync([dto.ToUserId], ct);
 
         if (group is null || from is null || to is null)
+        {
             return null;
+        }
 
         return group.SettlementBetween(from, to, dto.Amount, dto.DateTime, dto.Description);
     }

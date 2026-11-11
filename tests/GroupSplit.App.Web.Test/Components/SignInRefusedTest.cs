@@ -111,7 +111,9 @@ public class SignInRefusedTest : ComponentTest
 
         var app = RenderApp();
         if (status == 401)
+        {
             Assert.Single(app.FindAll("#the-app"));
+        }
         else
         {
             Assert.Empty(app.FindAll("#the-app"));

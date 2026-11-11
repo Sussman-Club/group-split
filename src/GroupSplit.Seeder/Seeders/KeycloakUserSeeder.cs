@@ -66,9 +66,15 @@ public sealed class KeycloakUserSeeder(
 
             switch (await SeedUserAsync(dto, ct))
             {
-                case SeedOutcome.Created: created++; break;
-                case SeedOutcome.Repaired: repaired++; break;
-                default: skipped++; break;
+                case SeedOutcome.Created:
+                    created++;
+                    break;
+                case SeedOutcome.Repaired:
+                    repaired++;
+                    break;
+                default:
+                    skipped++;
+                    break;
             }
         }
 

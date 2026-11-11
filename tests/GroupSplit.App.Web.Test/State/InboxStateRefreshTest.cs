@@ -288,7 +288,10 @@ public class InboxStateRefreshTest
     private void SetStatus(Guid id, InboxStatus status)
     {
         var index = _rows.FindIndex(row => row.Id == id);
-        _rows[index] = _rows[index] with { Status = status };
+        _rows[index] = _rows[index] with
+        {
+            Status = status
+        };
     }
 
     // ---- Narrowing to a span of days ---------------------------------------------------
@@ -374,7 +377,10 @@ public class InboxStateRefreshTest
     private void ClearMatches(Guid id)
     {
         var index = _rows.FindIndex(row => row.Id == id);
-        _rows[index] = _rows[index] with { PossibleDuplicates = [] };
+        _rows[index] = _rows[index] with
+        {
+            PossibleDuplicates = []
+        };
     }
 
     private static BankTransactionResponse Row(string merchant, decimal amount) =>

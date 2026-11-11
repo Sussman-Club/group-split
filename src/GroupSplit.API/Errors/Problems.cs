@@ -177,7 +177,10 @@ public static class Problems
             AdditionalMetadata = httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint?.Metadata
         });
 
-        if (written) return;
+        if (written)
+        {
+            return;
+        }
 
         Enrich(httpContext, problem);
         await httpContext.Response.WriteAsJsonAsync(problem, options: null, ContentType, cancellationToken);

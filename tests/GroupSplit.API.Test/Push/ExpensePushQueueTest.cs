@@ -30,7 +30,9 @@ public sealed class ExpensePushQueueTest(ApiTestFixture fixture) : ApiUnitTest(f
 
         PushDevice Device(UserEntity user, string token, bool enabled = true, bool stale = false) => new()
         {
-            UserId = user.Id, Token = token, ExpensesEnabled = enabled,
+            UserId = user.Id,
+            Token = token,
+            ExpensesEnabled = enabled,
             UpdatedAt = DateTimeOffset.UtcNow.AddDays(stale ? -31 : 0)
         };
         var first = Device(recipient, "phone");
@@ -41,7 +43,10 @@ public sealed class ExpensePushQueueTest(ApiTestFixture fixture) : ApiUnitTest(f
 
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "Lunch", Amount = 12, DateTime = DateTimeOffset.UtcNow
+            GroupId = group.Id,
+            Name = "Lunch",
+            Amount = 12,
+            DateTime = DateTimeOffset.UtcNow
         });
         var rows = await DbContext.Set<BackgroundJob>().Where(j => j.Type == SendExpensePush.Name).ToListAsync();
         var queued = rows.Select(row => JsonSerializer.Deserialize<SendExpensePush>(row.Payload)!).ToList();

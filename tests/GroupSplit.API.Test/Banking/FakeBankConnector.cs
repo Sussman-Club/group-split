@@ -92,7 +92,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public FakeBankConnector Answer(SyncPage page)
     {
         lock (_gate)
+        {
             _answers.Enqueue(page);
+        }
 
         return this;
     }
@@ -100,7 +102,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public FakeBankConnector Throw(BankSyncFailure kind)
     {
         lock (_gate)
+        {
             _answers.Enqueue(new BankSyncException(kind, $"Scripted {kind}."));
+        }
 
         return this;
     }
@@ -116,7 +120,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public Task<LinkSession> CreateLinkSessionAsync(LinkSessionRequest request, CancellationToken ct = default)
     {
         lock (_gate)
+        {
             _linkSessionsSeen.Add(request);
+        }
 
         return Task.FromResult(new LinkSession("link-fake-token", DateTimeOffset.UtcNow.AddMinutes(30)));
     }
@@ -124,7 +130,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public FakeBankConnector AnswerAccounts(IReadOnlyList<ImportedAccount> accounts)
     {
         lock (_gate)
+        {
             _accountsAnswers.Enqueue(accounts);
+        }
 
         return this;
     }
@@ -137,7 +145,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
             AccountReads++;
 
             if (RefuseAccountsWith is { } kind)
+            {
                 throw new BankSyncException(kind, $"Scripted {kind} reading the accounts.");
+            }
 
             // The last answer stands rather than running out, because a sync asks for the
             // list mid-run and a test that scripted one answer means it for that run.
@@ -161,7 +171,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
         lock (_gate)
         {
             if (RefuseExchange)
+            {
                 throw new BankSyncException(BankSyncFailure.Transient, "Scripted refusal exchanging a token.");
+            }
 
             return Task.FromResult(_items.Count > 0 ? _items.Dequeue() : Item());
         }
@@ -174,7 +186,9 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     public FakeBankConnector AnswerExchange(LinkedItem item)
     {
         lock (_gate)
+        {
             _items.Enqueue(item);
+        }
 
         return this;
     }
@@ -204,14 +218,18 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
         Entered.TrySetResult();
 
         if (Gate is { } gate)
+        {
             await gate.WaitAsync(ct);
+        }
 
         object answer;
 
         lock (_gate)
         {
             if (_answers.Count == 0)
+            {
                 throw new InvalidOperationException("The fake connector was asked for a page it was not given.");
+            }
 
             answer = _answers.Dequeue();
         }
@@ -229,10 +247,14 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
         // Recorded before the refusal, so a test can tell "would not listen" from "was
         // never asked".
         lock (_gate)
+        {
             _removedTokens.Add(accessToken);
+        }
 
         if (RefuseRemoval)
+        {
             throw new BankSyncException(BankSyncFailure.Transient, "Scripted refusal to remove.");
+        }
 
         // What the provider answers for an item it no longer has -- one already removed, by
         // us on an earlier attempt or at its own end.
@@ -277,6 +299,8 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     private List<T> Snapshot<T>(List<T> tracked)
     {
         lock (_gate)
+        {
             return [.. tracked];
+        }
     }
 }

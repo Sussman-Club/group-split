@@ -279,7 +279,9 @@ public class BankKeyRingVerifierTest
                 Func<TState, Exception?, string> formatter)
             {
                 lock (lines)
+                {
                     lines.Add(formatter(state, exception));
+                }
             }
         }
     }

@@ -59,7 +59,9 @@ public class JoinTest : ComponentTest
             parameters.Add(component => component.Token, Token);
 
             if (user is not null)
+            {
                 parameters.AddCascadingValue(user);
+            }
         });
 
         await page.InvokeAsync(() => Task.CompletedTask);

@@ -98,9 +98,13 @@ public sealed class ReceiptTaxesTest
             {
                 Assert.Equal(amounts[index], decimal.Round(amounts[index], 2));
                 if (items[index].IsTaxable == false || items[index].TaxRate == 0)
+                {
                     Assert.Equal(0m, amounts[index]);
+                }
                 else
+                {
                     Assert.InRange(Math.Abs(amounts[index] - exact[index]), 0m, .01m);
+                }
             }
             Assert.Equal(amounts, ReceiptTaxes.Calculate(printedTax,
                 items.Select((item, index) => item with { TaxAmount = amounts[index] }).ToArray()));

@@ -17,12 +17,16 @@ public class NotDefaultAttribute : ValidationAttribute
     protected override ValidationResult? IsValid(object? value, ValidationContext context)
     {
         if (value is null)
+        {
             return ValidationResult.Success;
+        }
 
         var type = value.GetType();
 
         if (!type.IsValueType || !value.Equals(Activator.CreateInstance(type)))
+        {
             return ValidationResult.Success;
+        }
 
         return new ValidationResult(FormatErrorMessage(context.DisplayName),
             context.MemberName is { } member ? [member] : null);

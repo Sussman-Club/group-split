@@ -16,7 +16,11 @@ public sealed class ReceiptCommandTests : IDisposable
         _environment.Set(EnvironmentVariables.ApiUrl, _api.BaseAddress);
         _environment.Set(EnvironmentVariables.Token, "test-token");
     }
-    public void Dispose() { _api.Dispose(); _environment.Dispose(); }
+    public void Dispose()
+    {
+        _api.Dispose();
+        _environment.Dispose();
+    }
 
     [Fact]
     public async Task Set_sends_rule_version_and_tax_on_each_item()
@@ -173,8 +177,11 @@ public sealed class ReceiptCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
         var item = ReceiptItems.Parse("--item", [$"{id}#Food=20x2/tax1@{Version}"]).Single();
-        Assert.Equal(id, item.Id); Assert.Equal(Version, item.SplitRuleVersionId);
-        Assert.Equal(2, item.Quantity); Assert.Equal(20m, item.TotalPrice); Assert.Equal(10m, item.UnitPrice);
+        Assert.Equal(id, item.Id);
+        Assert.Equal(Version, item.SplitRuleVersionId);
+        Assert.Equal(2, item.Quantity);
+        Assert.Equal(20m, item.TotalPrice);
+        Assert.Equal(10m, item.UnitPrice);
         Assert.Equal(1m, item.TaxAmount);
     }
     [Theory]
@@ -183,13 +190,15 @@ public sealed class ReceiptCommandTests : IDisposable
     public async Task Malformed_item_is_refused_before_a_request(string value)
     {
         var result = await Cli.RunAsync("receipts", "set", Expense.ToString(), "--item", value);
-        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode); Assert.Empty(_api.Requests);
+        Assert.Equal(ExitCodes.InvalidInput, result.ExitCode);
+        Assert.Empty(_api.Requests);
     }
     [Fact]
     public async Task Removed_bank_split_command_is_not_available()
     {
         var result = await Cli.RunAsync("receipts", "split", Expense.ToString());
-        Assert.NotEqual(ExitCodes.Success, result.ExitCode); Assert.Empty(_api.Requests);
+        Assert.NotEqual(ExitCodes.Success, result.ExitCode);
+        Assert.Empty(_api.Requests);
     }
 
     [Fact]
@@ -349,25 +358,67 @@ public sealed class ReceiptCommandTests : IDisposable
     /// <summary>A saved bill read off a Costco receipt, with its tip and its lines.</summary>
     private static object Saved(decimal tip, params object[] items) => new
     {
-        id = Guid.NewGuid(), expenseId = Expense, subtotal = 12m, tax = .48m, tip, total = 12.48m + tip,
-        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false, canEdit = true,
-        merchantName = "Costco", purchaseDate = "2026-09-30", items
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 12m,
+        tax = .48m,
+        tip,
+        total = 12.48m + tip,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = false,
+        canEdit = true,
+        merchantName = "Costco",
+        purchaseDate = "2026-09-30",
+        items
     };
 
     private static object Line(Guid id, string name, string normalizedName, decimal price, decimal tax,
         decimal? rate, bool? taxable) => new
+        {
+            id,
+            name,
+            normalizedName,
+            description = "AS PRINTED",
+            unitPrice = price,
+            quantity = 1m,
+            totalPrice = price,
+            taxAmount = tax,
+            taxRate = rate,
+            isTaxable = taxable,
+            splitRuleVersionId = (Guid?)null,
+            splitRuleName = (string?)null,
+            splitRule = (object?)null
+        };
+
+    private static object Bill(params object[] items) => new
     {
-        id, name, normalizedName, description = "AS PRINTED", unitPrice = price, quantity = 1m,
-        totalPrice = price, taxAmount = tax, taxRate = rate, isTaxable = taxable,
-        splitRuleVersionId = (Guid?)null, splitRuleName = (string?)null, splitRule = (object?)null
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 100m,
+        tax = 6m,
+        tip = 0m,
+        total = 106m,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = false,
+        canEdit = true,
+        items
     };
 
-    private static object Bill(params object[] items) => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
-        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false,
-        canEdit = true, items };
-
     /// <summary>A bill the expense divides by, so changing it moves balances.</summary>
-    private static object Dividing() => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
-        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true,
-        canEdit = true, items = Array.Empty<object>() };
+    private static object Dividing() => new
+    {
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 100m,
+        tax = 6m,
+        tip = 0m,
+        total = 106m,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = true,
+        canEdit = true,
+        items = Array.Empty<object>()
+    };
 }

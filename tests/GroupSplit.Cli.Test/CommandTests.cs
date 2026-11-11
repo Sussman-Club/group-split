@@ -111,7 +111,10 @@ public sealed class CommandTests : IDisposable
     public async Task Validation_messages_reach_the_envelope_as_details()
     {
         _api.Problem("/api/transactions", 400, "VALIDATION_FAILED", "Validation failed",
-            new { Errors = new Dictionary<string, string[]> { ["Name"] = ["Name is required."] } });
+            new
+            {
+                Errors = new Dictionary<string, string[]> { ["Name"] = ["Name is required."] }
+            });
 
         var result = await Cli.RunAsync("transactions", "create", "x", "1.00");
 
@@ -290,10 +293,18 @@ public sealed class CommandTests : IDisposable
         var id = Guid.NewGuid();
         _api.Returns($"/api/transactions/{id}", new
         {
-            id, name = "Lidl", description = (string?)null, amount = 12.50m,
-            dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
-            paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-            categoryId = (Guid?)null, category = (string?)null, splits = Array.Empty<object>(),
+            id,
+            name = "Lidl",
+            description = (string?)null,
+            amount = 12.50m,
+            dateTime = DateTimeOffset.UtcNow,
+            groupId = (Guid?)null,
+            groupName = (string?)null,
+            paidByUserId = Guid.NewGuid(),
+            paidByUserName = "Anabel",
+            categoryId = (Guid?)null,
+            category = (string?)null,
+            splits = Array.Empty<object>(),
             hasBankTransaction = fromBank
         });
 
@@ -330,7 +341,9 @@ public sealed class CommandTests : IDisposable
     public async Task A_settlement_the_expense_read_cannot_see_is_still_offered_for_deletion()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString());
 
@@ -353,7 +366,9 @@ public sealed class CommandTests : IDisposable
     public async Task A_settlement_is_deleted_once_the_confirmation_is_given()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
 
@@ -370,7 +385,9 @@ public sealed class CommandTests : IDisposable
     {
         var id = Guid.NewGuid();
         _api.Problem($"/api/transactions/{id}", 500, "SERVER_ERROR", "Something broke.", method: "GET");
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
 
@@ -629,7 +646,11 @@ public sealed class CommandTests : IDisposable
         var groupId = Guid.NewGuid();
 
         _api.Returns($"/api/groups/{groupId}/transactions/summary",
-            new { count = 1411, total = 39429.42m });
+            new
+            {
+                count = 1411,
+                total = 39429.42m
+            });
 
         var result = await Cli.RunAsync("transactions", "summary", "--group", groupId.ToString());
 
@@ -645,7 +666,11 @@ public sealed class CommandTests : IDisposable
     public async Task Without_a_group_both_commands_still_read_your_own_listing()
     {
         _api.Returns("/api/transactions", Page());
-        _api.Returns("/api/transactions/summary", new { count = 0, total = 0m });
+        _api.Returns("/api/transactions/summary", new
+        {
+            count = 0,
+            total = 0m
+        });
 
         await Cli.RunAsync("transactions", "list");
         await Cli.RunAsync("transactions", "summary");
@@ -885,7 +910,10 @@ public sealed class CommandTests : IDisposable
     {
         _api.Returns("/api/transactions/shares/summary", new
         {
-            count = 3, total = 124m, share = 64m, owedToOthers = 45m
+            count = 3,
+            total = 124m,
+            share = 64m,
+            owedToOthers = 45m
         });
 
         var result = await Cli.RunAsync("transactions", "shares", "summary", "--output", "text");
@@ -905,10 +933,17 @@ public sealed class CommandTests : IDisposable
 
         _api.Returns($"/api/transactions/{id}", new
         {
-            id, name = "Dinner", description = "Birthday", amount = 42.50m,
-            dateTime = DateTimeOffset.UtcNow, groupId = Guid.NewGuid(), groupName = "Trip",
-            paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-            categoryId = (Guid?)null, category = "Food",
+            id,
+            name = "Dinner",
+            description = "Birthday",
+            amount = 42.50m,
+            dateTime = DateTimeOffset.UtcNow,
+            groupId = Guid.NewGuid(),
+            groupName = "Trip",
+            paidByUserId = Guid.NewGuid(),
+            paidByUserName = "Anabel",
+            categoryId = (Guid?)null,
+            category = "Food",
             splits = new[]
             {
                 new { userId = Guid.NewGuid(), userName = "Anabel", amount = 21.25m },
@@ -926,7 +961,11 @@ public sealed class CommandTests : IDisposable
     [Fact]
     public async Task Transactions_summary_totals_what_it_was_given()
     {
-        _api.Returns("/api/transactions/summary", new { count = 7, total = 123.45m });
+        _api.Returns("/api/transactions/summary", new
+        {
+            count = 7,
+            total = 123.45m
+        });
 
         var result = await Cli.RunAsync("transactions", "summary", "--output", "text");
 
@@ -947,7 +986,9 @@ public sealed class CommandTests : IDisposable
     {
         _api.Returns("/api/users/me/position", new
         {
-            net = 12.5m, owedToYou = 20m, youOwe = 7.5m,
+            net = 12.5m,
+            owedToYou = 20m,
+            youOwe = 7.5m,
             groups = new[] { new { groupId = Guid.NewGuid(), groupName = "Trip", balance = 12.5m, isArchive = false } }
         });
 
@@ -971,7 +1012,10 @@ public sealed class CommandTests : IDisposable
 
     private static object Group(string name) => new
     {
-        id = Guid.NewGuid(), name, memberCount = 3, isArchive = false
+        id = Guid.NewGuid(),
+        name,
+        memberCount = 3,
+        isArchive = false
     };
 
     // ---- the inbox -------------------------------------------------------------------
@@ -1039,7 +1083,9 @@ public sealed class CommandTests : IDisposable
     public async Task Ignoring_a_row_needs_no_confirmation_because_restore_undoes_it()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/inbox/{id}/ignore", new { }, 204);
+        _api.Returns($"/api/inbox/{id}/ignore", new
+        {
+        }, 204);
 
         var result = await Cli.RunAsync("inbox", "ignore", id.ToString());
 
@@ -1049,18 +1095,32 @@ public sealed class CommandTests : IDisposable
 
     private static object ImportedRow(string merchant, decimal amount) => new
     {
-        id = Guid.NewGuid(), date = "2026-09-15", amount, currency = "USD",
-        description = merchant.ToUpperInvariant(), merchantName = merchant,
-        providerCategory = (string?)null, providerCategoryDetailed = (string?)null,
-        authorizedDate = (string?)null, paymentChannel = (string?)null, city = (string?)null,
-        logoUrl = (string?)null, pending = false, status = "New",
-        transactionId = (Guid?)null, removedAt = (DateTimeOffset?)null,
-        accountName = "Everyday", institutionName = "Fake Bank"
+        id = Guid.NewGuid(),
+        date = "2026-09-15",
+        amount,
+        currency = "USD",
+        description = merchant.ToUpperInvariant(),
+        merchantName = merchant,
+        providerCategory = (string?)null,
+        providerCategoryDetailed = (string?)null,
+        authorizedDate = (string?)null,
+        paymentChannel = (string?)null,
+        city = (string?)null,
+        logoUrl = (string?)null,
+        pending = false,
+        status = "New",
+        transactionId = (Guid?)null,
+        removedAt = (DateTimeOffset?)null,
+        accountName = "Everyday",
+        institutionName = "Fake Bank"
     };
 
     private static object Page(params object[] items) => new
     {
-        items, page = 1, pageSize = 20, totalCount = items.Length
+        items,
+        page = 1,
+        pageSize = 20,
+        totalCount = items.Length
     };
 
     /// <summary>
@@ -1069,33 +1129,64 @@ public sealed class CommandTests : IDisposable
     /// </summary>
     private static object SomebodyElsePaid(string name, decimal amount, Guid groupId, string groupName) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount,
-        dateTime = DateTimeOffset.UtcNow, groupId, groupName,
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Omar",
-        categoryId = (Guid?)null, category = (string?)null
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId,
+        groupName,
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Omar",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 
     private static object Transaction(string name, decimal amount, Guid groupId, string groupName) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount,
-        dateTime = DateTimeOffset.UtcNow, groupId, groupName,
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-        categoryId = (Guid?)null, category = (string?)null
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId,
+        groupName,
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Anabel",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 
     private static object Share(string name, decimal amount, decimal share, bool paidByYou) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount, share, paidByYou,
-        dateTime = DateTimeOffset.UtcNow, groupId = Guid.NewGuid(), groupName = "Trip",
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Omar",
-        categoryId = (Guid?)null, category = (string?)null
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount,
+        share,
+        paidByYou,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId = Guid.NewGuid(),
+        groupName = "Trip",
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Omar",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 
     private static object Transaction(string name) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount = 12.34m,
-        dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-        categoryId = (Guid?)null, category = (string?)null, splits = Array.Empty<object>()
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount = 12.34m,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId = (Guid?)null,
+        groupName = (string?)null,
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Anabel",
+        categoryId = (Guid?)null,
+        category = (string?)null,
+        splits = Array.Empty<object>()
     };
 }

@@ -255,10 +255,25 @@ public sealed class PlaidConnector(
     {
         var absent = new List<string>(4);
 
-        if (transaction.TransactionId is not { Length: > 0 }) absent.Add("id");
-        if (transaction.AccountId is not { Length: > 0 }) absent.Add("account");
-        if (transaction.Date is null) absent.Add("date");
-        if (transaction.Amount is null) absent.Add("amount");
+        if (transaction.TransactionId is not { Length: > 0 })
+        {
+            absent.Add("id");
+        }
+
+        if (transaction.AccountId is not { Length: > 0 })
+        {
+            absent.Add("account");
+        }
+
+        if (transaction.Date is null)
+        {
+            absent.Add("date");
+        }
+
+        if (transaction.Amount is null)
+        {
+            absent.Add("amount");
+        }
 
         var known = transaction.TransactionId is { Length: > 0 } id
             ? id
@@ -376,7 +391,9 @@ public sealed class PlaidConnector(
     private void Ensure(ResponseBase response, string what)
     {
         if (response.IsSuccessStatusCode)
+        {
             return;
+        }
 
         var error = response.Error;
         var code = error?.ErrorCode ?? "UNKNOWN";

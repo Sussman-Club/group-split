@@ -226,7 +226,11 @@ public static class MerchantCommands
             await new Api.MerchantsClient(context.ApiHttpClient).DeleteMerchantAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", merchantId = id },
+                new
+                {
+                    status = "deleted",
+                    merchantId = id
+                },
                 value => new Markup($"[green]Deleted[/] {value.merchantId}.\n"));
 
             return ExitCodes.Success;

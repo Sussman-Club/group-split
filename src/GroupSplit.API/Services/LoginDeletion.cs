@@ -43,7 +43,10 @@ internal sealed class LoginDeletion(
             .FirstOrDefaultAsync(candidate => candidate.Id == pendingId, cancellationToken);
 
         // Somebody else finished it -- the request that wrote it, or a sweep that overlapped.
-        if (pending is null) return true;
+        if (pending is null)
+        {
+            return true;
+        }
 
         try
         {
@@ -125,7 +128,10 @@ internal sealed class SweepPendingLoginDeletionsHandler(
             .Select(pending => pending.Id)
             .ToListAsync(cancellationToken);
 
-        if (ids.Count == 0) return;
+        if (ids.Count == 0)
+        {
+            return;
+        }
 
         var deleted = 0;
 
@@ -134,7 +140,10 @@ internal sealed class SweepPendingLoginDeletionsHandler(
         // of them at once.
         foreach (var id in ids)
         {
-            if (await logins.TryDeleteAsync(id, cancellationToken)) deleted++;
+            if (await logins.TryDeleteAsync(id, cancellationToken))
+            {
+                deleted++;
+            }
         }
 
         logger.LogInformation("Deleted {Deleted} of {Count} Keycloak logins still owed for deleted accounts.",

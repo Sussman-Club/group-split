@@ -177,7 +177,9 @@ public sealed class GroupCommands(
         });
 
         if (error is null)
+        {
             return true;
+        }
 
         if (error.Code == ErrorCodes.GroupMemberNotSettled &&
             error.Extension<decimal?>("balance") is { } balance and not 0m)
@@ -206,9 +208,13 @@ public sealed class GroupCommands(
         errors.TryAsync(async () =>
         {
             if (archived)
+            {
                 await groups.ArchiveGroupAsync(groupId, ct);
+            }
             else
+            {
                 await groups.UnarchiveGroupAsync(groupId, ct);
+            }
 
             snackbar.Add(
                 archived

@@ -20,7 +20,6 @@ public class TransactionGetTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var user = userService.User;
         var now = DateTimeOffset.UtcNow;
 
-        // Create a transaction for the current user
         var created = await transactionService.Create(new CreateTransactionRequest
         {
             Name = "Coffee",

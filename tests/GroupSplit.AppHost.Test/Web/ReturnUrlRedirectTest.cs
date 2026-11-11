@@ -36,7 +36,10 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
         {
             if (request.IsNavigationRequest && request.Frame == Page.MainFrame)
             {
-                lock (_navigations) _navigations.Add(request.Url);
+                lock (_navigations)
+                {
+                    _navigations.Add(request.Url);
+                }
             }
         };
     }
@@ -119,9 +122,11 @@ public class ReturnUrlRedirectTest(AppHostFixture appHost) : WebPageTest(appHost
         // New accounts are redirected from the safe home fallback to Groups once their
         // account has loaded. Wait for that navigation before inspecting the final URL.
         if (path == "/groups")
+        {
             await Page.WaitForURLAsync(url => Uri.TryCreate(url, UriKind.Absolute, out var target)
                 && target.Authority == web.Authority && target.AbsolutePath == path,
                 new PageWaitForURLOptions { Timeout = OperationTimeoutMs });
+        }
 
         lock (_navigations)
         {

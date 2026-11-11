@@ -37,7 +37,10 @@ public class EssentialMetricsTest
         requests.Record(0.2, new("http.route", "/groups/{id}"), new("http.response.status_code", 200), new("url.path", "/groups/two"));
         requests.Record(0.3, new("http.route", "/groups/{id}"), new("http.response.status_code", 500), new("url.path", "/groups/three"));
         foreach (var name in new[] { "http.client.request.duration", "dotnet.process.cpu.time", "dotnet.process.memory.working_set", "dotnet.gc.collections", "dotnet.gc.last_collection.heap.size", "detailed.test.metric" })
+        {
             meter.CreateCounter<long>(name).Add(1);
+        }
+
         Assert.True(provider.ForceFlush());
 
         Assert.Equal(enabled ? 6 : 7, exporter.PointCounts.Count);
@@ -57,15 +60,26 @@ public class EssentialMetricsTest
         {
             foreach (var metric in batch)
             {
-                if (metric.MeterName != meterName) continue;
+                if (metric.MeterName != meterName)
+                {
+                    continue;
+                }
+
                 var count = 0;
                 foreach (var point in metric.GetMetricPoints())
                 {
                     count++;
                     foreach (var tag in point.Tags)
                     {
-                        if (tag.Key == "url.path") HasRawPath = true;
-                        if (tag.Key == "http.response.status_code" && Equals(tag.Value, 500)) HasErrorStatus = true;
+                        if (tag.Key == "url.path")
+                        {
+                            HasRawPath = true;
+                        }
+
+                        if (tag.Key == "http.response.status_code" && Equals(tag.Value, 500))
+                        {
+                            HasErrorStatus = true;
+                        }
                     }
                 }
                 PointCounts[metric.Name] = count;

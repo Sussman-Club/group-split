@@ -56,11 +56,11 @@ public static class WebAppExtensions
         public RouteGroupBuilder MapApiForwarder()
         {
             var group = app.MapGroup("/api");
-            
+
             group.RequireAuthorization();
             group.RefuseCrossSiteWrites();
 
-            group.MapForwarder("{*path}","https+http://api", new ForwarderRequestConfig(), b =>
+            group.MapForwarder("{*path}", "https+http://api", new ForwarderRequestConfig(), b =>
             {
                 b.AddRequestTransform(async requestTransformContext =>
                 {
@@ -98,7 +98,7 @@ public static class WebAppExtensions
                         new AuthenticationHeaderValue("Bearer", token.AccessToken.ToString());
                 });
             });
-            
+
             return group;
         }
 
@@ -241,7 +241,10 @@ public static class WebAppExtensions
         builder.Add(endpoint =>
         {
             // As in RefuseAmbiguousPaths: a forwarder's delegate is already here.
-            if (endpoint.RequestDelegate is not { } next) return;
+            if (endpoint.RequestDelegate is not { } next)
+            {
+                return;
+            }
 
             endpoint.RequestDelegate = context => IsFromOwnPages(context.Request)
                 ? next(context)
@@ -303,7 +306,10 @@ public static class WebAppExtensions
             // The forwarders are built from a request delegate, so theirs is already here. A
             // route handler's may not be yet when conventions run; the only one in the group is
             // the catch-all, which answers 404 whatever the path.
-            if (endpoint.RequestDelegate is not { } next) return;
+            if (endpoint.RequestDelegate is not { } next)
+            {
+                return;
+            }
 
             endpoint.RequestDelegate = context =>
             {

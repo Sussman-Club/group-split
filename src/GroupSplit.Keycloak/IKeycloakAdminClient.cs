@@ -7,7 +7,10 @@ namespace GroupSplit.Keycloak;
 public interface IKeycloakAdminClient
 {
     /// <summary>The realm the demo accounts belong to, for logging.</summary>
-    string Realm { get; }
+    string Realm
+    {
+        get;
+    }
 
     /// <summary>
     /// Signs in as the bootstrap admin. Called once before any account is touched, so bad

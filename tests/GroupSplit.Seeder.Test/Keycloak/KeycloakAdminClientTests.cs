@@ -231,7 +231,10 @@ public class KeycloakAdminClientTests
 
         var client = ClientFor(handler);
         await client.CreateAsync(AUser(), TestContext.Current.CancellationToken);
-        await client.CreateAsync(AUser() with { Id = "another-id" }, TestContext.Current.CancellationToken);
+        await client.CreateAsync(AUser() with
+        {
+            Id = "another-id"
+        }, TestContext.Current.CancellationToken);
 
         Assert.Contains("a-renamed-default", handler.Requests.Last().Body);
         Assert.Single(handler.Requests, request => request.Uri.EndsWith("/admin/realms/group-split"));

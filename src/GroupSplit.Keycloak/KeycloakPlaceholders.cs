@@ -57,8 +57,15 @@ public static partial class KeycloakPlaceholders
                 {
                     var name = match.Groups["name"].Value;
 
-                    if (lookup(name) is { Length: > 0 } resolved) return resolved;
-                    if (match.Groups["default"].Success) return match.Groups["default"].Value;
+                    if (lookup(name) is { Length: > 0 } resolved)
+                    {
+                        return resolved;
+                    }
+
+                    if (match.Groups["default"].Success)
+                    {
+                        return match.Groups["default"].Value;
+                    }
 
                     missing.Add(name);
                     return match.Value;

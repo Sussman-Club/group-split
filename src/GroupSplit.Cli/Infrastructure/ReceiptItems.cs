@@ -24,7 +24,9 @@ public static class ReceiptItems
         var lines = new List<ReceiptLine>();
 
         foreach (var value in values)
+        {
             lines.Add(One(option, value));
+        }
 
         return lines;
     }
@@ -37,12 +39,16 @@ public static class ReceiptItems
         var separator = value.IndexOf('=');
 
         if (separator <= 0)
+        {
             throw Invalid(option, value, "it needs the form <name>=<line-total>");
+        }
 
         var name = value[..separator].Trim();
 
         if (name.Length == 0)
+        {
             throw Invalid(option, value, "the part before '=' is empty");
+        }
 
         // Which stored line this is, for a bill being corrected rather than written. Without
         // it every save was a bill the server had never seen: the API matches lines by the id
@@ -61,7 +67,9 @@ public static class ReceiptItems
             name = name[(hash + 1)..].Trim();
 
             if (name.Length == 0)
+            {
                 throw Invalid(option, value, "there is an id but no name after it");
+            }
         }
 
         var rest = value[(separator + 1)..].Trim();
@@ -120,7 +128,10 @@ public static class ReceiptItems
             rest = rest[..at].Trim();
 
             if (!Guid.TryParse(who, out var versionId))
+            {
                 throw Invalid(option, value, "the value after @ must be one split rule version id");
+            }
+
             ruleVersionId = versionId;
         }
 

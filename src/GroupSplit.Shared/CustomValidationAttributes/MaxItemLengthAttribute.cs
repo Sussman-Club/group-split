@@ -32,12 +32,16 @@ public sealed class MaxItemLengthAttribute : ValidationAttribute
     public override bool IsValid(object? value)
     {
         if (value is not IEnumerable items || value is string)
+        {
             return true;
+        }
 
         foreach (var item in items)
         {
             if (item is string text && text.Trim().Length > _length)
+            {
                 return false;
+            }
         }
 
         return true;

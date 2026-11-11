@@ -46,7 +46,9 @@ public static class KeyRingExtensions
             var certificate = options[nameof(BankingOptions.KeyRingCertificate)];
 
             if (string.IsNullOrWhiteSpace(certificate))
+            {
                 return builder;
+            }
 
             protection.ProtectKeysWithCertificate(Load(certificate));
 

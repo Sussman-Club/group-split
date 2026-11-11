@@ -24,7 +24,11 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
     {
         var users = db.Set<User>().Where(u => u.Kind == UserKind.Account && u.Id != actorId
             && u.Groups.Any(g => g.Id == groupId));
-        if (recipients is not null) users = users.Where(u => recipients.Contains(u.Id));
+        if (recipients is not null)
+        {
+            users = users.Where(u => recipients.Contains(u.Id));
+        }
+
         await Enqueue(kind, groupId, subjectId, users.Select(u => u.Id), ct);
     }
 
@@ -35,11 +39,14 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
     public Task ForStaff(PushNotificationKind kind, Guid ticketId, Guid actorId, CancellationToken ct)
     {
         if (PushNotificationKinds.Category(kind) != PushNotificationCategory.StaffSupport)
+        {
             throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
         var users = from member in db.Set<StaffMember>()
-            join user in db.Set<User>() on member.UserId equals user.Id
-            where member.Active && user.Kind == UserKind.Account && user.Id != actorId
-            select user.Id;
+                    join user in db.Set<User>() on member.UserId equals user.Id
+                    where member.Active && user.Kind == UserKind.Account && user.Id != actorId
+                    select user.Id;
         return Enqueue(kind, Guid.Empty, ticketId, users, ct);
     }
 
@@ -51,7 +58,9 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
             .Where(d => d.UpdatedAt > now.AddDays(-30) && users.Contains(d.UserId))
             .Select(d => new { d.Id, d.UserId }).ToListAsync(ct);
         foreach (var device in devices)
+        {
             jobs.Enqueue(new SendPushNotification(device.Id, device.UserId, groupId, Guid.NewGuid(),
                 now.AddHours(1), kind, subjectId));
+        }
     }
 }

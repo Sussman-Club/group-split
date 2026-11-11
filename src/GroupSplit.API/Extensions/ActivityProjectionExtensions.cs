@@ -92,7 +92,9 @@ public static class ActivityProjectionExtensions
         public IQueryable<Transaction> ApplyFilter(ActivityFilter? filter)
         {
             if (filter is null)
+            {
                 return activity;
+            }
 
             // Hoisted out of the expression and normalised here, as the expense filter does
             // it: Npgsql writes a DateTimeOffset to a timestamptz column only at offset
@@ -225,7 +227,9 @@ public static class ActivityProjectionExtensions
             IReadOnlyList<GroupLedgerEntryResponse> page, CancellationToken ct)
         {
             if (page.Count == 0)
+            {
                 return page;
+            }
 
             var earliest = page.Min(entry => entry.DateTime);
             var latest = page.Max(entry => entry.DateTime);
@@ -251,7 +255,9 @@ public static class ActivityProjectionExtensions
             var after = new Dictionary<Guid, decimal>(window.Count);
 
             foreach (var entry in window)
+            {
                 after[entry.Id] = balance += entry.Change;
+            }
 
             return page.Select(entry => entry with { RunningBalance = after[entry.Id] }).ToList();
         }

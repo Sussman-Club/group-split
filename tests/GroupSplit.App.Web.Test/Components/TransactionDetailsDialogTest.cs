@@ -199,7 +199,10 @@ public class TransactionDetailsDialogTest : ComponentTest
             .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .Returns((Guid _, int? _, CancellationToken _) => Task.FromResult(reads++ == 0 ? initial : refreshed));
 
-        var bill = Bill() with { CanEdit = true };
+        var bill = Bill() with
+        {
+            CanEdit = true
+        };
         _bills.Setup(commands => commands.GetAsync(_expense, It.IsAny<CancellationToken>()))
             .ReturnsAsync(bill);
         _bills.Setup(commands => commands.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),

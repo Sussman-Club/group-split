@@ -912,7 +912,10 @@ public sealed class RealmSettingsReconcilerTests
 
         public Task<JsonObject?> GetIdentityProviderAsync(string alias, CancellationToken ct = default)
         {
-            if (!IdentityProviders.TryGetValue(alias, out var provider)) return Task.FromResult<JsonObject?>(null);
+            if (!IdentityProviders.TryGetValue(alias, out var provider))
+            {
+                return Task.FromResult<JsonObject?>(null);
+            }
 
             var copy = (JsonObject)provider.DeepClone();
 

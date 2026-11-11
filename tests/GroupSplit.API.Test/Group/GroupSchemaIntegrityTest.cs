@@ -89,7 +89,9 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
         var (scope, guest) = await AnotherPerson();
 
         using (scope)
+        {
             await As<IJoinLinkService>(scope).Accept(first.Token, Ct);
+        }
 
         await Groups.RemoveGroupMember(group.Id, guest.Id, Ct);
 
@@ -232,7 +234,9 @@ public class GroupSchemaIntegrityTest(ApiTestFixture fixture) : ApiUnitTest(fixt
         var (scope, luz) = await AnotherPerson();
 
         using (scope)
+        {
             await As<IInvitationService>(scope).Claim(invitation.Token, Ct);
+        }
 
         var provisioned = await ProvisionedIn(group.Id);
 

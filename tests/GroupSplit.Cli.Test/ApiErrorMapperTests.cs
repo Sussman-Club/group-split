@@ -86,13 +86,19 @@ public sealed class ApiErrorMapperTests
     [InlineData(503, ExitCodes.Error)]
     public void Status_codes_map_to_the_documented_exit_codes(int status, int expected)
     {
-        Assert.Equal(expected, ApiErrorMapper.Map(Exception(status, new { title = "x" })).ExitCode);
+        Assert.Equal(expected, ApiErrorMapper.Map(Exception(status, new
+        {
+            title = "x"
+        })).ExitCode);
     }
 
     [Fact]
     public void A_401_tells_the_caller_how_to_recover()
     {
-        Assert.Contains("auth login", ApiErrorMapper.Map(Exception(401, new { title = "x" })).Error.Remediation);
+        Assert.Contains("auth login", ApiErrorMapper.Map(Exception(401, new
+        {
+            title = "x"
+        })).Error.Remediation);
     }
 
     /// <summary>

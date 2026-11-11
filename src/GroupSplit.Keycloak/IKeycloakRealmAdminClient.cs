@@ -5,7 +5,10 @@ namespace GroupSplit.Keycloak;
 /// <summary>The realm-level operations used by the settings reconciler and local reset.</summary>
 public interface IKeycloakRealmAdminClient
 {
-    string Realm { get; }
+    string Realm
+    {
+        get;
+    }
 
     Task SignInAsync(CancellationToken ct = default);
 
@@ -79,7 +82,10 @@ public interface IKeycloakRealmAdminClient
     Task UpdateExecutionAsync(string flowAlias, JsonObject execution, CancellationToken ct = default);
 
     /// <summary>The realm the bootstrap admin signs in to -- <c>master</c>, unless configured otherwise.</summary>
-    string AdminRealm { get; }
+    string AdminRealm
+    {
+        get;
+    }
 
     Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default);
 

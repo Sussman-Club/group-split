@@ -58,7 +58,11 @@ public sealed class AndroidDownloadTest : ComponentTest
         public bool Failure { get; set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            if (Failure) throw new HttpRequestException("internal request details");
+            if (Failure)
+            {
+                throw new HttpRequestException("internal request details");
+            }
+
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(Available ? new AndroidReleaseInfo("1.0.0-42",

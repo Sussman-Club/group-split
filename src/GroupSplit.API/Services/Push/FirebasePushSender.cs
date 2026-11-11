@@ -20,7 +20,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
         PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null)
     {
         if (!config.GetValue<bool>("Push:Enabled"))
+        {
             throw new InvalidOperationException("Push delivery is disabled.");
+        }
+
         app ??= FirebaseApp.Create(new AppOptions
         {
             Credential = await CredentialAsync(config, ct),
@@ -41,7 +44,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     internal static Task<GoogleCredential> CredentialAsync(IConfiguration config, CancellationToken ct)
     {
         var encoded = config["Push:ServiceAccountBase64"];
-        if (string.IsNullOrWhiteSpace(encoded)) return GoogleCredential.GetApplicationDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            return GoogleCredential.GetApplicationDefaultAsync(ct);
+        }
         // Select the credential type explicitly: deployment configuration must never load
         // arbitrary external-account credential definitions or write a private key to disk.
         try
@@ -60,37 +66,47 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     internal static Message CreateMessage(string token, Guid groupId, string groupName,
         Guid deliveryId, DateTimeOffset sentAt,
         PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null) => new()
-    {
-        Token = token,
-        Notification = new Notification { Title = "Group Split", Body = PushNotificationKinds.Body(kind, groupName) },
-        Data = Data(kind, groupId, requestToken),
-        Apns = new ApnsConfig
         {
-            Headers = new Dictionary<string, string>
+            Token = token,
+            Notification = new Notification { Title = "Group Split", Body = PushNotificationKinds.Body(kind, groupName) },
+            Data = Data(kind, groupId, requestToken),
+            Apns = new ApnsConfig
             {
-                ["apns-push-type"] = "alert", ["apns-priority"] = "10",
-                ["apns-expiration"] = sentAt.AddHours(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+                Headers = new Dictionary<string, string>
+                {
+                    ["apns-push-type"] = "alert",
+                    ["apns-priority"] = "10",
+                    ["apns-expiration"] = sentAt.AddHours(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+                },
+                Aps = new Aps { Sound = "default", ThreadId = groupId == Guid.Empty ? "account" : groupId.ToString() }
             },
-            Aps = new Aps { Sound = "default", ThreadId = groupId == Guid.Empty ? "account" : groupId.ToString() }
-        },
-        Android = new AndroidConfig
-        {
-            TimeToLive = TimeSpan.FromHours(1),
-            Notification = new AndroidNotification
+            Android = new AndroidConfig
             {
-                ChannelId = PushNotificationKinds.Channel(kind), Tag = deliveryId.ToString(),
-                // FirebaseAdmin serializes an unset DateTime as year 1. Android then shows
-                // an age of thousands of years on notifications it displays in the background.
-                EventTimestamp = sentAt.UtcDateTime
+                TimeToLive = TimeSpan.FromHours(1),
+                Notification = new AndroidNotification
+                {
+                    ChannelId = PushNotificationKinds.Channel(kind),
+                    Tag = deliveryId.ToString(),
+                    // FirebaseAdmin serializes an unset DateTime as year 1. Android then shows
+                    // an age of thousands of years on notifications it displays in the background.
+                    EventTimestamp = sentAt.UtcDateTime
+                }
             }
-        }
-    };
+        };
 
     private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken)
     {
         var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString() };
-        if (groupId != Guid.Empty) data["groupId"] = groupId.ToString();
-        if (requestToken is not null) data["requestToken"] = requestToken;
+        if (groupId != Guid.Empty)
+        {
+            data["groupId"] = groupId.ToString();
+        }
+
+        if (requestToken is not null)
+        {
+            data["requestToken"] = requestToken;
+        }
+
         return data;
     }
 

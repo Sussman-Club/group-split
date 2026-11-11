@@ -85,18 +85,28 @@ public sealed class ReceiptAttachmentService(
                 // The content hash identifies the same bytes. Restore the object as well as
                 // returning its existing metadata if storage was cleared independently.
                 await using var retryStream = file.OpenReadStream();
-                await storage.PutObjectAsync(new PutObjectRequest { BucketName = storageOptions.Value.BucketName,
-                    Key = existing.ObjectKey, InputStream = retryStream, ContentType = existing.ContentType }, ct);
+                await storage.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = storageOptions.Value.BucketName,
+                    Key = existing.ObjectKey,
+                    InputStream = retryStream,
+                    ContentType = existing.ContentType
+                }, ct);
                 return ToResponse(existing);
             }
             throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
                 "This source file is already attached to an expense. Review the existing expense instead.")
                 .WithExtension("expenseId", existing.ExpenseId);
-        }        var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
+        }
+        var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
         if (receipt is null)
+        {
             db.Add(new Receipt { Id = receiptId, OwnerUserId = currentUser.User.Id, Subtotal = 0, Total = 0 });
+        }
         else if (receipt.OwnerUserId != currentUser.User.Id || receipt.ExpenseId != null)
+        {
             throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
+        }
         // The new draft and attachment are saved together only after storage succeeds.
         var attachment = NewAttachment(file, null, receiptId);
         attachment.ObjectKey = key;
@@ -111,21 +121,28 @@ public sealed class ReceiptAttachmentService(
         var attachment = await db.Set<ReceiptAttachment>().FirstOrDefaultAsync(a => a.Id == attachmentId && a.ReceiptId == receiptId && a.ExpenseId == null, ct)
             ?? throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file not found.");
         GetObjectResponse response;
-        try { response = await storage.GetObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct); }
+        try
+        {
+            response = await storage.GetObjectAsync(storageOptions.Value.BucketName, attachment.ObjectKey, ct);
+        }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        { throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file is missing. Upload the original again."); }
+        {
+            throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file is missing. Upload the original again.");
+        }
         using (response)
         {
-        await using var buffer = new MemoryStream();
-        await response.ResponseStream.CopyToAsync(buffer, ct);
-        return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
+            await using var buffer = new MemoryStream();
+            await response.ResponseStream.CopyToAsync(buffer, ct);
+            return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
         }
     }
 
     private async Task FindDraft(Guid id, CancellationToken ct)
     {
         if (!await db.Set<Receipt>().AnyAsync(r => r.Id == id && r.OwnerUserId == currentUser.User.Id && r.ExpenseId == null, ct))
+        {
             throw new NotFoundException(ErrorCodes.ReceiptNotFound, "Receipt not found.");
+        }
     }
     private ReceiptAttachment NewAttachment(IFormFile file, Guid? expenseId, Guid ownerId)
     {
@@ -206,7 +223,9 @@ public sealed class ReceiptAttachmentService(
             .ToListAsync(ct);
 
         if (attachments.Count == 0)
+        {
             return [];
+        }
 
         var returning = attachments
             .Where(attachment => returnReceiptId is not null && attachment.ReceiptId == returnReceiptId)

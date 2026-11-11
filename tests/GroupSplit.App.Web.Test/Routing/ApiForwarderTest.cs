@@ -79,7 +79,9 @@ public sealed class ApiForwarderTest : IAsyncLifetime
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/groups/7b0f9c3e-0000-4000-8000-000000000001/archive");
 
         if (fetchSite is not null)
+        {
             request.Headers.Add("Sec-Fetch-Site", fetchSite);
+        }
 
         using var response = await _client.SendAsync(request, Ct);
 
@@ -170,10 +172,14 @@ public sealed class ApiForwarderTest : IAsyncLifetime
         context.Request.Method = method;
 
         if (fetchSite is not null)
+        {
             context.Request.Headers["Sec-Fetch-Site"] = fetchSite;
+        }
 
         if (marker is not null)
+        {
             context.Request.Headers[SameOriginRequest.HeaderName] = marker;
+        }
 
         Assert.Equal(own, WebAppExtensions.IsFromOwnPages(context.Request));
     }

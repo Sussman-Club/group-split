@@ -169,7 +169,12 @@ public static class ReceiptCommands
 
             context.Output.WriteMessage(
                 $"Downloaded receipt attachment {attachmentId} to {path}.",
-                new { status = "downloaded", attachmentId, path });
+                new
+                {
+                    status = "downloaded",
+                    attachmentId,
+                    path
+                });
             return ExitCodes.Success;
         });
 
@@ -229,7 +234,12 @@ public static class ReceiptCommands
 
             context.Output.WriteMessage(
                 $"Deleted receipt attachment {attachmentId}.",
-                new { status = "deleted", transactionId, attachmentId });
+                new
+                {
+                    status = "deleted",
+                    transactionId,
+                    attachmentId
+                });
             return ExitCodes.Success;
         });
 
@@ -390,7 +400,9 @@ public static class ReceiptCommands
     private static ReceiptItemInput Kept(ReceiptItems.ReceiptLine line, ReceiptResponse? saved)
     {
         if (line.Item.Id is not { } id || saved?.Items.FirstOrDefault(item => item.Id == id) is not { } stored)
+        {
             return line.Item;
+        }
 
         var kept = line.Item with
         {
@@ -401,7 +413,12 @@ public static class ReceiptCommands
 
         return line.StatesTax
             ? kept
-            : kept with { TaxAmount = stored.TaxAmount, TaxRate = stored.TaxRate, IsTaxable = stored.IsTaxable };
+            : kept with
+            {
+                TaxAmount = stored.TaxAmount,
+                TaxRate = stored.TaxRate,
+                IsTaxable = stored.IsTaxable
+            };
     }
 
     private static Command Rule()
@@ -528,7 +545,11 @@ public static class ReceiptCommands
             await client.DeleteReceiptAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", transactionId = id },
+                new
+                {
+                    status = "deleted",
+                    transactionId = id
+                },
                 _ => new Markup("[green]Deleted[/] the bill.\n"));
 
             return ExitCodes.Success;

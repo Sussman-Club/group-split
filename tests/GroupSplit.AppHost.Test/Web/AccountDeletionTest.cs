@@ -102,7 +102,10 @@ public class AccountDeletionTest(AppHostFixture appHost) : WebPageTest(appHost)
     }
 
     private static LocatorAssertionsToBeVisibleOptions Visible =>
-        new() { Timeout = OperationTimeoutMs };
+        new()
+        {
+            Timeout = OperationTimeoutMs
+        };
 
     private string Url(string path) =>
         new Uri(_appHost.Application.GetEndpoint("web"), path).AbsoluteUri;

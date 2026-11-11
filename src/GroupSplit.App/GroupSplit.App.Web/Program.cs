@@ -46,17 +46,14 @@ builder.Services.AddAuthorizationBuilder();
 
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
-// Add shared services
 builder.Services.AddSharedServices();
 builder.Services.AddWebLocalization();
 builder.Services.AddReceiptClientPolicies();
 builder.Services.ConfigureReceiptHttpClient();
 
-// Initialize render mode configuration
 var renderModePreference = builder.Configuration.GetValue<RenderModePreference>("RenderMode");
 RenderModeConfig.Initialize(renderModePreference);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .RegisterPersistentService<GroupsTracker>(RenderMode.InteractiveAuto)
     .RegisterPersistentService<TransactionsTracker>(RenderMode.InteractiveAuto)
@@ -66,10 +63,8 @@ builder.Services.AddRazorComponents()
     .RegisterPersistentService<UserTracker>(RenderMode.InteractiveAuto)
     .AddRenderModeComponents();
 
-// Add MudBlazor services
 builder.Services.AddMudServices();
 
-// Add the forwarder to make sending requests to the backend easier
 builder.Services.AddHttpForwarderWithServiceDiscovery();
 
 // NOTE: The BFF invokes AuthService from the client-side only.
@@ -91,7 +86,6 @@ app.MapKeycloakForwarder();
 
 app.MapWebhookForwarder();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();

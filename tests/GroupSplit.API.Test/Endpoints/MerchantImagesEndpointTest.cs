@@ -87,10 +87,26 @@ public class MerchantImagesEndpointTest : IAsyncLifetime
     public async Task Invalid_or_mislabelled_images_are_refused_before_storage(string kind)
     {
         var bytes = Png.ToArray();
-        if (kind == "svg") bytes = "<svg onload='alert(1)'/>"u8.ToArray();
-        if (kind == "too-large") bytes = new byte[MerchantLogos.MaximumUploadBytes + 1];
-        if (kind == "dimensions") BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(16, 4), 513);
-        if (kind == "truncated") bytes = bytes[..30];
+        if (kind == "svg")
+        {
+            bytes = "<svg onload='alert(1)'/>"u8.ToArray();
+        }
+
+        if (kind == "too-large")
+        {
+            bytes = new byte[MerchantLogos.MaximumUploadBytes + 1];
+        }
+
+        if (kind == "dimensions")
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(16, 4), 513);
+        }
+
+        if (kind == "truncated")
+        {
+            bytes = bytes[..30];
+        }
+
         using var form = Upload("Shop", bytes);
         var response = await _host.Client.PostAsync("/staff/merchant-images", form, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -123,7 +139,11 @@ public class MerchantImagesEndpointTest : IAsyncLifetime
     private static MultipartFormDataContent Upload(string name, byte[] bytes, Guid? id = null)
     {
         var form = new MultipartFormDataContent();
-        if (id is not null) form.Add(new StringContent(id.Value.ToString()), "merchantId");
+        if (id is not null)
+        {
+            form.Add(new StringContent(id.Value.ToString()), "merchantId");
+        }
+
         form.Add(new StringContent(name), "name");
         var file = new ByteArrayContent(bytes);
         file.Headers.ContentType = new MediaTypeHeaderValue("image/png");

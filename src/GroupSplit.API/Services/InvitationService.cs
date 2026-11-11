@@ -171,7 +171,9 @@ public sealed class InvitationService(
         // A member of the group opening the link -- to check it works before sending it --
         // must not put it into their own list of links waiting on them.
         if (!alreadyAMember)
+        {
             await Remember(guest.Id, userId, ct);
+        }
 
         // Read again rather than projected from what Held found, and so able to come back
         // empty: somebody may have claimed the link in the moments since.
@@ -230,7 +232,9 @@ public sealed class InvitationService(
         {
             // A retry from what the database holds; see CallerScope.StartOver.
             if (retrying)
+            {
                 context.StartOver(user);
+            }
 
             retrying = true;
 
@@ -381,10 +385,10 @@ public sealed class InvitationService(
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException
-                  {
-                      SqlState: PostgresErrorCodes.UniqueViolation,
-                      ConstraintName: "IX_SplitRule_GroupId_Name"
-                  })
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_SplitRule_GroupId_Name"
+            })
         {
             context.StartOver(userContext.User);
 
@@ -405,7 +409,9 @@ public sealed class InvitationService(
             .AnyAsync(opened => opened.GuestId == guestId && opened.UserId == userId, ct);
 
         if (already)
+        {
             return;
+        }
 
         var row = context.Add(new InvitationOpened
         {
@@ -451,8 +457,10 @@ public sealed class InvitationService(
         var normalized = (token ?? string.Empty).Trim();
 
         if (normalized.Length == 0)
+        {
             throw new NotFoundException(ErrorCodes.GroupInvitationNotFound,
                 "That invitation link was not found.");
+        }
 
         var guest = await context.Set<GroupGuest>()
                         .FirstOrDefaultAsync(candidate => candidate.Token == normalized, ct)

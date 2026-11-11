@@ -115,7 +115,9 @@ public static class GroupApi
                     var groupResponse = await groupService.Describe(group).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
+                    {
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+                    }
 
                     return Results.Ok(groupResponse);
                 })
@@ -135,7 +137,9 @@ public static class GroupApi
                     var groupUpdateRequest = await groupService.GetUpdateModel(id, ct);
 
                     if (groupUpdateRequest is null)
+                    {
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+                    }
 
                     patchDocument.ApplyOrRefuse(groupUpdateRequest);
 
@@ -145,11 +149,15 @@ public static class GroupApi
                     // default at all, and every group divides by one -- so it is refused
                     // rather than read as silence and quietly ignored.
                     if (patchDocument.Touches("/defaultSplitRuleId") && groupUpdateRequest.DefaultSplitRuleId is null)
+                    {
                         throw new ValidationException(ErrorCodes.SplitRuleInvalid,
                             "A group always has a default rule. Name the one to use instead.");
+                    }
 
                     if (!PatchedModel.IsValid(groupUpdateRequest, out var invalid))
+                    {
                         return invalid;
+                    }
 
                     await groupService.UpdateGroup(id, groupUpdateRequest, ct);
 
@@ -557,7 +565,9 @@ public static class GroupApi
                     var groupResponse = await groupService.Describe(group).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
+                    {
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+                    }
 
                     return Results.Ok(groupResponse);
                 })
@@ -670,7 +680,9 @@ public static class GroupApi
                     var groupResponse = await groupService.Describe(archived).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
+                    {
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+                    }
 
                     return Results.Ok(groupResponse);
                 })
@@ -690,7 +702,9 @@ public static class GroupApi
                     var groupResponse = await groupService.Describe(unarchived).FirstOrDefaultAsync(ct);
 
                     if (groupResponse is null)
+                    {
                         return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+                    }
 
                     return Results.Ok(groupResponse);
                 })

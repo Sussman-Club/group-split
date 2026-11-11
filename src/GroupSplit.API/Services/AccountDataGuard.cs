@@ -29,14 +29,17 @@ public sealed class AccountDataGuard(AppDbContext db) : IAccountDataGuard
     public async Task<IAsyncDisposable> Acquire(Guid userId, bool allowDeleted = false, CancellationToken ct = default)
     {
         IAsyncDisposable lease;
+
         if (db.Database.IsRelational())
         {
             var source = (NpgsqlConnection)db.Database.GetDbConnection();
             var settings = new NpgsqlConnectionStringBuilder(source.ConnectionString) { Pooling = false };
             var connection = source.CloneWith(settings.ConnectionString);
+
             try
             {
                 await connection.OpenAsync(ct);
+
                 var key = BinaryPrimitives.ReadInt64BigEndian(SHA256.HashData(userId.ToByteArray()));
                 await using var command = new NpgsqlCommand("SELECT pg_advisory_lock(@key)", connection) { CommandTimeout = 0 };
                 command.Parameters.AddWithValue("key", key);
@@ -63,7 +66,10 @@ public sealed class AccountDataGuard(AppDbContext db) : IAccountDataGuard
             // Query scalar database state after waiting, never the middleware's tracked user.
             if (!allowDeleted && !await db.Set<User>().AsNoTracking()
                     .AnyAsync(user => user.Id == userId && user.Kind != UserKind.Deleted, ct))
+            {
                 throw new NotFoundException(ErrorCodes.AccountNotFound, "This account no longer exists.");
+            }
+
             return lease;
         }
         catch
@@ -78,6 +84,7 @@ public sealed class AccountDataGuard(AppDbContext db) : IAccountDataGuard
         public ValueTask DisposeAsync()
         {
             gate.Release();
+
             return ValueTask.CompletedTask;
         }
     }

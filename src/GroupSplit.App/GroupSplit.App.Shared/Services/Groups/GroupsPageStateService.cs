@@ -95,7 +95,9 @@ public class GroupsPageStateService : IGroupsPageStateService
         set
         {
             if (value is not null && Groups.All(g => g.Id != value.Id))
+            {
                 throw new ArgumentException(UiText.Get("The selected group must be part of the user's groups."), nameof(value));
+            }
 
             var changed = value?.Id != _tracker.SelectedGroup?.Id;
 
@@ -192,13 +194,17 @@ public class GroupsPageStateService : IGroupsPageStateService
     public Task EnsureSelectedLoadedAsync()
     {
         if (SelectedGroup is not { } selected)
+        {
             return Task.CompletedTask;
+        }
 
         // Either the figures are its own, or they are on their way. A tracker restored from
         // the prerender can say neither -- the selection persisted before its figures
         // landed, or beside the previous group's -- and that is the case this exists for.
         if (_tracker.FiguresGroupId == selected.Id || !_selectedLoad.IsCompleted)
+        {
             return _selectedLoad;
+        }
 
         return _selectedLoad = LoadSelectedAsync(selected, ++_selectionVersion);
     }
@@ -238,7 +244,9 @@ public class GroupsPageStateService : IGroupsPageStateService
         finally
         {
             if (version == _selectionVersion)
+            {
                 _selecting = false;
+            }
 
             OnTransactionsChanged?.Invoke();
         }
@@ -280,7 +288,9 @@ public class GroupsPageStateService : IGroupsPageStateService
         }, UiText.Get("this group"));
 
         if (version != _selectionVersion || !loaded)
+        {
             return loaded;
+        }
 
         // Both assign a new object rather than editing the old one in place: a component
         // that was handed the previous one only looks again when the reference changes.
@@ -328,7 +338,10 @@ public class GroupsPageStateService : IGroupsPageStateService
     {
         var created = await _groupCommands.CreateAsync(request, cancellationToken);
 
-        if (created is null) return false;
+        if (created is null)
+        {
+            return false;
+        }
 
         // Landing on the new group is this class's business rather than the command's,
         // which is why the command hands the group back instead of doing anything with it.
@@ -346,7 +359,10 @@ public class GroupsPageStateService : IGroupsPageStateService
 
     public IAsyncEnumerable<UserInfo> GetGroupMembersAsync(CancellationToken cancellationToken = default)
     {
-        if (SelectedGroup is null) return AsyncEnumerable.Empty<UserInfo>();
+        if (SelectedGroup is null)
+        {
+            return AsyncEnumerable.Empty<UserInfo>();
+        }
 
         return _groupsClient.GetGroupMembersAsAsyncEnumerable(SelectedGroup.Id, cancellationToken);
     }

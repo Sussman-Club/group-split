@@ -159,7 +159,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -563,7 +568,12 @@ public sealed class MutationCommandTests : IDisposable
             new { id = guest, firstName = "Pat", isGuest = true }
         });
 
-        _api.Returns($"/api/groups/{id}/members/{guest}", new { id, name = "The flat", memberCount = 1 });
+        _api.Returns($"/api/groups/{id}/members/{guest}", new
+        {
+            id,
+            name = "The flat",
+            memberCount = 1
+        });
 
         var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), guest.ToString(), "--yes");
 
@@ -590,7 +600,9 @@ public sealed class MutationCommandTests : IDisposable
                     category = (string?)null
                 }
             },
-            page = 1, pageSize = 20, totalCount = 1
+            page = 1,
+            pageSize = 20,
+            totalCount = 1
         });
 
         var result = await Cli.RunAsync("groups", "activity", id.ToString(), "--output", "text");
@@ -678,10 +690,17 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns($"/api/groups/{id}/invitations/{invitation}", new
         {
-            invitationId = invitation, groupId = id, groupName = "The flat",
-            name = "Omar", outcome = (int)InvitationOutcome.Withdrawn,
-            sharesMoved = 0, amountOwed = 0m, paymentsMoved = 0, amountPaid = 0m,
-            rulesAffected = 0, rulesEmptied = 0
+            invitationId = invitation,
+            groupId = id,
+            groupName = "The flat",
+            name = "Omar",
+            outcome = (int)InvitationOutcome.Withdrawn,
+            sharesMoved = 0,
+            amountOwed = 0m,
+            paymentsMoved = 0,
+            amountPaid = 0m,
+            rulesAffected = 0,
+            rulesEmptied = 0
         });
 
         var result = await Cli.RunAsync(
@@ -753,9 +772,15 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns("/api/invitations/claims/token-omar/decline", new
         {
-            invitationId = Guid.NewGuid(), groupId = Guid.NewGuid(), groupName = "The flat",
-            name = "Omar", outcome = (int)InvitationOutcome.Declined,
-            sharesMoved = 0, amountOwed = 0m, paymentsMoved = 0, amountPaid = 0m,
+            invitationId = Guid.NewGuid(),
+            groupId = Guid.NewGuid(),
+            groupName = "The flat",
+            name = "Omar",
+            outcome = (int)InvitationOutcome.Declined,
+            sharesMoved = 0,
+            amountOwed = 0m,
+            paymentsMoved = 0,
+            amountPaid = 0m,
             rulesAffected = 0
         });
 
@@ -792,8 +817,14 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns("/api/invitations/claims/token-omar", new
         {
-            groupId = group, groupName = "The flat", memberCount = 3, name = "Omar",
-            sharesTaken = 3, amountOwed = 62.50m, paymentsTaken = 1, amountPaid = 40m,
+            groupId = group,
+            groupName = "The flat",
+            memberCount = 3,
+            name = "Omar",
+            sharesTaken = 3,
+            amountOwed = 62.50m,
+            paymentsTaken = 1,
+            amountPaid = 40m,
             rulesTaken = 2
         }, method: "POST");
 
@@ -1035,7 +1066,12 @@ public sealed class MutationCommandTests : IDisposable
         var id = Guid.NewGuid();
         var omar = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1079,7 +1115,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1106,7 +1147,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1138,7 +1184,13 @@ public sealed class MutationCommandTests : IDisposable
         var id = Guid.NewGuid();
 
         _api.Returns($"/api/transactions/{id}",
-            new { id, name = "Settle up", amount = 50m, kind = (int)ActivityKind.Transfer });
+            new
+            {
+                id,
+                name = "Settle up",
+                amount = 50m,
+                kind = (int)ActivityKind.Transfer
+            });
 
         var result = await Cli.RunAsync(
             "transactions", "update", id.ToString(), "--amount", "60", "--preview");
@@ -1160,7 +1212,11 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns($"/api/transactions/{id}", new
         {
-            id, name = "Rent", amount = 900m, groupId = group, description = "March"
+            id,
+            name = "Rent",
+            amount = 900m,
+            groupId = group,
+            description = "March"
         });
 
         // The name it already has, and a new amount.
@@ -1346,7 +1402,9 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns("/api/users/me", new
         {
-            id = me, fullName = "Anabel Benitez", email = "anabel@example.com"
+            id = me,
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
         });
 
         _api.Returns("/api/split-rules", Rule("Mine", groupId));
@@ -1564,7 +1622,9 @@ public sealed class MutationCommandTests : IDisposable
     {
         _api.Returns("/api/users/me", new
         {
-            id = Guid.NewGuid(), fullName = "Anabel Benitez", email = "anabel@example.com"
+            id = Guid.NewGuid(),
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
         });
 
         var result = await Cli.RunAsync("users", "delete");
@@ -1588,7 +1648,9 @@ public sealed class MutationCommandTests : IDisposable
     {
         _api.Returns("/api/users/me", new
         {
-            id = Guid.NewGuid(), fullName = "Anabel Benitez", email = "anabel@example.com"
+            id = Guid.NewGuid(),
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
         });
 
         var result = await Cli.RunAsync("users", "delete");
@@ -1603,7 +1665,9 @@ public sealed class MutationCommandTests : IDisposable
     {
         _api.Returns("/api/users/me", new
         {
-            id = Guid.NewGuid(), fullName = "Anabel Benitez", email = "anabel@example.com"
+            id = Guid.NewGuid(),
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
         });
 
         _api.Problem("/api/users/me", 409, "ACCOUNT_NOT_SETTLED",
@@ -1639,7 +1703,10 @@ public sealed class MutationCommandTests : IDisposable
 
     private static object Group(string name) => new
     {
-        id = Guid.NewGuid(), name, memberCount = 3, isArchive = false
+        id = Guid.NewGuid(),
+        name,
+        memberCount = 3,
+        isArchive = false
     };
 
     /// <summary>
@@ -1662,8 +1729,11 @@ public sealed class MutationCommandTests : IDisposable
 
         _api.Returns($"/api/groups/{id}/repayments", new
         {
-            fromUserId = loraine, fromUserName = "Loraine Haddad",
-            toUserId = daniel, toUserName = "Daniel Haddad", amount = 43544.61m
+            fromUserId = loraine,
+            fromUserName = "Loraine Haddad",
+            toUserId = daniel,
+            toUserName = "Daniel Haddad",
+            amount = 43544.61m
         });
 
         var result = await Cli.RunAsync(
@@ -1708,19 +1778,28 @@ public sealed class MutationCommandTests : IDisposable
 
     private static object Member(Guid id, string name) => new
     {
-        id, firstName = name, lastName = "Haddad", email = $"{name.ToLowerInvariant()}@example.com"
+        id,
+        firstName = name,
+        lastName = "Haddad",
+        email = $"{name.ToLowerInvariant()}@example.com"
     };
 
     private static object Category(string name, Guid groupId, Guid? id = null, Guid? ruleId = null) => new
     {
-        id = id ?? Guid.NewGuid(), groupId, name,
-        defaultSplitRuleId = ruleId, defaultSplitRuleName = ruleId is null ? null : "By room size"
+        id = id ?? Guid.NewGuid(),
+        groupId,
+        name,
+        defaultSplitRuleId = ruleId,
+        defaultSplitRuleName = ruleId is null ? null : "By room size"
     };
 
     private static object Rule(string name, Guid groupId, Guid? id = null, Guid? member = null) => new
     {
-        id = id ?? Guid.NewGuid(), groupId, name,
-        versionId = Guid.NewGuid(), changedAt = DateTimeOffset.UtcNow,
+        id = id ?? Guid.NewGuid(),
+        groupId,
+        name,
+        versionId = Guid.NewGuid(),
+        changedAt = DateTimeOffset.UtcNow,
         definition = new Dictionary<string, object>
         {
             ["$type"] = "shares",
@@ -1730,9 +1809,16 @@ public sealed class MutationCommandTests : IDisposable
 
     private static object Transaction(string name) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount = 42.50m,
-        dateTime = DateTimeOffset.UtcNow, groupId = Guid.NewGuid(), groupName = "The flat",
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-        categoryId = (Guid?)null, category = (string?)null
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount = 42.50m,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId = Guid.NewGuid(),
+        groupName = "The flat",
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Anabel",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 }

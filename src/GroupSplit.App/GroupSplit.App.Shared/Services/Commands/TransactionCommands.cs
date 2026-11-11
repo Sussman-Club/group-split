@@ -27,7 +27,9 @@ public sealed class TransactionCommands(
     {
         var created = await CreateExpenseAsync(request, ct, complete: false);
         if (created is null)
+        {
             return false;
+        }
 
         // Save the extracted bill first. ReceiptService also links any unassociated source
         // files to the new receipt, so the original document and its itemized data remain
@@ -58,7 +60,9 @@ public sealed class TransactionCommands(
         {
             created = await transactions.CreateTransactionAsync(request, ct);
             if (complete)
+            {
                 await CompleteCreationAsync(created, ct);
+            }
         }, UiText.Get("Could not save the expense."));
 
         return succeeded ? created : null;
@@ -105,7 +109,9 @@ public sealed class TransactionCommands(
         }
 
         if (rows.Count == 0)
+        {
             return;
+        }
 
         var parameters = new DialogParameters<AttachBankRowDialog>
         {
@@ -151,7 +157,9 @@ public sealed class TransactionCommands(
     private async Task SayWhyAsync(Exception exception)
     {
         if (ApiErrors.IsCancellation(exception))
+        {
             return;
+        }
 
         var error = ApiErrors.Read(exception);
 
@@ -160,7 +168,9 @@ public sealed class TransactionCommands(
         // time somebody changes the total before the shares, mid-edit. Neither is news; the
         // dialog's own total line already says the shares do not add up.
         if (error.Kind is ApiErrorKind.Validation || error.Code == ErrorCodes.SplitsDoNotSumToAmount)
+        {
             return;
+        }
 
         await errors.ShowAsync(error, UiText.Get("Could not work out how this divides."));
     }

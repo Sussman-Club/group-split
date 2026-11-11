@@ -84,7 +84,9 @@ public static class SeederResourceBuilderExtensions
                     foreach (var result in await Task.WhenAll(tasks))
                     {
                         if (!result.Success)
+                        {
                             return result;
+                        }
                     }
 
                     return await rcs.ExecuteCommandAsync(

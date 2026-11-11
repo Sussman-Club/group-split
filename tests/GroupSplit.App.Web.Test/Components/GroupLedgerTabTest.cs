@@ -111,9 +111,11 @@ public class GroupLedgerTabTest : ComponentTest
                     entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 if (sortBy == "dateTime")
+                {
                     rows = descending == true
                         ? rows.OrderByDescending(entry => entry.DateTime).ToList()
                         : rows.OrderBy(entry => entry.DateTime).ToList();
+                }
 
                 if (_holdNextRead is { } held)
                 {
@@ -190,7 +192,10 @@ public class GroupLedgerTabTest : ComponentTest
         string? requestedSort, bool descending, bool native)
     {
         if (native)
+        {
             Services.AddSingleton(new AppLinks(new Uri("https://example.test/")));
+        }
+
         ReaderAt(TimeSpan.Zero);
         var day = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
         _entries =
@@ -527,7 +532,9 @@ public class GroupLedgerTabTest : ComponentTest
         openingAnswered.SetResult(new TransactionSummaryResponse(5, 29m));
 
         for (var turn = 0; turn < 5; turn++)
+        {
             await tab.InvokeAsync(() => { });
+        }
 
         Assert.Equal(("0", "$0.00"), Cards(tab));
     }
@@ -616,7 +623,9 @@ public class GroupLedgerTabTest : ComponentTest
 
         oldAnswer.SetResult(new TransactionSummaryResponse(5, 29m));
         for (var turn = 0; turn < 5; turn++)
+        {
             await tab.InvokeAsync(() => { });
+        }
 
         Assert.Equal(("6", "$41.50"), Cards(tab));
     }
@@ -631,7 +640,10 @@ public class GroupLedgerTabTest : ComponentTest
         var tab = Render();
 
         var search = tab.Find(".gs-search input");
-        await search.InputAsync(new() { Value = "coffee" });
+        await search.InputAsync(new()
+        {
+            Value = "coffee"
+        });
 
         // The box is debounced, so the request follows the pause rather than the keystroke.
         tab.WaitForAssertion(() => Assert.Equal("coffee", _asks.Last().Search), TimeSpan.FromSeconds(5));
@@ -649,7 +661,10 @@ public class GroupLedgerTabTest : ComponentTest
         tab.WaitForAssertion(() => Assert.Single(tab.FindAll(".gs-feed-row")));
         await tab.Find(".gs-mobile-filter-toggle").ClickAsync(new());
         Assert.Contains("filters-open", tab.Find(".gs-ledger-toolbar").ClassName);
-        await tab.Find(".gs-search input").InputAsync(new() { Value = "no-such-transaction" });
+        await tab.Find(".gs-search input").InputAsync(new()
+        {
+            Value = "no-such-transaction"
+        });
         tab.WaitForAssertion(() =>
         {
             Assert.Empty(tab.FindAll(".gs-feed-row"));
@@ -1195,7 +1210,10 @@ public class GroupLedgerTabTest : ComponentTest
     [Fact]
     public async Task A_settlement_made_through_a_day_opens_and_names_its_period()
     {
-        var settled = Transfer(Guid.NewGuid()) with { CoversThrough = new DateOnly(2026, 8, 31) };
+        var settled = Transfer(Guid.NewGuid()) with
+        {
+            CoversThrough = new DateOnly(2026, 8, 31)
+        };
         _entries = [settled];
 
         Guid? viewed = null;

@@ -144,7 +144,9 @@ public static class GroupCommands
             patch.Replace(request => request.Name, context.ParseResult.GetValue(name)!);
 
             if (context.ParseResult.GetResult(description) is not null)
+            {
                 patch.Replace(request => request.Description, context.ParseResult.GetValue(description) ?? string.Empty);
+            }
 
             var group = await context.Groups.UpdateGroupAsync(
                 context.ParseResult.GetValue(GroupId), patch, ct);
@@ -222,7 +224,9 @@ public static class GroupCommands
 
                 if (Periods.FirstOrDefault(known => string.Equals(known.Name, token, StringComparison.OrdinalIgnoreCase))
                     is { Name: not null } match)
+                {
                     return match.Period;
+                }
 
                 result.AddError($"Could not read period '{token}'. Use one of: {string.Join(", ", Periods.Select(known => known.Name))}.");
                 return default;
@@ -511,7 +515,14 @@ public static class GroupCommands
                 ct);
 
             context.Output.Write(
-                new { status = "settled", groupId = id, userId = other, amount = paid, direction = side },
+                new
+                {
+                    status = "settled",
+                    groupId = id,
+                    userId = other,
+                    amount = paid,
+                    direction = side
+                },
                 value => new Markup(
                     $"[green]Settled[/] {value.amount:N2} with {Markup.Escape(name)}.\n"));
 
@@ -676,7 +687,12 @@ public static class GroupCommands
             if (payments.Count == 0)
             {
                 context.Output.Write(
-                    new { status = "already-square", groupId = id, through = day },
+                    new
+                    {
+                        status = "already-square",
+                        groupId = id,
+                        through = day
+                    },
                     _ => new Markup(day is { } squareThrough
                         ? $"You are already square with everybody in this group through {squareThrough:yyyy-MM-dd}.\n"
                         : "You are already square with everybody in this group.\n"));
@@ -687,7 +703,12 @@ public static class GroupCommands
             if (parse.GetValue(dryRun))
             {
                 context.Output.Write(
-                    new { groupId = id, through = day, payments = payments.Select(payment => payment.Line) },
+                    new
+                    {
+                        groupId = id,
+                        through = day,
+                        payments = payments.Select(payment => payment.Line)
+                    },
                     _ => new Rows(
                         new Markup($"[bold]{payments.Count}[/] repayments, "
                                    + $"{payments.Sum(payment => payment.Amount):N2} in all.\n"),
@@ -864,12 +885,16 @@ public static class GroupCommands
             context.Output.Write(spending, value =>
             {
                 if (value.Categories.Count == 0)
+                {
                     return new Markup(Tables.Empty("spending") + "\n");
+                }
 
                 var table = Tables.Grid("Category", "Expenses", "Total", "Your share");
                 foreach (var category in value.Categories)
+                {
                     table.AddRow(Markup.Escape(category.Name), category.Count.ToString(),
                         category.Total.ToString("N2"), category.Share.ToString("N2"));
+                }
 
                 return new Rows(table);
             });
@@ -945,7 +970,12 @@ public static class GroupCommands
             await context.Groups.LeaveGroupAsync(id, ct);
 
             context.Output.Write(
-                new { status = "left", groupId = id, name = group.Name },
+                new
+                {
+                    status = "left",
+                    groupId = id,
+                    name = group.Name
+                },
                 value => new Markup($"[green]Left[/] {Markup.Escape(value.name)}.\n"));
 
             return ExitCodes.Success;
@@ -1140,7 +1170,9 @@ public static class GroupCommands
                     table.AddRow("Link", Markup.Escape(value.Url ?? value.Token));
 
                     if (value.ExpiresAt is { } expires)
+                    {
                         table.AddRow("Expires", expires.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
+                    }
 
                     return new Rows(table, new Markup(
                         $"\n[grey]Whoever opens it and claims it takes {Markup.Escape(value.Name)}'s " +
@@ -1183,7 +1215,13 @@ public static class GroupCommands
             await context.Groups.RevokeGuestLinkAsync(id, userId, ct);
 
             context.Output.Write(
-                new { status = "revoked", groupId = id, userId, name = guest.Name },
+                new
+                {
+                    status = "revoked",
+                    groupId = id,
+                    userId,
+                    name = guest.Name
+                },
                 value => new Markup($"[green]Stopped[/] {Markup.Escape(value.name)}'s link.\n"));
 
             return ExitCodes.Success;
@@ -1384,7 +1422,10 @@ public static class GroupCommands
         table.AddRow("Id", group.Id.ToString());
         table.AddRow("Name", Markup.Escape(group.Name));
         if (!string.IsNullOrWhiteSpace(group.Description))
+        {
             table.AddRow("Description", Markup.Escape(group.Description));
+        }
+
         table.AddRow("Members", group.MemberCount.ToString());
         table.AddRow("State", group.IsArchive ? "archived" : "active");
 

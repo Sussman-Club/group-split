@@ -45,7 +45,9 @@ public class TransactionSeeder(
         var payer = await DbContext.Set<User>().FindAsync([dto.PayerId], ct);
 
         if (payer is null)
+        {
             return null;
+        }
 
         // No category means a personal expense, in the payer's personal group: a category
         // is what says which shared group an expense is in. It divides to a single share,
@@ -57,7 +59,9 @@ public class TransactionSeeder(
             : null;
 
         if (dto.CategoryId is not null && category is null)
+        {
             return null;
+        }
 
         var expense = new Expense
         {
@@ -80,7 +84,9 @@ public class TransactionSeeder(
         };
 
         if (dto.Receipt is { } bill)
+        {
             expense.Receipt = await SeededBill.ForExpense(bill, expense, DbContext, ruleFactory, ct);
+        }
 
         // Through the same division the app uses, so a developer's seeded balances are
         // ones the app could actually have produced.
@@ -100,12 +106,16 @@ public class TransactionSeeder(
     private async Task<Merchant?> MerchantAsync(string? name, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             return null;
+        }
 
         var normalized = name.Trim().ToLowerInvariant();
 
         if (_merchants.TryGetValue(normalized, out var seen))
+        {
             return seen;
+        }
 
         var merchant = await DbContext.Set<Merchant>()
             .FirstOrDefaultAsync(candidate => candidate.NormalizedName == normalized, ct);

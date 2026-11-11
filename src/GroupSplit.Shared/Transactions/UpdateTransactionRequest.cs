@@ -5,7 +5,8 @@ namespace GroupSplit.Shared;
 
 public record UpdateTransactionRequest
 {
-    [Required] public Guid PaidByUserId { get; set; }
+    [Required]
+    public Guid PaidByUserId { get; set; }
 
     /// <summary>
     /// The group the expense belongs to after the edit, or null for the caller's own ledger.

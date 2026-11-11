@@ -33,7 +33,10 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         await shared.Database.ExecuteSqlRawAsync($"CREATE SCHEMA \"{_schema}\"", Ct);
         var settings = new NpgsqlConnectionStringBuilder(
             await appHost.Application.GetConnectionStringAsync("db", Ct))
-        { SearchPath = _schema, Pooling = false };
+        {
+            SearchPath = _schema,
+            Pooling = false
+        };
         _connectionString = settings.ConnectionString;
         await using var db = Context();
         await db.Database.ExecuteSqlRawAsync(db.Database.GenerateCreateScript(), Ct);
@@ -83,7 +86,11 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         var ids = new List<Guid>();
         await using (var db = Context())
         {
-            for (var index = 0; index < 12; index++) ids.Add(Queue(db).Enqueue(new TestJob(Guid.NewGuid())).Id);
+            for (var index = 0; index < 12; index++)
+            {
+                ids.Add(Queue(db).Enqueue(new TestJob(Guid.NewGuid())).Id);
+            }
+
             await db.SaveChangesAsync(Ct);
         }
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -140,14 +147,20 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         Assert.Equal(2, replacement.Attempts);
 
         await using (var oldWorker = Context())
+        {
             await Store(oldWorker).Finish(first, BackgroundJobStatus.Completed, null, Ct);
+        }
+
         var current = await Read(first.Id);
         Assert.Equal(BackgroundJobStatus.Running, current.Status);
         Assert.Equal(replacement.LeaseId, current.LeaseId);
         Assert.Equal(replacement.Payload, current.Payload);
 
         await using (var worker = Context())
+        {
             await Store(worker).Finish(replacement, BackgroundJobStatus.Completed, null, Ct);
+        }
+
         current = await Read(first.Id);
         Assert.Equal(BackgroundJobStatus.Completed, current.Status);
         Assert.Equal("{}", current.Payload);
@@ -165,7 +178,10 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
             var job = Assert.IsType<BackgroundJob>(await Claim());
             Assert.Equal(attempt, job.Attempts);
             await using (var worker = Context())
+            {
                 await Store(worker).Finish(job, BackgroundJobStatus.Pending, "HandlerFailed", Ct);
+            }
+
             var saved = await Read(id);
             Assert.Null(saved.LeaseId);
             Assert.Equal("HandlerFailed", saved.Reason);
@@ -212,7 +228,10 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         Guid id;
         await using (var db = Context())
         {
-            id = Queue(db).AwaitOperator("provider-item", new { ItemId = "item-to-remove" }, "ConnectorUnavailable").Id;
+            id = Queue(db).AwaitOperator("provider-item", new
+            {
+                ItemId = "item-to-remove"
+            }, "ConnectorUnavailable").Id;
             await db.SaveChangesAsync(Ct);
         }
         _clock.Now = _clock.Now.AddYears(1);
@@ -291,8 +310,14 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         Guid id;
         await using (var db = Context())
         {
-            var row = new BackgroundJob { Type = type, Version = version, Payload = payload,
-                CreatedAt = _clock.Now, AvailableAt = _clock.Now };
+            var row = new BackgroundJob
+            {
+                Type = type,
+                Version = version,
+                Payload = payload,
+                CreatedAt = _clock.Now,
+                AvailableAt = _clock.Now
+            };
             db.Add(row);
             await db.SaveChangesAsync(Ct);
             id = row.Id;
@@ -314,8 +339,13 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
     public async Task PostgreSQL_rejects_malformed_JSON_payloads()
     {
         await using var db = Context();
-        db.Add(new BackgroundJob { Type = "test-job", Payload = "not-json",
-            CreatedAt = _clock.Now, AvailableAt = _clock.Now });
+        db.Add(new BackgroundJob
+        {
+            Type = "test-job",
+            Payload = "not-json",
+            CreatedAt = _clock.Now,
+            AvailableAt = _clock.Now
+        });
         var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));
         var postgres = Assert.IsType<PostgresException>(failure.InnerException);
         Assert.Equal("22P02", postgres.SqlState);

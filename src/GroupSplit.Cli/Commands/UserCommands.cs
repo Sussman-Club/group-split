@@ -111,7 +111,11 @@ public static class UserCommands
             }
 
             context.Output.Write(
-                new { status = "deleted", userId = user.Id },
+                new
+                {
+                    status = "deleted",
+                    userId = user.Id
+                },
                 _ => new Markup("[green]Account deleted[/], and its sign-in with it. Signed out.\n"));
 
             return ExitCodes.Success;

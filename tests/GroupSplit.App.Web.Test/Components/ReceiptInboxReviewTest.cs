@@ -72,8 +72,15 @@ public class ReceiptInboxReviewTest : ComponentTest
         var action = ignored ? "Restore receipt" : "Ignore receipt";
         page.WaitForAssertion(() => Assert.Contains(action, page.Markup));
         page.FindAll("button").Single(button => button.TextContent.Trim() == action).Click();
-        if (ignored) client.Verify(x => x.RestoreInboxReceiptAsync(id, It.IsAny<CancellationToken>()), Times.Once);
-        else client.Verify(x => x.IgnoreInboxReceiptAsync(id, It.IsAny<CancellationToken>()), Times.Once);
+        if (ignored)
+        {
+            client.Verify(x => x.RestoreInboxReceiptAsync(id, It.IsAny<CancellationToken>()), Times.Once);
+        }
+        else
+        {
+            client.Verify(x => x.IgnoreInboxReceiptAsync(id, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
         Assert.EndsWith(ignored ? "/inbox/receipts" : "/inbox/receipts?status=ignored", Services.GetRequiredService<NavigationManager>().Uri);
     }
 

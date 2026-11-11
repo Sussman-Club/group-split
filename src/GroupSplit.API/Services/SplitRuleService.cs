@@ -207,8 +207,10 @@ public class SplitRuleService(
         ArgumentNullException.ThrowIfNull(versions);
 
         if (versions.Count == 0)
+        {
             throw new ValidationException(ErrorCodes.SplitRuleHistoryInvalid,
                 "A history needs at least one entry: the division the rule stands for now.");
+        }
 
         // Strictly increasing, because each entry's window ends where the next one begins. Two
         // sharing a date would leave a version that was never what the rule said, and one
@@ -217,7 +219,9 @@ public class SplitRuleService(
         for (var i = 1; i < versions.Count; i++)
         {
             if (versions[i].From > versions[i - 1].From)
+            {
                 continue;
+            }
 
             throw new ValidationException(ErrorCodes.SplitRuleHistoryInvalid,
                     "The entries have to be in order, oldest first, with no two starting at " +
@@ -235,11 +239,13 @@ public class SplitRuleService(
         // spending would disagree. Only the last is checked because the entries strictly
         // increase above, so it is the latest of them.
         if (versions[^1].From > clock.GetUtcNow())
+        {
             throw new ValidationException(ErrorCodes.SplitRuleHistoryInvalid,
                     "A history says what a rule has already stood for, so no entry can start " +
                     "in the future.")
                 .WithExtension("index", versions.Count - 1)
                 .WithExtension("from", versions[^1].From);
+        }
 
         var rule = await Existing(id, ct);
 
@@ -251,11 +257,13 @@ public class SplitRuleService(
         // larger question than this answers -- so it is refused by name rather than guessed
         // at.
         if (rule.Versions.Count > 1)
+        {
             throw new ConflictException(ErrorCodes.SplitRuleAlreadyHasHistory,
                     $"\"{rule.Name}\" has already been through {rule.Versions.Count} versions, " +
                     "so its history cannot be written in wholesale.")
                 .WithExtension("splitRuleId", rule.Id)
                 .WithExtension("versionCount", rule.Versions.Count);
+        }
 
         var current = CurrentOf(rule);
 
@@ -274,11 +282,13 @@ public class SplitRuleService(
         // the handler's judgement and the same one an edit uses to decide whether anything
         // changed at all.
         if (!handlers.SameAs(current, proposed[^1]))
+        {
             throw new ConflictException(ErrorCodes.SplitRuleHistoryEndsElsewhere,
                     $"The last entry is not the division \"{rule.Name}\" stands for now. Correct " +
                     "the rule with an ordinary update first, then write its history.")
                 .WithExtension("splitRuleId", rule.Id)
                 .WithExtension("currentVersionId", current.Id);
+        }
 
         // Reused, not replaced. Deleting it and writing the same division back would orphan
         // every transaction that records it -- the pointer is the only account of which
@@ -326,16 +336,20 @@ public class SplitRuleService(
                 .AnyAsync(group => group.DefaultSplitRuleId == id, ct);
 
         if (stillDefault)
+        {
             throw new ConflictException(ErrorCodes.SplitRuleInUse,
                 "This rule is still a default split.");
+        }
 
         var everUsed = await dbContext.Set<Transaction>()
             .AnyAsync(transaction => transaction.SplitRuleVersion!.SplitRuleId == id, ct);
 
         if (everUsed || await dbContext.Set<ReceiptItem>()
             .AnyAsync(item => item.SplitRuleVersion!.SplitRuleId == id, ct))
+        {
             throw new ConflictException(ErrorCodes.SplitRuleInUse,
                 "Expenses have been divided by this rule, so it is part of their history and cannot be deleted.");
+        }
 
         dbContext.Remove(rule);
         await dbContext.SaveChangesAsync(ct);
@@ -401,7 +415,9 @@ public class SplitRuleService(
         SplitRule rule, SplitRuleVersion current, SplitRuleVersion proposed)
     {
         if (current.GetType() == proposed.GetType())
+        {
             return;
+        }
 
         throw new ConflictException(ErrorCodes.SplitRuleKindFixed,
                 $"\"{rule.Name}\" divides one way and this would make it divide another. A "
@@ -420,7 +436,9 @@ public class SplitRuleService(
     private async Task RefuseASecondBillRule(SplitRuleVersion version, Group group, CancellationToken ct)
     {
         if (version is not ItemizedSplitRuleVersion)
+        {
             return;
+        }
 
         var held = await dbContext.Set<SplitRule>()
             .FirstOrDefaultAsync(rule =>
@@ -429,7 +447,9 @@ public class SplitRuleService(
                     open.SupersededAt == null && open is ItemizedSplitRuleVersion), ct);
 
         if (held is null)
+        {
             return;
+        }
 
         throw new ConflictException(ErrorCodes.SplitRuleBillIsProvisioned,
                 $"This group already divides bills by \"{held.Name}\", which it was given and "
@@ -441,7 +461,9 @@ public class SplitRuleService(
     private static void RefuseIfProvisioned(SplitRule rule, string what)
     {
         if (!rule.BuiltIn)
+        {
             return;
+        }
 
         // Two kinds of provisioned rule now, and they are held for different reasons: saying
         // "for one of its members" about the bill rule would be simply untrue.
@@ -477,7 +499,9 @@ public class SplitRuleService(
     private async Task Validate(SplitRuleVersion ruleVersion, Group group, CancellationToken ct)
     {
         if (handlers.Invalid(ruleVersion) is { } complaint)
+        {
             throw new ValidationException(ErrorCodes.SplitRuleInvalid, complaint);
+        }
 
         // Who a rule names is asked of the rule's shape rather than of one interface, because
         // the shapes are the point: a proportional rule names a list, and the one that puts
@@ -492,15 +516,19 @@ public class SplitRuleService(
         };
 
         if (named.Count == 0)
+        {
             return;
+        }
 
         var known = await participants.Of(group.Id)
             .Where(user => named.Contains(user.Id))
             .CountAsync(ct);
 
         if (known != named.Count)
+        {
             throw new ValidationException(ErrorCodes.RuleUsersNotInGroup,
                 "Some people in the rule are neither members of the group nor invited to it.");
+        }
     }
 
     private async Task RefuseDuplicateName(Guid groupId, string name, Guid? excluding, CancellationToken ct)
@@ -511,7 +539,9 @@ public class SplitRuleService(
             rule.Name.ToLower() == name.ToLower(), ct);
 
         if (taken)
+        {
             throw new ConflictException(ErrorCodes.SplitRuleNameTaken,
                 $"This group already has a rule called \"{name}\".");
+        }
     }
 }

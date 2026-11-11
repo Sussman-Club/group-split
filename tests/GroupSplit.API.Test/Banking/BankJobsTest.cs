@@ -32,8 +32,13 @@ public class BankJobsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_new_bank_signin_problem_stages_one_private_alert_and_does_not_repeat()
     {
         var connection = await LinkAsync(BankConnectionStatus.Active);
-        DbContext.Add(new PushDevice { UserId = connection.UserId, Token = "test-token",
-            UpdatedAt = DateTimeOffset.UtcNow, BankSyncIssuesEnabled = true });
+        DbContext.Add(new PushDevice
+        {
+            UserId = connection.UserId,
+            Token = "test-token",
+            UpdatedAt = DateTimeOffset.UtcNow,
+            BankSyncIssuesEnabled = true
+        });
         await DbContext.SaveChangesAsync(Ct);
         _bank.Throw(BankSyncFailure.LoginRequired);
         Assert.Equal(SyncOutcome.LoginRequired, await GetService<IBankSyncService>().SyncAsync(connection.Id, Ct));

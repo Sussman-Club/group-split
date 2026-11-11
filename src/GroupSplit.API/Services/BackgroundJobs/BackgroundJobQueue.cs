@@ -21,8 +21,11 @@ public sealed class BackgroundJobQueue(AppDbContext db, BackgroundJobRegistry re
         var wire = registry.Serialize(job);
         return Add(new BackgroundJob
         {
-            Type = wire.Name, Version = wire.Version, Payload = wire.Payload,
-            CreatedAt = time.GetUtcNow(), AvailableAt = time.GetUtcNow()
+            Type = wire.Name,
+            Version = wire.Version,
+            Payload = wire.Payload,
+            CreatedAt = time.GetUtcNow(),
+            AvailableAt = time.GetUtcNow()
         });
     }
 
@@ -30,14 +33,25 @@ public sealed class BackgroundJobQueue(AppDbContext db, BackgroundJobRegistry re
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        if (type.Length > 128 || reason.Length > 256) throw new ArgumentOutOfRangeException(nameof(reason));
+        if (type.Length > 128 || reason.Length > 256)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason));
+        }
+
         return Add(new BackgroundJob
         {
-            Type = type, Payload = JsonSerializer.Serialize(details), Reason = reason,
+            Type = type,
+            Payload = JsonSerializer.Serialize(details),
+            Reason = reason,
             Status = BackgroundJobStatus.AwaitingOperator,
-            CreatedAt = time.GetUtcNow(), AvailableAt = time.GetUtcNow()
+            CreatedAt = time.GetUtcNow(),
+            AvailableAt = time.GetUtcNow()
         });
     }
 
-    private BackgroundJob Add(BackgroundJob job) { db.Add(job); return job; }
+    private BackgroundJob Add(BackgroundJob job)
+    {
+        db.Add(job);
+        return job;
+    }
 }

@@ -37,7 +37,9 @@ public sealed class BufferedBrowserFile : IBrowserFile
         cancellationToken.ThrowIfCancellationRequested();
 
         if (Size > maxAllowedSize)
+        {
             throw new IOException($"The file size ({Size} bytes) exceeds the maximum allowed size of {maxAllowedSize} bytes.");
+        }
 
         return new MemoryStream(_content, writable: false);
     }

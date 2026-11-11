@@ -16,7 +16,10 @@ internal sealed class ProcessBackgroundJobsHandler(
             for (var count = 0; count < 10; count++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!await processor.RunNext(cancellationToken)) break;
+                if (!await processor.RunNext(cancellationToken))
+                {
+                    break;
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }

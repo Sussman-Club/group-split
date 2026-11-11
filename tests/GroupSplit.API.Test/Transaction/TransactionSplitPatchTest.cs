@@ -126,7 +126,10 @@ public class TransactionSplitPatchTest : IAsyncLifetime
     }
 
     private static SharesSplitRuleDto Shares(Guid a, int weightA, Guid b, int weightB) =>
-        new() { Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB } };
+        new()
+        {
+            Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB }
+        };
 
     /// <summary>A category whose default rule divides the way <paramref name="definition"/> says.</summary>
     private async Task<(Guid CategoryId, Guid RuleId)> ACategory(

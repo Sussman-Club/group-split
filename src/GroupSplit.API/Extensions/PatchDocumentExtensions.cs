@@ -78,7 +78,9 @@ public static class PatchDocumentExtensions
             }
 
             if (errors.Count > 0)
+            {
                 throw new ValidationException(ErrorCodes.PatchInvalid, string.Join(" ", errors));
+            }
         }
     }
 
@@ -95,10 +97,14 @@ public static class PatchDocumentExtensions
     private static bool Addresses(string? path, string pointer)
     {
         if (string.IsNullOrEmpty(path))
+        {
             return false;
+        }
 
         if (!path.StartsWith(pointer, StringComparison.OrdinalIgnoreCase))
+        {
             return false;
+        }
 
         return path.Length == pointer.Length || path[pointer.Length] == '/';
     }

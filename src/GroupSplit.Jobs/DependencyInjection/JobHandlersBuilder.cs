@@ -12,7 +12,9 @@ internal class JobHandlersBuilder(IJobsBuilder jobsBuilder) : IJobHandlersBuilde
         ArgumentNullException.ThrowIfNull(handlerFactory);
         if (typeof(TJob).GetInterfaces().Append(typeof(TJob)).Any(
                 type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IJob<>)))
+        {
             throw new ArgumentException("Register result jobs using Add<TJob, TResult>.", nameof(handlerFactory));
+        }
 
         _executions.Add(typeof(TJob), async (services, job, token) =>
         {
@@ -30,9 +32,11 @@ internal class JobHandlersBuilder(IJobsBuilder jobsBuilder) : IJobHandlersBuilde
         var resultContracts = typeof(TJob).GetInterfaces().Append(typeof(TJob))
             .Count(type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IJob<>));
         if (resultContracts > 1)
+        {
             throw new ArgumentException(
                 $"Job type {typeof(TJob).FullName} declares multiple result contracts. Only one is supported.",
                 nameof(handlerFactory));
+        }
 
         _executions.Add(typeof(TJob), async (services, job, token) =>
             await handlerFactory(services).HandleAsync((TJob)job, token).ConfigureAwait(false));

@@ -38,7 +38,10 @@ public sealed class JsonOutputWriter(OutputSettings settings, TextWriter stdout,
     public void Write<T>(T payload, Func<T, IRenderable> renderer) => WriteJson(payload);
 
     public void WriteMessage(string message, object? payload = null)
-        => WriteJson(payload ?? new { message });
+        => WriteJson(payload ?? new
+        {
+            message
+        });
 
     /// <summary>
     /// Whole, whatever --fields asked for. The fields named the result the caller wanted,

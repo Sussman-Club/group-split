@@ -26,7 +26,9 @@ public class TransactionShareTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .CreateGroup(new CreateGroupRequest { Name = "Home" }, Ct);
 
         if (others.Length > 0)
+        {
             await JoinGroup(group.Id, others);
+        }
 
         return group.Id;
     }

@@ -175,7 +175,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     {
         var quantity = Math.Round(item.Quantity, 3, MidpointRounding.AwayFromZero);
         if (quantity <= 0m)
+        {
             quantity = 1m;
+        }
 
         var unitPrice = RoundMoney(item.UnitPrice);
         var totalPrice = RoundMoney(item.TotalPrice);
@@ -184,7 +186,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         if (name is null)
         {
             if (unitPrice == 0m && totalPrice == 0m)
+            {
                 return null;
+            }
 
             name = UnnamedItem;
         }
@@ -219,26 +223,38 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
     internal sealed class AzureReceipt
     {
-        [JsonPropertyName("merchantName")] public string? MerchantName { get; init; }
+        [JsonPropertyName("merchantName")]
+        public string? MerchantName { get; init; }
         // A string, not a DateOnly: a model that writes the date any other way would
         // otherwise fail the whole reading over the one field that is allowed to be null.
-        [JsonPropertyName("purchaseDate")] public string? PurchaseDate { get; init; }
-        [JsonPropertyName("subtotal")] public decimal Subtotal { get; init; }
-        [JsonPropertyName("tax")] public decimal Tax { get; init; }
-        [JsonPropertyName("tip")] public decimal Tip { get; init; }
-        [JsonPropertyName("total")] public decimal Total { get; init; }
+        [JsonPropertyName("purchaseDate")]
+        public string? PurchaseDate { get; init; }
+        [JsonPropertyName("subtotal")]
+        public decimal Subtotal { get; init; }
+        [JsonPropertyName("tax")]
+        public decimal Tax { get; init; }
+        [JsonPropertyName("tip")]
+        public decimal Tip { get; init; }
+        [JsonPropertyName("total")]
+        public decimal Total { get; init; }
         [JsonPropertyName("items")] public IReadOnlyList<AzureReceiptItem> Items { get; init; } = [];
     }
 
     internal sealed class AzureReceiptItem
     {
         [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
-        [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; init; }
-        [JsonPropertyName("quantity")] public decimal Quantity { get; init; }
-        [JsonPropertyName("totalPrice")] public decimal TotalPrice { get; init; }
-        [JsonPropertyName("taxAmount")] public decimal? TaxAmount { get; init; }
-        [JsonPropertyName("taxRate")] public decimal? TaxRate { get; init; }
-        [JsonPropertyName("isTaxable")] public bool? IsTaxable { get; init; }
+        [JsonPropertyName("unitPrice")]
+        public decimal UnitPrice { get; init; }
+        [JsonPropertyName("quantity")]
+        public decimal Quantity { get; init; }
+        [JsonPropertyName("totalPrice")]
+        public decimal TotalPrice { get; init; }
+        [JsonPropertyName("taxAmount")]
+        public decimal? TaxAmount { get; init; }
+        [JsonPropertyName("taxRate")]
+        public decimal? TaxRate { get; init; }
+        [JsonPropertyName("isTaxable")]
+        public bool? IsTaxable { get; init; }
     }
 
 }

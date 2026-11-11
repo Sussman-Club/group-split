@@ -26,7 +26,9 @@ public static class ServiceExtensions
              service.ImplementationType == typeof(JobScheduleInitializer))).ToArray();
 
         foreach (var registration in defaults)
+        {
             builder.Services.Remove(registration);
+        }
 
         return builder;
     }
@@ -36,7 +38,9 @@ public static class ServiceExtensions
         public IJobsBuilder AddJobs()
         {
             if (JobsBuilders.TryGetValue(services, out var existingBuilder))
+            {
                 return existingBuilder;
+            }
 
             var builder = new JobsBuilder(services);
             JobsBuilders.Add(services, builder);

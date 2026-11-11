@@ -94,12 +94,21 @@ public class GroupSettingsTabTest : ComponentTest
     public async Task Category_and_rule_search_are_independent_and_match_linked_names()
     {
         var tab = await RenderTabAsync();
-        await tab.Find("#group-categories input").InputAsync(new() { Value = "household" });
+        await tab.Find("#group-categories input").InputAsync(new()
+        {
+            Value = "household"
+        });
         tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll("#group-categories .gs-row").Count));
         Assert.Equal(2, tab.FindAll("#group-rules .gs-rule").Count);
-        await tab.Find("#group-rules input").InputAsync(new() { Value = "groceries" });
+        await tab.Find("#group-rules input").InputAsync(new()
+        {
+            Value = "groceries"
+        });
         tab.WaitForAssertion(() => Assert.Single(tab.FindAll("#group-rules .gs-rule")));
-        await tab.Find("#group-categories input").InputAsync(new() { Value = "no such category" });
+        await tab.Find("#group-categories input").InputAsync(new()
+        {
+            Value = "no such category"
+        });
         tab.WaitForAssertion(() =>
         {
             Assert.Empty(tab.FindAll("#group-categories .gs-row"));

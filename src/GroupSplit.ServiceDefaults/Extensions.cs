@@ -71,7 +71,9 @@ public static class Extensions
                 .WithMetrics(metrics =>
                 {
                     if (builder.Configuration.GetValue<bool>("Telemetry:EssentialMetricsOnly"))
+                    {
                         metrics.AddView(EssentialMetrics.Select);
+                    }
 
                     metrics.AddAspNetCoreInstrumentation()
                         .AddMeter("Npgsql")
@@ -84,7 +86,10 @@ public static class Extensions
                     if (builder.Configuration.GetValue<double?>("Telemetry:TraceSampleRatio") is { } ratio)
                     {
                         if (!double.IsFinite(ratio) || ratio < 0 || ratio > 1)
+                        {
                             throw new InvalidOperationException("Telemetry:TraceSampleRatio must be between 0 and 1.");
+                        }
+
                         tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(ratio)));
                     }
                     tracing.AddSource(builder.Environment.ApplicationName)
@@ -103,8 +108,10 @@ public static class Extensions
                         .AddEntityFrameworkCoreInstrumentation(options =>
                         {
                             if (builder.Configuration.GetValue<bool>("Telemetry:SuppressRoutineDatabaseTraces"))
+                            {
                                 options.Filter = (_, command) =>
                                     !RoutineDatabaseTelemetry.IsProbe(command);
+                            }
                         })
                         .AddAWSInstrumentation()
                         // Invitation and join-link tokens out of url.path and url.full, on
@@ -139,13 +146,12 @@ public static class Extensions
         public TBuilder AddDefaultHealthChecks()
         {
             builder.Services.AddHealthChecks()
-                // Add a default liveness check to ensure app is responsive
                 .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
 
             return builder;
         }
     }
-    
+
     extension(WebApplication app)
     {
         /// <summary>

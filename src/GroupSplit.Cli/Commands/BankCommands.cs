@@ -244,7 +244,11 @@ public static class BankCommands
             // minute, so a caller polling `groupsplit inbox summary` is the way to see it
             // arrive rather than waiting on this.
             context.Output.Write(
-                new { status = "queued", connectionId = id },
+                new
+                {
+                    status = "queued",
+                    connectionId = id
+                },
                 _ => new Markup(
                     "[green]Sync queued.[/] [grey]New rows appear in: groupsplit inbox list[/]\n"));
 
@@ -293,7 +297,12 @@ public static class BankCommands
             await client.UnlinkBankConnectionAsync(id, ct);
 
             context.Output.Write(
-                new { status = "unlinked", connectionId = id, institution = connection.InstitutionName },
+                new
+                {
+                    status = "unlinked",
+                    connectionId = id,
+                    institution = connection.InstitutionName
+                },
                 value => new Markup($"[green]Unlinked[/] {Markup.Escape(value.institution)}.\n"));
 
             return ExitCodes.Success;
