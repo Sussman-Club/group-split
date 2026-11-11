@@ -1,9 +1,33 @@
-<div class="gs-stack" role="status" aria-live="polite" aria-label="@Loc["Loading…"]" aria-busy="true" style="gap: 16px">
-    <span class="gs-muted">@Loc["Loading…"]</span>
-    <div aria-hidden="true" class="gs-stack" style="gap: 16px">
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="100%" Height="72px" />
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="100%" Height="56px" />
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="100%" Height="56px" />
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="100%" Height="96px" />
+<div class="gs-skeleton-view gs-expense-loading" role="status" aria-live="polite" aria-label="@Loc["Loading…"]" aria-busy="true">
+    <div class="gs-expense-loading-layout" aria-hidden="true">
+        <div class="gs-expense-loading-source">
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="40px" Height="40px" />
+            <div class="gs-expense-loading-source-copy">
+                <MudSkeleton Width="62%" Height="18px" />
+                <MudSkeleton Width="40%" Height="14px" />
+            </div>
+            <MudSkeleton Width="68px" Height="22px" />
+        </div>
+        <div class="gs-expense-loading-fields">
+            <div class="gs-expense-loading-field"><MudSkeleton Width="30%" Height="14px" /><MudSkeleton Width="38%" Height="22px" /></div>
+            <div class="gs-expense-loading-field"><MudSkeleton Width="34%" Height="14px" /><MudSkeleton Width="64%" Height="18px" /></div>
+        </div>
+        <div class="gs-expense-loading-chips">
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="110px" Height="36px" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="90px" Height="36px" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="104px" Height="36px" />
+        </div>
+        <div class="gs-expense-loading-shares">
+            <MudSkeleton Width="40%" Height="18px" />
+            <MudSkeleton Width="65%" Height="14px" />
+            @for (var i = 0; i < 2; i++)
+            {
+                <div class="gs-expense-loading-person">
+                    <MudSkeleton SkeletonType="SkeletonType.Circle" Width="32px" Height="32px" />
+                    <MudSkeleton Width="42%" Height="16px" />
+                    <MudSkeleton Width="56px" Height="18px" />
+                </div>
+            }
+        </div>
     </div>
 </div>

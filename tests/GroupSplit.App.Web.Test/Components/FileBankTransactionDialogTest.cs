@@ -100,6 +100,19 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task A_single_possible_match_is_selected_even_without_a_model_suggestion()
+    {
+        var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Painkillers", 100m, "USD", DateTimeOffset.UtcNow,
+            null, null, "Ana", 0m, 0, MatchConfidence.Confident);
+        var (provider, reference) = await OpenAsync(Row with { PossibleDuplicates = [candidate] });
+        Assert.Equal("true", provider.Find("button[role=radio]").GetAttribute("aria-checked"));
+        var attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
+        Assert.False(attach.HasAttribute("disabled"));
+        await attach.ClickAsync(new MouseEventArgs());
+        Assert.Equal(candidate.TransactionId, (await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>())!.AttachTo);
+    }
+
+    [Fact]
     public async Task Suggested_expense_is_preselected_before_attaching()
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,

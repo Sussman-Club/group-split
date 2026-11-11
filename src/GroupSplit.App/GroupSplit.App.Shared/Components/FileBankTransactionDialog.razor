@@ -416,7 +416,8 @@
         _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
         _newExpenseChosen = !HasMatches;
-        _selectedExpenseId = Row.PossibleDuplicates.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
+        _selectedExpenseId = (Row.PossibleDuplicates.FirstOrDefault(match => match.IsSuggested)
+            ?? (Row.PossibleDuplicates.Count == 1 ? Row.PossibleDuplicates[0] : null))?.TransactionId;
 
         var loaded = await Errors.TryAsync(async () =>
         {
