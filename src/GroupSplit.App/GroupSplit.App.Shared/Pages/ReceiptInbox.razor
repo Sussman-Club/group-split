@@ -396,7 +396,7 @@ else if (_rows is not null)
         try
         {
             IReadOnlyList<ReceiptExpenseCandidate>? matches = null;
-            if (!await Errors.TryAsync(async () => matches = (await Client.MatchReceiptInboxAsync(row.Id)).ToList(), Loc["Could not check for matching expenses."].Value)) return;
+            var matching = Errors.TryAsync(async () => matches = (await Client.MatchReceiptInboxAsync(row.Id)).ToList(), Loc["Could not check for matching expenses."].Value);
             var dialog = await Dialogs.ShowAsync<CreateTransactionDialog>(Loc["Create expense"].Value,
                 new DialogParameters<CreateTransactionDialog>
                 {
@@ -405,6 +405,7 @@ else if (_rows is not null)
                     { x => x.InboxSuggestion, suggestion }
                 }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
             if (await dialog.Result is not { Canceled: false, Data: CreateTransactionRequest request }) return;
+            if (!await matching) return;
             var createAnyway = confirmedNew || matches!.Count > 0 && await Dialogs.ShowMessageBoxAsync(Loc["Possible duplicate"].Value,
                 Loc["These matching expenses may already record this purchase. Create another expense?"].Value,
                 yesText: Loc["Create another"].Value, cancelText: Loc["Cancel"].Value) == true;

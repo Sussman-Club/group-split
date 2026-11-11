@@ -86,6 +86,20 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Bank_payment_waits_for_group_choices_before_showing_the_form()
+    {
+        var groups = new TaskCompletionSource<ICollection<GroupResponse>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _groups.Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>())).Returns(groups.Task);
+        var (provider, _) = await OpenAsync();
+        provider.WaitForAssertion(() => Assert.Single(provider.FindAll("[aria-busy=true][role=status]")));
+        Assert.Empty(provider.FindComponents<ExpenseDecisions>());
+        Assert.True(provider.FindAll("button").Single(b => b.TextContent.Trim() == "Add expense").HasAttribute("disabled"));
+        groups.SetResult([Flat, Trip]);
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseDecisions>()));
+        Assert.DoesNotContain("Loading…", provider.Markup);
+    }
+
+    [Fact]
     public async Task Suggested_expense_is_preselected_before_attaching()
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,

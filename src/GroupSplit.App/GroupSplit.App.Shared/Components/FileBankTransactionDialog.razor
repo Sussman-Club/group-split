@@ -47,6 +47,12 @@
     </TitleContent>
 
     <DialogContent>
+        @if (_initializing)
+        {
+            <ExpenseDialogLoading />
+        }
+        else
+        {
         <div class="gs-stack" style="gap: 16px">
             @if (Login.User is { Onboarding.BankDismissed: false } && !_bankGuideDismissed)
             {
@@ -204,6 +210,7 @@
             }
             }
         </div>
+        }
     </DialogContent>
 
     <DialogActions>
@@ -212,19 +219,20 @@
         @if ((HasMatches || _searchedExpense is not null) && !_newExpenseChosen)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(SelectedExpenseId is null || !SelectedExpenseCanAttach)" OnClick="AttachSelected">@Loc["Attach to this expense"]</MudButton>
+                       Disabled="@(_initializing || SelectedExpenseId is null || !SelectedExpenseCanAttach)" OnClick="AttachSelected">@Loc["Attach to this expense"]</MudButton>
         }
         else
         {
             @* Gated on having answered, not on the answer: null is "Personal", which is a
                destination like any other, so it cannot also stand for "not yet said". *@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-btn-pill"
-                       Disabled="@(!_chosen)" OnClick="Submit">@(Row.IsCredit ? Loc["Add credit"].Value : Loc["Add expense"].Value)</MudButton>
+                       Disabled="@(_initializing || !_chosen)" OnClick="Submit">@(Row.IsCredit ? Loc["Add credit"].Value : Loc["Add expense"].Value)</MudButton>
         }
     </DialogActions>
 </MudDialog>
 
 @code {
+    private bool _initializing = true;
     private int _bankGuideStep;
     private bool _bankGuideDismissed;
     private async Task NextBankGuideAsync()
@@ -398,6 +406,12 @@
                 : Loc["What it was for, in your own categories."].Value;
 
     protected override async Task OnInitializedAsync()
+    {
+        try { await InitializePaymentAsync(); }
+        finally { _initializing = false; }
+    }
+
+    private async Task InitializePaymentAsync()
     {
         _awaiting = Loc["Pick a group to see how it divides."];
         _name = Row.Title;
