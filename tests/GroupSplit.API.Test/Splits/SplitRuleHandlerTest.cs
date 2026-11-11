@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Services;
+using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Shared;
@@ -210,15 +210,9 @@ public class SplitRuleHandlerTest
     /// </remarks>
     private sealed class FixedThenEvenSplitRuleVersion : SplitRuleVersion
     {
-        public required Guid FixedUserId
-        {
-            get; init;
-        }
+        public required Guid FixedUserId { get; init; }
 
-        public required decimal FixedAmount
-        {
-            get; init;
-        }
+        public required decimal FixedAmount { get; init; }
     }
 
     private sealed class FixedThenEvenSplitRuleHandler : ISplitRuleHandler<FixedThenEvenSplitRuleVersion>

@@ -6,27 +6,15 @@ namespace GroupSplit.App.Shared.Services.Groups;
 public class GroupsTracker
 {
     [PersistentState]
-    public ICollection<GroupResponse>? Groups
-    {
-        get; set;
-    }
+    public ICollection<GroupResponse>? Groups { get; set; }
 
     [PersistentState]
-    public GroupResponse? SelectedGroup
-    {
-        get; set;
-    }
+    public GroupResponse? SelectedGroup { get; set; }
 
     [PersistentState]
-    public PagedResponse<TransactionResponse>? Transactions
-    {
-        get; set;
-    }
+    public PagedResponse<TransactionResponse>? Transactions { get; set; }
     [PersistentState]
-    public UserGroupBalanceResponse? Balance
-    {
-        get; set;
-    }
+    public UserGroupBalanceResponse? Balance { get; set; }
 
     /// <summary>
     /// Which group <see cref="Transactions"/> and <see cref="Balance"/> describe, or null
@@ -41,18 +29,12 @@ public class GroupsTracker
     /// trust, which is how one group's balances ended up on another group's page.
     /// </remarks>
     [PersistentState]
-    public Guid? FiguresGroupId
-    {
-        get; set;
-    }
+    public Guid? FiguresGroupId { get; set; }
 
     /// <summary>
     /// Where this person stands across every group. Not about the selected group, and kept
     /// here anyway: it is read on the same announcements and shown beside the same figures.
     /// </summary>
     [PersistentState]
-    public UserPositionResponse? Position
-    {
-        get; set;
-    }
+    public UserPositionResponse? Position { get; set; }
 }

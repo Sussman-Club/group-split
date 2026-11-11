@@ -18,10 +18,7 @@ public class TransactionsPageStateService : ITransactionsPageStateService
     private readonly ITransactionCommands _commands;
     private readonly LocalClock _clock;
 
-    public Task IsReadyTask
-    {
-        get;
-    }
+    public Task IsReadyTask { get; }
 
     public TransactionsPageStateService(ITransactionsClient client,
         TransactionsTracker tracker,

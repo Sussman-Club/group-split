@@ -62,10 +62,7 @@ public class SettlePageTest : ComponentTest
     }
 
     /// <summary>Omar, owed 50 from Home and 40 from Trip: one payment for two groups.</summary>
-    private static PersonSettlement OmarAcrossBoth
-    {
-        get;
-    } =
+    private static PersonSettlement OmarAcrossBoth { get; } =
         new(Omar, "Omar", 90m, [new GroupDebt(Home, "Home", 50m), new GroupDebt(Trip, "Trip", 40m)]);
 
     private static PersonSettlement DaniInTrip { get; } = new(Dani, "Dani", 25m, [new GroupDebt(Trip, "Trip", 25m)]);

@@ -85,18 +85,9 @@ public sealed class AndroidUpdateNoticeTest : ComponentTest
 
     private sealed class Transport(string? version) : HttpMessageHandler
     {
-        public string? Failure
-        {
-            get; set;
-        }
-        public int Calls
-        {
-            get; private set;
-        }
-        public HttpRequestMessage? Request
-        {
-            get; private set;
-        }
+        public string? Failure { get; set; }
+        public int Calls { get; private set; }
+        public HttpRequestMessage? Request { get; private set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;

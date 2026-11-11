@@ -38,10 +38,7 @@ public class Transfer : Transaction
     /// nothing about a period, and backfilling its own date would have it claim one.
     /// </para>
     /// </remarks>
-    public DateOnly? CoversThrough
-    {
-        get; set;
-    }
+    public DateOnly? CoversThrough { get; set; }
 
     /// <summary>
     /// For EF, and internal so that <see cref="TransferExtensions"/> stays the only way

@@ -320,10 +320,7 @@ public class UserProvisioningTest(AppHostFixture appHost) : IAsyncLifetime
     {
         private Func<Task>? _action;
 
-        public bool Fired
-        {
-            get; private set;
-        }
+        public bool Fired { get; private set; }
 
         public void Arm(Func<Task> action)
         {

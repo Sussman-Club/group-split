@@ -19,10 +19,7 @@ public class TransactionSplit : Entity
 {
     public virtual Transaction Transaction { get; set; } = null!;
 
-    public Guid TransactionId
-    {
-        get; set;
-    }
+    public Guid TransactionId { get; set; }
 
     public virtual User User { get; set; } = null!;
 
@@ -31,18 +28,12 @@ public class TransactionSplit : Entity
     /// split rather than to how EF indexes it -- and the service that writes splits lives
     /// outside this assembly.
     /// </summary>
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// Their share. Negative on a refund, and zero for a member a split deliberately
     /// excludes -- both of which are worth a row, since the alternative is inferring
     /// absence from a missing one.
     /// </summary>
-    public required decimal Amount
-    {
-        get; set;
-    }
+    public required decimal Amount { get; set; }
 }

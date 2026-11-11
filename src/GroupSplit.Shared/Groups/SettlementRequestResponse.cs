@@ -14,22 +14,10 @@ public record SettlementRequestResponse(
 
 public record CreateSettlementRequest
 {
-    public Guid RecipientUserId
-    {
-        get; set;
-    }
-    public decimal Amount
-    {
-        get; set;
-    }
-    public DateOnly? Through
-    {
-        get; set;
-    }
+    public Guid RecipientUserId { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly? Through { get; set; }
 
     [System.ComponentModel.DataAnnotations.Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes)]
-    public int? UtcOffset
-    {
-        get; set;
-    }
+    public int? UtcOffset { get; set; }
 }

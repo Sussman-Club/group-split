@@ -10,35 +10,17 @@ namespace GroupSplit.Shared;
 public record SaveReceiptRequest
 {
     [MaxDecimalPlaces(2)]
-    public decimal Subtotal
-    {
-        get; init;
-    }
+    public decimal Subtotal { get; init; }
     [MaxDecimalPlaces(2)]
-    public decimal Tax
-    {
-        get; init;
-    }
+    public decimal Tax { get; init; }
     [MaxDecimalPlaces(2)]
-    public decimal Tip
-    {
-        get; init;
-    }
+    public decimal Tip { get; init; }
     [MaxDecimalPlaces(2)]
-    public decimal Total
-    {
-        get; init;
-    }
+    public decimal Total { get; init; }
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
     [StringLength(128)]
-    public string? MerchantName
-    {
-        get; init;
-    }
-    public DateOnly? PurchaseDate
-    {
-        get; init;
-    }
+    public string? MerchantName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
 }
 
 public record ReceiptItemInput
@@ -49,60 +31,33 @@ public record ReceiptItemInput
     /// Which stored line this is, for a bill being corrected. Null is a new line, which is
     /// every line of a bill being written down for the first time.
     /// </summary>
-    public Guid? Id
-    {
-        get; init;
-    }
+    public Guid? Id { get; init; }
     [Required, StringLength(NameLength)] public string Name { get; init; } = null!;
     [StringLength(128)]
-    public string? NormalizedName
-    {
-        get; init;
-    }
+    public string? NormalizedName { get; init; }
     /// <summary>
     /// The source wording. On an existing line, null leaves the saved wording unchanged;
     /// an empty string explicitly clears it.
     /// </summary>
     [StringLength(1000)]
-    public string? Description
-    {
-        get; init;
-    }
+    public string? Description { get; init; }
     [MaxDecimalPlaces(2)]
-    public decimal UnitPrice
-    {
-        get; init;
-    }
+    public decimal UnitPrice { get; init; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
     [MaxDecimalPlaces(2)]
-    public decimal TotalPrice
-    {
-        get; init;
-    }
+    public decimal TotalPrice { get; init; }
     [MaxDecimalPlaces(2)]
-    public decimal TaxAmount
-    {
-        get; init;
-    }
+    public decimal TaxAmount { get; init; }
     /// <summary>Percentage points: 7.5 means 7.5%, rather than a ratio of 0.075.</summary>
     [Range(0, 100), MaxDecimalPlaces(4)]
-    public decimal? TaxRate
-    {
-        get; init;
-    }
-    public bool? IsTaxable
-    {
-        get; init;
-    }
+    public decimal? TaxRate { get; init; }
+    public bool? IsTaxable { get; init; }
     /// <summary>
     /// The exact saved version to use. Null on a new line starts it on the first rule a line
     /// can use: the category's default, the group's default split, then Even. Null on a
     /// stored line leaves it without a rule.
     /// </summary>
-    public Guid? SplitRuleVersionId
-    {
-        get; init;
-    }
+    public Guid? SplitRuleVersionId { get; init; }
 }
 
 /// <summary>
@@ -113,46 +68,22 @@ public sealed class ReceiptItemPatch
 {
     [Required, StringLength(128)] public string Name { get; set; } = string.Empty;
     [StringLength(1000)]
-    public string? Description
-    {
-        get; set;
-    }
+    public string? Description { get; set; }
     [MaxDecimalPlaces(2)]
-    public decimal UnitPrice
-    {
-        get; set;
-    }
+    public decimal UnitPrice { get; set; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; set; } = 1;
     [MaxDecimalPlaces(2)]
-    public decimal TotalPrice
-    {
-        get; set;
-    }
+    public decimal TotalPrice { get; set; }
     [MaxDecimalPlaces(2)]
-    public decimal TaxAmount
-    {
-        get; set;
-    }
+    public decimal TaxAmount { get; set; }
     [Range(0, 100), MaxDecimalPlaces(4)]
-    public decimal? TaxRate
-    {
-        get; set;
-    }
-    public bool? IsTaxable
-    {
-        get; set;
-    }
-    public Guid? SplitRuleVersionId
-    {
-        get; set;
-    }
+    public decimal? TaxRate { get; set; }
+    public bool? IsTaxable { get; set; }
+    public Guid? SplitRuleVersionId { get; set; }
 }
 
 /// <summary>One line's rule. No version clears it, which leaves the bill undividable.</summary>
 public record SetReceiptItemRuleRequest
 {
-    public Guid? SplitRuleVersionId
-    {
-        get; init;
-    }
+    public Guid? SplitRuleVersionId { get; init; }
 }

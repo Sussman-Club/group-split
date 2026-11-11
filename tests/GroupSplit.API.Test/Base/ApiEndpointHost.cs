@@ -61,16 +61,10 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
     }
 
     /// <summary>A client whose requests arrive authenticated as the host's own user.</summary>
-    public HttpClient Client
-    {
-        get;
-    }
+    public HttpClient Client { get; }
 
     /// <summary>The identity provider subject <see cref="Client"/> signs in as.</summary>
-    public string Subject
-    {
-        get;
-    }
+    public string Subject { get; }
 
     public IServiceProvider Services => _app.Services;
 

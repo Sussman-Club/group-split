@@ -11,16 +11,10 @@ public sealed record OidcEndpoints
     public string TokenEndpoint { get; init; } = string.Empty;
 
     [JsonPropertyName("device_authorization_endpoint")]
-    public string? DeviceAuthorizationEndpoint
-    {
-        get; init;
-    }
+    public string? DeviceAuthorizationEndpoint { get; init; }
 
     [JsonPropertyName("end_session_endpoint")]
-    public string? EndSessionEndpoint
-    {
-        get; init;
-    }
+    public string? EndSessionEndpoint { get; init; }
 
     [JsonPropertyName("issuer")]
     public string Issuer { get; init; } = string.Empty;

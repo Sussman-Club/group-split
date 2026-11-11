@@ -35,10 +35,7 @@ public class ApiUnitTest : IAsyncLifetime
     /// <summary>
     /// The shared fixture that contains the service registration template.
     /// </summary>
-    protected ApiTestFixture Fixture
-    {
-        get;
-    }
+    protected ApiTestFixture Fixture { get; }
 
     private ServiceProvider? _serviceProviderInstance;
 

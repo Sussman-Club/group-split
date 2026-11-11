@@ -27,19 +27,10 @@ public sealed class BufferedBrowserFile : IBrowserFile
         _content = content;
     }
 
-    public string Name
-    {
-        get;
-    }
-    public DateTimeOffset LastModified
-    {
-        get;
-    }
+    public string Name { get; }
+    public DateTimeOffset LastModified { get; }
     public long Size => _content.LongLength;
-    public string ContentType
-    {
-        get;
-    }
+    public string ContentType { get; }
 
     public Stream OpenReadStream(long maxAllowedSize, CancellationToken cancellationToken = default)
     {

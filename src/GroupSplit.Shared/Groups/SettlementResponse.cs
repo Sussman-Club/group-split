@@ -14,66 +14,39 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SettlementResponse
 {
-    public Guid Id
-    {
-        get; init;
-    }
+    public Guid Id { get; init; }
 
-    public Guid GroupId
-    {
-        get; init;
-    }
+    public Guid GroupId { get; init; }
 
     public string GroupName { get; init; } = "";
 
-    public Guid FromUserId
-    {
-        get; init;
-    }
+    public Guid FromUserId { get; init; }
 
     public string FromUserName { get; init; } = "";
 
-    public Guid ToUserId
-    {
-        get; init;
-    }
+    public Guid ToUserId { get; init; }
 
     public string ToUserName { get; init; } = "";
 
-    public decimal Amount
-    {
-        get; init;
-    }
+    public decimal Amount { get; init; }
 
-    public DateTimeOffset DateTime
-    {
-        get; init;
-    }
+    public DateTimeOffset DateTime { get; init; }
 
     /// <summary>What the payer wanted remembered, when they said -- "cash", "end of August".</summary>
-    public string? Description
-    {
-        get; init;
-    }
+    public string? Description { get; init; }
 
     /// <summary>
     /// Whether the caller was the payer. Derivable from <see cref="FromUserId"/> by anyone
     /// who knows their own id, and stated because it is what the row's wording turns on:
     /// "You paid Daniel" and "Omar paid you" are the same record read from two ends.
     /// </summary>
-    public bool PaidByYou
-    {
-        get; init;
-    }
+    public bool PaidByYou { get; init; }
 
     /// <summary>
     /// The last day of activity it was meant to settle, when it was settled through one --
     /// "through 31 Aug" on the row.
     /// </summary>
-    public DateOnly? CoversThrough
-    {
-        get; init;
-    }
+    public DateOnly? CoversThrough { get; init; }
 }
 
 /// <summary>

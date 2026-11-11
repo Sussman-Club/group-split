@@ -12,10 +12,7 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record LinkTokenRequest
 {
-    public Guid? ConnectionId
-    {
-        get; set;
-    }
+    public Guid? ConnectionId { get; set; }
 }
 
 /// <summary>

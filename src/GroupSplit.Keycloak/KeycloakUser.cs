@@ -14,34 +14,19 @@ namespace GroupSplit.Keycloak;
 public sealed record KeycloakUser
 {
     [JsonPropertyName("id")]
-    public required string Id
-    {
-        get; init;
-    }
+    public required string Id { get; init; }
 
     [JsonPropertyName("username")]
-    public required string Username
-    {
-        get; init;
-    }
+    public required string Username { get; init; }
 
     [JsonPropertyName("email")]
-    public required string Email
-    {
-        get; init;
-    }
+    public required string Email { get; init; }
 
     [JsonPropertyName("firstName")]
-    public string? FirstName
-    {
-        get; init;
-    }
+    public string? FirstName { get; init; }
 
     [JsonPropertyName("lastName")]
-    public string? LastName
-    {
-        get; init;
-    }
+    public string? LastName { get; init; }
 
     [JsonPropertyName("enabled")] public bool Enabled { get; init; } = true;
 
@@ -68,17 +53,11 @@ public sealed record KeycloakCredential
     [JsonPropertyName("type")] public string Type { get; init; } = "password";
 
     [JsonPropertyName("value")]
-    public required string Value
-    {
-        get; init;
-    }
+    public required string Value { get; init; }
 
     /// <summary>Not temporary: a demo account that demands a password change at first sign-in is a nuisance.</summary>
     [JsonPropertyName("temporary")]
-    public bool Temporary
-    {
-        get; init;
-    }
+    public bool Temporary { get; init; }
 }
 
 /// <summary>
@@ -91,72 +70,42 @@ public sealed record KeycloakCredential
 public sealed record KeycloakRole
 {
     [JsonPropertyName("id")]
-    public required string Id
-    {
-        get; init;
-    }
+    public required string Id { get; init; }
 
     [JsonPropertyName("name")]
-    public required string Name
-    {
-        get; init;
-    }
+    public required string Name { get; init; }
 
     [JsonPropertyName("description")]
-    public string? Description
-    {
-        get; init;
-    }
+    public string? Description { get; init; }
 
     [JsonPropertyName("composite")]
-    public bool Composite
-    {
-        get; init;
-    }
+    public bool Composite { get; init; }
 
     [JsonPropertyName("clientRole")]
-    public bool ClientRole
-    {
-        get; init;
-    }
+    public bool ClientRole { get; init; }
 
     [JsonPropertyName("containerId")]
-    public string? ContainerId
-    {
-        get; init;
-    }
+    public string? ContainerId { get; init; }
 }
 
 /// <summary>The slice of a realm the seeder reads: which role every account starts with.</summary>
 public sealed record KeycloakRealmSummary
 {
     [JsonPropertyName("defaultRole")]
-    public KeycloakRole? DefaultRole
-    {
-        get; init;
-    }
+    public KeycloakRole? DefaultRole { get; init; }
 }
 
 /// <summary>What a lookup hands back. Only the fields the seeder decides on.</summary>
 public sealed record KeycloakUserSummary
 {
     [JsonPropertyName("id")]
-    public required string Id
-    {
-        get; init;
-    }
+    public required string Id { get; init; }
 
     [JsonPropertyName("username")]
-    public string? Username
-    {
-        get; init;
-    }
+    public string? Username { get; init; }
 
     [JsonPropertyName("email")]
-    public string? Email
-    {
-        get; init;
-    }
+    public string? Email { get; init; }
 }
 
 /// <summary>The body of a partial import.</summary>
@@ -170,29 +119,17 @@ public sealed record KeycloakPartialImport
     [JsonPropertyName("ifResourceExists")] public string IfResourceExists { get; init; } = "FAIL";
 
     [JsonPropertyName("users")]
-    public required IReadOnlyList<KeycloakUser> Users
-    {
-        get; init;
-    }
+    public required IReadOnlyList<KeycloakUser> Users { get; init; }
 }
 
 public sealed record KeycloakPartialImportResult
 {
     [JsonPropertyName("added")]
-    public int Added
-    {
-        get; init;
-    }
+    public int Added { get; init; }
 
     [JsonPropertyName("skipped")]
-    public int Skipped
-    {
-        get; init;
-    }
+    public int Skipped { get; init; }
 
     [JsonPropertyName("overwritten")]
-    public int Overwritten
-    {
-        get; init;
-    }
+    public int Overwritten { get; init; }
 }

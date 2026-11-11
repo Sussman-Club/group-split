@@ -159,10 +159,7 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     private readonly Lock _lock = new();
 
-    public bool RowsLoaded
-    {
-        get; private set;
-    }
+    public bool RowsLoaded { get; private set; }
     public bool IsLoading => _pendingLoads > 0;
     private int _pendingLoads;
 
@@ -230,37 +227,22 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     public IReadOnlyList<BankTransactionResponse> Rows { get; private set; } = [];
 
-    public int NewCount
-    {
-        get; private set;
-    }
+    public int NewCount { get; private set; }
 
-    public int? PossibleDuplicates
-    {
-        get; private set;
-    }
+    public int? PossibleDuplicates { get; private set; }
 
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
 
     public DateFilter Range { get; private set; } = DateFilter.AllTime;
-    public string? Search
-    {
-        get; private set;
-    }
+    public string? Search { get; private set; }
 
-    public int TotalCount
-    {
-        get; private set;
-    }
+    public int TotalCount { get; private set; }
 
     public bool HasMore => Rows.Count < TotalCount;
 
     public int Pages => _pages;
 
-    public BankConnectionsResponse? Connections
-    {
-        get; private set;
-    }
+    public BankConnectionsResponse? Connections { get; private set; }
 
     public event Action? OnChanged;
 

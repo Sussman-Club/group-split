@@ -47,10 +47,7 @@ public record TransactionDetailsResponse : TransactionResponse
     /// division is reachable from there by asking for it.
     /// </para>
     /// </remarks>
-    public Guid? SplitRuleVersionId
-    {
-        get; init;
-    }
+    public Guid? SplitRuleVersionId { get; init; }
 
     /// <summary>
     /// The rule the expense named for itself, whatever its category says, or null when it
@@ -63,29 +60,20 @@ public record TransactionDetailsResponse : TransactionResponse
     /// for Ana" rather than "automatically" -- and to know what the person is changing away
     /// from when they pick something else.
     /// </remarks>
-    public Guid? SplitRuleId
-    {
-        get; init;
-    }
+    public Guid? SplitRuleId { get; init; }
 
     /// <summary>
     /// On a settlement, the last day of activity it was meant to settle, as stored. Null on
     /// an expense, and on a settlement that claims no period.
     /// </summary>
-    public DateOnly? CoversThrough
-    {
-        get; init;
-    }
+    public DateOnly? CoversThrough { get; init; }
 
     /// <summary>
     /// On a settlement made through a day, what that period is and whether it is still
     /// square, on the reader's calendar. Only <c>GET /transactions/{id}</c> fills it, since
     /// only it is told the reader's offset.
     /// </summary>
-    public SettlementCoverage? Coverage
-    {
-        get; init;
-    }
+    public SettlementCoverage? Coverage { get; init; }
 }
 
 /// <summary>

@@ -207,10 +207,7 @@ public static class OpenAIExtensions
 
     private sealed class OpenAIEndpointReferenceAnnotation : IResourceAnnotation
     {
-        public required ReferenceExpression ReferenceExpression
-        {
-            get; init;
-        }
+        public required ReferenceExpression ReferenceExpression { get; init; }
     }
 
     // Aspire's OpenAIModelResource stores Model as a string. This resource mirrors its

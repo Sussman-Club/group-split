@@ -498,10 +498,7 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     {
         private string? _token;
 
-        public bool Fired
-        {
-            get; private set;
-        }
+        public bool Fired { get; private set; }
 
         public void Arm(string token)
         {

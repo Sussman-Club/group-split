@@ -60,18 +60,12 @@ public record Cutoff(DateOnly Through, int UtcOffsetMinutes = 0)
 public record CutoffQuery
 {
     /// <summary>The last day of activity to count, or nothing to count everything.</summary>
-    public DateOnly? Through
-    {
-        get; init;
-    }
+    public DateOnly? Through { get; init; }
 
     /// <summary>The caller's offset from UTC in minutes, which says when that day ends.</summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
         ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
-    public int? UtcOffset
-    {
-        get; init;
-    }
+    public int? UtcOffset { get; init; }
 
     public Cutoff? ToCutoff() => Cutoff.Of(Through, UtcOffset);
 }

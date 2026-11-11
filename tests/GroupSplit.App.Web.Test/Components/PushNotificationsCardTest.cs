@@ -79,14 +79,8 @@ public sealed class PushNotificationsCardTest : ComponentTest
     private sealed class Preferences : IPushNotifications
     {
         private readonly HashSet<PushNotificationKind> enabled = [];
-        public bool Fail
-        {
-            get; set;
-        }
-        public Task? Pending
-        {
-            get; set;
-        }
+        public bool Fail { get; set; }
+        public Task? Pending { get; set; }
         public bool Supported => true;
         public bool Enabled => enabled.Count > 0;
         public bool IsEnabled(PushNotificationKind kind) => enabled.Contains(kind);

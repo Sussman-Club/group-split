@@ -248,10 +248,7 @@ public class KeycloakUserSeederTests
 
         public string Realm => "group-split";
 
-        public bool SignedIn
-        {
-            get; private set;
-        }
+        public bool SignedIn { get; private set; }
 
         public List<string> Calls { get; } = [];
 

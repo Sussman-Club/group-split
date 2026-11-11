@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Routing;
 
 namespace GroupSplit.App.Shared.Models;
 
@@ -17,10 +17,7 @@ public class MenuItem
     /// and the number belongs to whoever is signed in. The nav asks for the count when it
     /// renders an item that wants one.
     /// </remarks>
-    public bool ShowsInboxCount
-    {
-        get; init;
-    }
+    public bool ShowsInboxCount { get; init; }
 
     /// <summary>
     /// Whether this item shows how many people are outstanding, in either direction.
@@ -31,8 +28,5 @@ public class MenuItem
     /// has looked at; this one counts people somebody has to square up with, which is a
     /// standing state rather than something arriving.
     /// </remarks>
-    public bool ShowsSettleCount
-    {
-        get; init;
-    }
+    public bool ShowsSettleCount { get; init; }
 }

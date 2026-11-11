@@ -35,16 +35,10 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     private readonly Queue<IReadOnlyList<ImportedAccount>> _accountsAnswers = new();
 
     /// <summary>When set, every account read refuses this way.</summary>
-    public BankSyncFailure? RefuseAccountsWith
-    {
-        get; set;
-    }
+    public BankSyncFailure? RefuseAccountsWith { get; set; }
 
     /// <summary>How many times the account list has been asked for.</summary>
-    public int AccountReads
-    {
-        get; private set;
-    }
+    public int AccountReads { get; private set; }
 
     public string Provider => provider;
 
@@ -57,19 +51,13 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     /// When set, every <see cref="RemoveAsync"/> refuses. Every caller of it here is best
     /// effort, so what a test wants to see is what they do when the provider will not listen.
     /// </summary>
-    public bool RefuseRemoval
-    {
-        get; set;
-    }
+    public bool RefuseRemoval { get; set; }
 
     /// <summary>
     /// When set, the provider has no item for any token: removed at its end. An item removed
     /// once through <see cref="RemoveAsync"/> is unknown from then on whatever this says.
     /// </summary>
-    public bool ItemUnknown
-    {
-        get; set;
-    }
+    public bool ItemUnknown { get; set; }
 
     private readonly HashSet<string> _removedItems = [];
 
@@ -96,10 +84,7 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     /// When set, every sync waits here after being counted, so a test can hold one run open
     /// while it starts another.
     /// </summary>
-    public SemaphoreSlim? Gate
-    {
-        get; set;
-    }
+    public SemaphoreSlim? Gate { get; set; }
 
     /// <summary>Completes the first time a sync is entered.</summary>
     public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -179,10 +164,7 @@ internal sealed class FakeBankConnector(string provider = FakeBankConnector.Name
     /// When set, every exchange refuses -- which is what an expired public token looks
     /// like, and the ordinary end of the window a held link is trying to finish inside.
     /// </summary>
-    public bool RefuseExchange
-    {
-        get; set;
-    }
+    public bool RefuseExchange { get; set; }
 
     public Task<LinkedItem> ExchangeAsync(string publicToken, CancellationToken ct = default)
     {

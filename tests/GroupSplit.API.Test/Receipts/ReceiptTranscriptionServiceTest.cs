@@ -738,10 +738,7 @@ public class ReceiptTranscriptionServiceTest
     private sealed class StubProvider(TranscribedReceipt response) : IReceiptTranscriptionProvider
     {
         public string Name => "stub";
-        public ReceiptSourceDocument? Document
-        {
-            get; private set;
-        }
+        public ReceiptSourceDocument? Document { get; private set; }
 
         public Task<TranscribedReceipt> Transcribe(ReceiptSourceDocument document, CancellationToken ct = default)
         {
@@ -752,10 +749,7 @@ public class ReceiptTranscriptionServiceTest
 
     private sealed class VeryfiServer(string response, HttpStatusCode status = HttpStatusCode.Created) : HttpMessageHandler
     {
-        public HttpRequestMessage? Request
-        {
-            get; private set;
-        }
+        public HttpRequestMessage? Request { get; private set; }
         public string Body { get; private set; } = string.Empty;
         public List<string> IdempotencyKeys { get; } = [];
 

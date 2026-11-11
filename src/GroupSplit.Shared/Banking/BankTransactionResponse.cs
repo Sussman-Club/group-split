@@ -96,10 +96,7 @@ public sealed record BankTransactionResponse(
     string InstitutionName)
 {
     /// <summary>Stable identity of the linked account; display names need not be unique.</summary>
-    public Guid? AccountId
-    {
-        get; init;
-    }
+    public Guid? AccountId { get; init; }
 
     /// <summary>
     /// Expenses already recorded that could be this same payment.
@@ -118,10 +115,7 @@ public sealed record BankTransactionResponse(
     /// Never filled in by the listing itself, which stays one database read: a client that
     /// wants suggestions asks <c>POST /inbox/suggestions</c> for the rows it shows.
     /// </remarks>
-    public FilingSuggestionResponse? Suggestion
-    {
-        get; init;
-    }
+    public FilingSuggestionResponse? Suggestion { get; init; }
 
     /// <summary>What to lead the row with: who was paid, falling back to the bank's line.</summary>
     public string Title => string.IsNullOrWhiteSpace(MerchantName) ? Description : MerchantName;

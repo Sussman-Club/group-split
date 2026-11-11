@@ -10,10 +10,7 @@ public sealed class JobsRuntime : IJobDispatcher, IJobScheduler, IAsyncDisposabl
     private readonly IJobDispatcher _dispatcher;
     private bool _disposed;
 
-    public Task Completion
-    {
-        get;
-    }
+    public Task Completion { get; }
 
     internal JobsRuntime(IHost host, IJobDispatcher dispatcher)
     {

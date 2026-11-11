@@ -6,14 +6,8 @@ namespace GroupSplit.Shared;
 public record CreateTransactionRequest
 {
     /// <summary>The reviewed itemized receipt to validate and save with the new expense.</summary>
-    public SaveReceiptRequest? Receipt
-    {
-        get; set;
-    }
-    public Guid? PaidByUserId
-    {
-        get; set;
-    }
+    public SaveReceiptRequest? Receipt { get; set; }
+    public Guid? PaidByUserId { get; set; }
 
     /// <summary>
     /// The group the expense is recorded in, or null for the caller's own.
@@ -25,19 +19,13 @@ public record CreateTransactionRequest
     /// existed to tell those apart. The second case no longer exists: every group can
     /// record an expense, with or without a category.
     /// </remarks>
-    public Guid? GroupId
-    {
-        get; set;
-    }
+    public Guid? GroupId { get; set; }
 
     /// <summary>
     /// What it is for, or null for none. A category may name a rule to divide by; without
     /// one, or without a category at all, the expense divides evenly.
     /// </summary>
-    public Guid? CategoryId
-    {
-        get; set;
-    }
+    public Guid? CategoryId { get; set; }
 
     /// <summary>
     /// Where it was spent, or null for the ordinary case of nowhere anybody wrote down.
@@ -48,10 +36,7 @@ public record CreateTransactionRequest
     /// buys is the merchant's mark on the row and the shop being searchable -- it says
     /// nothing about how the expense divides, which is the category's job.
     /// </remarks>
-    public Guid? MerchantId
-    {
-        get; set;
-    }
+    public Guid? MerchantId { get; set; }
 
     /// <summary>
     /// A rule to divide by, whatever the category says, or null to let the category decide.
@@ -67,10 +52,7 @@ public record CreateTransactionRequest
     /// <see cref="Splits"/> is refused: they are two answers to one question.
     /// </para>
     /// </remarks>
-    public Guid? SplitRuleId
-    {
-        get; set;
-    }
+    public Guid? SplitRuleId { get; set; }
 
     /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
@@ -81,20 +63,14 @@ public record CreateTransactionRequest
     /// Sending them says the person overrode that for this one expense -- "don't charge
     /// Omar for his own birthday cake" -- and they are stored as given.
     /// </remarks>
-    public IReadOnlyList<SplitInput>? Splits
-    {
-        get; set;
-    }
+    public IReadOnlyList<SplitInput>? Splits { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequired))]
     [StringLength(TransactionNames.MaxLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength))]
     public string Name { get; set; } = null!;
 
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionShort))]
-    public string? Description
-    {
-        get; set;
-    }
+    public string? Description { get; set; }
 
     /// <summary>
     /// What was spent, or what came back: negative records a refund, which the splitter
@@ -119,23 +95,14 @@ public record CreateTransactionRequest
     /// expense exists, which is why the edit request has no such field.
     /// </remarks>
     [RegularExpression("^[A-Za-z]{3}$", ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.CurrencyCode))]
-    public string? Currency
-    {
-        get; set;
-    }
+    public string? Currency { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [NotZero(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountNotZero))]
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
-    public decimal Amount
-    {
-        get; set;
-    }
+    public decimal Amount { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
     [NotDefault(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
-    public DateTimeOffset DateTime
-    {
-        get; set;
-    }
+    public DateTimeOffset DateTime { get; set; }
 };

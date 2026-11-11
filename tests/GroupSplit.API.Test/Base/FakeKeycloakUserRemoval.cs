@@ -27,15 +27,9 @@ public sealed class FakeKeycloakUserRemoval : IKeycloakUserRemoval
     }
 
     /// <summary>How many calls fail before one succeeds. <see cref="int.MaxValue"/> is an outage.</summary>
-    public int FailuresBeforeSuccess
-    {
-        get; set;
-    }
+    public int FailuresBeforeSuccess { get; set; }
 
-    public int Calls
-    {
-        get; private set;
-    }
+    public int Calls { get; private set; }
 
     public Task RemoveUserAsync(string id, CancellationToken ct = default)
     {

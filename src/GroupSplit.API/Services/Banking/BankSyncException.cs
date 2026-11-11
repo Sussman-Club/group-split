@@ -38,8 +38,5 @@ public sealed class BankSyncException(BankSyncFailure kind, string message, Exce
     /// connection needs the person. The exception is unlinking, where it is the outcome
     /// being asked for: an item the provider does not know is an item already handed back.
     /// </remarks>
-    public bool ItemUnknown
-    {
-        get; init;
-    }
+    public bool ItemUnknown { get; init; }
 }

@@ -21,10 +21,7 @@ public record ExpenseShareResponse : TransactionResponse
     /// What this person owed on it. Not <see cref="TransactionResponse.Amount"/> divided
     /// by anything -- it is the stored split, the same row every balance is summed from.
     /// </summary>
-    public decimal Share
-    {
-        get; init;
-    }
+    public decimal Share { get; init; }
 
     /// <summary>
     /// Whether the caller is also the payer, which is the one row that is not a debt.
@@ -36,10 +33,7 @@ public record ExpenseShareResponse : TransactionResponse
     /// and adding it to what you owe would count the same expense twice. See
     /// <see cref="ExpenseShareSummaryResponse.OwedToOthers"/>.
     /// </remarks>
-    public bool PaidByYou
-    {
-        get; init;
-    }
+    public bool PaidByYou { get; init; }
 }
 
 /// <summary>

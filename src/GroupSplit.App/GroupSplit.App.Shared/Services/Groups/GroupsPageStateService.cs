@@ -27,10 +27,7 @@ public class GroupsPageStateService : IGroupsPageStateService
     private readonly IGroupCommands _groupCommands;
     private readonly ITransactionCommands _transactionCommands;
 
-    public Task IsReadyTask
-    {
-        get;
-    }
+    public Task IsReadyTask { get; }
 
     /// <summary>
     /// The load behind the selection in force: the figures' journey from the server, for

@@ -29,16 +29,10 @@ public class PendingBankLink : Entity
 {
     public virtual User User { get; set; } = null!;
 
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 
     /// <summary>Which connector this was started with; the same string a connection carries.</summary>
-    public required string Provider
-    {
-        get; set;
-    }
+    public required string Provider { get; set; }
 
     /// <summary>
     /// The provider's one-time token, protected. Cleared once it has been exchanged, because
@@ -48,10 +42,7 @@ public class PendingBankLink : Entity
     /// Worth writing down for the few minutes it lasts: while it is alive an interrupted
     /// link can still be completed without asking anybody to link their bank again.
     /// </remarks>
-    public string? PublicTokenCiphertext
-    {
-        get; set;
-    }
+    public string? PublicTokenCiphertext { get; set; }
 
     /// <summary>
     /// The exchanged item -- its id, institution, accounts and access token -- as protected
@@ -63,27 +54,15 @@ public class PendingBankLink : Entity
     /// migration here. It is read by the same code that wrote it, in the same deployment,
     /// and it never outlives the connection it becomes.
     /// </remarks>
-    public string? ItemCiphertext
-    {
-        get; set;
-    }
+    public string? ItemCiphertext { get; set; }
 
-    public required DateTimeOffset StartedAt
-    {
-        get; set;
-    }
+    public required DateTimeOffset StartedAt { get; set; }
 
     /// <summary>
     /// How many times finishing this has been tried. Bounded, so a link that cannot be
     /// finished stops being retried rather than being retried forever.
     /// </summary>
-    public int Attempts
-    {
-        get; set;
-    }
+    public int Attempts { get; set; }
 
-    public DateTimeOffset? LastAttemptAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? LastAttemptAt { get; set; }
 }

@@ -39,10 +39,7 @@ public sealed class BankingOptions
     /// <see cref="BankingOptionsValidator"/> refuses a value a provider would not accept.
     /// </para>
     /// </remarks>
-    public string? PublicOrigin
-    {
-        get; set;
-    }
+    public string? PublicOrigin { get; set; }
 
     /// <summary>
     /// A PKCS#12 certificate, base64 encoded, that the Data Protection key ring is
@@ -60,8 +57,5 @@ public sealed class BankingOptions
     /// up yet because there is nothing to rotate away from.
     /// </para>
     /// </remarks>
-    public string? KeyRingCertificate
-    {
-        get; set;
-    }
+    public string? KeyRingCertificate { get; set; }
 }

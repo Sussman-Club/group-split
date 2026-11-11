@@ -4,10 +4,7 @@ namespace GroupSplit.Jobs;
 public sealed class CronExpression
 {
     private readonly Cronos.CronExpression _parsed;
-    public string Value
-    {
-        get;
-    }
+    public string Value { get; }
 
     private CronExpression(string expression)
     {

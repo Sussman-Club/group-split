@@ -25,10 +25,7 @@ public class SplitRuleParticipant : Entity
     /// </summary>
     public virtual WeightedSplitRuleVersion SplitRuleVersion { get; set; } = null!;
 
-    public Guid SplitRuleVersionId
-    {
-        get; set;
-    }
+    public Guid SplitRuleVersionId { get; set; }
 
     public virtual User User { get; set; } = null!;
 
@@ -36,10 +33,7 @@ public class SplitRuleParticipant : Entity
     /// Public, unlike the other foreign keys here, because who a rule names is the rule's
     /// data and not an artefact of how EF indexes it -- every handler reads it.
     /// </summary>
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// Defaulted rather than required, because an even split names people without

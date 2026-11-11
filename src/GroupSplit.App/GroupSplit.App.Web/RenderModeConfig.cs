@@ -13,10 +13,7 @@ public enum RenderModePreference
 public static class RenderModeConfig
 {
     public static IComponentRenderMode Current { get; private set; } = null!;
-    private static RenderModePreference Preference
-    {
-        get; set;
-    }
+    private static RenderModePreference Preference { get; set; }
 
     public static void Initialize(RenderModePreference preference)
     {

@@ -901,10 +901,7 @@ public sealed class RealmSettingsReconcilerTests
 
         public Dictionary<string, List<JsonObject>> Flows { get; } = [];
 
-        public int IdentityProviderUpdates
-        {
-            get; private set;
-        }
+        public int IdentityProviderUpdates { get; private set; }
 
         /// <summary>Every call that changed a flow, plus the provider updates, in order.</summary>
         public List<string> Writes { get; } = [];
@@ -1007,20 +1004,11 @@ public sealed class RealmSettingsReconcilerTests
 
         public string Realm => "group-split";
 
-        public JsonObject RealmData
-        {
-            get; private set;
-        }
+        public JsonObject RealmData { get; private set; }
         public Dictionary<string, JsonObject> Clients { get; } = [];
 
-        public int RealmUpdates
-        {
-            get; private set;
-        }
-        public int ClientUpdates
-        {
-            get; private set;
-        }
+        public int RealmUpdates { get; private set; }
+        public int ClientUpdates { get; private set; }
 
         public Task SignInAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
@@ -1174,23 +1162,14 @@ public sealed class RealmSettingsReconcilerTests
 
         public string AdminRealm => "master";
 
-        public JsonObject AdminRealmData
-        {
-            get; private set;
-        } = new()
+        public JsonObject AdminRealmData { get; private set; } = new()
         {
             ["realm"] = "master",
             ["attributes"] = new JsonObject { ["unrelated"] = "kept" }
         };
 
-        public int AdminRealmReads
-        {
-            get; private set;
-        }
-        public int AdminRealmUpdates
-        {
-            get; private set;
-        }
+        public int AdminRealmReads { get; private set; }
+        public int AdminRealmUpdates { get; private set; }
 
         public Task<JsonObject> GetAdminRealmAsync(CancellationToken ct = default)
         {

@@ -214,15 +214,9 @@ public class ServerSideTokenStoreTest
         private readonly MemoryDistributedCache _inner = new(
             new OptionsWrapper<MemoryDistributedCacheOptions>(new MemoryDistributedCacheOptions()));
 
-        public DistributedCacheEntryOptions? LastOptions
-        {
-            get; private set;
-        }
+        public DistributedCacheEntryOptions? LastOptions { get; private set; }
 
-        public byte[]? LastValue
-        {
-            get; private set;
-        }
+        public byte[]? LastValue { get; private set; }
 
         public byte[]? Get(string key) => _inner.Get(key);
 

@@ -37,27 +37,15 @@ public record SplitRuleResponse(
 /// <param name="ChangedAt">When the current version became what the rule says.</param>
 public record SplitRuleDetailsResponse
 {
-    public Guid Id
-    {
-        get; init;
-    }
+    public Guid Id { get; init; }
 
-    public Guid GroupId
-    {
-        get; init;
-    }
+    public Guid GroupId { get; init; }
 
     public string Name { get; init; } = null!;
 
-    public Guid VersionId
-    {
-        get; init;
-    }
+    public Guid VersionId { get; init; }
 
-    public DateTimeOffset ChangedAt
-    {
-        get; init;
-    }
+    public DateTimeOffset ChangedAt { get; init; }
 
     public SplitRuleDto Definition { get; init; } = null!;
 
@@ -66,10 +54,7 @@ public record SplitRuleDetailsResponse
     /// No <c>AllForUserId</c> beside it, unlike the listing: the definition below already
     /// says who a rule is for, when it is for one person.
     /// </remarks>
-    public bool BuiltIn
-    {
-        get; init;
-    }
+    public bool BuiltIn { get; init; }
 }
 
 /// <summary>
@@ -109,10 +94,7 @@ public record SplitRuleVersionInput(DateTimeOffset From, SplitRuleDto Definition
 
 public record CreateSplitRuleRequest
 {
-    public Guid GroupId
-    {
-        get; init;
-    }
+    public Guid GroupId { get; init; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
     [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]

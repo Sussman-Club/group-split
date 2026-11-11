@@ -69,10 +69,7 @@ public class AppHostFixture : IAsyncLifetime
     /// those have to match the data volumes a normal run of the app has already initialised.
     /// </para>
     /// </remarks>
-    public static IReadOnlyDictionary<string, string> Parameters
-    {
-        get;
-    } =
+    public static IReadOnlyDictionary<string, string> Parameters { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["receipt-transcription-provider"] = "Veryfi",

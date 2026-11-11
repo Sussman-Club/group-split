@@ -339,10 +339,7 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
     /// </summary>
     private sealed class BeforeNaming(Func<Task> run) : DbCommandInterceptor
     {
-        public bool Fired
-        {
-            get; private set;
-        }
+        public bool Fired { get; private set; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command,

@@ -35,10 +35,7 @@ public sealed class ConnectionCutter : IDisposable
         _ = Task.Run(AcceptAsync);
     }
 
-    public string BaseAddress
-    {
-        get;
-    }
+    public string BaseAddress { get; }
 
     public void Dispose()
     {

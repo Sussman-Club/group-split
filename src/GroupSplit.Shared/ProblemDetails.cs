@@ -45,36 +45,18 @@ public record ProblemDetails
     /// </summary>
     public const string RetryAfterExtension = "retryAfter";
 
-    public string? Type
-    {
-        get; init;
-    }
+    public string? Type { get; init; }
 
-    public string? Title
-    {
-        get; init;
-    }
+    public string? Title { get; init; }
 
-    public int? Status
-    {
-        get; init;
-    }
+    public int? Status { get; init; }
 
-    public string? Detail
-    {
-        get; init;
-    }
+    public string? Detail { get; init; }
 
-    public string? Instance
-    {
-        get; init;
-    }
+    public string? Instance { get; init; }
 
     [JsonExtensionData]
-    public IDictionary<string, JsonElement>? Extensions
-    {
-        get; init;
-    }
+    public IDictionary<string, JsonElement>? Extensions { get; init; }
 }
 
 public static class ProblemDetailsExtensions

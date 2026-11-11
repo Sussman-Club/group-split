@@ -66,10 +66,7 @@ public sealed record ExpenseMatchResponse(
     MatchConfidence Confidence)
 {
     /// <summary>A model-selected candidate for review, never an automatic attachment.</summary>
-    public bool IsSuggested
-    {
-        get; init;
-    }
+    public bool IsSuggested { get; init; }
     /// <summary>The same money to the cent, and so worth interrupting somebody with.</summary>
     public bool IsConfident => Confidence == MatchConfidence.Confident;
 
@@ -84,10 +81,7 @@ public sealed record ExpenseMatchResponse(
 public sealed record LinkBankTransactionRequest
 {
     /// <summary>The expense the row is the same money as.</summary>
-    public Guid TransactionId
-    {
-        get; set;
-    }
+    public Guid TransactionId { get; set; }
 }
 
 /// <summary>
@@ -97,8 +91,5 @@ public sealed record LinkBankTransactionRequest
 public sealed record DismissBankMatchRequest
 {
     /// <summary>The expense that was suggested and is not it.</summary>
-    public Guid TransactionId
-    {
-        get; set;
-    }
+    public Guid TransactionId { get; set; }
 }

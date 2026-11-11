@@ -29,18 +29,12 @@ namespace GroupSplit.Shared;
 public record SettleWithPersonRequest
 {
     /// <summary>The other end of the payment.</summary>
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
-    public decimal Amount
-    {
-        get; set;
-    }
+    public decimal Amount { get; set; }
 
     /// <summary>
     /// Who paid whom. Stated rather than read off the balance, for the same reason
@@ -50,17 +44,11 @@ public record SettleWithPersonRequest
     public SettlementDirection Direction { get; set; } = SettlementDirection.TheyPaidYou;
 
     /// <summary>When the money moved. Null means now.</summary>
-    public DateTimeOffset? Date
-    {
-        get; set;
-    }
+    public DateTimeOffset? Date { get; set; }
 
     /// <summary>What to remember about it -- "cash", "bank transfer, ref 4821".</summary>
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
-    public string? Description
-    {
-        get; set;
-    }
+    public string? Description { get; set; }
 
     /// <summary>
     /// The last day of activity it settles, or null for everything. See <see cref="Cutoff"/>.
@@ -69,20 +57,14 @@ public record SettleWithPersonRequest
     /// Decides what is outstanding with them, and so which groups the payment is spread over
     /// and how much each one takes; every transfer it writes remembers it.
     /// </remarks>
-    public DateOnly? Through
-    {
-        get; set;
-    }
+    public DateOnly? Through { get; set; }
 
     /// <summary>
     /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
     /// </summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
         ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
-    public int? UtcOffset
-    {
-        get; set;
-    }
+    public int? UtcOffset { get; set; }
 }
 
 /// <summary>

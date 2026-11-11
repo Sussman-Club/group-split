@@ -24,15 +24,9 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class GroupMembership
 {
-    public Guid GroupId
-    {
-        get; init;
-    }
+    public Guid GroupId { get; init; }
 
-    public Guid UserId
-    {
-        get; init;
-    }
+    public Guid UserId { get; init; }
 
     /// <summary>
     /// When they joined.
@@ -49,20 +43,14 @@ public class GroupMembership
     /// in-memory provider the tests use, where a store default does not apply.
     /// </para>
     /// </remarks>
-    public DateTimeOffset JoinedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset JoinedAt { get; set; }
 
     /// <summary>
     /// When this member archived the group, or null while they have not. Nothing about the
     /// group changes: it accepts every write it would otherwise accept, and the other
     /// members never see this. It only moves down their own list.
     /// </summary>
-    public DateTimeOffset? ArchivedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? ArchivedAt { get; set; }
 
     /// <summary>
     /// When the membership ended, or null while it stands. A row with this set is history:
@@ -76,26 +64,17 @@ public class GroupMembership
     /// <see cref="GroupMembershipEvent"/>, which is where "who removed whom, and when" is
     /// answered. The rejoin rule only needs the latest departure, and reads it here.
     /// </remarks>
-    public DateTimeOffset? LeftAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? LeftAt { get; set; }
 
     /// <summary>How the membership ended. Null exactly when <see cref="LeftAt"/> is.</summary>
-    public LeftReason? LeftReason
-    {
-        get; set;
-    }
+    public LeftReason? LeftReason { get; set; }
 
     /// <summary>
     /// Who ended it: the member who removed them, or the person themselves when they left or
     /// deleted their account. Null while the membership stands, and once that account is
     /// gone.
     /// </summary>
-    public Guid? LeftByUserId
-    {
-        get; set;
-    }
+    public Guid? LeftByUserId { get; set; }
 }
 
 /// <summary>How somebody stopped being a member of a group.</summary>

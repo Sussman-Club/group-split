@@ -103,40 +103,19 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
     private sealed class VeryfiDocument
     {
         [JsonPropertyName("tax")]
-        public decimal? Tax
-        {
-            get; init;
-        }
+        public decimal? Tax { get; init; }
         [JsonPropertyName("tip")]
-        public decimal? Tip
-        {
-            get; init;
-        }
+        public decimal? Tip { get; init; }
         [JsonPropertyName("total")]
-        public decimal? Total
-        {
-            get; init;
-        }
+        public decimal? Total { get; init; }
         [JsonPropertyName("vendor")]
-        public JsonElement Vendor
-        {
-            get; init;
-        }
+        public JsonElement Vendor { get; init; }
         [JsonPropertyName("raw_vendor_name")]
-        public string? RawVendorName
-        {
-            get; init;
-        }
+        public string? RawVendorName { get; init; }
         [JsonPropertyName("date")]
-        public string? Date
-        {
-            get; init;
-        }
+        public string? Date { get; init; }
         [JsonPropertyName("line_items")]
-        public IReadOnlyList<VeryfiLineItem?>? LineItems
-        {
-            get; init;
-        }
+        public IReadOnlyList<VeryfiLineItem?>? LineItems { get; init; }
 
         public TranscribedReceipt ToReceipt()
         {
@@ -230,70 +209,31 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             new(StringComparer.OrdinalIgnoreCase) { "tax", "payment" };
 
         [JsonPropertyName("description")]
-        public string? Description
-        {
-            get; init;
-        }
+        public string? Description { get; init; }
         [JsonPropertyName("full_description")]
-        public string? FullDescription
-        {
-            get; init;
-        }
+        public string? FullDescription { get; init; }
         [JsonPropertyName("normalized_description")]
-        public string? NormalizedDescription
-        {
-            get; init;
-        }
+        public string? NormalizedDescription { get; init; }
         [JsonPropertyName("product_info")]
-        public VeryfiProductInfo? ProductInfo
-        {
-            get; init;
-        }
+        public VeryfiProductInfo? ProductInfo { get; init; }
         [JsonPropertyName("text")]
-        public string? Text
-        {
-            get; init;
-        }
+        public string? Text { get; init; }
         [JsonPropertyName("type")]
-        public string? Type
-        {
-            get; init;
-        }
+        public string? Type { get; init; }
         [JsonPropertyName("sku")]
-        public string? Sku
-        {
-            get; init;
-        }
+        public string? Sku { get; init; }
         [JsonPropertyName("price")]
-        public decimal? Price
-        {
-            get; init;
-        }
+        public decimal? Price { get; init; }
         [JsonPropertyName("quantity")]
-        public decimal? Quantity
-        {
-            get; init;
-        }
+        public decimal? Quantity { get; init; }
         [JsonPropertyName("total")]
-        public decimal? Total
-        {
-            get; init;
-        }
+        public decimal? Total { get; init; }
         [JsonPropertyName("discount")]
-        public decimal? Discount
-        {
-            get; init;
-        }
+        public decimal? Discount { get; init; }
         [JsonPropertyName("tax")]
-        public decimal? Tax
-        {
-            get; init;
-        }
+        public decimal? Tax { get; init; }
         [JsonPropertyName("tax_rate")]
-        public decimal? TaxRate
-        {
-            get; init;
-        }
+        public decimal? TaxRate { get; init; }
 
         public ReceiptItemDraft? ToRow()
         {
@@ -454,10 +394,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
     private sealed class VeryfiProductInfo
     {
         [JsonPropertyName("expanded_description")]
-        public string? ExpandedDescription
-        {
-            get; init;
-        }
+        public string? ExpandedDescription { get; init; }
     }
 
     /// <summary>

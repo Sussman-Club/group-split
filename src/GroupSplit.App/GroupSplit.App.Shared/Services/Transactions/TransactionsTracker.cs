@@ -6,28 +6,16 @@ namespace GroupSplit.App.Shared.Services.Transactions;
 public class TransactionsTracker
 {
     [PersistentState]
-    public PagedResponse<TransactionResponse>? Page
-    {
-        get; set;
-    }
+    public PagedResponse<TransactionResponse>? Page { get; set; }
 
     [PersistentState] public TransactionQuery Query { get; set; } = TransactionQuery.Default;
 
     [PersistentState]
-    public TransactionSummaryResponse? Summary
-    {
-        get; set;
-    }
+    public TransactionSummaryResponse? Summary { get; set; }
 
     [PersistentState]
-    public TransactionSummaryResponse? MonthSummary
-    {
-        get; set;
-    }
+    public TransactionSummaryResponse? MonthSummary { get; set; }
 
     [PersistentState]
-    public TransactionSummaryResponse? MatchesSummary
-    {
-        get; set;
-    }
+    public TransactionSummaryResponse? MatchesSummary { get; set; }
 }

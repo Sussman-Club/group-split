@@ -16,18 +16,9 @@ public sealed record TicketSelection(Guid Id, DateTimeOffset ExpectedUpdatedAt);
 public sealed class BulkTicketUpdateRequest
 {
     public List<TicketSelection> Tickets { get; set; } = [];
-    public string? Status
-    {
-        get; set;
-    }
-    public bool ChangeAssignment
-    {
-        get; set;
-    }
-    public Guid? AssignedUserId
-    {
-        get; set;
-    }
+    public string? Status { get; set; }
+    public bool ChangeAssignment { get; set; }
+    public Guid? AssignedUserId { get; set; }
 }
 public sealed record SupportMessageResponse(Guid Id, string Body, string AuthorName, bool FromReporter,
     string Visibility, DateTimeOffset CreatedAt);
@@ -35,44 +26,17 @@ public sealed class CreateSupportMessageRequest
 {
     public string Body { get; set; } = "";
     public bool WaitForCustomer { get; set; } = true;
-    public DateTimeOffset? ExpectedUpdatedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? ExpectedUpdatedAt { get; set; }
 }
 public sealed class SupportTicketQuery
 {
-    public string? Search
-    {
-        get; set;
-    }
-    public string? Status
-    {
-        get; set;
-    }
-    public string? Priority
-    {
-        get; set;
-    }
-    public string? Type
-    {
-        get; set;
-    }
-    public bool NeedsReview
-    {
-        get; set;
-    }
-    public Guid? AssignedUserId
-    {
-        get; set;
-    }
-    public bool UnassignedOnly
-    {
-        get; set;
-    }
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public string? Priority { get; set; }
+    public string? Type { get; set; }
+    public bool NeedsReview { get; set; }
+    public Guid? AssignedUserId { get; set; }
+    public bool UnassignedOnly { get; set; }
     public string Sort { get; set; } = "updated";
-    public int Page
-    {
-        get; set;
-    }
+    public int Page { get; set; }
 }

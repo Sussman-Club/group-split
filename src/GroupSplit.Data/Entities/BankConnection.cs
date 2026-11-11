@@ -17,54 +17,36 @@ public class BankConnection : Entity
 {
     public virtual User User { get; set; } = null!;
 
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// Which connector speaks for this connection -- <c>"plaid"</c> today. Lower-case, and
     /// the same string the webhook route carries as its segment.
     /// </summary>
-    public required string Provider
-    {
-        get; set;
-    }
+    public required string Provider { get; set; }
 
     /// <summary>
     /// The provider's own id for the link, which is how a webhook names it.
     /// </summary>
-    public required string ProviderItemId
-    {
-        get; set;
-    }
+    public required string ProviderItemId { get; set; }
 
     /// <summary>
     /// For the linked-banks card. Taken from the provider at exchange and not refreshed.
     /// </summary>
-    public required string InstitutionName
-    {
-        get; set;
-    }
+    public required string InstitutionName { get; set; }
 
     /// <summary>
     /// The provider's access token, protected with ASP.NET Data Protection before it is
     /// written and unprotected only by the sync engine at the moment it calls the
     /// connector. Never returned by any endpoint and never logged.
     /// </summary>
-    public required string AccessTokenCiphertext
-    {
-        get; set;
-    }
+    public required string AccessTokenCiphertext { get; set; }
 
     /// <summary>
     /// Where the last sync left off, in the provider's own terms. Null until the first
     /// sync has run, which is a real state -- "never synced" -- and not a missing value.
     /// </summary>
-    public string? Cursor
-    {
-        get; set;
-    }
+    public string? Cursor { get; set; }
 
     public BankConnectionStatus Status { get; set; } = BankConnectionStatus.Active;
 
@@ -87,10 +69,7 @@ public class BankConnection : Entity
     /// would lose a real transaction.
     /// </para>
     /// </remarks>
-    public bool AccountsRekeyed
-    {
-        get; set;
-    }
+    public bool AccountsRekeyed { get; set; }
 
     /// <summary>
     /// The bank has an account this connection is not importing: one the person did not
@@ -107,10 +86,7 @@ public class BankConnection : Entity
     /// actually resolve it earns the flag back on the next sync that meets the row again.
     /// </para>
     /// </remarks>
-    public bool AccountsNotShared
-    {
-        get; set;
-    }
+    public bool AccountsNotShared { get; set; }
 
     /// <summary>
     /// The provider has warned that this connection will stop working soon -- a consent
@@ -121,23 +97,14 @@ public class BankConnection : Entity
     /// Also a flag rather than a status, and for the same reason: nothing has broken yet
     /// and syncs must keep running. Cleared by the sign-in that resolves it.
     /// </remarks>
-    public bool SignInExpiring
-    {
-        get; set;
-    }
+    public bool SignInExpiring { get; set; }
 
-    public required DateTimeOffset LinkedAt
-    {
-        get; set;
-    }
+    public required DateTimeOffset LinkedAt { get; set; }
 
     /// <summary>
     /// When a sync last completed a page. Null for the same reason <see cref="Cursor"/> is.
     /// </summary>
-    public DateTimeOffset? LastSyncedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? LastSyncedAt { get; set; }
 
     public virtual ICollection<LinkedAccount> Accounts { get; } = [];
 }

@@ -12,10 +12,7 @@ public class LinkedAccount : Entity
 {
     public virtual BankConnection Connection { get; set; } = null!;
 
-    public Guid BankConnectionId
-    {
-        get; set;
-    }
+    public Guid BankConnectionId { get; set; }
 
     /// <summary>
     /// The provider's id for the account, unique within the connection and nowhere wider:
@@ -27,39 +24,24 @@ public class LinkedAccount : Entity
     /// see <see cref="BankConnection.AccountsRekeyed"/>, the one run that matches on what
     /// rows look like instead.
     /// </remarks>
-    public required string ProviderAccountId
-    {
-        get; set;
-    }
+    public required string ProviderAccountId { get; set; }
 
-    public required string Name
-    {
-        get; set;
-    }
+    public required string Name { get; set; }
 
     /// <summary>
     /// The last few digits of the account number, as the bank displays them. Optional
     /// because not every institution gives one.
     /// </summary>
-    public string? Mask
-    {
-        get; set;
-    }
+    public string? Mask { get; set; }
 
     /// <summary>
     /// The provider's word for what kind of account it is -- <c>depository</c>,
     /// <c>credit</c> -- kept as a label and not an enum, because the app does nothing
     /// with it but show it and the set is the provider's to change.
     /// </summary>
-    public required string Type
-    {
-        get; set;
-    }
+    public required string Type { get; set; }
 
-    public string? Subtype
-    {
-        get; set;
-    }
+    public string? Subtype { get; set; }
 
     /// <summary>
     /// ISO 4217, the account's own. Each row carries its own as well, because a provider
@@ -79,10 +61,7 @@ public class LinkedAccount : Entity
     /// Cleared if the provider reports the account again, which is what re-sharing it looks
     /// like from here.
     /// </remarks>
-    public bool AccessRevoked
-    {
-        get; set;
-    }
+    public bool AccessRevoked { get; set; }
 
     public virtual ICollection<BankTransaction> Transactions { get; } = [];
 }

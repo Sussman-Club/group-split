@@ -13,10 +13,7 @@ public abstract class StaffPageBase : ComponentBase
     [Inject] protected NavigationManager Navigation { get; set; } = null!;
     [Inject] private IStringLocalizer<AppStrings> Text { get; set; } = null!;
     protected bool Loading { get; private set; } = true;
-    protected string? LoadError
-    {
-        get; private set;
-    }
+    protected string? LoadError { get; private set; }
     private int _request;
 
     protected async Task LoadAsync<T>(Func<Task<T>> read, Action<T> apply)

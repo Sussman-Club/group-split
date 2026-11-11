@@ -53,14 +53,8 @@ public class EssentialMetricsTest
     private sealed class Collector(string meterName) : BaseExporter<Metric>
     {
         public ConcurrentDictionary<string, int> PointCounts { get; } = new();
-        public bool HasRawPath
-        {
-            get; private set;
-        }
-        public bool HasErrorStatus
-        {
-            get; private set;
-        }
+        public bool HasRawPath { get; private set; }
+        public bool HasErrorStatus { get; private set; }
 
         public override ExportResult Export(in Batch<Metric> batch)
         {

@@ -14,34 +14,22 @@ public sealed class CliProfile
     /// are both derived from it, which is what makes a deployment one setting rather than three.
     /// </summary>
     [JsonPropertyName("server")]
-    public string? Server
-    {
-        get; set;
-    }
+    public string? Server { get; set; }
 
     /// <summary>
     /// Overrides the derived API base. Needed when the API is not behind the web app's
     /// forwarder -- a local Aspire run gives each resource its own origin and port.
     /// </summary>
     [JsonPropertyName("apiUrl")]
-    public string? ApiUrl
-    {
-        get; set;
-    }
+    public string? ApiUrl { get; set; }
 
     /// <summary>Overrides the derived Keycloak realm URL, for the same reason as <see cref="ApiUrl"/>.</summary>
     [JsonPropertyName("authority")]
-    public string? Authority
-    {
-        get; set;
-    }
+    public string? Authority { get; set; }
 
     /// <summary>The Keycloak client this CLI authenticates as. Only set it if the realm was renamed.</summary>
     [JsonPropertyName("clientId")]
-    public string? ClientId
-    {
-        get; set;
-    }
+    public string? ClientId { get; set; }
 }
 
 public sealed class CliConfigFile

@@ -277,26 +277,11 @@ public class DecisionClientTest
 
     private sealed class Recording(string response, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
-        public HttpMethod? Method
-        {
-            get; private set;
-        }
-        public Uri? Uri
-        {
-            get; private set;
-        }
-        public string? ApiKey
-        {
-            get; private set;
-        }
-        public string? Body
-        {
-            get; private set;
-        }
-        public long? ContentLength
-        {
-            get; private set;
-        }
+        public HttpMethod? Method { get; private set; }
+        public Uri? Uri { get; private set; }
+        public string? ApiKey { get; private set; }
+        public string? Body { get; private set; }
+        public long? ContentLength { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {

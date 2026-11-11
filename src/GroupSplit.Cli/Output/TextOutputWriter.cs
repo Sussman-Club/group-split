@@ -21,10 +21,7 @@ public sealed class TextOutputWriter : IOutputWriter
         _error = CreateConsole(stderr, settings.Color);
     }
 
-    public OutputSettings Settings
-    {
-        get;
-    }
+    public OutputSettings Settings { get; }
 
     public IAnsiConsole Console => _out;
 

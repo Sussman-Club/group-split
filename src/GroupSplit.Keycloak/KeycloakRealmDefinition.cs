@@ -386,10 +386,7 @@ public sealed record ManagedClient(string ClientId, string[] Properties, string[
     /// rather than reported. Only for a client none of whose definition depends on the
     /// environment, so that creating it cannot get anything wrong that an import would not.
     /// </summary>
-    public bool CreateWhenMissing
-    {
-        get; init;
-    }
+    public bool CreateWhenMissing { get; init; }
 }
 
 /// <summary>

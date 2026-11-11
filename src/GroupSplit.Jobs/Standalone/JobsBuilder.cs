@@ -10,26 +10,11 @@ public sealed class JobsBuilder
 {
     private readonly IServiceCollection _services = new ServiceCollection();
     private bool _built;
-    internal DependencyInjection.IJobsBuilder Inner
-    {
-        get;
-    }
-    public DispatcherBuilder Dispatcher
-    {
-        get;
-    }
-    public HandlersBuilder Handlers
-    {
-        get;
-    }
-    public ReceiverBuilder Receiver
-    {
-        get;
-    }
-    public SchedulerBuilder Scheduler
-    {
-        get;
-    }
+    internal DependencyInjection.IJobsBuilder Inner { get; }
+    public DispatcherBuilder Dispatcher { get; }
+    public HandlersBuilder Handlers { get; }
+    public ReceiverBuilder Receiver { get; }
+    public SchedulerBuilder Scheduler { get; }
 
     public JobsBuilder()
     {

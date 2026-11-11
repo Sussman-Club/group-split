@@ -103,10 +103,7 @@ public sealed class AndroidReleaseTest
     {
         public string Body { get; set; } = "{}";
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
-        public int Calls
-        {
-            get; private set;
-        }
+        public int Calls { get; private set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;

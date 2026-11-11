@@ -285,14 +285,8 @@ public class BankEndpointTest : IAsyncLifetime
     {
         public string Choice { get; set; } = "cannot tell";
         public double Confidence { get; set; } = .95;
-        public int Calls
-        {
-            get; private set;
-        }
-        public bool Fail
-        {
-            get; set;
-        }
+        public int Calls { get; private set; }
+        public bool Fail { get; set; }
         public Task<DecisionAnswer?> ChooseAsync(object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
         {
             Calls++;

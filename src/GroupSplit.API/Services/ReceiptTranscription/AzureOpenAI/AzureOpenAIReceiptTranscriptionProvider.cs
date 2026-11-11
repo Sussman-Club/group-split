@@ -224,37 +224,19 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     internal sealed class AzureReceipt
     {
         [JsonPropertyName("merchantName")]
-        public string? MerchantName
-        {
-            get; init;
-        }
+        public string? MerchantName { get; init; }
         // A string, not a DateOnly: a model that writes the date any other way would
         // otherwise fail the whole reading over the one field that is allowed to be null.
         [JsonPropertyName("purchaseDate")]
-        public string? PurchaseDate
-        {
-            get; init;
-        }
+        public string? PurchaseDate { get; init; }
         [JsonPropertyName("subtotal")]
-        public decimal Subtotal
-        {
-            get; init;
-        }
+        public decimal Subtotal { get; init; }
         [JsonPropertyName("tax")]
-        public decimal Tax
-        {
-            get; init;
-        }
+        public decimal Tax { get; init; }
         [JsonPropertyName("tip")]
-        public decimal Tip
-        {
-            get; init;
-        }
+        public decimal Tip { get; init; }
         [JsonPropertyName("total")]
-        public decimal Total
-        {
-            get; init;
-        }
+        public decimal Total { get; init; }
         [JsonPropertyName("items")] public IReadOnlyList<AzureReceiptItem> Items { get; init; } = [];
     }
 
@@ -262,35 +244,17 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     {
         [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
         [JsonPropertyName("unitPrice")]
-        public decimal UnitPrice
-        {
-            get; init;
-        }
+        public decimal UnitPrice { get; init; }
         [JsonPropertyName("quantity")]
-        public decimal Quantity
-        {
-            get; init;
-        }
+        public decimal Quantity { get; init; }
         [JsonPropertyName("totalPrice")]
-        public decimal TotalPrice
-        {
-            get; init;
-        }
+        public decimal TotalPrice { get; init; }
         [JsonPropertyName("taxAmount")]
-        public decimal? TaxAmount
-        {
-            get; init;
-        }
+        public decimal? TaxAmount { get; init; }
         [JsonPropertyName("taxRate")]
-        public decimal? TaxRate
-        {
-            get; init;
-        }
+        public decimal? TaxRate { get; init; }
         [JsonPropertyName("isTaxable")]
-        public bool? IsTaxable
-        {
-            get; init;
-        }
+        public bool? IsTaxable { get; init; }
     }
 
 }

@@ -29,8 +29,5 @@ public sealed class SoleSplitRuleVersion : SplitRuleVersion
     /// <see cref="SplitRuleParticipant.UserId"/> is: who a rule names is the rule's data,
     /// and every handler reads it.
     /// </summary>
-    public Guid UserId
-    {
-        get; set;
-    }
+    public Guid UserId { get; set; }
 }

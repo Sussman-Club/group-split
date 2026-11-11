@@ -21,28 +21,19 @@ public class BankTransaction : Entity
 {
     public virtual LinkedAccount Account { get; set; } = null!;
 
-    public Guid LinkedAccountId
-    {
-        get; set;
-    }
+    public Guid LinkedAccountId { get; set; }
 
     /// <summary>
     /// The provider's id, unique within the account. The key every upsert relies on: a
     /// page replayed after a crash finds its rows already here and changes nothing.
     /// </summary>
-    public required string ProviderTransactionId
-    {
-        get; set;
-    }
+    public required string ProviderTransactionId { get; set; }
 
     /// <summary>
     /// A date and not an instant, because that is all a bank statement has. Filing turns
     /// it into midnight UTC on that day.
     /// </summary>
-    public required DateOnly Date
-    {
-        get; set;
-    }
+    public required DateOnly Date { get; set; }
 
     /// <summary>
     /// Positive when money left the account, which is the sign an <see cref="Expense"/>
@@ -53,10 +44,7 @@ public class BankTransaction : Entity
     /// The provider's convention is translated into this one inside its connector and
     /// nowhere else; this is the app's convention, stated once.
     /// </remarks>
-    public required decimal Amount
-    {
-        get; set;
-    }
+    public required decimal Amount { get; set; }
 
     /// <summary>
     /// ISO 4217, per row, because that is how the provider reports it.
@@ -66,29 +54,20 @@ public class BankTransaction : Entity
     /// <summary>
     /// The line as the bank wrote it.
     /// </summary>
-    public required string Description
-    {
-        get; set;
-    }
+    public required string Description { get; set; }
 
     /// <summary>
     /// The provider's cleaned-up name for who was paid, when it has one. What the inbox
     /// leads with, falling back to <see cref="Description"/>.
     /// </summary>
-    public string? MerchantName
-    {
-        get; set;
-    }
+    public string? MerchantName { get; set; }
 
     /// <summary>
     /// The provider's own category for the row, in the provider's vocabulary. Turned
     /// into a readable label for the inbox; matched against a group's categories by the
     /// client, which is the only place that knows which group.
     /// </summary>
-    public string? ProviderCategory
-    {
-        get; set;
-    }
+    public string? ProviderCategory { get; set; }
 
     /// <summary>
     /// The provider's finer category, under <see cref="ProviderCategory"/>:
@@ -96,10 +75,7 @@ public class BankTransaction : Entity
     /// <c>FOOD_AND_DRINK</c>. Shown, never matched on -- see
     /// <see cref="BankCategoryMapping"/> for why the mapping uses the primary one.
     /// </summary>
-    public string? ProviderCategoryDetailed
-    {
-        get; set;
-    }
+    public string? ProviderCategoryDetailed { get; set; }
 
     /// <summary>
     /// When the money was actually spent, where the provider knows it and it differs from
@@ -110,22 +86,13 @@ public class BankTransaction : Entity
     /// the event and is not the date anybody remembers. This is the one to lead with when
     /// there is one.
     /// </remarks>
-    public DateOnly? AuthorizedDate
-    {
-        get; set;
-    }
+    public DateOnly? AuthorizedDate { get; set; }
 
     /// <summary>How it was paid: <c>in store</c>, <c>online</c>, <c>other</c>.</summary>
-    public string? PaymentChannel
-    {
-        get; set;
-    }
+    public string? PaymentChannel { get; set; }
 
     /// <summary>Where it happened, when the provider knows. A city and nothing finer.</summary>
-    public string? City
-    {
-        get; set;
-    }
+    public string? City { get; set; }
 
     /// <summary>
     /// The place this was spent, resolved from <see cref="MerchantName"/> as the row was
@@ -136,15 +103,9 @@ public class BankTransaction : Entity
     /// Null when the provider sent no merchant name at all, which is an ordinary state for
     /// a bank line nobody has enriched -- <see cref="Description"/> is then all there is.
     /// </remarks>
-    public virtual Merchant? Merchant
-    {
-        get; set;
-    }
+    public virtual Merchant? Merchant { get; set; }
 
-    public Guid? MerchantId
-    {
-        get; set;
-    }
+    public Guid? MerchantId { get; set; }
 
     /// <summary>
     /// A mark for the kind of thing this was, from the provider, for a row whose merchant
@@ -158,33 +119,21 @@ public class BankTransaction : Entity
     /// payer's avatar with where it was spent, and a category icon there would be claiming
     /// to know a place when all it knows is a kind.
     /// </remarks>
-    public string? CategoryIconUrl
-    {
-        get; set;
-    }
+    public string? CategoryIconUrl { get; set; }
 
     /// <summary>
     /// Not yet settled at the bank. A pending row is not a transaction: it may change
     /// amount, or vanish, before it posts. It can still be filed, if the person wants to.
     /// </summary>
-    public bool Pending
-    {
-        get; set;
-    }
+    public bool Pending { get; set; }
 
     /// <summary>
     /// The pending row this posted row replaced, when the provider said so. Both rows are
     /// kept; the old one is <see cref="BankTransactionStatus.Superseded"/>.
     /// </summary>
-    public virtual BankTransaction? Replaces
-    {
-        get; set;
-    }
+    public virtual BankTransaction? Replaces { get; set; }
 
-    public Guid? ReplacesId
-    {
-        get; set;
-    }
+    public Guid? ReplacesId { get; set; }
 
     public BankTransactionStatus Status { get; set; } = BankTransactionStatus.New;
 
@@ -198,31 +147,19 @@ public class BankTransaction : Entity
     /// than dangling if the expense is deleted, because deleting an expense is undoing the
     /// filing, not undoing the import.
     /// </remarks>
-    public virtual Transaction? FiledAs
-    {
-        get; set;
-    }
+    public virtual Transaction? FiledAs { get; set; }
 
     /// <summary>
     /// When the provider withdrew a row that had already been filed. The expense stays --
     /// it is somebody's history -- and the inbox can say what happened. A row nobody had
     /// acted on is simply deleted instead, so this is set on filed rows only.
     /// </summary>
-    public DateTimeOffset? RemovedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? RemovedAt { get; set; }
 
     /// <summary>
     /// The provider's row, verbatim. <c>jsonb</c> in Postgres, text anywhere else.
     /// </summary>
-    public required string RawJson
-    {
-        get; set;
-    }
+    public required string RawJson { get; set; }
 
-    public required DateTimeOffset ImportedAt
-    {
-        get; set;
-    }
+    public required DateTimeOffset ImportedAt { get; set; }
 }

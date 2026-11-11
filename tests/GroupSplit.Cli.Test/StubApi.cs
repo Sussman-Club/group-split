@@ -33,10 +33,7 @@ public sealed class StubApi : IDisposable
         _ = Task.Run(ServeAsync);
     }
 
-    public string BaseAddress
-    {
-        get;
-    }
+    public string BaseAddress { get; }
 
     public IReadOnlyList<Recorded> Requests => _requests;
 

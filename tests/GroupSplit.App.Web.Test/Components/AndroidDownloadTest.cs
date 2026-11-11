@@ -54,14 +54,8 @@ public sealed class AndroidDownloadTest : ComponentTest
     }
     private sealed class Transport : HttpMessageHandler
     {
-        public bool Available
-        {
-            get; set;
-        }
-        public bool Failure
-        {
-            get; set;
-        }
+        public bool Available { get; set; }
+        public bool Failure { get; set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             if (Failure)

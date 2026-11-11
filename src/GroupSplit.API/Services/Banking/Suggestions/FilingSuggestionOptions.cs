@@ -18,21 +18,12 @@ public sealed class FilingSuggestionOptions
     /// The Decision-1 deployment's name. Empty leaves the feature off, and the inbox
     /// behaves exactly as it did without it.
     /// </summary>
-    public string? Deployment
-    {
-        get; set;
-    }
+    public string? Deployment { get; set; }
 
     /// <summary>The Azure resource the deployment is on, without a path.</summary>
-    public Uri? Endpoint
-    {
-        get; set;
-    }
+    public Uri? Endpoint { get; set; }
 
-    public string? Key
-    {
-        get; set;
-    }
+    public string? Key { get; set; }
 
     /// <summary>
     /// Below this the answer is treated as an abstention. A wrong suggestion said with
@@ -54,10 +45,7 @@ public sealed class FilingSuggestionOptions
     /// <c>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT</c> is <c>true</c>: the content
     /// is a person's merchants, amounts and receipt items.
     /// </summary>
-    public bool CaptureMessageContent
-    {
-        get; set;
-    }
+    public bool CaptureMessageContent { get; set; }
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Deployment)

@@ -23,10 +23,7 @@ public sealed record SuggestFilingsRequest
 /// <summary>One row to suggest for, and what else is known about it.</summary>
 public sealed record SuggestFilingRow
 {
-    public Guid Id
-    {
-        get; init;
-    }
+    public Guid Id { get; init; }
 
     /// <summary>
     /// What a receipt attached to the row says was bought, once somebody has read it.
@@ -35,10 +32,7 @@ public sealed record SuggestFilingRow
     /// Sent rather than looked up: reading a receipt is not stored until the row is filed,
     /// so the client holding the reading is the only one that has it.
     /// </remarks>
-    public FilingReceipt? Receipt
-    {
-        get; init;
-    }
+    public FilingReceipt? Receipt { get; init; }
 }
 
 /// <summary>
@@ -48,10 +42,7 @@ public sealed record SuggestFilingRow
 public sealed record FilingReceipt
 {
     [StringLength(128)]
-    public string? MerchantName
-    {
-        get; init;
-    }
+    public string? MerchantName { get; init; }
 
     /// <summary>The line items' names, as the receipt printed them.</summary>
     [Length(0, MaxItems, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.ReceiptItemsLength))]

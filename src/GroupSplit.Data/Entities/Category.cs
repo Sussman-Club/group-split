@@ -15,15 +15,9 @@ public class Category : Entity
 {
     public virtual Group Group { get; set; } = null!;
 
-    internal Guid GroupId
-    {
-        get; set;
-    }
+    internal Guid GroupId { get; set; }
 
-    public required string Name
-    {
-        get; set;
-    }
+    public required string Name { get; set; }
 
     /// <summary>
     /// Optional context for people and the filing suggester, such as what belongs in this
@@ -47,19 +41,13 @@ public class Category : Entity
     /// change to how the group splits groceries forever.
     /// </para>
     /// </remarks>
-    public virtual SplitRule? DefaultSplitRule
-    {
-        get; set;
-    }
+    public virtual SplitRule? DefaultSplitRule { get; set; }
 
     /// <summary>
     /// Public, unlike this entity's other foreign key, because which rule a category
     /// defaults to is a thing services read and write directly.
     /// </summary>
-    public Guid? DefaultSplitRuleId
-    {
-        get; set;
-    }
+    public Guid? DefaultSplitRuleId { get; set; }
 
     /// <summary>
     /// When the group stopped filing under this, or null while it is still in use.
@@ -82,8 +70,5 @@ public class Category : Entity
     /// their own list, which is why that one hangs off the membership.
     /// </para>
     /// </remarks>
-    public DateTimeOffset? ArchivedAt
-    {
-        get; set;
-    }
+    public DateTimeOffset? ArchivedAt { get; set; }
 }

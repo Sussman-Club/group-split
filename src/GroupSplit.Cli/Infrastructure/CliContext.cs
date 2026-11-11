@@ -69,40 +69,22 @@ public sealed class CliContext : IDisposable
     /// <summary>The parsed command line, for commands reading options they declared themselves.</summary>
     public ParseResult ParseResult => _parseResult;
 
-    public IOutputWriter Output
-    {
-        get;
-    }
+    public IOutputWriter Output { get; }
 
     /// <summary>
     /// stdout with no formatting applied, for the two commands whose output is not a
     /// rendering of a result: a token to be pasted into another command, and a shell script
     /// to be evaluated. A table or a JSON envelope would make either unusable.
     /// </summary>
-    public TextWriter RawOutput
-    {
-        get;
-    }
+    public TextWriter RawOutput { get; }
 
-    public ConfigStore Config
-    {
-        get;
-    }
+    public ConfigStore Config { get; }
 
-    public TokenStore Tokens
-    {
-        get;
-    }
+    public TokenStore Tokens { get; }
 
-    public OidcDiscovery Discovery
-    {
-        get;
-    }
+    public OidcDiscovery Discovery { get; }
 
-    public DeviceCodeFlow DeviceFlow
-    {
-        get;
-    }
+    public DeviceCodeFlow DeviceFlow { get; }
 
     public Endpoints Endpoints => _endpoints.Value;
 
