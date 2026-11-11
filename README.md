@@ -153,7 +153,7 @@ dotnet format whitespace build --folder --exclude '**/bin/**' '**/obj/**'
 
 Add `--verify-no-changes` to any command to check without modifying files. Folder mode covers the native app without requiring MAUI workloads.
 
-CI also checks that control-flow statements use braces and enum members appear on separate lines. To apply that rule locally, install the Android MAUI workload and run:
+CI also checks that control-flow statements use braces and enum members appear on separate lines and simple auto-properties stay on one line. To apply that rule locally, install the Android MAUI workload and run:
 
 ```sh
 dotnet restore group-split.slnx

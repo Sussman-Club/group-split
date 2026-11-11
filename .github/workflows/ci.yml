@@ -53,7 +53,7 @@ jobs:
           dotnet format style group-split.slnx --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
           dotnet format style build/FormatTools.csproj --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
           dotnet format style build/CSharpLayout/CSharpLayout.csproj --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
-      - name: Verify enum layout
+      - name: Verify enums and auto-properties
         run: dotnet run --project build/CSharpLayout/CSharpLayout.csproj --no-restore -- src tests tools build
 
   build-test:

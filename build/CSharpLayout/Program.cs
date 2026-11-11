@@ -18,6 +18,25 @@ foreach (var directory in args)
         }
 
         var root = CSharpSyntaxTree.ParseText(File.ReadAllText(file), path: file).GetRoot();
+        foreach (var property in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+        {
+            var accessors = property.AccessorList;
+            if (property.Parent is InterfaceDeclarationSyntax || property.Modifiers.Any(token => token.RawKind == (int)SyntaxKind.AbstractKeyword) ||
+                accessors is null || accessors.Accessors.Count == 0 ||
+                accessors.Accessors.Any(accessor => accessor.Body is not null || accessor.ExpressionBody is not null))
+            {
+                continue;
+            }
+
+            var identifier = property.Identifier.GetLocation().GetLineSpan().StartLinePosition;
+            var end = accessors.CloseBraceToken.GetLocation().GetLineSpan().StartLinePosition;
+            if (identifier.Line != end.Line)
+            {
+                Console.Error.WriteLine($"{file}({identifier.Line + 1},{identifier.Character + 1}): simple auto-properties must be on one line.");
+                violations++;
+            }
+        }
+
         foreach (var declaration in root.DescendantNodes().OfType<EnumDeclarationSyntax>())
         {
             var lines = new HashSet<int>();
