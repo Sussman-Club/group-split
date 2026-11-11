@@ -95,12 +95,20 @@ public sealed class LocalClock
     public void ApplyTimeFormat(string? value) => _timeFormat = value is "12" or "24" ? value : "system";
 
     public string FormatTime(TimeOnly time, string fallback = "t") =>
-        time.ToString(_timeFormat switch { "12" => "h:mm tt", "24" => "HH:mm", _ => fallback });
+        time.ToString(_timeFormat switch
+        {
+            "12" => "h:mm tt",
+            "24" => "HH:mm",
+            _ => fallback
+        });
 
     public string DisplayInstant(DateTimeOffset instant, bool longDate = false)
     {
         var local = Local(instant);
-        if (_timeFormat == "system") return local.ToString(longDate ? "f" : "g");
+        if (_timeFormat == "system")
+        {
+            return local.ToString(longDate ? "f" : "g");
+        }
         return $"{local.ToString(longDate ? "D" : "d")} {FormatTime(TimeOnly.FromDateTime(local.DateTime))}";
     }
 
@@ -210,8 +218,14 @@ public sealed class LocalClock
     /// <summary>Uses a browser time zone ID, including its daylight-saving rules.</summary>
     public void ApplyZone(string? id)
     {
-        try { _zone = string.IsNullOrWhiteSpace(id) ? null : TimeZoneInfo.FindSystemTimeZoneById(id); }
-        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException) { _zone = null; }
+        try
+        {
+            _zone = string.IsNullOrWhiteSpace(id) ? null : TimeZoneInfo.FindSystemTimeZoneById(id);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            _zone = null;
+        }
     }
 
     private static bool IsUnavailable(Exception exception) =>
