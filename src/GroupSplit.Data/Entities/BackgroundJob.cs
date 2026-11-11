@@ -2,7 +2,11 @@ namespace GroupSplit.Data.Entities;
 
 public enum BackgroundJobStatus
 {
-    Pending, Running, Completed, Failed, AwaitingOperator
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    AwaitingOperator
 }
 
 /// <summary>A durable invocation. Payloads contain identifiers, never credentials.</summary>

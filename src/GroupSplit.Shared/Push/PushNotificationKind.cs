@@ -3,11 +3,23 @@ namespace GroupSplit.Shared;
 // Values are persisted in jobs: append kinds without renumbering existing ones.
 public enum PushNotificationKind
 {
-    ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue, StaffTicketCreated, StaffCustomerReplied
+    ExpenseCreated,
+    ExpenseChanged,
+    Settlement,
+    PaymentRequest,
+    InvitationAccepted,
+    BankSyncIssue,
+    StaffTicketCreated,
+    StaffCustomerReplied
 }
+
 public enum PushNotificationCategory
 {
-    Expenses, Settlements, GuestsJoining, BankSyncIssues, StaffSupport
+    Expenses,
+    Settlements,
+    GuestsJoining,
+    BankSyncIssues,
+    StaffSupport
 }
 
 public sealed record PushNotificationDefinition(

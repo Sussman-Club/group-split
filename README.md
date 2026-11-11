@@ -148,17 +148,21 @@ C# whitespace conventions are defined in `.editorconfig` and checked in CI. Befo
 dotnet format whitespace src --folder --exclude '**/bin/**' '**/obj/**'
 dotnet format whitespace tests --folder --exclude '**/bin/**' '**/obj/**'
 dotnet format whitespace tools --folder --exclude '**/bin/**' '**/obj/**'
+dotnet format whitespace build --folder --exclude '**/bin/**' '**/obj/**'
 ```
 
 Add `--verify-no-changes` to any command to check without modifying files. Folder mode covers the native app without requiring MAUI workloads.
 
-CI also checks that control-flow statements use braces. To apply that rule locally, install the Android MAUI workload and run:
+CI also checks that control-flow statements use braces and enum members appear on separate lines. To apply that rule locally, install the Android MAUI workload and run:
 
 ```sh
 dotnet restore group-split.slnx
 dotnet restore build/FormatTools.csproj
+dotnet restore build/CSharpLayout/CSharpLayout.csproj
 dotnet format style group-split.slnx --no-restore --diagnostics IDE0011 --severity warn
 dotnet format style build/FormatTools.csproj --no-restore --diagnostics IDE0011 --severity warn
+dotnet format style build/CSharpLayout/CSharpLayout.csproj --no-restore --diagnostics IDE0011 --severity warn
+dotnet run --project build/CSharpLayout/CSharpLayout.csproj --no-restore -- src tests tools build
 ```
 
 Add `--verify-no-changes` to the style commands to check without modifying files. Razor, CSS, JavaScript, and other code-style analyzers are outside these checks.

@@ -2,7 +2,10 @@ namespace GroupSplit.Shared;
 
 public enum SettlementRequestStatus
 {
-    Open, Stale, Paid, Cancelled
+    Open,
+    Stale,
+    Paid,
+    Cancelled
 }
 
 /// <summary>A shareable invitation to record a repayment; never a ledger entry itself.</summary>

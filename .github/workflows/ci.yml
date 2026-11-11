@@ -39,6 +39,7 @@ jobs:
           dotnet format whitespace src --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
           dotnet format whitespace tests --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
           dotnet format whitespace tools --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
+          dotnet format whitespace build --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
       # The style analyzer loads the full solution, including the Android head.
       - name: Install Android workload
         run: dotnet workload install maui-android
@@ -46,10 +47,14 @@ jobs:
         run: |
           dotnet restore group-split.slnx
           dotnet restore build/FormatTools.csproj
+          dotnet restore build/CSharpLayout/CSharpLayout.csproj
       - name: Verify control-flow braces
         run: |
           dotnet format style group-split.slnx --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
           dotnet format style build/FormatTools.csproj --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
+          dotnet format style build/CSharpLayout/CSharpLayout.csproj --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
+      - name: Verify enum layout
+        run: dotnet run --project build/CSharpLayout/CSharpLayout.csproj --no-restore -- src tests tools build
 
   build-test:
     name: Build & unit tests
