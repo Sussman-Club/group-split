@@ -87,9 +87,9 @@ public class ReceiptService(
 
         return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct), expense.GroupId)
             with
-            {
-                CanEdit = canEdit
-            };
+        {
+            CanEdit = canEdit
+        };
     }
 
     public async Task<Receipt> PrepareDraft(Expense expense, SaveReceiptRequest request, CancellationToken ct = default)
@@ -114,9 +114,12 @@ public class ReceiptService(
         // Validate a detached draft first: a refused request never mutates the tracked bill.
         var draft = new Receipt
         {
-            ExpenseId = expense.Id, Subtotal = request.Subtotal,
-            MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
-            Tax = request.Tax, Tip = request.Tip,
+            ExpenseId = expense.Id,
+            Subtotal = request.Subtotal,
+            MerchantName = Clean(request.MerchantName, 128),
+            PurchaseDate = request.PurchaseDate,
+            Tax = request.Tax,
+            Tip = request.Tip,
             Total = request.Total
         };
         // Worked out once, and only if some line needs it.
@@ -148,15 +151,21 @@ public class ReceiptService(
             }
             draft.Items.Add(new ReceiptItem
             {
-                Id = input.Id ?? Guid.NewGuid(), Position = position,
+                Id = input.Id ?? Guid.NewGuid(),
+                Position = position,
                 Name = input.Name?.Trim() ?? "",
                 NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
                                  ?? input.Name?.Trim().ToLowerInvariant() ?? "",
                 Description = input.Description is null ? savedDescription :
                     string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
-                UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
-                TaxAmount = input.TaxAmount, TaxRate = input.TaxRate, IsTaxable = input.IsTaxable,
-                SplitRuleVersionId = version?.Id, SplitRuleVersion = version
+                UnitPrice = input.UnitPrice,
+                Quantity = input.Quantity,
+                TotalPrice = input.TotalPrice,
+                TaxAmount = input.TaxAmount,
+                TaxRate = input.TaxRate,
+                IsTaxable = input.IsTaxable,
+                SplitRuleVersionId = version?.Id,
+                SplitRuleVersion = version
             });
         }
 

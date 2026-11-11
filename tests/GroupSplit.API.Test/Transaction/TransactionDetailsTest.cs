@@ -30,9 +30,9 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     private async Task<Guid> PercentCategory(Guid groupId, Guid a, decimal aPct, Guid b, decimal bPct)
     {
         var version = await CreateCategory(groupId, "Split", new PercentSplitRuleDto
-            {
-                Percentages = new Dictionary<Guid, decimal> { [a] = aPct, [b] = bPct }
-            });
+        {
+            Percentages = new Dictionary<Guid, decimal> { [a] = aPct, [b] = bPct }
+        });
 
         return version;
     }

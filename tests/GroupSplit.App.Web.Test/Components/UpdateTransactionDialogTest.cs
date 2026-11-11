@@ -1200,19 +1200,19 @@ public class UpdateTransactionDialogTest : ComponentTest
 
     private static TransactionDetailsResponse Details(
         Guid id, Guid? merchantId = null, Guid? splitRuleVersionId = null) => new()
-    {
-        SplitRuleVersionId = splitRuleVersionId,
-        Id = id,
-        Name = "Dinner",
-        Amount = 100m,
-        DateTime = DateTimeOffset.UtcNow,
-        GroupId = GroupId,
-        PaidByUserId = MeId,
-        CategoryId = FoodCategoryId,
-        Category = "Food",
-        MerchantId = merchantId,
-        Splits = [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)]
-    };
+        {
+            SplitRuleVersionId = splitRuleVersionId,
+            Id = id,
+            Name = "Dinner",
+            Amount = 100m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = GroupId,
+            PaidByUserId = MeId,
+            CategoryId = FoodCategoryId,
+            Category = "Food",
+            MerchantId = merchantId,
+            Splits = [new TransactionSplitResponse(MeId, "Ana Benitez", 100m)]
+        };
 
     private static TransactionResponse Row(Guid id) => new()
     {

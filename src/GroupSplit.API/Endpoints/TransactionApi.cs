@@ -459,26 +459,26 @@ public static class TransactionApi
         internal IQueryable<TransactionResponse> SelectDto()
         {
             return from transaction in transactions
-                select new TransactionResponse
-                {
-                    Id = transaction.Id,
-                    Amount = transaction.Amount,
-                    Currency = transaction.Currency,
-                    DateTime = transaction.DateTime,
-                    HasBankTransaction = transaction.BankTransactionId != null,
-                    Name = transaction.Name,
-                    Description = transaction.Description,
-                    GroupId = transaction.GroupId,
-                    GroupName = transaction.Group != null ? transaction.Group.Name : null,
-                    PaidByUserId = transaction.User.Id,
-                    PaidByUserName = transaction.User.FirstName +
-                                     (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
-                    CategoryId = transaction.CategoryId,
-                    Category = transaction.Category != null ? transaction.Category.Name : null,
-                    MerchantId = transaction.MerchantId,
-                    MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
-                    MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null
-                };
+                   select new TransactionResponse
+                   {
+                       Id = transaction.Id,
+                       Amount = transaction.Amount,
+                       Currency = transaction.Currency,
+                       DateTime = transaction.DateTime,
+                       HasBankTransaction = transaction.BankTransactionId != null,
+                       Name = transaction.Name,
+                       Description = transaction.Description,
+                       GroupId = transaction.GroupId,
+                       GroupName = transaction.Group != null ? transaction.Group.Name : null,
+                       PaidByUserId = transaction.User.Id,
+                       PaidByUserName = transaction.User.FirstName +
+                                        (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       CategoryId = transaction.CategoryId,
+                       Category = transaction.Category != null ? transaction.Category.Name : null,
+                       MerchantId = transaction.MerchantId,
+                       MerchantName = transaction.Merchant != null ? transaction.Merchant.Name : null,
+                       MerchantLogoUrl = transaction.Merchant != null ? transaction.Merchant.LogoUrl : null
+                   };
         }
 
         internal IQueryable<Expense> ApplyFilter(TransactionFilter? filter)
@@ -497,33 +497,33 @@ public static class TransactionApi
             var search = string.IsNullOrWhiteSpace(filter.Search) ? null : filter.Search.Trim().ToLowerInvariant();
 
             return from transaction in transactions
-                where (after == null || transaction.DateTime >= after) &&
-                      (before == null || transaction.DateTime <= before) &&
-                      (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
-                      // Personal is the payer's own group, whose id is theirs: true keeps
-                      // only those rows, false keeps only the shared ones, and null keeps
-                      // both. Asked of the row rather than of the caller, so it reads the
-                      // same in every listing that applies it.
-                      (filter.Personal == null ||
-                       (filter.Personal.Value
-                           ? transaction.GroupId == transaction.UserId
-                           : transaction.GroupId != transaction.UserId)) &&
-                      (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
-                      (category == null ||
-                       (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
-                      // ToLower().Contains rather than EF.Functions.ILike: the same query has
-                      // to run on Npgsql and on the in-memory provider the tests use, and
-                      // ILike translates only on the first. The names are nullable once an
-                      // account has been anonymised.
-                      (search == null ||
-                       transaction.Name.ToLower().Contains(search) ||
-                       (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
-                       (transaction.Category != null &&
-                        transaction.Category.Name.ToLower().Contains(search)) ||
-                       (transaction.Group != null && transaction.Group.Name.ToLower().Contains(search)) ||
-                       (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
-                       (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
-                select transaction;
+                   where (after == null || transaction.DateTime >= after) &&
+                         (before == null || transaction.DateTime <= before) &&
+                         (filter.GroupId == null || transaction.GroupId == filter.GroupId) &&
+                         // Personal is the payer's own group, whose id is theirs: true keeps
+                         // only those rows, false keeps only the shared ones, and null keeps
+                         // both. Asked of the row rather than of the caller, so it reads the
+                         // same in every listing that applies it.
+                         (filter.Personal == null ||
+                          (filter.Personal.Value
+                              ? transaction.GroupId == transaction.UserId
+                              : transaction.GroupId != transaction.UserId)) &&
+                         (filter.PaidByUserId == null || transaction.User.Id == filter.PaidByUserId) &&
+                         (category == null ||
+                          (transaction.Category != null && transaction.Category.Name.ToLower() == category)) &&
+                         // ToLower().Contains rather than EF.Functions.ILike: the same query has
+                         // to run on Npgsql and on the in-memory provider the tests use, and
+                         // ILike translates only on the first. The names are nullable once an
+                         // account has been anonymised.
+                         (search == null ||
+                          transaction.Name.ToLower().Contains(search) ||
+                          (transaction.Description != null && transaction.Description.ToLower().Contains(search)) ||
+                          (transaction.Category != null &&
+                           transaction.Category.Name.ToLower().Contains(search)) ||
+                          (transaction.Group != null && transaction.Group.Name.ToLower().Contains(search)) ||
+                          (transaction.User.FirstName != null && transaction.User.FirstName.ToLower().Contains(search)) ||
+                          (transaction.User.LastName != null && transaction.User.LastName.ToLower().Contains(search)))
+                   select transaction;
         }
 
         /// <summary>
@@ -656,33 +656,33 @@ public static class TransactionApi
         private IQueryable<ExpenseShareResponse> SelectDto(IQueryable<Expense> expenses, Guid userId)
         {
             return from split in shares
-                join expense in expenses on split.TransactionId equals expense.Id
-                select new ExpenseShareResponse
-                {
-                    Id = expense.Id,
-                    Amount = expense.Amount,
-                    // Both figures are in it. Left out, every row said the record's default,
-                    // and a euro expense listed itself as the same number of dollars.
-                    Currency = expense.Currency,
-                    // The stored split, not the amount divided by anything. It is the row
-                    // every balance is summed from, so a listing that re-derived it could
-                    // disagree with the figure the group page shows.
-                    Share = split.Amount,
-                    DateTime = expense.DateTime,
-                    Name = expense.Name,
-                    Description = expense.Description,
-                    GroupId = expense.GroupId,
-                    GroupName = expense.Group != null ? expense.Group.Name : null,
-                    PaidByUserId = expense.User.Id,
-                    PaidByUserName = expense.User.FirstName +
-                                     (expense.User.LastName != null ? " " + expense.User.LastName : ""),
-                    PaidByYou = expense.UserId == userId,
-                    CategoryId = expense.CategoryId,
-                    Category = expense.Category != null ? expense.Category.Name : null,
-                    MerchantId = expense.MerchantId,
-                    MerchantName = expense.Merchant != null ? expense.Merchant.Name : null,
-                    MerchantLogoUrl = expense.Merchant != null ? expense.Merchant.LogoUrl : null
-                };
+                   join expense in expenses on split.TransactionId equals expense.Id
+                   select new ExpenseShareResponse
+                   {
+                       Id = expense.Id,
+                       Amount = expense.Amount,
+                       // Both figures are in it. Left out, every row said the record's default,
+                       // and a euro expense listed itself as the same number of dollars.
+                       Currency = expense.Currency,
+                       // The stored split, not the amount divided by anything. It is the row
+                       // every balance is summed from, so a listing that re-derived it could
+                       // disagree with the figure the group page shows.
+                       Share = split.Amount,
+                       DateTime = expense.DateTime,
+                       Name = expense.Name,
+                       Description = expense.Description,
+                       GroupId = expense.GroupId,
+                       GroupName = expense.Group != null ? expense.Group.Name : null,
+                       PaidByUserId = expense.User.Id,
+                       PaidByUserName = expense.User.FirstName +
+                                        (expense.User.LastName != null ? " " + expense.User.LastName : ""),
+                       PaidByYou = expense.UserId == userId,
+                       CategoryId = expense.CategoryId,
+                       Category = expense.Category != null ? expense.Category.Name : null,
+                       MerchantId = expense.MerchantId,
+                       MerchantName = expense.Merchant != null ? expense.Merchant.Name : null,
+                       MerchantLogoUrl = expense.Merchant != null ? expense.Merchant.LogoUrl : null
+                   };
         }
 
         /// <summary>

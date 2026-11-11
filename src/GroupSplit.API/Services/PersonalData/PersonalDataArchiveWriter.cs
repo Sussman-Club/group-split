@@ -16,8 +16,11 @@ public sealed class PersonalDataArchiveWriter(IReceiptAttachmentService receiptF
     {
         var options = new FileStreamOptions
         {
-            Mode = FileMode.CreateNew, Access = FileAccess.ReadWrite, Share = FileShare.None,
-            BufferSize = 65536, Options = FileOptions.Asynchronous | FileOptions.DeleteOnClose
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None,
+            BufferSize = 65536,
+            Options = FileOptions.Asynchronous | FileOptions.DeleteOnClose
         };
         if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         var output = new FileStream(Path.Combine(Path.GetTempPath(), $"groupsplit-export-{Guid.NewGuid():N}.zip"), options);

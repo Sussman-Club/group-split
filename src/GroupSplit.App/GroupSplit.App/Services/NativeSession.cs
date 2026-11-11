@@ -27,10 +27,14 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
             var challenge = Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
             var url = Query(options.Endpoint("auth"), new()
             {
-                ["client_id"] = NativeOptions.ClientId, ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
-                ["response_type"] = "code", ["scope"] = "openid profile email",
+                ["client_id"] = NativeOptions.ClientId,
+                ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
+                ["response_type"] = "code",
+                ["scope"] = "openid profile email",
                 ["ui_locales"] = GroupSplit.Shared.AppLanguages.Resolve(System.Globalization.CultureInfo.CurrentUICulture.Name),
-                ["code_challenge_method"] = "S256", ["code_challenge"] = challenge, ["state"] = state
+                ["code_challenge_method"] = "S256",
+                ["code_challenge"] = challenge,
+                ["state"] = state
             });
             var result = await browser.AuthenticateAsync(url, NativeOptions.Callback, ct);
             if (!result.TryGetValue("state", out var returnedState) || returnedState != state
@@ -40,8 +44,10 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
 
             var response = await ExchangeAsync(new()
             {
-                ["grant_type"] = "authorization_code", ["code"] = code,
-                ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri, ["code_verifier"] = verifier
+                ["grant_type"] = "authorization_code",
+                ["code"] = code,
+                ["redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
+                ["code_verifier"] = verifier
             }, ct);
             persistent = remember;
             await SaveAsync(response);
@@ -69,7 +75,9 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
             using var http = clients.CreateClient(IdentityClientName);
             using var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["client_id"] = NativeOptions.ClientId, ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.RefreshToken
+                ["client_id"] = NativeOptions.ClientId,
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = tokens.RefreshToken
             });
             using var response = await http.PostAsync(options.Endpoint("token"), content, ct);
             if (response.StatusCode == HttpStatusCode.BadRequest)
@@ -80,8 +88,11 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
             response.EnsureSuccessStatusCode();
             var refreshed = await ReadTokensAsync(response, ct);
             // A provider may leave the refresh token unchanged rather than return it again.
-            await SaveAsync(refreshed with { RefreshToken = refreshed.RefreshToken ?? tokens.RefreshToken,
-                IdToken = refreshed.IdToken ?? tokens.IdToken });
+            await SaveAsync(refreshed with
+            {
+                RefreshToken = refreshed.RefreshToken ?? tokens.RefreshToken,
+                IdToken = refreshed.IdToken ?? tokens.IdToken
+            });
             return tokens!.AccessToken;
         }
         finally { gate.Release(); }
@@ -103,8 +114,10 @@ public sealed class NativeSession(NativeOptions options, IHttpClientFactory clie
             var state = RandomValue();
             var result = await browser.AuthenticateAsync(Query(options.Endpoint("logout"), new()
             {
-                ["client_id"] = NativeOptions.ClientId, ["id_token_hint"] = saved.IdToken,
-                ["post_logout_redirect_uri"] = NativeOptions.Callback.AbsoluteUri, ["state"] = state
+                ["client_id"] = NativeOptions.ClientId,
+                ["id_token_hint"] = saved.IdToken,
+                ["post_logout_redirect_uri"] = NativeOptions.Callback.AbsoluteUri,
+                ["state"] = state
             }), NativeOptions.Callback, ct);
             if (!result.TryGetValue("state", out var returned) || returned != state)
                 throw new InvalidOperationException("The app signed out, but authority sign-out could not be verified.");

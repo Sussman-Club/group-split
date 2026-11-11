@@ -31,12 +31,14 @@ public class ExpenseReviewDialogTest : ComponentTest
         var second = Guid.NewGuid();
         var original = new GroupSplit.Shared.UpdateTransactionRequest
         {
-            Name = "Dinner", Amount = 20m,
+            Name = "Dinner",
+            Amount = 20m,
             Splits = [new() { UserId = first, Amount = 10m }, new() { UserId = second, Amount = 10m }]
         };
         var updated = new GroupSplit.Shared.UpdateTransactionRequest
         {
-            Name = "Dinner corrected", Amount = 20m,
+            Name = "Dinner corrected",
+            Amount = 20m,
             Splits = original.Splits.Reverse().ToArray()
         };
         var method = typeof(UpdateTransactionDialog).GetMethod("CreatePatch", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;

@@ -93,8 +93,11 @@ public sealed class AuthHardeningTests : IDisposable
         // explicit zero stays distinguishable from an absent value, which takes a default.
         _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new
         {
-            device_code = "d", user_code = "ABCD-EFGH", verification_uri = "https://example.com/device",
-            expires_in = 0, interval = 0
+            device_code = "d",
+            user_code = "ABCD-EFGH",
+            verification_uri = "https://example.com/device",
+            expires_in = 0,
+            interval = 0
         });
         _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "authorization_pending" }, 400);
 
@@ -176,7 +179,9 @@ public sealed class AuthHardeningTests : IDisposable
         var store = new TokenStore();
         store.Save(unreachable, "cli", new StoredCredential
         {
-            AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+            AccessToken = "a",
+            RefreshToken = "r",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
 
         var result = await Cli.RunAsync("auth", "logout");
@@ -198,7 +203,9 @@ public sealed class AuthHardeningTests : IDisposable
 
         store.Save(authority, "cli", new StoredCredential
         {
-            AccessToken = "stale", RefreshToken = "keep-me", ExpiresAt = DateTimeOffset.UtcNow.AddHours(-1)
+            AccessToken = "stale",
+            RefreshToken = "keep-me",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(-1)
         });
 
         // No refresh_token in the response: nulling the stored one would strand the user at
@@ -220,7 +227,10 @@ public sealed class AuthHardeningTests : IDisposable
 
     private void Device() => _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new
     {
-        device_code = "d", user_code = "ABCD-EFGH", verification_uri = "https://example.com/device",
-        expires_in = 600, interval = 0
+        device_code = "d",
+        user_code = "ABCD-EFGH",
+        verification_uri = "https://example.com/device",
+        expires_in = 600,
+        interval = 0
     });
 }

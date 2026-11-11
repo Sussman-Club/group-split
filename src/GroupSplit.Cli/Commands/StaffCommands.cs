@@ -51,12 +51,15 @@ public static class StaffCommands
     {
         var id = Id(); var body = new Argument<string>("body") { Description = "Message text." };
         var command = new Command(name, description) { id, body };
-        command.SetHandler(async (c, ct) => {
+        command.SetHandler(async (c, ct) =>
+        {
             var ticketId = c.ParseResult.GetValue(id); var message = c.ParseResult.GetValue(body)!;
-            if (isPublic) {
+            if (isPublic)
+            {
                 var current = await Get<SupportTicketResponse>(c, $"staff/tickets/{ticketId}", ct);
                 await Send(c, HttpMethod.Post, $"staff/tickets/{ticketId}/reply", new CreateSupportMessageRequest { Body = message, ExpectedUpdatedAt = current.UpdatedAt }, ct);
-            } else await Send(c, HttpMethod.Post, $"staff/tickets/{ticketId}/notes", new CreateSupportNoteRequest(message), ct);
+            }
+            else await Send(c, HttpMethod.Post, $"staff/tickets/{ticketId}/notes", new CreateSupportNoteRequest(message), ct);
             return ExitCodes.Success;
         });
         return command;
@@ -69,7 +72,8 @@ public static class StaffCommands
         var unassign = new Option<bool>("--unassign") { Description = "Clear the assignment." };
         var review = new Option<bool?>("--needs-review") { Description = "Set whether classification needs review (true or false)." };
         var command = new Command("update", "Update ticket classification, status, priority or assignment.") { id, status, priority, type, assign, unassign, review };
-        command.SetHandler(async (c, ct) => {
+        command.SetHandler(async (c, ct) =>
+        {
             var p = c.ParseResult; var ticketId = p.GetValue(id); var assigned = p.GetValue(assign);
             if (assigned is not null && p.GetValue(unassign)) throw CliException.Input("Choose --assign or --unassign, not both.");
             var ticket = await Get<SupportTicketResponse>(c, $"staff/tickets/{ticketId}", ct);
@@ -84,7 +88,8 @@ public static class StaffCommands
         var file = new Argument<string>("file") { Description = "JSON file with tickets and expectedUpdatedAt, plus status and/or assignment." };
         var hash = Text("--sha256", "Expected SHA-256 of the reviewed file.");
         var command = new Command("bulk-update", "Update multiple tickets atomically from a reviewed JSON file.") { file, hash };
-        command.SetHandler(async (c, ct) => {
+        command.SetHandler(async (c, ct) =>
+        {
             var bytes = await File.ReadAllBytesAsync(c.ParseResult.GetValue(file)!, ct);
             var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
             if (c.ParseResult.GetValue(hash) is { } expected && !string.Equals(digest, expected, StringComparison.OrdinalIgnoreCase))
@@ -170,7 +175,8 @@ public static class StaffCommands
     {
         var id = Id(); var file = new Argument<string>("file") { Description = "PNG image, at most 1 MiB and 512×512 pixels." };
         var command = new Command("upload-logo", "Upload a PNG logo for a shared merchant.") { id, file };
-        command.SetHandler(async (c, ct) => {
+        command.SetHandler(async (c, ct) =>
+        {
             var merchant = await Get<MerchantResponse>(c, $"staff/merchants/{c.ParseResult.GetValue(id)}", ct);
             var path = c.ParseResult.GetValue(file)!; var info = new FileInfo(path);
             if (!info.Exists || info.Length is <= 0 or > MerchantLogos.MaximumUploadBytes) throw CliException.Input("Choose a PNG file up to 1 MiB.");
@@ -193,13 +199,16 @@ public static class StaffCommands
         var bankRows = new Option<int?>("--bank-rows") { Description = "Expected number of bank rows." };
         var aliases = new Option<int?>("--aliases") { Description = "Expected number of aliases." };
         var command = new Command("merge", "Merge a duplicate after reviewing its preview.") { id, target, sourceVersion, targetVersion, transactions, bankRows, aliases };
-        command.SetHandler(async (c, ct) => { var p = c.ParseResult; var source = p.GetValue(id); var destination = p.GetValue(target); var preview = await Get<MerchantMergePreview>(c, $"staff/merchants/{source}/merge-preview?targetId={destination}", ct);
+        command.SetHandler(async (c, ct) =>
+        {
+            var p = c.ParseResult; var source = p.GetValue(id); var destination = p.GetValue(target); var preview = await Get<MerchantMergePreview>(c, $"staff/merchants/{source}/merge-preview?targetId={destination}", ct);
             if (preview.Source.Version != p.GetValue(sourceVersion) || preview.Target.Version != p.GetValue(targetVersion)) throw CliException.Input("Merchants changed since the preview.", "Run merge-preview again and review it.");
             if ((p.GetValue(transactions) is { } t && t != preview.Transactions) || (p.GetValue(bankRows) is { } b && b != preview.BankRows) || (p.GetValue(aliases) is { } a && a != preview.Aliases))
                 throw CliException.Input("The merge impact changed after review.", "Run merge-preview again and review it.");
             Confirmation.Require(c, "staff.merchants.merge", $"Merge '{preview.Source.Name}' into '{preview.Target.Name}'?", [$"Move {preview.Transactions} expenses, {preview.BankRows} bank rows, and {preview.Aliases} aliases.", "The destination keeps its name and logo."],
                 new Dictionary<Option, string> { [transactions] = preview.Transactions.ToString(), [bankRows] = preview.BankRows.ToString(), [aliases] = preview.Aliases.ToString() });
-            await Send(c, HttpMethod.Post, $"staff/merchants/{source}/merge", new MergeMerchantsRequest(destination, p.GetValue(sourceVersion), p.GetValue(targetVersion), preview.Transactions, preview.BankRows, preview.Aliases), ct); return ExitCodes.Success; }); return command;
+            await Send(c, HttpMethod.Post, $"staff/merchants/{source}/merge", new MergeMerchantsRequest(destination, p.GetValue(sourceVersion), p.GetValue(targetVersion), preview.Transactions, preview.BankRows, preview.Aliases), ct); return ExitCodes.Success;
+        }); return command;
     }
 
     private static Command Read(string name, string description, string url) { var command = new Command(name, description); command.SetHandler(async (c, ct) => { await Show(c, url, ct); return ExitCodes.Success; }); return command; }

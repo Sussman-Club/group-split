@@ -56,7 +56,7 @@ public static class OpenApiOptionsExtensions
                     options.AddSchemaTransformer((schema, context, _) =>
                     {
                         if (context.JsonTypeInfo.Type is not
-                                { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
+                            { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
                             type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>)) return Task.CompletedTask;
 
                         var modelTypeInfo = JsonTypeInfo.CreateJsonTypeInfo(modelType, context.JsonTypeInfo.Options);

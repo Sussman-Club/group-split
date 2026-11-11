@@ -209,7 +209,9 @@ public sealed class SettleCommandTests : IDisposable
                     description = "cash", paidByYou = false
                 }
             },
-            page = 1, pageSize = 25, totalCount = 1
+            page = 1,
+            pageSize = 25,
+            totalCount = 1
         });
 
         var result = await Cli.RunAsync("settle", "history", "--output", "text");

@@ -291,8 +291,14 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
         Guid id;
         await using (var db = Context())
         {
-            var row = new BackgroundJob { Type = type, Version = version, Payload = payload,
-                CreatedAt = _clock.Now, AvailableAt = _clock.Now };
+            var row = new BackgroundJob
+            {
+                Type = type,
+                Version = version,
+                Payload = payload,
+                CreatedAt = _clock.Now,
+                AvailableAt = _clock.Now
+            };
             db.Add(row);
             await db.SaveChangesAsync(Ct);
             id = row.Id;
@@ -314,8 +320,13 @@ public class BackgroundJobTest(AppHostFixture appHost) : IAsyncLifetime
     public async Task PostgreSQL_rejects_malformed_JSON_payloads()
     {
         await using var db = Context();
-        db.Add(new BackgroundJob { Type = "test-job", Payload = "not-json",
-            CreatedAt = _clock.Now, AvailableAt = _clock.Now });
+        db.Add(new BackgroundJob
+        {
+            Type = "test-job",
+            Payload = "not-json",
+            CreatedAt = _clock.Now,
+            AvailableAt = _clock.Now
+        });
         var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));
         var postgres = Assert.IsType<PostgresException>(failure.InnerException);
         Assert.Equal("22P02", postgres.SqlState);

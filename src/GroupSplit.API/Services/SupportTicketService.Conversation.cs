@@ -40,8 +40,14 @@ public sealed partial class SupportTicketService
         var ticket = await VisibleTicket(id, fromReporter ? actor : null, ct);
         if (request.ExpectedUpdatedAt is { } expected && ticket.UpdatedAt != expected) throw Changed();
         var now = NextTime(ticket);
-        var message = new SupportTicketMessage { TicketId = id, AuthorUserId = actor, Body = request.Body.Trim(),
-            Visibility = isPublic ? SupportMessageVisibility.Public : SupportMessageVisibility.Internal, CreatedAt = now };
+        var message = new SupportTicketMessage
+        {
+            TicketId = id,
+            AuthorUserId = actor,
+            Body = request.Body.Trim(),
+            Visibility = isPublic ? SupportMessageVisibility.Public : SupportMessageVisibility.Internal,
+            CreatedAt = now
+        };
         db.Add(message);
         var beforeStatus = ticket.Status;
         if (isPublic && fromReporter)

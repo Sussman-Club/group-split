@@ -10,7 +10,8 @@ public class BillSheetTest : ComponentTest
         string? description = null) =>
         new ReceiptItemResponse(Guid.NewGuid(), name, price, 1, price, tax,
             rule is null ? null : Guid.NewGuid(), rule,
-            rule is null ? null : new EvenSplitRuleDto()) with { Description = description };
+            rule is null ? null : new EvenSplitRuleDto()) with
+        { Description = description };
 
     private static ReceiptResponse Bill(params ReceiptItemResponse[] items) =>
         new(Guid.NewGuid(), Guid.NewGuid(), items.Sum(i => i.TotalPrice), items.Sum(i => i.TaxAmount), 0,

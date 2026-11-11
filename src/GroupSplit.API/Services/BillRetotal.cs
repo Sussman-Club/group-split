@@ -68,8 +68,13 @@ public static class BillRetotal
 
         var copy = new Receipt
         {
-            Id = bill.Id, ExpenseId = bill.ExpenseId, Subtotal = bill.Subtotal, Tax = bill.Tax,
-            Tip = bill.Tip, Total = bill.Total, MerchantName = bill.MerchantName,
+            Id = bill.Id,
+            ExpenseId = bill.ExpenseId,
+            Subtotal = bill.Subtotal,
+            Tax = bill.Tax,
+            Tip = bill.Tip,
+            Total = bill.Total,
+            MerchantName = bill.MerchantName,
             PurchaseDate = bill.PurchaseDate
         };
 
@@ -77,10 +82,18 @@ public static class BillRetotal
         {
             copy.Items.Add(new ReceiptItem
             {
-                Id = item.Id, ReceiptId = item.ReceiptId, Position = item.Position, Name = item.Name,
-                NormalizedName = item.NormalizedName, Description = item.Description,
-                UnitPrice = item.UnitPrice, Quantity = item.Quantity, TotalPrice = item.TotalPrice,
-                TaxAmount = item.TaxAmount, TaxRate = item.TaxRate, IsTaxable = item.IsTaxable,
+                Id = item.Id,
+                ReceiptId = item.ReceiptId,
+                Position = item.Position,
+                Name = item.Name,
+                NormalizedName = item.NormalizedName,
+                Description = item.Description,
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.TotalPrice,
+                TaxAmount = item.TaxAmount,
+                TaxRate = item.TaxRate,
+                IsTaxable = item.IsTaxable,
                 SplitRuleVersionId = withoutRules ? null : item.SplitRuleVersionId,
                 SplitRuleVersion = withoutRules ? null : item.SplitRuleVersion
             });

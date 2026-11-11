@@ -50,12 +50,12 @@ public abstract class StaffEditorBase : ComponentBase
         {
             Error = e is ApiProblemException problem
                 ? problem.UserMessage : Text[e.StatusCode switch
-            {
-                HttpStatusCode.Conflict => "This record changed or the merchant name already exists. Refresh before trying again.",
-                HttpStatusCode.Forbidden => "Staff access is required. Your permissions may have changed.",
-                HttpStatusCode.BadRequest => "Check the entered values and try again.",
-                _ => "Could not complete the request. Please try again."
-            }];
+                {
+                    HttpStatusCode.Conflict => "This record changed or the merchant name already exists. Refresh before trying again.",
+                    HttpStatusCode.Forbidden => "Staff access is required. Your permissions may have changed.",
+                    HttpStatusCode.BadRequest => "Check the entered values and try again.",
+                    _ => "Could not complete the request. Please try again."
+                }];
         }
         catch (TaskCanceledException) { Error = Text["The request timed out. Please try again."]; }
         finally { Saving = false; }

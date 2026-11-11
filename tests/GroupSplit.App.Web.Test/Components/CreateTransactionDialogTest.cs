@@ -25,8 +25,13 @@ public class CreateTransactionDialogTest : ComponentTest
     [Fact]
     public async Task Closing_an_unchanged_imported_receipt_does_not_ask_to_discard()
     {
-        var receipt = new SaveReceiptRequest { MerchantName = "Cafe", Subtotal = 12m, Total = 12m,
-            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Cafe",
+            Subtotal = 12m,
+            Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }]
+        };
         var provider = Render<MudDialogProvider>();
         IDialogReference? reference = null;
         await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
@@ -41,8 +46,13 @@ public class CreateTransactionDialogTest : ComponentTest
     [Fact]
     public async Task Closing_an_edited_imported_receipt_asks_to_discard()
     {
-        var receipt = new SaveReceiptRequest { MerchantName = "Cafe", Subtotal = 12m, Total = 12m,
-            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Cafe",
+            Subtotal = 12m,
+            Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }]
+        };
         var provider = Render<MudDialogProvider>();
         await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
             .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
@@ -58,9 +68,14 @@ public class CreateTransactionDialogTest : ComponentTest
     [Fact]
     public async Task Imported_receipt_tax_is_distributed_before_requesting_a_split_preview()
     {
-        var receipt = new SaveReceiptRequest { Subtotal = 20m, Tax = 2m, Total = 22m,
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 20m,
+            Tax = 2m,
+            Total = 22m,
             Items = [new ReceiptItemInput { Name = "One", UnitPrice = 10m, TotalPrice = 10m },
-                new ReceiptItemInput { Name = "Two", UnitPrice = 10m, TotalPrice = 10m }] };
+                new ReceiptItemInput { Name = "Two", UnitPrice = 10m, TotalPrice = 10m }]
+        };
         _commands.Setup(c => c.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana", 22m)], "Even"));
         var provider = Render<MudDialogProvider>();
@@ -133,15 +148,31 @@ public class CreateTransactionDialogTest : ComponentTest
             .ReturnsAsync([new SplitRuleResponse(itemized, GroupId, "Receipt", true, DividesByBill: true),
                 new SplitRuleResponse(even, GroupId, "Even", true, DividesEvenly: true)]);
         _splitRules.Setup(service => service.GetAsync(itemized, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleDetailsResponse { Id = itemized, GroupId = GroupId, Name = "Receipt",
-                VersionId = Guid.NewGuid(), Definition = new ItemizedSplitRuleDto() });
+            .ReturnsAsync(new SplitRuleDetailsResponse
+            {
+                Id = itemized,
+                GroupId = GroupId,
+                Name = "Receipt",
+                VersionId = Guid.NewGuid(),
+                Definition = new ItemizedSplitRuleDto()
+            });
         _splitRules.Setup(service => service.GetAsync(even, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SplitRuleDetailsResponse { Id = even, GroupId = GroupId, Name = "Even",
-                VersionId = evenVersion, Definition = new EvenSplitRuleDto() });
+            .ReturnsAsync(new SplitRuleDetailsResponse
+            {
+                Id = even,
+                GroupId = GroupId,
+                Name = "Even",
+                VersionId = evenVersion,
+                Definition = new EvenSplitRuleDto()
+            });
         _commands.Setup(service => service.PreviewAsync(It.IsAny<CreateTransactionRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SplitPreviewResponse([new TransactionSplitResponse(MeId, "Ana", 12m)], "Receipt"));
-        var receipt = new SaveReceiptRequest { Subtotal = 12m, Total = 12m,
-            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }] };
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 12m,
+            Total = 12m,
+            Items = [new ReceiptItemInput { Name = "Lunch", UnitPrice = 12m, TotalPrice = 12m }]
+        };
         var receipts = new Mock<IReceiptCommands>();
         receipts.Setup(service => service.TranscribeAsync(It.IsAny<Microsoft.AspNetCore.Components.Forms.IBrowserFile>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ReceiptDraftResponse("test", receipt));
@@ -224,7 +255,10 @@ public class CreateTransactionDialogTest : ComponentTest
     {
         var receipt = new SaveReceiptRequest
         {
-            Subtotal = 12m, Total = 12m, MerchantName = "Corner shop", PurchaseDate = new DateOnly(2026, 9, 12),
+            Subtotal = 12m,
+            Total = 12m,
+            MerchantName = "Corner shop",
+            PurchaseDate = new DateOnly(2026, 9, 12),
             Items = [new ReceiptItemInput { Name = "Milk", Quantity = 1m, UnitPrice = 12m, TotalPrice = 12m }]
         };
         var merchantId = Guid.NewGuid();

@@ -22,7 +22,10 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         await JoinGroup(group.Id, other);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "Dinner", Amount = 100, DateTime = DateTimeOffset.UtcNow
+            GroupId = group.Id,
+            Name = "Dinner",
+            Amount = 100,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         return (group.Id, other);
     }
@@ -30,7 +33,7 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     private async Task<IServiceScope> As(Member user)
     {
         var scope = ServiceProvider.CreateScope();
-        var tracked = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<Member>().SingleAsync(x=>x.Id==user.Id,Ct);
+        var tracked = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<Member>().SingleAsync(x => x.Id == user.Id, Ct);
         scope.ServiceProvider.GetRequiredService<ICurrentUserInitializer>().Initialize(tracked);
         return scope;
     }
@@ -41,12 +44,12 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         var (group, other) = await Debt();
         var request = await Requests.CreateForGroup(group, new CreateSettlementRequest { RecipientUserId = other.Id, Amount = 80 }, Ct);
         Assert.Empty(await DbContext.Set<Transfer>().ToListAsync(Ct));
-        await Assert.ThrowsAsync<ForbiddenException>(()=>Requests.Get(request.Token,Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(() => Requests.Get(request.Token, Ct));
         using var scope = await As(other);
         var recipient = scope.ServiceProvider.GetRequiredService<ISettlementRequestService>();
-        Assert.Equal(SettlementRequestStatus.Open, (await recipient.Get(request.Token,Ct)).Status);
-        Assert.Equal(SettlementRequestStatus.Paid, (await recipient.RecordRepayment(request.Token,Ct)).Status);
-        await Assert.ThrowsAsync<ConflictException>(()=>recipient.RecordRepayment(request.Token,Ct));
+        Assert.Equal(SettlementRequestStatus.Open, (await recipient.Get(request.Token, Ct)).Status);
+        Assert.Equal(SettlementRequestStatus.Paid, (await recipient.RecordRepayment(request.Token, Ct)).Status);
+        await Assert.ThrowsAsync<ConflictException>(() => recipient.RecordRepayment(request.Token, Ct));
         Assert.Equal(80, Assert.Single(await DbContext.Set<Transfer>().ToListAsync(Ct)).Amount);
     }
 
@@ -55,11 +58,11 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     {
         var (group, other) = await Debt();
         var request = await Requests.CreateForGroup(group, new CreateSettlementRequest { RecipientUserId = other.Id, Amount = 50 }, Ct);
-        Assert.Equal(SettlementRequestStatus.Cancelled, (await Requests.Cancel(request.Token,Ct)).Status);
+        Assert.Equal(SettlementRequestStatus.Cancelled, (await Requests.Cancel(request.Token, Ct)).Status);
         using var scope = await As(other);
         var recipient = scope.ServiceProvider.GetRequiredService<ISettlementRequestService>();
-        Assert.Equal(SettlementRequestStatus.Cancelled, (await recipient.Get(request.Token,Ct)).Status);
-        await Assert.ThrowsAsync<ConflictException>(()=>recipient.RecordRepayment(request.Token,Ct));
+        Assert.Equal(SettlementRequestStatus.Cancelled, (await recipient.Get(request.Token, Ct)).Status);
+        await Assert.ThrowsAsync<ConflictException>(() => recipient.RecordRepayment(request.Token, Ct));
         Assert.Empty(await DbContext.Set<Transfer>().ToListAsync(Ct));
     }
 
@@ -70,12 +73,15 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         var request = await Requests.CreateForGroup(group, new CreateSettlementRequest { RecipientUserId = other.Id, Amount = 50 }, Ct);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group, Name = "Another dinner", Amount = 20, DateTime = DateTimeOffset.UtcNow
+            GroupId = group,
+            Name = "Another dinner",
+            Amount = 20,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         using var scope = await As(other);
         var recipient = scope.ServiceProvider.GetRequiredService<ISettlementRequestService>();
-        Assert.Equal(SettlementRequestStatus.Stale, (await recipient.Get(request.Token,Ct)).Status);
-        await Assert.ThrowsAsync<ConflictException>(()=>recipient.RecordRepayment(request.Token,Ct));
+        Assert.Equal(SettlementRequestStatus.Stale, (await recipient.Get(request.Token, Ct)).Status);
+        await Assert.ThrowsAsync<ConflictException>(() => recipient.RecordRepayment(request.Token, Ct));
     }
 
     [Fact]
@@ -86,26 +92,36 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         await JoinGroup(group.Id, other);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "August", Amount = 100,
+            GroupId = group.Id,
+            Name = "August",
+            Amount = 100,
             DateTime = new DateTimeOffset(2026, 8, 20, 12, 0, 0, TimeSpan.Zero)
         }, Ct);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "September", Amount = 80, PaidByUserId = other.Id,
+            GroupId = group.Id,
+            Name = "September",
+            Amount = 80,
+            PaidByUserId = other.Id,
             DateTime = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero)
         }, Ct);
         var day = new DateOnly(2026, 8, 31);
         var request = await Requests.CreateForGroup(group.Id, new CreateSettlementRequest
         {
-            RecipientUserId = other.Id, Amount = 50, Through = day, UtcOffset = -240
+            RecipientUserId = other.Id,
+            Amount = 50,
+            Through = day,
+            UtcOffset = -240
         }, Ct);
         Assert.Equal(day, request.Through);
         Assert.Equal(50, Assert.Single((await DbContext.Set<SettlementRequest>()
-            .Include(row=>row.Groups).SingleAsync(Ct)).Groups).DebtAtCreation);
+            .Include(row => row.Groups).SingleAsync(Ct)).Groups).DebtAtCreation);
         // Later spending does not alter the requested period.
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "October", Amount = 40,
+            GroupId = group.Id,
+            Name = "October",
+            Amount = 40,
             DateTime = new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero)
         }, Ct);
         using var scope = await As(other);
@@ -123,6 +139,6 @@ public class SettlementRequestTest(ApiTestFixture fixture) : ApiUnitTest(fixture
         await GetService<ISettlementService>().Settle(group, new SettleRequest { UserId = other.Id, Amount = 50 }, Ct);
         using var scope = await As(other);
         Assert.Equal(SettlementRequestStatus.Paid, (await scope.ServiceProvider.GetRequiredService<ISettlementRequestService>()
-            .Get(request.Token,Ct)).Status);
+            .Get(request.Token, Ct)).Status);
     }
 }

@@ -1,5 +1,5 @@
 using GroupSplit.Shared;
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using GroupSplit.API.Services;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;

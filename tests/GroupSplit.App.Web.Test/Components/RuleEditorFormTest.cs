@@ -320,7 +320,9 @@ public class RuleEditorFormTest : ComponentTest
         {
             Percentages = new Dictionary<Guid, decimal>
             {
-                [Alice.Id] = 33.33m, [Bob.Id] = 33.33m, [Carol.Id] = 33.34m
+                [Alice.Id] = 33.33m,
+                [Bob.Id] = 33.33m,
+                [Carol.Id] = 33.34m
             }
         });
 

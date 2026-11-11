@@ -37,9 +37,9 @@ public sealed class PushNotificationQueue(AppDbContext db, IBackgroundJobQueue j
         if (PushNotificationKinds.Category(kind) != PushNotificationCategory.StaffSupport)
             throw new ArgumentOutOfRangeException(nameof(kind));
         var users = from member in db.Set<StaffMember>()
-            join user in db.Set<User>() on member.UserId equals user.Id
-            where member.Active && user.Kind == UserKind.Account && user.Id != actorId
-            select user.Id;
+                    join user in db.Set<User>() on member.UserId equals user.Id
+                    where member.Active && user.Kind == UserKind.Account && user.Id != actorId
+                    select user.Id;
         return Enqueue(kind, Guid.Empty, ticketId, users, ct);
     }
 

@@ -369,8 +369,14 @@ public sealed class ConfirmCommandTests : IDisposable
     {
         _api.Returns($"/api/transactions/{Thing}", new
         {
-            id = Thing, name = "Dinner", amount = 42.50m, dateTime = DateTimeOffset.UtcNow,
-            groupId = Group, groupName = "The flat", paidByUserId = Omar, paidByUserName = "Omar"
+            id = Thing,
+            name = "Dinner",
+            amount = 42.50m,
+            dateTime = DateTimeOffset.UtcNow,
+            groupId = Group,
+            groupName = "The flat",
+            paidByUserId = Omar,
+            paidByUserName = "Omar"
         });
 
         var prompt = await Cli.RunAsync(
@@ -427,35 +433,63 @@ public sealed class ConfirmCommandTests : IDisposable
 
     private static object Connection(Guid id) => new
     {
-        id, provider = "plaid", institutionName = "Monzo", status = "Active",
-        linkedAt = DateTimeOffset.UtcNow.AddDays(-30), lastSyncedAt = DateTimeOffset.UtcNow,
+        id,
+        provider = "plaid",
+        institutionName = "Monzo",
+        status = "Active",
+        linkedAt = DateTimeOffset.UtcNow.AddDays(-30),
+        lastSyncedAt = DateTimeOffset.UtcNow,
         accounts = Array.Empty<object>()
     };
 
     private static object Member(Guid id, string name) => new
     {
-        id, firstName = name, lastName = "Haddad", email = $"{name.ToLowerInvariant()}@example.com"
+        id,
+        firstName = name,
+        lastName = "Haddad",
+        email = $"{name.ToLowerInvariant()}@example.com"
     };
 
     private static object AGroup() => new { id = Group, name = "The flat", memberCount = 3, isArchive = false };
 
     private static object Guest(string token) => new
     {
-        userId = Pat, groupId = Group, groupName = "Ski trip", name = "Pat",
-        addedByUserName = "Daniel", addedAt = DateTimeOffset.UtcNow,
-        hasLink = true, token, linkIssuedByUserName = "Daniel", linkIssuedAt = DateTimeOffset.UtcNow
+        userId = Pat,
+        groupId = Group,
+        groupName = "Ski trip",
+        name = "Pat",
+        addedByUserName = "Daniel",
+        addedAt = DateTimeOffset.UtcNow,
+        hasLink = true,
+        token,
+        linkIssuedByUserName = "Daniel",
+        linkIssuedAt = DateTimeOffset.UtcNow
     };
 
     private static object Claim() => new
     {
-        invitationId = Guid.NewGuid(), groupId = Group, groupName = "The flat", memberCount = 2,
-        name = "Omar", invitedByUserName = "Anabel", invitedAt = DateTimeOffset.UtcNow, alreadyAMember = false
+        invitationId = Guid.NewGuid(),
+        groupId = Group,
+        groupName = "The flat",
+        memberCount = 2,
+        name = "Omar",
+        invitedByUserName = "Anabel",
+        invitedAt = DateTimeOffset.UtcNow,
+        alreadyAMember = false
     };
 
     private static object DividingBill() => new
     {
-        id = Other, expenseId = Thing, subtotal = 100m, tax = 6m, tip = 0m, total = 106m,
-        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true, canEdit = true,
+        id = Other,
+        expenseId = Thing,
+        subtotal = 100m,
+        tax = 6m,
+        tip = 0m,
+        total = 106m,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = true,
+        canEdit = true,
         items = new[]
         {
             new
@@ -469,18 +503,30 @@ public sealed class ConfirmCommandTests : IDisposable
 
     private static object Attachment(Guid id, Guid? expenseId, Guid? bankTransactionId) => new
     {
-        id, expenseId, bankTransactionId, receiptId = (Guid?)null,
-        fileName = "receipt.pdf", contentType = "application/pdf", length = 3, uploadedAt = DateTimeOffset.UtcNow
+        id,
+        expenseId,
+        bankTransactionId,
+        receiptId = (Guid?)null,
+        fileName = "receipt.pdf",
+        contentType = "application/pdf",
+        length = 3,
+        uploadedAt = DateTimeOffset.UtcNow
     };
 
     private static object Merchant() => new
     {
-        id = Thing, name = "Lidl", logoUrl = (string?)null, firstSeenAt = DateTimeOffset.UtcNow, transactionCount = 12
+        id = Thing,
+        name = "Lidl",
+        logoUrl = (string?)null,
+        firstSeenAt = DateTimeOffset.UtcNow,
+        transactionCount = 12
     };
 
     private static object Plan(decimal owed) => new
     {
-        net = -owed, owedToYouTotal = 0m, youOweTotal = owed,
+        net = -owed,
+        owedToYouTotal = 0m,
+        youOweTotal = owed,
         youPay = new object[]
         {
             new

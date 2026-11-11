@@ -35,8 +35,13 @@ public sealed class PushDeliveryTest : IAsyncLifetime
         var group = new Data.Entities.Group { Name = "Trip" };
         if (scenario != "departed") group.Users.Add(user);
         db.AddRange(user, group);
-        var device = new PushDevice { UserId = user.Id, Token = "token", ExpensesEnabled = scenario != "disabled",
-            UpdatedAt = DateTimeOffset.UtcNow };
+        var device = new PushDevice
+        {
+            UserId = user.Id,
+            Token = "token",
+            ExpensesEnabled = scenario != "disabled",
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
         if (scenario == "stale") device.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-31);
         if (scenario == "deleted") user.Kind = UserKind.Deleted;
         var delivery = new SendExpensePush(device.Id,

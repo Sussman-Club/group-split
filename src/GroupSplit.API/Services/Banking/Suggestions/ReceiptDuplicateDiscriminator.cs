@@ -27,7 +27,8 @@ public sealed class ReceiptDuplicateDiscriminator(IDecisionClient decisions, Hyb
     };
     private static readonly HybridCacheEntryOptions CacheOptions = new()
     {
-        Expiration = TimeSpan.FromDays(1), LocalCacheExpiration = TimeSpan.FromDays(1)
+        Expiration = TimeSpan.FromDays(1),
+        LocalCacheExpiration = TimeSpan.FromDays(1)
     };
     private sealed record CachedResult(bool Duplicate);
     private sealed class DecisionFailedException : Exception;
@@ -38,7 +39,8 @@ public sealed class ReceiptDuplicateDiscriminator(IDecisionClient decisions, Hyb
         if (!settings.IsConfigured || first.Items.Count is 0 or > 100 || second.Items.Count is 0 or > 100) return false;
         var state = new
         {
-            first = Facts(first), second = Facts(second)
+            first = Facts(first),
+            second = Facts(second)
         };
         var input = JsonSerializer.SerializeToUtf8Bytes(new { userId, state, settings.Deployment, Instructions });
         var key = "receipt-duplicate:" + Convert.ToHexString(SHA256.HashData(input));
@@ -68,7 +70,13 @@ public sealed class ReceiptDuplicateDiscriminator(IDecisionClient decisions, Hyb
 
     private static object Facts(Receipt receipt) => new
     {
-        receipt.MerchantName, receipt.PurchaseDate, receipt.Currency, receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total,
+        receipt.MerchantName,
+        receipt.PurchaseDate,
+        receipt.Currency,
+        receipt.Subtotal,
+        receipt.Tax,
+        receipt.Tip,
+        receipt.Total,
         items = receipt.Items.OrderBy(item => item.Position).Take(100).Select(item => new
         { item.Name, item.Quantity, item.UnitPrice, item.TotalPrice }).ToArray()
     };

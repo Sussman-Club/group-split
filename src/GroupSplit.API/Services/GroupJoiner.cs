@@ -128,10 +128,10 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
             }
             catch (DbUpdateException exception)
                 when (exception.InnerException is PostgresException
-                      {
-                          SqlState: PostgresErrorCodes.UniqueViolation,
-                          ConstraintName: "PK_GroupUser"
-                      })
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "PK_GroupUser"
+                })
             {
                 // Two follows of one link in the same instant: the other request's insert is
                 // what put them there, and following a link twice is not an error. Only the

@@ -187,14 +187,25 @@ public sealed class CurrencyCommandTests : IDisposable
 
     private static object Transaction(string name, decimal amount, string currency) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount, currency,
-        dateTime = DateTimeOffset.UtcNow, groupId = (Guid?)null, groupName = (string?)null,
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-        categoryId = (Guid?)null, category = (string?)null
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount,
+        currency,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId = (Guid?)null,
+        groupName = (string?)null,
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Anabel",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 
     private static object Page(params object[] items) => new
     {
-        items, page = 1, pageSize = 25, totalCount = items.Length
+        items,
+        page = 1,
+        pageSize = 25,
+        totalCount = items.Length
     };
 }

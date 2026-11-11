@@ -58,8 +58,11 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         DbContext.AddRange(group, outsider);
         PushDevice Device(UserEntity user, string token, bool enabled) => new()
         {
-            UserId = user.Id, Token = token, UpdatedAt = DateTimeOffset.UtcNow,
-            ExpensesEnabled = enabled, SettlementsEnabled = enabled,
+            UserId = user.Id,
+            Token = token,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ExpensesEnabled = enabled,
+            SettlementsEnabled = enabled,
             InvitationsEnabled = enabled
         };
         var expected = Device(member, "recipient", true);
@@ -85,8 +88,15 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
     {
         var user = GetService<ICurrentUser>().User;
         var group = new GroupEntity { Name = "Trip", Users = { user } };
-        var device = new PushDevice { UserId = user.Id, Token = "token", UpdatedAt = DateTimeOffset.UtcNow,
-            ExpensesEnabled = true, SettlementsEnabled = true, InvitationsEnabled = true };
+        var device = new PushDevice
+        {
+            UserId = user.Id,
+            Token = "token",
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ExpensesEnabled = true,
+            SettlementsEnabled = true,
+            InvitationsEnabled = true
+        };
         DbContext.AddRange(group, device);
         await DbContext.SaveChangesAsync(Ct);
         var job = new SendPushNotification(device.Id, user.Id, group.Id, Guid.NewGuid(),
@@ -112,14 +122,23 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         var actor = GetService<ICurrentUser>().User;
         var recipient = new UserEntity { FirstName = "Recipient" };
         var group = new GroupEntity { Name = "Trip", Users = { actor, recipient } };
-        var device = new PushDevice { UserId = recipient.Id, Token = "token", UpdatedAt = DateTimeOffset.UtcNow,
-            ExpensesEnabled = true, SettlementsEnabled = true };
+        var device = new PushDevice
+        {
+            UserId = recipient.Id,
+            Token = "token",
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ExpensesEnabled = true,
+            SettlementsEnabled = true
+        };
         DbContext.AddRange(group, device);
         await DbContext.SaveChangesAsync(Ct);
         var expenses = GetService<ITransactionService>();
         var expense = await expenses.Create(new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "Lunch", Amount = 12, DateTime = DateTimeOffset.UtcNow
+            GroupId = group.Id,
+            Name = "Lunch",
+            Amount = 12,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         var update = (await expenses.GetUpdateModel(expense.Id, Ct))!;
         update.Name = "Renamed lunch";
@@ -140,11 +159,24 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         var recipient = GetService<ICurrentUser>().User;
         var requester = new UserEntity { FirstName = "Requester" };
         var group = new GroupEntity { Name = "Trip", Users = { requester, recipient } };
-        var payment = new SettlementRequest { Requester = requester, Recipient = recipient, Token = "opaque-token",
-            Currency = "USD", Amount = 1, CreatedAt = DateTimeOffset.UtcNow, ResolvedAt = DateTimeOffset.UtcNow };
+        var payment = new SettlementRequest
+        {
+            Requester = requester,
+            Recipient = recipient,
+            Token = "opaque-token",
+            Currency = "USD",
+            Amount = 1,
+            CreatedAt = DateTimeOffset.UtcNow,
+            ResolvedAt = DateTimeOffset.UtcNow
+        };
         payment.Groups.Add(new SettlementRequestGroup { Group = group, DebtAtCreation = 1, RequestedAmount = 1 });
-        var device = new PushDevice { UserId = recipient.Id, Token = "token", SettlementsEnabled = true,
-            UpdatedAt = DateTimeOffset.UtcNow };
+        var device = new PushDevice
+        {
+            UserId = recipient.Id,
+            Token = "token",
+            SettlementsEnabled = true,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
         DbContext.AddRange(group, payment, device);
         await DbContext.SaveChangesAsync(Ct);
         var sender = new Mock<IPushSender>();
@@ -159,13 +191,30 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
     {
         var owner = GetService<ICurrentUser>().User;
         var other = new UserEntity { FirstName = "Other" };
-        var bank = new BankConnection { User = owner, Provider = "test", ProviderItemId = "item",
-            InstitutionName = "Test bank", AccessTokenCiphertext = "encrypted", LinkedAt = DateTimeOffset.UtcNow,
-            Status = BankConnectionStatus.LoginRequired };
-        var device = new PushDevice { UserId = owner.Id, Token = "token", BankSyncIssuesEnabled = true,
-            UpdatedAt = DateTimeOffset.UtcNow };
-        var otherDevice = new PushDevice { UserId = other.Id, Token = "other-token", BankSyncIssuesEnabled = true,
-            UpdatedAt = DateTimeOffset.UtcNow };
+        var bank = new BankConnection
+        {
+            User = owner,
+            Provider = "test",
+            ProviderItemId = "item",
+            InstitutionName = "Test bank",
+            AccessTokenCiphertext = "encrypted",
+            LinkedAt = DateTimeOffset.UtcNow,
+            Status = BankConnectionStatus.LoginRequired
+        };
+        var device = new PushDevice
+        {
+            UserId = owner.Id,
+            Token = "token",
+            BankSyncIssuesEnabled = true,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        var otherDevice = new PushDevice
+        {
+            UserId = other.Id,
+            Token = "other-token",
+            BankSyncIssuesEnabled = true,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
         DbContext.AddRange(bank, other, device, otherDevice);
         await DbContext.SaveChangesAsync(Ct);
         await GetService<PushNotificationQueue>().ForBankIssue(owner.Id, bank.Id, Ct);

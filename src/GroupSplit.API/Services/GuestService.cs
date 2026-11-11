@@ -270,20 +270,20 @@ public sealed class GuestService(
         var issuedSince = GroupGuest.IssuedSince(now);
 
         return from guest in guests
-            let works = guest.Token != null && guest.LinkIssuedAt > issuedSince
-            select new GroupGuestResponse(
-                guest.ParticipantUserId,
-                guest.GroupId,
-                guest.Group.Name,
-                guest.Name,
-                guest.AddedBy == null ? null : guest.AddedBy.FirstName + " " + guest.AddedBy.LastName,
-                guest.AddedAt,
-                works,
-                works ? guest.Token : null,
-                guest.LinkIssuedBy == null ? null : guest.LinkIssuedBy.FirstName + " " + guest.LinkIssuedBy.LastName,
-                guest.LinkIssuedAt,
-                guest.LinkIssuedAt + GroupGuest.LinkLifetime,
-                guest.Token != null && !works);
+               let works = guest.Token != null && guest.LinkIssuedAt > issuedSince
+               select new GroupGuestResponse(
+                   guest.ParticipantUserId,
+                   guest.GroupId,
+                   guest.Group.Name,
+                   guest.Name,
+                   guest.AddedBy == null ? null : guest.AddedBy.FirstName + " " + guest.AddedBy.LastName,
+                   guest.AddedAt,
+                   works,
+                   works ? guest.Token : null,
+                   guest.LinkIssuedBy == null ? null : guest.LinkIssuedBy.FirstName + " " + guest.LinkIssuedBy.LastName,
+                   guest.LinkIssuedAt,
+                   guest.LinkIssuedAt + GroupGuest.LinkLifetime,
+                   guest.Token != null && !works);
     }
 
     /// <summary>

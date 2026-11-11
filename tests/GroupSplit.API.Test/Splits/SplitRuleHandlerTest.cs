@@ -71,7 +71,7 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = new EvenSplitRuleVersion();
 
-        var afterOmarJoins = Handler.Divide(ruleVersion, Spending(100.00m, Alice), [..Members, Guid.NewGuid()]);
+        var afterOmarJoins = Handler.Divide(ruleVersion, Spending(100.00m, Alice), [.. Members, Guid.NewGuid()]);
 
         Assert.Equal(4, afterOmarJoins.Count);
         Assert.Equal(25.00m, AmountFor(afterOmarJoins, Bob));
@@ -223,9 +223,9 @@ public class SplitRuleHandlerTest
 
             var evenly = SplitCalculator.Divide(
                 transaction.Amount - ruleVersion.FixedAmount, transaction.Payer,
-                [..rest.Select(member => new SplitWeight(member, 1))]);
+                [.. rest.Select(member => new SplitWeight(member, 1))]);
 
-            return [new SplitAmount(ruleVersion.FixedUserId, ruleVersion.FixedAmount), ..evenly];
+            return [new SplitAmount(ruleVersion.FixedUserId, ruleVersion.FixedAmount), .. evenly];
         }
 
         public string? Invalid(FixedThenEvenSplitRuleVersion ruleVersion) =>
@@ -334,7 +334,8 @@ public class SplitRuleHandlerTest
     {
         SplitRuleVersion ruleVersion = new FixedThenEvenSplitRuleVersion
         {
-            FixedUserId = Carol, FixedAmount = 1m
+            FixedUserId = Carol,
+            FixedAmount = 1m
         };
 
         var exception = Assert.Throws<InvalidOperationException>(
@@ -357,7 +358,8 @@ public class SplitRuleHandlerTest
         expense.Group = group;
         expense.Receipt = new Receipt
         {
-            Subtotal = 30.00m, Total = 30.00m,
+            Subtotal = 30.00m,
+            Total = 30.00m,
             Items = { new ReceiptItem
             {
                 Name = "Pizza", NormalizedName = "pizza", Position = 0, Quantity = 1,

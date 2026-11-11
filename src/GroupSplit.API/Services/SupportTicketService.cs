@@ -46,13 +46,26 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
         var title = string.IsNullOrWhiteSpace(request.Title) ? summary : request.Title.Trim();
         var classification = await classifier.ClassifyAsync(description, ct);
         var now = clock.GetUtcNow();
-        var ticket = new SupportTicket { ReporterUserId = reporterUserId, Type = classification.Type, Priority = classification.Priority, ClassificationNeedsReview = classification.NeedsReview,
-            Title = title, Description = description,
+        var ticket = new SupportTicket
+        {
+            ReporterUserId = reporterUserId,
+            Type = classification.Type,
+            Priority = classification.Priority,
+            ClassificationNeedsReview = classification.NeedsReview,
+            Title = title,
+            Description = description,
             ReproductionSteps = string.IsNullOrWhiteSpace(request.ReproductionSteps) ? null : request.ReproductionSteps.Trim(),
-            CreatedAt = now, UpdatedAt = now };
+            CreatedAt = now,
+            UpdatedAt = now
+        };
         db.Add(ticket);
-        db.Add(new SupportTicketStatusChange { TicketId = ticket.Id, ChangedByUserId = reporterUserId,
-            ToStatus = SupportTicketStatus.New, ChangedAt = now });
+        db.Add(new SupportTicketStatusChange
+        {
+            TicketId = ticket.Id,
+            ChangedByUserId = reporterUserId,
+            ToStatus = SupportTicketStatus.New,
+            ChangedAt = now
+        });
         StaffActivityService.Record(db, reporterUserId, "Tickets", ticket.Id, "Report submitted", now);
         await push.ForStaff(PushNotificationKind.StaffTicketCreated, ticket.Id, reporterUserId, ct);
         await db.SaveChangesAsync(ct);

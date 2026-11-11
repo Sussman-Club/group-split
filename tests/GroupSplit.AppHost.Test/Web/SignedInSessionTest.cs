@@ -78,8 +78,14 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await using var reopened = await Browser.NewContextAsync(ContextOptions());
         await reopened.AddCookiesAsync(saved.Select(cookie => new Cookie
         {
-            Name = cookie.Name, Value = cookie.Value, Domain = cookie.Domain, Path = cookie.Path,
-            Expires = cookie.Expires, HttpOnly = cookie.HttpOnly, Secure = cookie.Secure, SameSite = cookie.SameSite
+            Name = cookie.Name,
+            Value = cookie.Value,
+            Domain = cookie.Domain,
+            Path = cookie.Path,
+            Expires = cookie.Expires,
+            HttpOnly = cookie.HttpOnly,
+            Secure = cookie.Secure,
+            SameSite = cookie.SameSite
         }));
         var page = await reopened.NewPageAsync();
         await page.GotoAsync(Url("/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });

@@ -69,17 +69,17 @@ public class SettlePageTest : ComponentTest
 
     private static SettlementResponse Paid(string from, string to, bool byYou, string group,
         string? note = null, DateOnly? through = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        GroupName = group,
-        FromUserName = from,
-        ToUserName = to,
-        Amount = 10m,
-        DateTime = ThirdOfSeptember,
-        Description = note,
-        PaidByYou = byYou,
-        CoversThrough = through
-    };
+        {
+            Id = Guid.NewGuid(),
+            GroupName = group,
+            FromUserName = from,
+            ToUserName = to,
+            Amount = 10m,
+            DateTime = ThirdOfSeptember,
+            Description = note,
+            PaidByYou = byYou,
+            CoversThrough = through
+        };
 
     /// <summary>The page, and the provider its dialog renders into.</summary>
     private async Task<(IRenderedComponent<Settle> Page, IRenderedComponent<MudDialogProvider> Dialogs)> Open()

@@ -56,11 +56,11 @@ public static class WebAppExtensions
         public RouteGroupBuilder MapApiForwarder()
         {
             var group = app.MapGroup("/api");
-            
+
             group.RequireAuthorization();
             group.RefuseCrossSiteWrites();
 
-            group.MapForwarder("{*path}","https+http://api", new ForwarderRequestConfig(), b =>
+            group.MapForwarder("{*path}", "https+http://api", new ForwarderRequestConfig(), b =>
             {
                 b.AddRequestTransform(async requestTransformContext =>
                 {
@@ -98,7 +98,7 @@ public static class WebAppExtensions
                         new AuthenticationHeaderValue("Bearer", token.AccessToken.ToString());
                 });
             });
-            
+
             return group;
         }
 

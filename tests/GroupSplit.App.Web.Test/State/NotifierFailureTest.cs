@@ -88,7 +88,10 @@ public class NotifierFailureTest
 
                 return new TransactionResponse
                 {
-                    Id = Guid.NewGuid(), Name = row.Title, Amount = row.Amount, GroupId = request.GroupId
+                    Id = Guid.NewGuid(),
+                    Name = row.Title,
+                    Amount = row.Amount,
+                    GroupId = request.GroupId
                 };
             });
 

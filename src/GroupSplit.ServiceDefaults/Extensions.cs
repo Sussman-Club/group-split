@@ -145,7 +145,7 @@ public static class Extensions
             return builder;
         }
     }
-    
+
     extension(WebApplication app)
     {
         /// <summary>

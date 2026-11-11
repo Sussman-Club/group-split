@@ -111,7 +111,7 @@ public static class SplitCalculator
         decimal amount,
         Guid payerId,
         IEnumerable<Guid> participants) =>
-        Divide(amount, payerId, [..participants.Select(id => new SplitWeight(id, 1))]);
+        Divide(amount, payerId, [.. participants.Select(id => new SplitWeight(id, 1))]);
 
     private static int RemainderIndex(Guid payerId, IReadOnlyList<SplitWeight> weights)
     {

@@ -352,7 +352,9 @@ public class PageStateRefreshTest
 
         var done = await _groupsPage.CreateTransactionAsync(new CreateTransactionRequest
         {
-            GroupId = Trip, Name = "Museum", Amount = 30m
+            GroupId = Trip,
+            Name = "Museum",
+            Amount = 30m
         });
 
         Assert.True(done);
@@ -567,7 +569,9 @@ public class PageStateRefreshTest
 
         var done = await _expensesPage.CreateAsync(new CreateTransactionRequest
         {
-            GroupId = Trip, Name = "Museum", Amount = 30m
+            GroupId = Trip,
+            Name = "Museum",
+            Amount = 30m
         });
 
         Assert.True(done);

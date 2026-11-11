@@ -25,11 +25,14 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // The one the group was given, not one made here: a second is refused now.
         var itemized = await BillRuleOf(group.Id);
         var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
-            { GroupId = group.Id, Name = "Food", DefaultSplitRuleId = itemized.SplitRuleId }, Ct);
+        { GroupId = group.Id, Name = "Food", DefaultSplitRuleId = itemized.SplitRuleId }, Ct);
         var expense = await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Dinner", Amount = amount, DateTime = DateTimeOffset.UtcNow,
-            GroupId = group.Id, CategoryId = category.Id,
+            Name = "Dinner",
+            Amount = amount,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
+            CategoryId = category.Id,
             Splits = [new SplitInput { UserId = Self, Amount = amount }]
         }, Ct);
         var even = await Rule(group.Id, "Together", new EvenSplitRuleDto());
@@ -51,8 +54,12 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private static ReceiptItemInput Item(string name, decimal price, Guid? rule, decimal tax = 0) =>
         new() { Name = name, UnitPrice = price, TotalPrice = price, TaxAmount = tax, SplitRuleVersionId = rule };
     private static SaveReceiptRequest Bill(params ReceiptItemInput[] items) => new()
-    { Items = items, Subtotal = items.Sum(i => i.TotalPrice), Tax = items.Sum(i => i.TaxAmount),
-        Total = items.Sum(i => i.TotalPrice + i.TaxAmount) };
+    {
+        Items = items,
+        Subtotal = items.Sum(i => i.TotalPrice),
+        Tax = items.Sum(i => i.TaxAmount),
+        Total = items.Sum(i => i.TotalPrice + i.TaxAmount)
+    };
 
     [Fact]
     public async Task Departed_sole_recipient_keeps_bill_readable_but_cannot_be_divided()
@@ -106,7 +113,7 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // that matters here is the one the group can actually make -- the same even split,
         // now naming one person instead of the whole group.
         await Rules.Update(version!.SplitRuleId, new UpdateSplitRuleRequest
-            { Name = "Together", Definition = new EvenSplitRuleDto([Self]) }, Ct);
+        { Name = "Together", Definition = new EvenSplitRuleDto([Self]) }, Ct);
         DbContext.ChangeTracker.Clear();
         var preview = await Receipts.Preview(expense.Id, Ct);
         Assert.Equal(24m, preview.Shares.Single(s => s.UserId == other).Amount);
@@ -167,7 +174,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (expense, other, even, sole) = await Setup(239m);
         var mine = await Rule(expense.GroupId, "Mine", new SoleSplitRuleDto(Self));
         await Receipts.SaveForExpense(expense.Id, Bill(Item("Food", 100, mine.Id, 6), Item("Goods", 100, sole, 23))
-            with { Tip = 10, Total = 239 }, Ct);
+            with
+        { Tip = 10, Total = 239 }, Ct);
         var shares = (await Receipts.Preview(expense.Id, Ct)).Shares;
         Assert.Equal(111m, shares.Single(s => s.UserId == Self).Amount);
         Assert.Equal(128m, shares.Single(s => s.UserId == other).Amount);
@@ -178,7 +186,8 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var (expense, _, even, sole) = await Setup(0.07m);
         await Receipts.SaveForExpense(expense.Id, Bill(Item("A", .03m, even), Item("B", .03m, sole))
-            with { Tip = .01m, Total = .07m }, Ct);
+            with
+        { Tip = .01m, Total = .07m }, Ct);
         var before = await Receipts.Preview(expense.Id, Ct);
         DbContext.ChangeTracker.Clear();
         var after = await Receipts.Preview(expense.Id, Ct);
@@ -314,7 +323,9 @@ public class ItemizedRuleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var refused = await Assert.ThrowsAsync<ConflictException>(() => Rules.Create(new CreateSplitRuleRequest
         {
-            GroupId = group.Id, Name = "By items too", Definition = new ItemizedSplitRuleDto()
+            GroupId = group.Id,
+            Name = "By items too",
+            Definition = new ItemizedSplitRuleDto()
         }, Ct));
 
         Assert.Equal(ErrorCodes.SplitRuleBillIsProvisioned, refused.Code);

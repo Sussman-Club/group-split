@@ -84,11 +84,11 @@ public static class Extensions
 
             var connectionString = await appHost.Application.GetConnectionStringAsync("db",
                 TestContext.Current.CancellationToken);
-            
+
             var options = new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
                 .UseNpgsql(connectionString)
                 .Options;
-            
+
             return new PostgreSqlAppDbContext(options);
         }
     }

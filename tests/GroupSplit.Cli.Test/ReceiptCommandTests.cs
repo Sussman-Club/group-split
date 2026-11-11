@@ -349,25 +349,67 @@ public sealed class ReceiptCommandTests : IDisposable
     /// <summary>A saved bill read off a Costco receipt, with its tip and its lines.</summary>
     private static object Saved(decimal tip, params object[] items) => new
     {
-        id = Guid.NewGuid(), expenseId = Expense, subtotal = 12m, tax = .48m, tip, total = 12.48m + tip,
-        missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false, canEdit = true,
-        merchantName = "Costco", purchaseDate = "2026-09-30", items
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 12m,
+        tax = .48m,
+        tip,
+        total = 12.48m + tip,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = false,
+        canEdit = true,
+        merchantName = "Costco",
+        purchaseDate = "2026-09-30",
+        items
     };
 
     private static object Line(Guid id, string name, string normalizedName, decimal price, decimal tax,
         decimal? rate, bool? taxable) => new
+        {
+            id,
+            name,
+            normalizedName,
+            description = "AS PRINTED",
+            unitPrice = price,
+            quantity = 1m,
+            totalPrice = price,
+            taxAmount = tax,
+            taxRate = rate,
+            isTaxable = taxable,
+            splitRuleVersionId = (Guid?)null,
+            splitRuleName = (string?)null,
+            splitRule = (object?)null
+        };
+
+    private static object Bill(params object[] items) => new
     {
-        id, name, normalizedName, description = "AS PRINTED", unitPrice = price, quantity = 1m,
-        totalPrice = price, taxAmount = tax, taxRate = rate, isTaxable = taxable,
-        splitRuleVersionId = (Guid?)null, splitRuleName = (string?)null, splitRule = (object?)null
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 100m,
+        tax = 6m,
+        tip = 0m,
+        total = 106m,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = false,
+        canEdit = true,
+        items
     };
 
-    private static object Bill(params object[] items) => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
-        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = false,
-        canEdit = true, items };
-
     /// <summary>A bill the expense divides by, so changing it moves balances.</summary>
-    private static object Dividing() => new { id = Guid.NewGuid(), expenseId = Expense, subtotal = 100m,
-        tax = 6m, tip = 0m, total = 106m, missingRuleItemCount = 0, canDivide = true, dividesItsExpense = true,
-        canEdit = true, items = Array.Empty<object>() };
+    private static object Dividing() => new
+    {
+        id = Guid.NewGuid(),
+        expenseId = Expense,
+        subtotal = 100m,
+        tax = 6m,
+        tip = 0m,
+        total = 106m,
+        missingRuleItemCount = 0,
+        canDivide = true,
+        dividesItsExpense = true,
+        canEdit = true,
+        items = Array.Empty<object>()
+    };
 }

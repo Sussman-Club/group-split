@@ -71,8 +71,14 @@ public partial class AppDbContext
         foreach (var merchant in merchants)
         {
             if (existing.Concat(Set<MerchantAlias>().Local).Any(a => a.NormalizedName == merchant.NormalizedName && a.MerchantId == merchant.Id)) continue;
-            var alias = new MerchantAlias { MerchantId = merchant.Id, Merchant = merchant, Name = merchant.Name,
-                NormalizedName = merchant.NormalizedName, CreatedAt = DateTimeOffset.UtcNow };
+            var alias = new MerchantAlias
+            {
+                MerchantId = merchant.Id,
+                Merchant = merchant,
+                Name = merchant.Name,
+                NormalizedName = merchant.NormalizedName,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
             Add(alias);
             added.Add(alias);
         }

@@ -15,7 +15,10 @@ public sealed class SuggestionModelLimiter : IDisposable
         _limiter = PartitionedRateLimiter.Create<Guid, Guid>(userId =>
             RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = limit.PermitLimit, Window = limit.Window, QueueLimit = 0, AutoReplenishment = true
+                PermitLimit = limit.PermitLimit,
+                Window = limit.Window,
+                QueueLimit = 0,
+                AutoReplenishment = true
             }));
     }
 

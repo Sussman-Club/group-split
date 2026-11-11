@@ -33,7 +33,9 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     private static SaveReceiptRequest Bill(params ReceiptItemInput[] items) => new()
     {
-        Items = items, Subtotal = items.Sum(i => i.TotalPrice), Tax = 0m,
+        Items = items,
+        Subtotal = items.Sum(i => i.TotalPrice),
+        Tax = 0m,
         Total = items.Sum(i => i.TotalPrice)
     };
 
@@ -44,18 +46,23 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var other = await CreateNewUser();
         await JoinGroup(group.Id, other);
         var mine = await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Mine", Definition = new SoleSplitRuleDto(Self) }, Ct);
+        { GroupId = group.Id, Name = "Mine", Definition = new SoleSplitRuleDto(Self) }, Ct);
         var theirs = await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Theirs", Definition = new SoleSplitRuleDto(other.Id) }, Ct);
+        { GroupId = group.Id, Name = "Theirs", Definition = new SoleSplitRuleDto(other.Id) }, Ct);
         var itemized = await DbContext.Set<ItemizedSplitRuleVersion>().Include(version => version.SplitRule)
             .SingleAsync(version => version.SplitRule.Group.Id == group.Id && version.SupersededAt == null, Ct);
         var request = new CreateTransactionRequest
         {
-            GroupId = group.Id, Name = "Dinner from receipt", Amount = 32.25m, DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
+            Name = "Dinner from receipt",
+            Amount = 32.25m,
+            DateTime = DateTimeOffset.UtcNow,
             SplitRuleId = itemized.SplitRule.Id,
             Receipt = new SaveReceiptRequest
             {
-                Subtotal = 30m, Tax = 2.25m, Total = 32.25m,
+                Subtotal = 30m,
+                Tax = 2.25m,
+                Total = 32.25m,
                 Items = [Item("My meal", 10m, mine.Current!.Id) with { TaxRate = 7.5m },
                     Item("Their meal", 20m, theirs.Current!.Id) with { TaxRate = 7.5m }]
             }
@@ -81,7 +88,9 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var before = await DbContext.Set<Expense>().CountAsync(Ct);
         await Assert.ThrowsAsync<UnprocessableException>(async () => await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Invalid receipt", Amount = 30m, DateTime = DateTimeOffset.UtcNow,
+            Name = "Invalid receipt",
+            Amount = 30m,
+            DateTime = DateTimeOffset.UtcNow,
             Receipt = Bill(Item("Meal", 20m, null))
         }, Ct));
         Assert.Equal(before, await DbContext.Set<Expense>().CountAsync(Ct));
@@ -93,18 +102,24 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = await Groups.CreateGroup(new CreateGroupRequest { Name = "Complex receipt" }, Ct);
         await JoinGroup(group.Id, await CreateNewUser());
         var even = await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Together", Definition = new EvenSplitRuleDto() }, Ct);
+        { GroupId = group.Id, Name = "Together", Definition = new EvenSplitRuleDto() }, Ct);
         var itemized = await DbContext.Set<ItemizedSplitRuleVersion>().Include(version => version.SplitRule)
             .SingleAsync(version => version.SplitRule.Group.Id == group.Id && version.SupersededAt == null, Ct);
         ReceiptItemInput Taxed(string name, decimal price, decimal rate) =>
             Item(name, price, even.Current!.Id) with { TaxRate = rate, IsTaxable = true };
         var request = new CreateTransactionRequest
         {
-            Name = "Mixed grocery receipt", GroupId = group.Id, Amount = 53.78m,
-            DateTime = DateTimeOffset.UtcNow, SplitRuleId = itemized.SplitRule.Id,
+            Name = "Mixed grocery receipt",
+            GroupId = group.Id,
+            Amount = 53.78m,
+            DateTime = DateTimeOffset.UtcNow,
+            SplitRuleId = itemized.SplitRule.Id,
             Receipt = new SaveReceiptRequest
             {
-                Subtotal = 43.23m, Tax = 2.55m, Tip = 8m, Total = 53.78m,
+                Subtotal = 43.23m,
+                Tax = 2.55m,
+                Tip = 8m,
+                Total = 53.78m,
                 Items = [Taxed("Milk", 4m, 7.5m), Taxed("Bread", 3m, 7.5m), Taxed("Apples", 3m, 7.5m),
                     Item("Weighted produce", 8.24m, even.Current!.Id) with
                         { UnitPrice = 5.99m, Quantity = 1.375m, IsTaxable = false },
@@ -136,12 +151,15 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var category = await CreateCategory(group.Id, "Food", divides ?? new ItemizedSplitRuleDto());
         var expense = await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Dinner", Amount = 48m, DateTime = DateTimeOffset.UtcNow,
-            GroupId = group.Id, CategoryId = category,
+            Name = "Dinner",
+            Amount = 48m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
+            CategoryId = category,
             Splits = [new SplitInput { UserId = Self, Amount = 48m }]
         }, Ct);
         var even = await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Together", Definition = new EvenSplitRuleDto() }, Ct);
+        { GroupId = group.Id, Name = "Together", Definition = new EvenSplitRuleDto() }, Ct);
         return (expense, group.Id, even.Current!.Id);
     }
 
@@ -153,10 +171,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Marking_a_previously_taxed_line_exempt_clears_its_old_tax_before_allocation()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Receipt", Amount = 21m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Receipt", Amount = 21m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 20m, Tax = 1m, Total = 21m,
+            Subtotal = 20m,
+            Tax = 1m,
+            Total = 21m,
             Items = [
                 new ReceiptItemInput { Name = "Now exempt", UnitPrice = 10m, TotalPrice = 10m, TaxAmount = .5m, IsTaxable = false },
                 new ReceiptItemInput { Name = "Taxable", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = true }]
@@ -169,7 +189,7 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_personal_expense_keeps_an_itemized_receipt_without_dividing()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
         var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m, null)), Ct);
         var response = await Receipts.ResponseFor(bill, ct: Ct);
@@ -187,7 +207,7 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_receipt_persists_source_metadata_and_signed_coupon_lines()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
@@ -213,7 +233,8 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         var updated = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 10m, Total = 10m,
+            Subtotal = 10m,
+            Total = 10m,
             Items = [
                 new ReceiptItemInput { Id = response.Items[0].Id, Name = "Coffee",
                     UnitPrice = 12m, TotalPrice = 12m, IsTaxable = false },
@@ -226,10 +247,11 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Two_small_coupons_remain_distinct_negative_lines()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = .01m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = .01m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = .01m, Total = .01m,
+            Subtotal = .01m,
+            Total = .01m,
             Items = [Item("A", .01m, null), Item("B", .01m, null), Item("C", .01m, null),
                 Item("Coupon A", -.01m, null), Item("Coupon B", -.01m, null)]
         }, Ct);
@@ -245,12 +267,15 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (expense, group, even) = await AnExpense();
         var mine = (await Rules.Create(new CreateSplitRuleRequest
         {
-            GroupId = group, Name = "My coupon", Definition = new SoleSplitRuleDto(Self)
+            GroupId = group,
+            Name = "My coupon",
+            Definition = new SoleSplitRuleDto(Self)
         }, Ct)).Current!.Id;
 
         var bill = await Receipts.SaveForExpense(expense.Id,
             Bill(Item("Dinner", 49m, even), Item("Coupon", -2m, mine), Item("Free sample", 0m, even))
-                with { Tip = 1m, Total = 48m }, Ct);
+                with
+            { Tip = 1m, Total = 48m }, Ct);
         var preview = await Receipts.Preview(expense.Id, Ct);
 
         Assert.Equal(3, bill.Items.Count);
@@ -266,10 +291,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var subtotal = (decimal)first + (decimal)second;
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Receipt", Amount = subtotal + (decimal)tax, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Receipt", Amount = subtotal + (decimal)tax, DateTime = DateTimeOffset.UtcNow }, Ct);
         var request = new SaveReceiptRequest
         {
-            Subtotal = subtotal, Tax = (decimal)tax, Total = subtotal + (decimal)tax,
+            Subtotal = subtotal,
+            Tax = (decimal)tax,
+            Total = subtotal + (decimal)tax,
             Items = [new ReceiptItemInput { Name = "First", UnitPrice = (decimal)first, TotalPrice = (decimal)first, IsTaxable = true },
                 new ReceiptItemInput { Name = "Second", UnitPrice = (decimal)second, TotalPrice = (decimal)second, IsTaxable = true },
                 Item("Free", 0m, null)]
@@ -281,11 +308,18 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.Equal((decimal)tax, bill.Items.Sum(item => item.TaxAmount));
         var savedAgain = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = subtotal, Tax = (decimal)tax, Total = subtotal + (decimal)tax,
+            Subtotal = subtotal,
+            Tax = (decimal)tax,
+            Total = subtotal + (decimal)tax,
             Items = bill.Items.Select(item => new ReceiptItemInput
             {
-                Id = item.Id, Name = item.Name, UnitPrice = item.UnitPrice,
-                Quantity = item.Quantity, TotalPrice = item.TotalPrice, TaxAmount = item.TaxAmount, IsTaxable = item.IsTaxable
+                Id = item.Id,
+                Name = item.Name,
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.TotalPrice,
+                TaxAmount = item.TaxAmount,
+                IsTaxable = item.IsTaxable
             }).ToArray()
         }, Ct);
         Assert.Equal((decimal)tax, savedAgain.Items.Sum(item => item.TaxAmount));
@@ -295,10 +329,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Extracted_tax_is_kept_and_only_missing_tax_on_identified_taxable_items_is_spread()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Receipt", Amount = 32m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Receipt", Amount = 32m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 30m, Tax = 2m, Total = 32m,
+            Subtotal = 30m,
+            Tax = 2m,
+            Total = 32m,
             Items = [
                 new ReceiptItemInput { Name = "Printed", UnitPrice = 10m, TotalPrice = 10m,
                     TaxAmount = .80m, TaxRate = 10m, IsTaxable = true },
@@ -316,10 +352,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Tax_rates_apply_to_signed_lines_and_leave_exempt_items_untaxed()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = 16.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = 16.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 15m, Tax = 1.50m, Total = 16.50m,
+            Subtotal = 15m,
+            Tax = 1.50m,
+            Total = 16.50m,
             Items = [
                 new ReceiptItemInput { Name = "Taxed", UnitPrice = 10m, TotalPrice = 10m,
                     TaxRate = 20m, IsTaxable = true },
@@ -342,10 +380,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_tax_flag_on_one_line_keeps_the_other_lines_reviewed_tax()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = 21.80m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = 21.80m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 20m, Tax = 1.80m, Total = 21.80m,
+            Subtotal = 20m,
+            Tax = 1.80m,
+            Total = 21.80m,
             Items = [
                 new ReceiptItemInput { Name = "Food", UnitPrice = 10m, TotalPrice = 10m,
                     TaxAmount = .80m, IsTaxable = true },
@@ -365,10 +405,12 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Per_line_rate_rounding_settles_on_the_printed_tax()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = 2.31m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = 2.31m, DateTime = DateTimeOffset.UtcNow }, Ct);
         var bill = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {
-            Subtotal = 2.10m, Tax = .21m, Total = 2.31m,
+            Subtotal = 2.10m,
+            Tax = .21m,
+            Total = 2.31m,
             Items = [
                 new ReceiptItemInput { Name = "A", UnitPrice = 1.05m, TotalPrice = 1.05m, TaxRate = 10m },
                 new ReceiptItemInput { Name = "B", UnitPrice = 1.05m, TotalPrice = 1.05m, TaxRate = 10m }]
@@ -382,12 +424,14 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_rated_bill_whose_tax_is_off_by_more_than_rounding_is_refused()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Shopping", Amount = 11.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Shopping", Amount = 11.50m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
         var refusal = await Assert.ThrowsAsync<UnprocessableException>(() =>
             Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
             {
-                Subtotal = 10m, Tax = 1.50m, Total = 11.50m,
+                Subtotal = 10m,
+                Tax = 1.50m,
+                Total = 11.50m,
                 Items = [new ReceiptItemInput { Name = "A", UnitPrice = 10m, TotalPrice = 10m, TaxRate = 10m }]
             }, Ct));
 
@@ -404,12 +448,16 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (expense, group, _) = await AnExpense();
         var mine = (await Rules.Create(new CreateSplitRuleRequest
         {
-            GroupId = group, Name = "My coupon", Definition = new SoleSplitRuleDto(Self)
+            GroupId = group,
+            Name = "My coupon",
+            Definition = new SoleSplitRuleDto(Self)
         }, Ct)).Current!.Id;
         var other = (await GetService<IGroupParticipants>().IdsOf(group, Ct)).Single(id => id != Self);
         var theirs = (await Rules.Create(new CreateSplitRuleRequest
         {
-            GroupId = group, Name = "Theirs", Definition = new SoleSplitRuleDto(other)
+            GroupId = group,
+            Name = "Theirs",
+            Definition = new SoleSplitRuleDto(other)
         }, Ct)).Current!.Id;
 
         await Receipts.SaveForExpense(expense.Id,
@@ -683,7 +731,9 @@ public class ReceiptServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             .SingleAsync(Ct);
         var sole = (await Rules.Create(new CreateSplitRuleRequest
         {
-            GroupId = group, Name = "Other only", Definition = new SoleSplitRuleDto(other)
+            GroupId = group,
+            Name = "Other only",
+            Definition = new SoleSplitRuleDto(other)
         }, Ct)).Current!.Id;
 
         var bill = await Receipts.SaveForExpense(expense.Id, Bill(

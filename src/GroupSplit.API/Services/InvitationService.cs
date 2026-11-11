@@ -381,10 +381,10 @@ public sealed class InvitationService(
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException
-                  {
-                      SqlState: PostgresErrorCodes.UniqueViolation,
-                      ConstraintName: "IX_SplitRule_GroupId_Name"
-                  })
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_SplitRule_GroupId_Name"
+            })
         {
             context.StartOver(userContext.User);
 

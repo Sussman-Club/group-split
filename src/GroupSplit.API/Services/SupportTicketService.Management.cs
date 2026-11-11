@@ -44,8 +44,19 @@ public sealed partial class SupportTicketService
             _ => throw InvalidFields()
         };
         var rows = await ordered.Skip(filter.Page * PageSize).Take(PageSize + 1)
-            .Select(t => new { t.Id, t.ReporterUserId, t.AssignedUserId, t.Type, t.Status, t.Priority,
-                t.ClassificationNeedsReview, t.Title, t.CreatedAt, t.UpdatedAt }).ToListAsync(ct);
+            .Select(t => new
+            {
+                t.Id,
+                t.ReporterUserId,
+                t.AssignedUserId,
+                t.Type,
+                t.Status,
+                t.Priority,
+                t.ClassificationNeedsReview,
+                t.Title,
+                t.CreatedAt,
+                t.UpdatedAt
+            }).ToListAsync(ct);
         var names = await Names(rows.SelectMany(t => new[] { t.ReporterUserId, t.AssignedUserId ?? Guid.Empty }), ct);
         return new(rows.Take(PageSize).Select(t => new SupportTicketSummary(t.Id, t.ReporterUserId, t.AssignedUserId,
             t.Type.ToString(), t.Status.ToString(), t.Priority.ToString(), t.ClassificationNeedsReview,
@@ -70,8 +81,11 @@ public sealed partial class SupportTicketService
         foreach (var ticket in rows)
             ApplyUpdate(ticket, new UpdateSupportTicketRequest
             {
-                Type = ticket.Type.ToString(), Priority = ticket.Priority.ToString(), Status = request.Status ?? ticket.Status.ToString(),
-                ClassificationNeedsReview = ticket.ClassificationNeedsReview, ExpectedUpdatedAt = expected[ticket.Id]
+                Type = ticket.Type.ToString(),
+                Priority = ticket.Priority.ToString(),
+                Status = request.Status ?? ticket.Status.ToString(),
+                ClassificationNeedsReview = ticket.ClassificationNeedsReview,
+                ExpectedUpdatedAt = expected[ticket.Id]
             }, actorUserId, request.ChangeAssignment ? request.AssignedUserId : ticket.AssignedUserId);
         await SaveTicketChanges(ct);
     }
@@ -126,8 +140,11 @@ public sealed partial class SupportTicketService
     private async Task<SupportTicketResponse> DescribeWithNames(SupportTicket ticket, CancellationToken ct)
     {
         var names = await Names([ticket.ReporterUserId, ticket.AssignedUserId ?? Guid.Empty], ct);
-        return Describe(ticket) with { ReporterName = names.GetValueOrDefault(ticket.ReporterUserId, "Deleted account"),
-            AssignedUserName = ticket.AssignedUserId is { } id ? names.GetValueOrDefault(id, "Deleted account") : null };
+        return Describe(ticket) with
+        {
+            ReporterName = names.GetValueOrDefault(ticket.ReporterUserId, "Deleted account"),
+            AssignedUserName = ticket.AssignedUserId is { } id ? names.GetValueOrDefault(id, "Deleted account") : null
+        };
     }
 
     private static ValidationException InvalidFields() => new(ErrorCodes.InvalidSupportTicket, "Check the ticket fields and filters.");

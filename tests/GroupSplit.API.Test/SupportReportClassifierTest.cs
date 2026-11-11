@@ -64,6 +64,8 @@ public class SupportReportClassifierTest
     private static SupportReportClassifier Create(IDecisionClient decisions) => new(decisions,
         Options.Create(new FilingSuggestionOptions
         {
-            Endpoint = new Uri("https://classifier.example/"), Key = "test", Deployment = "test"
+            Endpoint = new Uri("https://classifier.example/"),
+            Key = "test",
+            Deployment = "test"
         }), NullLogger<SupportReportClassifier>.Instance);
 }

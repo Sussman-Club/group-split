@@ -51,8 +51,12 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         _modelCallLimit = 1;
         var (group, _) = await Home();
         _model.Answer("Home · Groceries", .9);
-        var request = new SuggestReceiptFilingRequest { GroupId = group.Id, Currency = "USD",
-            Receipt = new SaveReceiptRequest { MerchantName = "Shop", Total = 12m, Items = [new ReceiptItemInput { Name = "Milk" }] } };
+        var request = new SuggestReceiptFilingRequest
+        {
+            GroupId = group.Id,
+            Currency = "USD",
+            Receipt = new SaveReceiptRequest { MerchantName = "Shop", Total = 12m, Items = [new ReceiptItemInput { Name = "Milk" }] }
+        };
         var service = GetService<IFilingSuggester>();
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
@@ -68,10 +72,12 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var before = await GetService<GroupSplit.Data.AppDbContext>().Set<BankTransaction>().CountAsync(Ct);
         var suggestion = await GetService<IFilingSuggester>().SuggestReceipt(new SuggestReceiptFilingRequest
         {
-            GroupId = group.Id, Currency = "USD",
+            GroupId = group.Id,
+            Currency = "USD",
             Receipt = new SaveReceiptRequest
             {
-                MerchantName = "Corner shop", Total = 12m,
+                MerchantName = "Corner shop",
+                Total = 12m,
                 Items = [new ReceiptItemInput { Name = "Milk" }]
             }
         }, Ct);
@@ -88,9 +94,14 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         _model.Answer("Home · Groceries", .9);
         var request = new SuggestReceiptFilingRequest
         {
-            GroupId = group.Id, Currency = "USD",
-            Receipt = new SaveReceiptRequest { MerchantName = "Corner shop", Total = 12m,
-                Items = [new ReceiptItemInput { Name = "Milk" }] }
+            GroupId = group.Id,
+            Currency = "USD",
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Corner shop",
+                Total = 12m,
+                Items = [new ReceiptItemInput { Name = "Milk" }]
+            }
         };
         var service = GetService<IFilingSuggester>();
         Assert.NotNull(await service.SuggestReceipt(request, Ct));

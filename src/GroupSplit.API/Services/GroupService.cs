@@ -316,12 +316,12 @@ public class GroupService(
     {
         var userId = userContext.User.Id;
         IQueryable<Group> groups = from g in GroupsOf(userId)
-                     join membership in context.Set<GroupMembership>()
-                         on new { GroupId = g.Id, UserId = userId }
-                         equals new { membership.GroupId, membership.UserId }
-                     where archived == null || (membership.ArchivedAt != null) == archived
-                     orderby g.Id == userId descending, g.Name, g.Id
-                     select g;
+                                   join membership in context.Set<GroupMembership>()
+                                       on new { GroupId = g.Id, UserId = userId }
+                                       equals new { membership.GroupId, membership.UserId }
+                                   where archived == null || (membership.ArchivedAt != null) == archived
+                                   orderby g.Id == userId descending, g.Name, g.Id
+                                   select g;
 
         if (page is not null)
         {
@@ -344,20 +344,20 @@ public class GroupService(
         var userId = userContext.User.Id;
 
         return from @group in groups
-            join membership in context.Set<GroupMembership>()
-                on new { GroupId = @group.Id, UserId = userId }
-                equals new { membership.GroupId, membership.UserId }
-            orderby @group.Id == userId descending, @group.Name, @group.Id
-            select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
-                membership.ArchivedAt != null)
-            {
-                Currency = @group.Currency,
-                Description = @group.Description,
-                DefaultSplitRuleId = @group.DefaultSplitRuleId,
-                DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
-                DefaultPeriod = @group.DefaultPeriod,
-                IsPersonal = @group.Id == userId
-            };
+               join membership in context.Set<GroupMembership>()
+                   on new { GroupId = @group.Id, UserId = userId }
+                   equals new { membership.GroupId, membership.UserId }
+               orderby @group.Id == userId descending, @group.Name, @group.Id
+               select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
+                   membership.ArchivedAt != null)
+               {
+                   Currency = @group.Currency,
+                   Description = @group.Description,
+                   DefaultSplitRuleId = @group.DefaultSplitRuleId,
+                   DefaultSplitRuleName = @group.DefaultSplitRule == null ? null : @group.DefaultSplitRule.Name,
+                   DefaultPeriod = @group.DefaultPeriod,
+                   IsPersonal = @group.Id == userId
+               };
     }
 
     public async Task<CreateGroupRequest?> GetUpdateModel(Guid id, CancellationToken ct = default)
@@ -836,11 +836,11 @@ public class GroupService(
                     @group.Id,
                     @group.Name,
                     (from transaction in context.Set<Transaction>()
-                        where transaction.GroupId == @group.Id && transaction.UserId == user.Id
-                        select transaction.Amount).Sum() -
+                     where transaction.GroupId == @group.Id && transaction.UserId == user.Id
+                     select transaction.Amount).Sum() -
                     (from split in context.Set<TransactionSplit>()
-                        where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
-                        select split.Amount).Sum(),
+                     where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
+                     select split.Amount).Sum(),
                     membership.ArchivedAt != null))
             .ToListAsync(cancellationToken);
 

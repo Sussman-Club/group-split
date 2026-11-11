@@ -57,7 +57,10 @@ public sealed record ExportAttachment(Guid Id, Guid? ExpenseId, Guid? BankTransa
     // Neither original filenames nor storage keys can control paths inside the ZIP.
     public string Path => $"receipts/{Id}" + (ContentType switch
     {
-        "image/jpeg" => ".jpg", "image/png" => ".png", "image/webp" => ".webp",
-        "application/pdf" => ".pdf", _ => ".bin"
+        "image/jpeg" => ".jpg",
+        "image/png" => ".png",
+        "image/webp" => ".webp",
+        "application/pdf" => ".pdf",
+        _ => ".bin"
     });
 }

@@ -16,8 +16,16 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 10, Subtotal = 10,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] } };
+        var receipt = new SaveReceiptInboxRequest
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                Total = 10,
+                Subtotal = 10,
+                Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }]
+            }
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
         var response = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new { BankTransactionId = Guid.NewGuid(), BankExpense = new { } }, Json);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -29,8 +37,17 @@ public class ReceiptInboxEndpointTest
         await using var host = await ApiEndpointHost.StartAsync();
         var day = DateOnly.FromDateTime(DateTime.UtcNow);
         var id = Guid.NewGuid();
-        var receipt = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Total = 20, Subtotal = 20,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 20, TotalPrice = 20 }] } };
+        var receipt = new SaveReceiptInboxRequest
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                PurchaseDate = day,
+                Total = 20,
+                Subtotal = 20,
+                Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 20, TotalPrice = 20 }]
+            }
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", receipt, Json)).EnsureSuccessStatusCode();
         var ids = new List<Guid>();
         foreach (var name in new[] { "First", "Second" })
@@ -78,8 +95,13 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var receipt = new SaveReceiptRequest { MerchantName = "Store", Subtotal = 10, Total = 10,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] };
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Store",
+            Subtotal = 10,
+            Total = 10,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }]
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { Receipt = receipt }, Json)).EnsureSuccessStatusCode();
         using var other = host.ClientForAnotherUser();
         Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsync($"/receipts/inbox/{id}/ignore", null)).StatusCode);
@@ -99,13 +121,25 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var receipt = new SaveReceiptRequest { MerchantName = "Store", Subtotal = 20m, Tax = 2m, Total = 22m,
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Store",
+            Subtotal = 20m,
+            Tax = 2m,
+            Total = 22m,
             Items = [new ReceiptItemInput { Name = "One", UnitPrice = 10m, TotalPrice = 10m },
-                new ReceiptItemInput { Name = "Two", UnitPrice = 10m, TotalPrice = 10m }] };
+                new ReceiptItemInput { Name = "Two", UnitPrice = 10m, TotalPrice = 10m }]
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { Receipt = receipt }, Json)).EnsureSuccessStatusCode();
         var reviewed = receipt with { Items = [receipt.Items[0] with { TaxAmount = 1.25m }, receipt.Items[1] with { TaxAmount = .75m }] };
-        var expense = new CreateTransactionRequest { Name = "Purchase", Amount = 22m, Currency = "USD",
-            DateTime = DateTimeOffset.UtcNow, Receipt = reviewed };
+        var expense = new CreateTransactionRequest
+        {
+            Name = "Purchase",
+            Amount = 22m,
+            Currency = "USD",
+            DateTime = DateTimeOffset.UtcNow,
+            Receipt = reviewed
+        };
         expense.Receipt = reviewed with { Items = [reviewed.Items[0] with { TaxAmount = 1.26m }, reviewed.Items[1]] };
         var invalid = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest { NewExpense = expense }, Json);
         await AssertProblem(invalid, HttpStatusCode.UnprocessableContent, "RECEIPT_DOES_NOT_ADD_UP");
@@ -122,10 +156,15 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var receipt = new SaveReceiptRequest { Subtotal = 30m, Tax = 2m, Total = 32m,
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 30m,
+            Tax = 2m,
+            Total = 32m,
             Items = [new ReceiptItemInput { Name = "Known", UnitPrice = 10m, TotalPrice = 10m, TaxAmount = .50m },
                 new ReceiptItemInput { Name = "Unknown", UnitPrice = 10m, TotalPrice = 10m },
-                new ReceiptItemInput { Name = "Exempt", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = false }] };
+                new ReceiptItemInput { Name = "Exempt", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = false }]
+        };
         var response = await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { Receipt = receipt }, Json);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<ReceiptInboxResponse>(Json);
@@ -136,11 +175,21 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var original = new SaveReceiptRequest { MerchantName = "Original", Total = 10, Subtotal = 10,
-            Items = [new ReceiptItemInput { Name = "Original item", UnitPrice = 10, TotalPrice = 10 }] };
+        var original = new SaveReceiptRequest
+        {
+            MerchantName = "Original",
+            Total = 10,
+            Subtotal = 10,
+            Items = [new ReceiptItemInput { Name = "Original item", UnitPrice = 10, TotalPrice = 10 }]
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { Currency = "CAD", Receipt = original }, Json)).EnsureSuccessStatusCode();
-        var replacement = new SaveReceiptRequest { MerchantName = "Replacement", Total = 5, Subtotal = 5,
-            Items = [new ReceiptItemInput { Name = "Replacement item", UnitPrice = 5, TotalPrice = 5 }] };
+        var replacement = new SaveReceiptRequest
+        {
+            MerchantName = "Replacement",
+            Total = 5,
+            Subtotal = 5,
+            Items = [new ReceiptItemInput { Name = "Replacement item", UnitPrice = 5, TotalPrice = 5 }]
+        };
         var refused = await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}/extracted", replacement, Json);
         await AssertProblem(refused, HttpStatusCode.Conflict, "RECEIPT_INVALID");
         var actual = await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{id}", Json);
@@ -182,8 +231,16 @@ public class ReceiptInboxEndpointTest
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
         var saved = await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
-        { Currency = "CAD", Receipt = new() { MerchantName = "Costco", Total = 20, Subtotal = 20,
-            Items = [new() { Name = "Lunch", TotalPrice = 20, UnitPrice = 20 }] } }, Json);
+        {
+            Currency = "CAD",
+            Receipt = new()
+            {
+                MerchantName = "Costco",
+                Total = 20,
+                Subtotal = 20,
+                Items = [new() { Name = "Lunch", TotalPrice = 20, UnitPrice = 20 }]
+            }
+        }, Json);
         saved.EnsureSuccessStatusCode();
         var rows = await host.Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json);
         Assert.Equal("CAD", Assert.Single(rows!).Currency);
@@ -199,8 +256,15 @@ public class ReceiptInboxEndpointTest
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
-        { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 20, Subtotal = 20,
-            Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }] } }, Json)).EnsureSuccessStatusCode();
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                Total = 20,
+                Subtotal = 20,
+                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }]
+            }
+        }, Json)).EnsureSuccessStatusCode();
         (await host.Client.PostAsync($"/receipts/inbox/{id}/ignore", null)).EnsureSuccessStatusCode();
         var refused = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest(), Json);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
@@ -218,8 +282,15 @@ public class ReceiptInboxEndpointTest
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
-        { Receipt = new SaveReceiptRequest { MerchantName = "Store", Total = 20, Subtotal = 20,
-            Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }] } }, Json)).EnsureSuccessStatusCode();
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                Total = 20,
+                Subtotal = 20,
+                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20, TotalPrice = 20 }]
+            }
+        }, Json)).EnsureSuccessStatusCode();
         (await host.Client.PostAsync($"/receipts/inbox/{id}/ignore", null)).EnsureSuccessStatusCode();
         var expense = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         { Name = "Food", Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
@@ -236,8 +307,15 @@ public class ReceiptInboxEndpointTest
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
-        { Receipt = new() { MerchantName = "Store", Total = 20, Subtotal = 20,
-            Items = [new() { Name = "Food", TotalPrice = 20, UnitPrice = 20 }] } }, Json)).EnsureSuccessStatusCode();
+        {
+            Receipt = new()
+            {
+                MerchantName = "Store",
+                Total = 20,
+                Subtotal = 20,
+                Items = [new() { Name = "Food", TotalPrice = 20, UnitPrice = 20 }]
+            }
+        }, Json)).EnsureSuccessStatusCode();
         var expense = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         { Name = "Food", Amount = 20, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
         expense.EnsureSuccessStatusCode();
@@ -258,13 +336,21 @@ public class ReceiptInboxEndpointTest
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        var details = new SaveReceiptInboxRequest { Receipt = new SaveReceiptRequest
-            { MerchantName = "Store", PurchaseDate = today, Subtotal = 20m, Total = 20m,
-                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20m, TotalPrice = 20m }] } };
+        var details = new SaveReceiptInboxRequest
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                PurchaseDate = today,
+                Subtotal = 20m,
+                Total = 20m,
+                Items = [new ReceiptItemInput { Name = "Food", UnitPrice = 20m, TotalPrice = 20m }]
+            }
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{first}", details, Json)).EnsureSuccessStatusCode();
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{second}", details, Json)).EnsureSuccessStatusCode();
         var created = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
-            { Name = "Food", Amount = 20m, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
+        { Name = "Food", Amount = 20m, Currency = "USD", DateTime = DateTimeOffset.UtcNow }, Json);
         created.EnsureSuccessStatusCode();
         var expenseId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         var before = await host.Client.GetFromJsonAsync<List<ReceiptExpenseCandidate>>($"/receipts/inbox/{second}/matches", Json);
@@ -283,8 +369,16 @@ public class ReceiptInboxEndpointTest
         var day = DateOnly.FromDateTime(DateTime.UtcNow);
         var id = Guid.NewGuid();
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest
-        { Receipt = new SaveReceiptRequest { MerchantName = "Store", PurchaseDate = day, Subtotal = 42m, Total = 42m,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 42m, TotalPrice = 42m }] } }, Json)).EnsureSuccessStatusCode();
+        {
+            Receipt = new SaveReceiptRequest
+            {
+                MerchantName = "Store",
+                PurchaseDate = day,
+                Subtotal = 42m,
+                Total = 42m,
+                Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 42m, TotalPrice = 42m }]
+            }
+        }, Json)).EnsureSuccessStatusCode();
         foreach (var offset in new[] { -3, -2, 2, 3 })
         {
             var result = await host.Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
@@ -313,7 +407,8 @@ public class ReceiptInboxEndpointTest
         var retry = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", request, Json);
         retry.EnsureSuccessStatusCode();
         Assert.Equal(firstBody!.ExpenseId, (await retry.Content.ReadFromJsonAsync<ReceiptInboxResponse>(Json))!.ExpenseId);
-    }    [Fact]
+    }
+    [Fact]
     public async Task Inbox_errors_use_the_standard_problem_contract()
     {
         await using var host = await ApiEndpointHost.StartAsync();
@@ -350,8 +445,13 @@ public class ReceiptInboxEndpointTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var id = Guid.NewGuid();
-        var bill = new SaveReceiptRequest { MerchantName = "Store", Subtotal = 10, Total = 10,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }] };
+        var bill = new SaveReceiptRequest
+        {
+            MerchantName = "Store",
+            Subtotal = 10,
+            Total = 10,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10, TotalPrice = 10 }]
+        };
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}", new SaveReceiptInboxRequest { Receipt = bill }, Json)).EnsureSuccessStatusCode();
         var response = await host.Client.PostAsJsonAsync($"/receipts/inbox/{id}/file", new FileReceiptInboxRequest
         { NewExpense = new CreateTransactionRequest { Name = "Store", Amount = 10, DateTime = DateTimeOffset.UtcNow, Receipt = bill } }, Json);
@@ -372,4 +472,5 @@ public class ReceiptInboxEndpointTest
         Assert.Equal("https://groupsplit.app/errors/" + code.ToLowerInvariant().Replace('_', '-'), body.GetProperty("type").GetString());
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("traceId").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("instance").GetString()));
-    }}
+    }
+}

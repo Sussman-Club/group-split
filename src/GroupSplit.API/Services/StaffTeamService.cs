@@ -33,16 +33,18 @@ public sealed class StaffTeamService(AppDbContext db, TimeProvider clock, IMemor
 
     public async Task<List<StaffPersonResponse>> ListAsync(CancellationToken ct) =>
         await (from m in db.Set<StaffMember>().AsNoTracking()
-            join u in db.Set<User>() on m.UserId equals u.Id
-            where m.Active && u.Kind == UserKind.Account
-            orderby u.FirstName, u.LastName, u.Id
-            select new StaffPersonResponse(u.Id, ((u.FirstName ?? "") + " " + (u.LastName ?? "")).Trim(), u.Email)).ToListAsync(ct);
+               join u in db.Set<User>() on m.UserId equals u.Id
+               where m.Active && u.Kind == UserKind.Account
+               orderby u.FirstName, u.LastName, u.Id
+               select new StaffPersonResponse(u.Id, ((u.FirstName ?? "") + " " + (u.LastName ?? "")).Trim(), u.Email)).ToListAsync(ct);
 
     public async Task ValidateAssigneeAsync(Guid? userId, CancellationToken ct)
     {
         if (userId is null) return;
-        if (!await (from m in db.Set<StaffMember>() join u in db.Set<User>() on m.UserId equals u.Id
-            where m.UserId == userId && m.Active && u.Kind == UserKind.Account select m.Id).AnyAsync(ct))
+        if (!await (from m in db.Set<StaffMember>()
+                    join u in db.Set<User>() on m.UserId equals u.Id
+                    where m.UserId == userId && m.Active && u.Kind == UserKind.Account
+                    select m.Id).AnyAsync(ct))
             throw new ValidationException(ErrorCodes.InvalidSupportTicket, "Choose an active staff member or leave the ticket unassigned.");
     }
 }

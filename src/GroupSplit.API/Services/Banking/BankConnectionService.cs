@@ -908,7 +908,7 @@ public sealed class BankConnectionService(
                 () => connector.AccountsAsync(token, ct));
         }
         catch (BadGatewayException e) when (e.InnerException is BankSyncException
-                                            { Kind: BankSyncFailure.LoginRequired })
+        { Kind: BankSyncFailure.LoginRequired })
         {
             // Not the provider having a bad minute, which is what a bad gateway says and
             // what the person would then be told: this item needs them, and the app already

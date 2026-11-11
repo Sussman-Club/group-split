@@ -85,14 +85,20 @@ public sealed class ReceiptAttachmentService(
                 // The content hash identifies the same bytes. Restore the object as well as
                 // returning its existing metadata if storage was cleared independently.
                 await using var retryStream = file.OpenReadStream();
-                await storage.PutObjectAsync(new PutObjectRequest { BucketName = storageOptions.Value.BucketName,
-                    Key = existing.ObjectKey, InputStream = retryStream, ContentType = existing.ContentType }, ct);
+                await storage.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = storageOptions.Value.BucketName,
+                    Key = existing.ObjectKey,
+                    InputStream = retryStream,
+                    ContentType = existing.ContentType
+                }, ct);
                 return ToResponse(existing);
             }
             throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
                 "This source file is already attached to an expense. Review the existing expense instead.")
                 .WithExtension("expenseId", existing.ExpenseId);
-        }        var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
+        }
+        var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
         if (receipt is null)
             db.Add(new Receipt { Id = receiptId, OwnerUserId = currentUser.User.Id, Subtotal = 0, Total = 0 });
         else if (receipt.OwnerUserId != currentUser.User.Id || receipt.ExpenseId != null)
@@ -116,9 +122,9 @@ public sealed class ReceiptAttachmentService(
         { throw new NotFoundException(ErrorCodes.ReceiptAttachmentNotFound, "Receipt file is missing. Upload the original again."); }
         using (response)
         {
-        await using var buffer = new MemoryStream();
-        await response.ResponseStream.CopyToAsync(buffer, ct);
-        return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
+            await using var buffer = new MemoryStream();
+            await response.ResponseStream.CopyToAsync(buffer, ct);
+            return new(buffer.ToArray(), attachment.ContentType, attachment.FileName);
         }
     }
 

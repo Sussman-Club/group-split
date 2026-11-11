@@ -89,7 +89,8 @@ public class FileBankTransactionDialogTest : ComponentTest
     public async Task Suggested_expense_is_preselected_before_attaching()
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,
-            Trip.Id, Trip.Name, "Ana", 0m, 0, MatchConfidence.Confident) { IsSuggested = true };
+            Trip.Id, Trip.Name, "Ana", 0m, 0, MatchConfidence.Confident)
+        { IsSuggested = true };
         var (provider, reference) = await OpenAsync(Row with { PossibleDuplicates = [candidate] });
         Assert.Contains("Suggested match", provider.Markup);
         Assert.Contains("Create a new expense", provider.Markup);

@@ -15,8 +15,12 @@ public class ReceiptInboxSeederTest
         var expense = new Expense
         {
             Id = Guid.Parse("d0000005-0000-4000-8000-000000000005"),
-            UserId = Guid.NewGuid(), GroupId = Guid.NewGuid(), Name = "Painkillers",
-            Amount = 9.35m, Currency = "USD", DateTime = DateTimeOffset.Parse("2026-10-31T20:30:00Z")
+            UserId = Guid.NewGuid(),
+            GroupId = Guid.NewGuid(),
+            Name = "Painkillers",
+            Amount = 9.35m,
+            Currency = "USD",
+            DateTime = DateTimeOffset.Parse("2026-10-31T20:30:00Z")
         };
         db.Add(expense);
         await db.SaveChangesAsync();

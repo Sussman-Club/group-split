@@ -34,11 +34,12 @@ public partial class MerchantService
             var counts = dbContext.Set<Transaction>().AsNoTracking().Where(t => t.MerchantId != null)
                 .GroupBy(t => t.MerchantId).Select(g => new { MerchantId = g.Key, Count = (int?)g.Count() });
             var ranked = from merchant in query
-                join count in counts on (Guid?)merchant.Id equals count.MerchantId into joined
-                from count in joined.DefaultIfEmpty()
-                orderby (count.Count ?? 0) descending, merchant.Id
-                select new MerchantResponse(merchant.Id, merchant.Name, merchant.LogoUrl, merchant.FirstSeenAt,
-                    count.Count ?? 0) { Version = merchant.Version };
+                         join count in counts on (Guid?)merchant.Id equals count.MerchantId into joined
+                         from count in joined.DefaultIfEmpty()
+                         orderby (count.Count ?? 0) descending, merchant.Id
+                         select new MerchantResponse(merchant.Id, merchant.Name, merchant.LogoUrl, merchant.FirstSeenAt,
+                             count.Count ?? 0)
+                         { Version = merchant.Version };
             var pageRows = await ranked.Skip((page ?? 0) * DirectoryPageSize).Take(DirectoryPageSize + 1).ToListAsync(ct);
             return new DirectoryPage<MerchantResponse>(pageRows.Take(DirectoryPageSize).ToList(), pageRows.Count > DirectoryPageSize);
         }
@@ -64,8 +65,13 @@ public partial class MerchantService
         var normalized = name.ToLowerInvariant();
         if (await dbContext.Set<MerchantAlias>().AnyAsync(m => m.NormalizedName == normalized, ct) || await dbContext.Set<Merchant>().AnyAsync(m => m.NormalizedName == normalized, ct))
             throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists.");
-        var merchant = new Merchant { Name = name, NormalizedName = normalized,
-            LogoUrl = AllowedLogo(request.LogoUrl), FirstSeenAt = clock.GetUtcNow() };
+        var merchant = new Merchant
+        {
+            Name = name,
+            NormalizedName = normalized,
+            LogoUrl = AllowedLogo(request.LogoUrl),
+            FirstSeenAt = clock.GetUtcNow()
+        };
         dbContext.Add(merchant);
         StaffActivityService.Record(dbContext, actorId, "Merchants", merchant.Id, "Merchant created", clock.GetUtcNow(),
             new("Name", null, name), new("Image", null, merchant.LogoUrl));

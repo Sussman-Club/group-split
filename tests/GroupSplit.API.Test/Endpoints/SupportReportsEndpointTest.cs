@@ -98,7 +98,7 @@ public class SupportReportsEndpointTest : IAsyncLifetime
     }
     [Theory]
     [InlineData("Bogus", "Title", "Details")]
-        [InlineData("Bug", "Title", " ")]
+    [InlineData("Bug", "Title", " ")]
     public async Task Invalid_reports_are_rejected(string type, string title, string description)
     {
         var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest

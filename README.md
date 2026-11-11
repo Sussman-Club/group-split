@@ -139,3 +139,15 @@ Operating it:
 - Plaid for bank data; Veryfi or Azure OpenAI for reading receipts
 - System.CommandLine and Spectre.Console for the CLI
 - xUnit v3, bUnit, Moq and Playwright for tests
+
+## C# formatting
+
+C# whitespace conventions are defined in `.editorconfig` and checked in CI. Before opening a pull request, format the source, tests, and tools from the repository root:
+
+```sh
+dotnet format whitespace src --folder --exclude '**/bin/**' '**/obj/**'
+dotnet format whitespace tests --folder --exclude '**/bin/**' '**/obj/**'
+dotnet format whitespace tools --folder --exclude '**/bin/**' '**/obj/**'
+```
+
+Add `--verify-no-changes` to either command to check without modifying files. Folder mode also covers the native app without requiring MAUI workloads. This check covers C# whitespace; Razor, CSS, JavaScript, and code-style analyzers are outside its scope.

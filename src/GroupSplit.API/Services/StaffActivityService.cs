@@ -12,10 +12,14 @@ public sealed class StaffActivityService(AppDbContext db)
 {
     public static void Record(AppDbContext db, Guid? actor, string resource, Guid id, string action,
         DateTimeOffset at, params ActivityChange[] changes) => db.Add(new StaffActivity
-    {
-        ActorUserId = actor, Resource = resource, ResourceId = id, Action = action,
-        At = at, ChangesJson = JsonSerializer.Serialize(changes)
-    });
+        {
+            ActorUserId = actor,
+            Resource = resource,
+            ResourceId = id,
+            Action = action,
+            At = at,
+            ChangesJson = JsonSerializer.Serialize(changes)
+        });
 
     public async Task<DirectoryPage<StaffActivityResponse>> ListAsync(string? resource, Guid? resourceId, int page, CancellationToken ct)
     {

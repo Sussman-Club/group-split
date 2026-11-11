@@ -32,9 +32,9 @@ public class StoredSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     private async Task<Guid> EvenCategory(Guid groupId, Guid a, Guid b) =>
         await CreateCategory(groupId, "Split", new PercentSplitRuleDto
-            {
-                Percentages = new Dictionary<Guid, decimal> { [a] = 50m, [b] = 50m }
-            });
+        {
+            Percentages = new Dictionary<Guid, decimal> { [a] = 50m, [b] = 50m }
+        });
 
     private Task<List<TransactionSplit>> SplitsOf(Guid transactionId) =>
         DbContext.Set<TransactionSplit>()

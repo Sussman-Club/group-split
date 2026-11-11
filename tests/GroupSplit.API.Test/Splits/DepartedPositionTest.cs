@@ -439,19 +439,22 @@ public class DepartedPositionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                                    && version is ItemizedSplitRuleVersion, Ct);
 
         var food = await GetService<ICategoryService>().Create(new CreateCategoryRequest
-            { GroupId = group.Id, Name = "Food", DefaultSplitRuleId = bill.SplitRuleId }, Ct);
+        { GroupId = group.Id, Name = "Food", DefaultSplitRuleId = bill.SplitRuleId }, Ct);
 
         var expense = await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Dinner", Amount = 60m, DateTime = DateTimeOffset.UtcNow,
-            GroupId = group.Id, CategoryId = food.Id,
+            Name = "Dinner",
+            Amount = 60m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group.Id,
+            CategoryId = food.Id,
             Splits = [new SplitInput { UserId = Self, Amount = 60m }]
         }, Ct);
 
         var mine = (await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Mine", Definition = new SoleSplitRuleDto(Self) }, Ct)).Current!.Id;
+        { GroupId = group.Id, Name = "Mine", Definition = new SoleSplitRuleDto(Self) }, Ct)).Current!.Id;
         var theirs = (await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group.Id, Name = "Theirs", Definition = new SoleSplitRuleDto(leaver.Id) }, Ct)).Current!.Id;
+        { GroupId = group.Id, Name = "Theirs", Definition = new SoleSplitRuleDto(leaver.Id) }, Ct)).Current!.Id;
 
         var receipt = await Receipts.SaveForExpense(expense.Id, new SaveReceiptRequest
         {

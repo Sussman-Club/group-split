@@ -59,12 +59,15 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         if (dates.Length == 0) return receipts.Select(Response).ToArray();
         var candidates = await Owned().Where(r => r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0)
             .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName }).ToListAsync(ct);
-        var responses = receipts.Select(r => Response(r) with { PossibleDuplicates = candidates
+        var responses = receipts.Select(r => Response(r) with
+        {
+            PossibleDuplicates = candidates
             .Where(c => c.Id != r.Id && c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
                 !string.IsNullOrWhiteSpace(r.MerchantName) && !string.IsNullOrWhiteSpace(c.MerchantName) &&
                 string.Equals(c.Currency, r.Currency, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))
-            .Select(c => new ReceiptDuplicateCandidate(c.Id, c.ExpenseId)).ToArray() }).ToArray();
+            .Select(c => new ReceiptDuplicateCandidate(c.Id, c.ExpenseId)).ToArray()
+        }).ToArray();
         if (!classify) return responses;
 
         // Never suggest deleting both sides. Prefer a filed receipt as the copy to keep;
@@ -144,10 +147,19 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             r.Subtotal = input.Subtotal; r.Tax = input.Tax; r.Tip = input.Tip; r.Total = input.Total;
             db.RemoveRange(r.Items); r.Items.Clear();
             foreach (var line in input.Items)
-                r.Items.Add(new ReceiptItem { Position = r.Items.Count, Name = line.Name,
-                    NormalizedName = line.NormalizedName ?? line.Name.ToLowerInvariant(), Description = line.Description,
-                    UnitPrice = line.UnitPrice, Quantity = line.Quantity, TotalPrice = line.TotalPrice,
-                    TaxAmount = line.TaxAmount, TaxRate = line.TaxRate, IsTaxable = line.IsTaxable });
+                r.Items.Add(new ReceiptItem
+                {
+                    Position = r.Items.Count,
+                    Name = line.Name,
+                    NormalizedName = line.NormalizedName ?? line.Name.ToLowerInvariant(),
+                    Description = line.Description,
+                    UnitPrice = line.UnitPrice,
+                    Quantity = line.Quantity,
+                    TotalPrice = line.TotalPrice,
+                    TaxAmount = line.TaxAmount,
+                    TaxRate = line.TaxRate,
+                    IsTaxable = line.IsTaxable
+                });
             if (importingDetails && r.Subtotal + r.Tax + r.Tip == r.Total && r.Items.Sum(item => item.TotalPrice) == r.Subtotal)
             {
                 var lines = r.Items.OrderBy(item => item.Position).ToArray();
@@ -276,9 +288,14 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 var saved = Response(r).Receipt;
                 if (submitted.Items.Count != saved.Items.Count)
                     throw new ValidationException(ErrorCodes.ReceiptInvalid, "The receipt items changed. Review the receipt and try again.");
-                input.Receipt = saved with { Items = saved.Items.Select((item, index) => item with
-                    { SplitRuleVersionId = submitted.Items[index].SplitRuleVersionId,
-                        TaxAmount = submitted.Items[index].TaxAmount }).ToArray() };
+                input.Receipt = saved with
+                {
+                    Items = saved.Items.Select((item, index) => item with
+                    {
+                        SplitRuleVersionId = submitted.Items[index].SplitRuleVersionId,
+                        TaxAmount = submitted.Items[index].TaxAmount
+                    }).ToArray()
+                };
             }
             else input.Receipt = null;
             expense = await transactions.Create(input, ct);
@@ -314,12 +331,27 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         return Response(r);
     }
     private static ReceiptInboxResponse Response(Receipt r) => new(r.Id, r.ExpenseId, r.Currency,
-        new SaveReceiptRequest { MerchantName = r.MerchantName, PurchaseDate = r.PurchaseDate,
-            Subtotal = r.Subtotal, Tax = r.Tax, Tip = r.Tip, Total = r.Total,
-            Items = r.Items.OrderBy(i => i.Position).Select(i => new ReceiptItemInput { Name = i.Name,
-                NormalizedName = i.NormalizedName, Description = i.Description, UnitPrice = i.UnitPrice,
-                Quantity = i.Quantity, TotalPrice = i.TotalPrice, TaxAmount = i.TaxAmount,
-                TaxRate = i.TaxRate, IsTaxable = i.IsTaxable }).ToList() },
+        new SaveReceiptRequest
+        {
+            MerchantName = r.MerchantName,
+            PurchaseDate = r.PurchaseDate,
+            Subtotal = r.Subtotal,
+            Tax = r.Tax,
+            Tip = r.Tip,
+            Total = r.Total,
+            Items = r.Items.OrderBy(i => i.Position).Select(i => new ReceiptItemInput
+            {
+                Name = i.Name,
+                NormalizedName = i.NormalizedName,
+                Description = i.Description,
+                UnitPrice = i.UnitPrice,
+                Quantity = i.Quantity,
+                TotalPrice = i.TotalPrice,
+                TaxAmount = i.TaxAmount,
+                TaxRate = i.TaxRate,
+                IsTaxable = i.IsTaxable
+            }).ToList()
+        },
         r.Attachments.Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, null, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToList())
-        { ExpenseName = r.Expense?.Name, IsIgnored = r.IsIgnored, MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
+    { ExpenseName = r.Expense?.Name, IsIgnored = r.IsIgnored, MerchantId = r.MerchantId, MerchantLogoUrl = r.Merchant?.LogoUrl, MerchantDisplayName = r.Merchant?.Name };
 }

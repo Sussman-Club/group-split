@@ -29,7 +29,9 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
     private static SaveReceiptRequest Bill(params ReceiptItemInput[] items) => new()
     {
-        Items = items, Subtotal = items.Sum(i => i.TotalPrice), Total = items.Sum(i => i.TotalPrice)
+        Items = items,
+        Subtotal = items.Sum(i => i.TotalPrice),
+        Total = items.Sum(i => i.TotalPrice)
     };
 
     /// <summary>A group of two: the caller and somebody else.</summary>
@@ -44,20 +46,24 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private async Task<(Guid Rule, Guid Version)> ARule(Guid group, string name, SplitRuleDto definition)
     {
         var rule = await Rules.Create(new CreateSplitRuleRequest
-            { GroupId = group, Name = name, Definition = definition }, Ct);
+        { GroupId = group, Name = name, Definition = definition }, Ct);
         return (rule.Id, rule.Current!.Id);
     }
 
     private async Task<Guid> ACategory(Guid group, string name, Guid rule) =>
         (await GetService<ICategoryService>().Create(new CreateCategoryRequest
-            { GroupId = group, Name = name, DefaultSplitRuleId = rule }, Ct)).Id;
+        { GroupId = group, Name = name, DefaultSplitRuleId = rule }, Ct)).Id;
 
     /// <summary>An expense of 30 in the group, divided by hand so its category moves nothing.</summary>
     private async Task<Expense> AnExpense(Guid group, Guid? category) =>
         await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Shopping", Amount = 30m, DateTime = DateTimeOffset.UtcNow, GroupId = group,
-            CategoryId = category, Splits = [new SplitInput { UserId = Self, Amount = 30m }]
+            Name = "Shopping",
+            Amount = 30m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group,
+            CategoryId = category,
+            Splits = [new SplitInput { UserId = Self, Amount = 30m }]
         }, Ct);
 
     /// <summary>Points the group's default split somewhere other than the Even it is given.</summary>
@@ -259,7 +265,7 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_personal_expenses_lines_start_on_no_rule()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-            { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
 
         var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m)), Ct);
 

@@ -52,7 +52,7 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
     /// </remarks>
     private static IReadOnlyList<SplitWeight> Among(
         IReadOnlyList<SplitWeight> weights, IReadOnlyCollection<Guid> members) =>
-        [..weights.Where(weight => members.Contains(weight.UserId))];
+        [.. weights.Where(weight => members.Contains(weight.UserId))];
 
     public virtual string? Invalid(TRule rule) =>
         rule.Participants.Select(participant => participant.UserId).Distinct().Count() == rule.Participants.Count
@@ -84,7 +84,7 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
 
     /// <summary>The participants' weights as they are stored.</summary>
     protected static IReadOnlyList<SplitWeight> StoredWeights(WeightedSplitRuleVersion ruleVersion) =>
-        [..ruleVersion.Participants.Select(participant => new SplitWeight(participant.UserId, participant.Weight))];
+        [.. ruleVersion.Participants.Select(participant => new SplitWeight(participant.UserId, participant.Weight))];
 
     /// <summary>Fills a new rule's participants from user-to-weight pairs.</summary>
     protected static TNew Naming<TNew>(TNew rule, IEnumerable<KeyValuePair<Guid, int>> weights)

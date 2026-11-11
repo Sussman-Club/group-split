@@ -191,8 +191,12 @@ public class ReceiptInboxTest : ComponentTest
     public void Waits_for_both_suggestions_and_expense_matches_before_showing_receipts()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
-        { MerchantName = "Shop", Total = 10m, PurchaseDate = new DateOnly(2026, 11, 4),
-            Items = [new ReceiptItemInput { Name = "Milk" }] }, []);
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4),
+            Items = [new ReceiptItemInput { Name = "Milk" }]
+        }, []);
         var matches = new TaskCompletionSource<ICollection<ReceiptExpenseCandidate>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var suggestions = new TaskCompletionSource<ICollection<ReceiptInboxSuggestion>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new Mock<IReceiptsClient>();
@@ -272,8 +276,12 @@ public class ReceiptInboxTest : ComponentTest
     public void Suggestion_is_shown_with_receipt_after_loading()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD",
-            new SaveReceiptRequest { MerchantName = "Amazon", Total = 19.34m,
-                Items = [new ReceiptItemInput { Name = "Storage bins" }] }, []);
+            new SaveReceiptRequest
+            {
+                MerchantName = "Amazon",
+                Total = 19.34m,
+                Items = [new ReceiptItemInput { Name = "Storage bins" }]
+            }, []);
         var client = new Mock<IReceiptsClient>();
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
         Services.AddSingleton(client.Object);

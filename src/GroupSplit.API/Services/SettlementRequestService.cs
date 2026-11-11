@@ -133,7 +133,9 @@ public class SettlementRequestService(
         };
         created.Groups.Add(new SettlementRequestGroup
         {
-            Group = group, DebtAtCreation = debt, RequestedAmount = request.Amount
+            Group = group,
+            DebtAtCreation = debt,
+            RequestedAmount = request.Amount
         });
         context.Add(created);
         await notifications.ForGroup(PushNotificationKind.PaymentRequest, group.Id, currentUser.User.Id,

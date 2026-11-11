@@ -122,10 +122,10 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             }
             catch (DbUpdateException exception)
                 when (exception.InnerException is PostgresException
-                      {
-                          SqlState: PostgresErrorCodes.UniqueViolation,
-                          ConstraintName: "IX_SplitRule_GroupId_Name"
-                      })
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "IX_SplitRule_GroupId_Name"
+                })
             {
                 // Unlike user provisioning, this context can be carrying a freshly joined
                 // member or group that must remain tracked. Drop only the failed insert

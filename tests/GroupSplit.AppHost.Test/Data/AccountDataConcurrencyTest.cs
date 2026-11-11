@@ -72,12 +72,21 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         await SignIn(scope);
         var inbox = scope.ServiceProvider.GetRequiredService<ReceiptInboxService>();
         var id = Guid.NewGuid();
-        var details = new SaveReceiptRequest { MerchantName = "Test", Subtotal = 10m, Tax = 1m, Total = 11m,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] };
+        var details = new SaveReceiptRequest
+        {
+            MerchantName = "Test",
+            Subtotal = 10m,
+            Tax = 1m,
+            Total = 11m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+        };
         var saved = await inbox.Save(id, new SaveReceiptInboxRequest { Receipt = details }, Ct);
         Assert.Equal(1m, Assert.Single(saved.Receipt.Items).TaxAmount);
-        var result = await inbox.File(id, new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest
-        { Name = "Test receipt", Amount = 11m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, Receipt = saved.Receipt } }, Ct);
+        var result = await inbox.File(id, new FileReceiptInboxRequest
+        {
+            NewExpense = new CreateTransactionRequest
+            { Name = "Test receipt", Amount = 11m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, Receipt = saved.Receipt }
+        }, Ct);
         Assert.NotNull(result.ExpenseId);
         Assert.Equal(1m, Assert.Single(result.Receipt.Items).TaxAmount);
     }
@@ -89,9 +98,15 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         await using var linkingScope = _services.CreateAsyncScope();
         await SignIn(linkingScope); // Loaded before deletion: reproduces an in-flight request.
         var db = deletingScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Add(new BankConnection { UserId = _userId, Provider = Provider, ProviderItemId = $"item-{Guid.NewGuid():N}",
-            InstitutionName = "Test bank", LinkedAt = DateTimeOffset.UtcNow,
-            AccessTokenCiphertext = deletingScope.ServiceProvider.GetRequiredService<IAccessTokenProtector>().Protect("access-test") });
+        db.Add(new BankConnection
+        {
+            UserId = _userId,
+            Provider = Provider,
+            ProviderItemId = $"item-{Guid.NewGuid():N}",
+            InstitutionName = "Test bank",
+            LinkedAt = DateTimeOffset.UtcNow,
+            AccessTokenCiphertext = deletingScope.ServiceProvider.GetRequiredService<IAccessTokenProtector>().Protect("access-test")
+        });
         await db.SaveChangesAsync(Ct);
 
         var removing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -119,8 +134,13 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         await SignIn(uploadingScope);
         await SignIn(deletingScope);
         var expense = await uploadingScope.ServiceProvider.GetRequiredService<ITransactionService>().Create(
-            new CreateTransactionRequest { Name = "Test expense", Amount = 12m,
-                DateTime = DateTimeOffset.UtcNow, PaidByUserId = _userId }, Ct);
+            new CreateTransactionRequest
+            {
+                Name = "Test expense",
+                Amount = 12m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = _userId
+            }, Ct);
         var putting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _storage.Setup(storage => storage.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()))
@@ -200,9 +220,14 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         var user = await db.Set<User>().SingleAsync(user => user.Id == _userId, Ct);
         user.Kind = UserKind.Deleted; user.FirstName = null; user.Email = null;
         var item = new LinkedItem("held-token", "held-item", "Test bank", []);
-        var pending = new PendingBankLink { UserId = _userId, Provider = Provider, StartedAt = DateTimeOffset.UtcNow,
+        var pending = new PendingBankLink
+        {
+            UserId = _userId,
+            Provider = Provider,
+            StartedAt = DateTimeOffset.UtcNow,
             ItemCiphertext = scope.ServiceProvider.GetRequiredService<IAccessTokenProtector>()
-                .Protect(JsonSerializer.Serialize(item, new JsonSerializerOptions(JsonSerializerDefaults.Web))) };
+                .Protect(JsonSerializer.Serialize(item, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+        };
         db.Add(pending);
         await db.SaveChangesAsync(Ct);
         _bank.Setup(bank => bank.RemoveAsync("held-token", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);

@@ -137,7 +137,10 @@ public sealed class JsonOutputWriterTests
         var writer = new JsonOutputWriter(
             new OutputSettings
             {
-                Format = OutputFormat.Json, Color = false, Interactive = false, Quiet = true
+                Format = OutputFormat.Json,
+                Color = false,
+                Interactive = false,
+                Quiet = true
             },
             stdout,
             stderr);

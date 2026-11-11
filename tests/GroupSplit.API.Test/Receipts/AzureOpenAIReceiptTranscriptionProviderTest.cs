@@ -21,7 +21,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var receipt = AzureOpenAIReceiptTranscriptionProvider.ToReceipt(new()
         {
-            Subtotal = 10m, Tax = 1m, Total = 11m,
+            Subtotal = 10m,
+            Tax = 1m,
+            Total = 11m,
             Items = [new() { Name = "Item", UnitPrice = 10m, Quantity = 1m, TotalPrice = 10m,
                 IsTaxable = taxable, TaxAmount = 0m }]
         });
@@ -34,7 +36,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var receipt = AzureOpenAIReceiptTranscriptionProvider.ToReceipt(new()
         {
-            Subtotal = 10m, Tax = .8m, Total = 10.8m,
+            Subtotal = 10m,
+            Tax = .8m,
+            Total = 10.8m,
             Items = [new() { Name = "Item", UnitPrice = 10m, Quantity = 1m, TotalPrice = 10m,
                 TaxAmount = null, TaxRate = 8m, IsTaxable = true }]
         });
@@ -53,7 +57,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var json = System.Text.Json.JsonSerializer.Serialize(new
         {
-            subtotal = 10m, tax, tip = 0, total = 10m + tax,
+            subtotal = 10m,
+            tax,
+            tip = 0,
+            total = 10m + tax,
             items = new[] { new { name = "Item", unitPrice = 10m, quantity = 1,
                 totalPrice = 10m, taxAmount = 0m, taxRate = rate, isTaxable = true } }
         });
@@ -75,7 +82,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var json = System.Text.Json.JsonSerializer.Serialize(new
         {
-            subtotal = 10m, tax, tip = 0, total = 10m + tax,
+            subtotal = 10m,
+            tax,
+            tip = 0,
+            total = 10m + tax,
             items = new[] { new { name = "Item", unitPrice = 10m, quantity = 1,
                 totalPrice = 10m, taxAmount = tax, taxRate = rate, isTaxable = true } }
         });
@@ -93,7 +103,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     {
         var json = System.Text.Json.JsonSerializer.Serialize(new
         {
-            subtotal = 25m, tax, tip = 0, total = 25m + tax,
+            subtotal = 25m,
+            tax,
+            tip = 0,
+            total = 25m + tax,
             items = new[]
             {
                 new { name = "Item", unitPrice = 12m, quantity = 1, totalPrice = 12m,

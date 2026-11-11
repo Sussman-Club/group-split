@@ -42,7 +42,10 @@ public sealed class MerchantImageService(
             await using var content = new MemoryStream(bytes, writable: false);
             await storage.PutObjectAsync(new PutObjectRequest
             {
-                BucketName = Bucket, Key = Key(imageId), ContentType = "image/png", InputStream = content
+                BucketName = Bucket,
+                Key = Key(imageId),
+                ContentType = "image/png",
+                InputStream = content
             }, ct);
 
             MerchantResponse saved;

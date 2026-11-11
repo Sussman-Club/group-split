@@ -83,30 +83,35 @@ public class ReceiptEndpointTest : IAsyncLifetime
         var pat = Assert.Single((await added.Content.ReadFromJsonAsync<GroupGuestResponse[]>(Json, Ct))!).UserId;
 
         var together = (await (await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
-                { GroupId = group, Name = "Together", Definition = new EvenSplitRuleDto() }, Json, Ct))
+        { GroupId = group, Name = "Together", Definition = new EvenSplitRuleDto() }, Json, Ct))
             .Content.ReadFromJsonAsync<SplitRuleDetailsResponse>(Json, Ct))!.VersionId;
         var patOnly = (await (await Client.PostAsJsonAsync("/split-rules", new CreateSplitRuleRequest
-                { GroupId = group, Name = "Pat only", Definition = new SoleSplitRuleDto(pat) }, Json, Ct))
+        { GroupId = group, Name = "Pat only", Definition = new SoleSplitRuleDto(pat) }, Json, Ct))
             .Content.ReadFromJsonAsync<SplitRuleDetailsResponse>(Json, Ct))!.VersionId;
         var bill = (await Client.GetFromJsonAsync<SplitRuleResponse[]>($"/split-rules?groupId={group}", Json, Ct))!
             .Single(rule => rule.DividesByBill).Id;
         var food = await IdOf(await Client.PostAsJsonAsync("/categories", new CreateCategoryRequest
-            { GroupId = group, Name = "Food", DefaultSplitRuleId = bill }, Json, Ct));
+        { GroupId = group, Name = "Food", DefaultSplitRuleId = bill }, Json, Ct));
 
         // Who "me" is, read off an expense of mine, so the real one can state its first shares.
         var probe = await (await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
-                { Name = "Probe", Amount = 1m, DateTime = DateTimeOffset.UtcNow, GroupId = group }, Json, Ct))
+        { Name = "Probe", Amount = 1m, DateTime = DateTimeOffset.UtcNow, GroupId = group }, Json, Ct))
             .Content.ReadFromJsonAsync<JsonElement>(Json, Ct);
         var me = probe.GetProperty("paidByUserId").GetGuid();
         var expense = await IdOf(await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest
         {
-            Name = "Dinner", Amount = 30m, DateTime = DateTimeOffset.UtcNow, GroupId = group, CategoryId = food,
+            Name = "Dinner",
+            Amount = 30m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = group,
+            CategoryId = food,
             Splits = [new SplitInput { UserId = me, Amount = 30m }]
         }, Json, Ct));
 
         var saved = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new SaveReceiptRequest
         {
-            Subtotal = 30m, Total = 30m,
+            Subtotal = 30m,
+            Total = 30m,
             Items =
             [
                 new ReceiptItemInput { Name = "Pizza", TotalPrice = 20m, SplitRuleVersionId = together },
@@ -119,7 +124,8 @@ public class ReceiptEndpointTest : IAsyncLifetime
         // The wine was a glass each, and only one of them was Pat's alone.
         var split = await Client.PutAsJsonAsync($"/transactions/{expense}/receipt", new SaveReceiptRequest
         {
-            Subtotal = 30m, Total = 30m,
+            Subtotal = 30m,
+            Total = 30m,
             Items =
             [
                 new ReceiptItemInput { Id = lines[0].Id, Name = "Pizza", TotalPrice = 20m, SplitRuleVersionId = together },

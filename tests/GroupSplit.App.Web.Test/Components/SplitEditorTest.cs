@@ -619,8 +619,14 @@ public class SplitEditorTest : ComponentTest
 
     private async Task Choose(IRenderedComponent<SplitEditor> editor, string option)
     {
-        var label = option switch { "Default" => "Category default", "Custom" => "Custom amounts",
-            "Receipt" => "Receipt items", "One pays" => "One person", _ => option };
+        var label = option switch
+        {
+            "Default" => "Category default",
+            "Custom" => "Custom amounts",
+            "Receipt" => "Receipt items",
+            "One pays" => "One person",
+            _ => option
+        };
         var opening = OpenChoices(editor);
         await Dialogs.FindAll(".gs-selection-option").Single(item => item.QuerySelector("strong")!.TextContent == label)
             .ClickAsync(new MouseEventArgs());

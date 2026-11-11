@@ -21,16 +21,16 @@ public class ApiTestFixture : IAsyncLifetime
     /// This contains all the service registrations but no actual instances.
     /// </summary>
     public ServiceCollection ServiceCollectionTemplate { get; private set; } = null!;
-    
+
     public ValueTask InitializeAsync()
     {
         // Create the template service collection with all registrations
         ServiceCollectionTemplate = new ServiceCollection();
-        
+
         // Register all your API services here
         // Note: We're just registering, not building the provider yet
         RegisterServices(ServiceCollectionTemplate);
-        
+
         return ValueTask.CompletedTask;
     }
 
@@ -39,7 +39,7 @@ public class ApiTestFixture : IAsyncLifetime
         // Nothing to dispose at assembly level
         return ValueTask.CompletedTask;
     }
-    
+
     /// <summary>
     /// Register all application services. Override this in derived fixtures for test-specific services.
     /// </summary>
