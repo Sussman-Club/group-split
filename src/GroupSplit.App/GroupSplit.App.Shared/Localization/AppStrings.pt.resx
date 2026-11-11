@@ -5870,6 +5870,39 @@
   <data name="No itemized details" xml:space="preserve">
     <value>Sem detalhes dos artigos</value>
   </data>
+  <data name="For Microsoft Edge · Opens Edge Add-ons in a new tab" xml:space="preserve">
+    <value>Para Microsoft Edge · Abre o Edge Add-ons em uma nova guia</value>
+  </data>
+  <data name="Install the extension from Microsoft Edge Add-ons." xml:space="preserve">
+    <value>Instale a extensão pelo Microsoft Edge Add-ons.</value>
+  </data>
+  <data name="Install the extension in Microsoft Edge, then return to your receipts." xml:space="preserve">
+    <value>Instale a extensão no Microsoft Edge e volte aos seus recibos.</value>
+  </data>
+  <data name="Open Edge Add-ons" xml:space="preserve">
+    <value>Abra o Edge Add-ons</value>
+  </data>
+  <data name="Open the receipt importer listing in Microsoft Edge." xml:space="preserve">
+    <value>Abra a página do importador de recibos no Microsoft Edge.</value>
+  </data>
+  <data name="Add the extension" xml:space="preserve">
+    <value>Adicione a extensão</value>
+  </data>
+  <data name="Select Get and confirm the installation in Edge." xml:space="preserve">
+    <value>Selecione Obter e confirme a instalação no Edge.</value>
+  </data>
+  <data name="Microsoft Edge updates extensions automatically. Refresh GroupSplit after an update." xml:space="preserve">
+    <value>O Microsoft Edge atualiza as extensões automaticamente. Recarregue o GroupSplit após uma atualização.</value>
+  </data>
+  <data name="Using another browser? Open this page in Microsoft Edge to install the extension. Copy the address from your browser, then paste it into Edge." xml:space="preserve">
+    <value>Está usando outro navegador? Abra esta página no Microsoft Edge para instalar a extensão. Copie o endereço do navegador e cole no Edge.</value>
+  </data>
+  <data name="Prefer to stay in this browser? You can still upload a photo or PDF from your receipts inbox." xml:space="preserve">
+    <value>Prefere continuar neste navegador? Você ainda pode enviar uma foto ou PDF pela caixa de entrada de recibos.</value>
+  </data>
+  <data name="It may need to be installed, updated, enabled, or reloaded. Follow the installation steps, then try again." xml:space="preserve">
+    <value>Talvez seja necessário instalar, atualizar, ativar ou recarregar. Siga as instruções de instalação e tente novamente.</value>
+  </data>
   <data name="Time zone" xml:space="preserve"><value>Fuso horário</value></data>
   <data name="Dates and times use this device's time zone unless you choose another." xml:space="preserve"><value>As datas e horas usam o fuso horário deste dispositivo, a menos que escolhas outro.</value></data>
   <data name="Follow device" xml:space="preserve"><value>Usar o do dispositivo</value></data>

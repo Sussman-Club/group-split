@@ -5870,6 +5870,39 @@
   <data name="No itemized details" xml:space="preserve">
     <value>Sin detalles de artículos</value>
   </data>
+  <data name="For Microsoft Edge · Opens Edge Add-ons in a new tab" xml:space="preserve">
+    <value>Para Microsoft Edge · Abre Edge Add-ons en una pestaña nueva</value>
+  </data>
+  <data name="Install the extension from Microsoft Edge Add-ons." xml:space="preserve">
+    <value>Instala la extensión desde Microsoft Edge Add-ons.</value>
+  </data>
+  <data name="Install the extension in Microsoft Edge, then return to your receipts." xml:space="preserve">
+    <value>Instala la extensión en Microsoft Edge y vuelve a tus recibos.</value>
+  </data>
+  <data name="Open Edge Add-ons" xml:space="preserve">
+    <value>Abre Edge Add-ons</value>
+  </data>
+  <data name="Open the receipt importer listing in Microsoft Edge." xml:space="preserve">
+    <value>Abre la página del importador de recibos en Microsoft Edge.</value>
+  </data>
+  <data name="Add the extension" xml:space="preserve">
+    <value>Añade la extensión</value>
+  </data>
+  <data name="Select Get and confirm the installation in Edge." xml:space="preserve">
+    <value>Selecciona Obtener y confirma la instalación en Edge.</value>
+  </data>
+  <data name="Microsoft Edge updates extensions automatically. Refresh GroupSplit after an update." xml:space="preserve">
+    <value>Microsoft Edge actualiza las extensiones automáticamente. Actualiza la página de GroupSplit después de una actualización.</value>
+  </data>
+  <data name="Using another browser? Open this page in Microsoft Edge to install the extension. Copy the address from your browser, then paste it into Edge." xml:space="preserve">
+    <value>¿Usas otro navegador? Abre esta página en Microsoft Edge para instalar la extensión. Copia la dirección de tu navegador y pégala en Edge.</value>
+  </data>
+  <data name="Prefer to stay in this browser? You can still upload a photo or PDF from your receipts inbox." xml:space="preserve">
+    <value>¿Prefieres seguir en este navegador? También puedes subir una foto o un PDF desde tu bandeja de recibos.</value>
+  </data>
+  <data name="It may need to be installed, updated, enabled, or reloaded. Follow the installation steps, then try again." xml:space="preserve">
+    <value>Puede que tengas que instalarlo, actualizarlo, habilitarlo o volver a cargarlo. Sigue los pasos de instalación y vuelve a intentarlo.</value>
+  </data>
   <data name="Time zone" xml:space="preserve"><value>Zona horaria</value></data>
   <data name="Dates and times use this device's time zone unless you choose another." xml:space="preserve"><value>Las fechas y horas usan la zona horaria de este dispositivo, a menos que elijas otra.</value></data>
   <data name="Follow device" xml:space="preserve"><value>Usar la del dispositivo</value></data>

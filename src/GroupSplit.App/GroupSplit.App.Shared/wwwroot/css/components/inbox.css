@@ -241,6 +241,7 @@
 .gs-receipt-import-help { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--gs-line); border-radius: var(--gs-radius); background: var(--gs-surface-3); color: var(--gs-ink); font-size: .8125rem; }
 .gs-receipt-import-help .mud-icon-root { flex: 0 0 auto; color: var(--gs-teal-deep); }
 .gs-receipt-import-help p { margin: 3px 0 0; color: var(--gs-muted); line-height: 1.45; }
+.gs-receipt-import-help .gs-receipt-import-help-action { margin: 10px 0 6px; min-height: 40px; }
 html.gs-receipt-import-open { overflow: hidden; }
 .gs-receipt-import-dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(520px, 100vw); height: 100dvh; max-width: none; max-height: none; padding: 0; border: 0; border-left: 1px solid var(--gs-line); border-radius: 0; overflow: hidden; background: var(--gs-surface); color: var(--gs-ink); box-shadow: -18px 0 54px rgb(0 0 0 / 22%); }
 .gs-receipt-import-dialog[open] { display: flex; flex-direction: column; }
