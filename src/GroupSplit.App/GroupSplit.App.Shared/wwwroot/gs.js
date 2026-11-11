@@ -382,6 +382,38 @@
             return -new Date().getTimezoneOffset();
         },
 
+        timeZone() {
+            let saved = null;
+            try { saved = localStorage.getItem("groupsplit.timeZone"); } catch { /* Device zone remains available. */ }
+            try { return saved || Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return null; }
+        },
+
+        timeZones() {
+            return typeof Intl.supportedValuesOf === "function"
+                ? ["UTC", ...Intl.supportedValuesOf("timeZone")]
+                : ["UTC", Intl.DateTimeFormat().resolvedOptions().timeZone].filter(Boolean);
+        },
+
+        setTimeZone(value) {
+            try {
+                if (value) localStorage.setItem("groupsplit.timeZone", value);
+                else localStorage.removeItem("groupsplit.timeZone");
+            } catch { /* The choice applies for this session when storage is unavailable. */ }
+            return value || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        },
+
+        timeFormat() {
+            try { return localStorage.getItem("groupsplit.timeFormat") || "system"; }
+            catch { return "system"; }
+        },
+
+        setTimeFormat(value) {
+            try {
+                if (value === "12" || value === "24") localStorage.setItem("groupsplit.timeFormat", value);
+                else localStorage.removeItem("groupsplit.timeFormat");
+            } catch { /* The choice applies for this session. */ }
+        },
+
         // Puts text on the clipboard, and says whether it got there. The async
         // API is unavailable outside a secure context and can be refused by
         // permission, so the old selection-and-execCommand route stays as a

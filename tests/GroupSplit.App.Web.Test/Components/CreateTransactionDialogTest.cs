@@ -23,6 +23,23 @@ namespace GroupSplit.App.Web.Test.Components;
 public class CreateTransactionDialogTest : ComponentTest
 {
     [Fact]
+    public async Task Imported_receipt_opens_in_a_loading_state_until_the_expense_is_ready()
+    {
+        var groups = new TaskCompletionSource<ICollection<GroupResponse>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _groups.Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>())).Returns(groups.Task);
+        var provider = Render<MudDialogProvider>();
+        await provider.InvokeAsync(async () => await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            { { x => x.InboxReceipt, new SaveReceiptRequest { MerchantName = "Cafe", Total = 12m } } }));
+        provider.WaitForAssertion(() => Assert.Single(provider.FindAll("[aria-busy=true][role=status]")));
+        Assert.Empty(provider.FindComponents<ExpenseDecisions>());
+        Assert.True(provider.FindAll("button").Single(b => b.TextContent.Trim() == "Add expense").HasAttribute("disabled"));
+        groups.SetResult([new GroupResponse(GroupId, "Trip", 2)]);
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseDecisions>()));
+        Assert.DoesNotContain("Loading…", provider.Markup);
+    }
+
+    [Fact]
     public async Task Closing_an_unchanged_imported_receipt_does_not_ask_to_discard()
     {
         var receipt = new SaveReceiptRequest

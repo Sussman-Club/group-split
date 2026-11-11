@@ -39,7 +39,7 @@
                     <MudTimePicker @bind-Time="_selectedTime"
                                    Label="@Loc["Time"]"
                                    Variant="Variant.Outlined"
-                                   AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')"/>
+                                   AmPm="@Clock.UseAmPm"/>
                 </MudStack>
 
                 <MudSelect T="Guid" Label="@Loc["Paid By"]"

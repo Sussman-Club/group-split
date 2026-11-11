@@ -81,6 +81,19 @@
     background-color: color-mix(in srgb, var(--gs-muted) 12%, transparent);
 }
 
+/* Follow the expense sheet's source, fields, choices and shares while it prepares. */
+.gs-expense-loading-layout { display: grid; gap: 16px; }
+.gs-expense-loading-source { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--gs-line); border-radius: 14px; background: var(--gs-surface); }
+.gs-expense-loading-source > .mud-skeleton { flex-shrink: 0; }
+.gs-expense-loading-source-copy { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.gs-expense-loading-fields { display: grid; gap: 12px; }
+.gs-expense-loading-field { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--gs-line); border-radius: 12px; }
+.gs-expense-loading-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gs-expense-loading-chips .mud-skeleton { border-radius: var(--gs-radius-pill); }
+.gs-expense-loading-shares { display: grid; gap: 8px; padding-top: 16px; border-top: 1px solid var(--gs-line); }
+.gs-expense-loading-person { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.gs-expense-loading-person > .mud-skeleton:last-child { margin-left: auto; flex-shrink: 0; }
+
 /* Reuse page card, row and grid rules so responsive changes stay in sync. */
 .gs-skeleton-hero::before,
 .gs-skeleton-hero::after {

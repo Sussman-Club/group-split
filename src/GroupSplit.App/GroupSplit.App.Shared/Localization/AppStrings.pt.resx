@@ -5903,4 +5903,16 @@
   <data name="It may need to be installed, updated, enabled, or reloaded. Follow the installation steps, then try again." xml:space="preserve">
     <value>Talvez seja necessário instalar, atualizar, ativar ou recarregar. Siga as instruções de instalação e tente novamente.</value>
   </data>
+  <data name="Time zone" xml:space="preserve"><value>Fuso horário</value></data>
+  <data name="Dates and times use this device's time zone unless you choose another." xml:space="preserve"><value>As datas e horas usam o fuso horário deste dispositivo, a menos que escolhas outro.</value></data>
+  <data name="Follow device" xml:space="preserve"><value>Usar o do dispositivo</value></data>
+  <data name="Time format" xml:space="preserve"><value>Formato da hora</value></data>
+  <data name="Choose how times are displayed on this device." xml:space="preserve"><value>Escolhe como as horas são apresentadas neste dispositivo.</value></data>
+  <data name="Follow language" xml:space="preserve"><value>Seguir o idioma</value></data>
+  <data name="12-hour" xml:space="preserve"><value>12 horas</value></data>
+  <data name="24-hour" xml:space="preserve"><value>24 horas</value></data>
+  <data name="Search time zones" xml:space="preserve"><value>Pesquisar fusos horários</value></data>
+  <data name="No matching time zones" xml:space="preserve"><value>Nenhum fuso horário encontrado</value></data>
+  <data name="{0} receipt waiting" xml:space="preserve"><value>{0} recibo pendente</value></data>
+  <data name="{0} receipts waiting" xml:space="preserve"><value>{0} recibos pendentes</value></data>
 </root>

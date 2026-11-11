@@ -47,6 +47,12 @@
     </TitleContent>
 
     <DialogContent>
+        @if (_initializingReceipt)
+        {
+            <ExpenseDialogLoading />
+        }
+        else
+        {
         <ReceiptReadLock IsLocked="@_readingReceipt">
         <MudForm @ref="_form" Model="_model" Disabled="@_readingReceipt">
             <div class="gs-stack" style="gap: 16px">
@@ -223,13 +229,14 @@
             </div>
         </MudForm>
         </ReceiptReadLock>
+        }
     </DialogContent>
 
     <DialogActions>
         <MudButton Variant="Variant.Text" Disabled="@_readingReceipt" OnClick="@Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_readingReceipt || ReceiptNeedsRules || HasUnassignedReceiptTax)" OnClick="@Submit">@Loc["Add expense"]</MudButton>
+                   Disabled="@(_initializingReceipt || _readingReceipt || ReceiptNeedsRules || HasUnassignedReceiptTax)" OnClick="@Submit">@Loc["Add expense"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -245,6 +252,7 @@
     [Parameter] public FilingDestinationSuggestion? InboxSuggestion { get; set; }
     [Parameter] public string? InboxCurrency { get; set; }
     [Parameter] public bool ShowFirstExpenseGuide { get; set; }
+    private bool _initializingReceipt;
     private int _guideStep;
     private bool _guideDismissed;
     private bool ShowGuide => IsShared && ShowFirstExpenseGuide && !_guideDismissed;
@@ -691,6 +699,13 @@
     }
 
     protected override async Task OnInitializedAsync()
+    {
+        _initializingReceipt = InboxReceipt is not null;
+        try { await InitializeExpenseAsync(); }
+        finally { _initializingReceipt = false; }
+    }
+
+    private async Task InitializeExpenseAsync()
     {
         // Opened from the personal group's own page, which names it by its id: inside this
         // dialog personal is the absent group, so it is told apart by that alone.

@@ -3,6 +3,7 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services.Errors
 @using Microsoft.AspNetCore.Components.Forms
+@inject LocalClock Clock
 @inject IReceiptsClient Client
 @inject IDialogService Dialogs
 @inject ApiErrorPresenter Errors
@@ -91,7 +92,7 @@
             @foreach (var match in _matches.Where(match => !match.HasReceipt))
             {
                 <div class="gs-receipt-suggestion">
-                    <strong>@match.Name</strong><span>@match.Amount.ToString("N2") @match.Currency · @match.DateTime.ToString("d")</span>
+                    <strong>@match.Name</strong><span>@match.Amount.ToString("N2") @match.Currency · @Clock.Day(match.DateTime).ToString("d")</span>
                     <div class="gs-inline"><MudButton OnClick="@(() => Attach(match.Id))" Disabled="_busy">@Loc["Attach"]</MudButton><MudButton OnClick="@(() => Dismiss(match.Id))" Disabled="_busy">@Loc["Not the same"]</MudButton></div>
                 </div>
             }

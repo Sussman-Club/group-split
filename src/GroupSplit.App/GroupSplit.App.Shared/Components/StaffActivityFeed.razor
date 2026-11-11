@@ -1,5 +1,6 @@
 @using GroupSplit.Shared
 @inject IStaffClient Staff
+@inject LocalClock Clock
 <section class="gs-card staff-activity-feed">
     <h2>@Loc["Activity history"]</h2>
     <p class="gs-muted">@Loc["Activity is kept for seven days. Ticket conversations and status history are stored separately."]</p>
@@ -8,7 +9,7 @@
     @foreach (var item in _items)
     {
         <article class="staff-activity-item" @key="item.Id">
-            <div><a class="staff-record-link" href="@RecordUrl(item)">@Loc[item.Action]</a><span class="staff-row-meta">@Loc[item.Resource] · @item.ResourceId.ToString("N")[..8]</span><small>@item.ActorName · @item.At.ToLocalTime().ToString("g")</small></div>
+            <div><a class="staff-record-link" href="@RecordUrl(item)">@Loc[item.Action]</a><span class="staff-row-meta">@Loc[item.Resource] · @item.ResourceId.ToString("N")[..8]</span><small>@item.ActorName · @Clock.DisplayInstant(item.At)</small></div>
             @if (item.Changes.Any(c => c.Before != c.After))
             {
                 <dl>@foreach (var change in item.Changes.Where(c => c.Before != c.After)) { <div><dt>@Loc[change.Field]</dt><dd><span>@Display(change.Before)</span><span aria-hidden="true"> → </span><strong>@Display(change.After)</strong></dd></div> }</dl>
@@ -27,6 +28,10 @@
     private string? _key;
     private int _page, _request;
     private bool _loading = true, _failed, _more;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && await Clock.InitializeAsync()) StateHasChanged();
+    }
     protected override Task OnParametersSetAsync()
     {
         var key = $"{Resource}/{ResourceId}/{RefreshKey}";

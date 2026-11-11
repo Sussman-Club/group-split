@@ -27,6 +27,8 @@ public sealed class LocalClock
 {
     private readonly IJSRuntime _js;
     private TimeSpan _offset = DateTimeOffset.Now.Offset;
+    private TimeZoneInfo? _zone;
+    private string _timeFormat = "system";
     private bool _resolved;
 
     public LocalClock(IJSRuntime js)
@@ -40,6 +42,8 @@ public sealed class LocalClock
             try
             {
                 Apply(inProcess.Invoke<int>("gs.tzOffsetMinutes"));
+                ApplyZone(inProcess.Invoke<string?>("gs.timeZone"));
+                ApplyTimeFormat(inProcess.Invoke<string?>("gs.timeFormat"));
             }
             catch (Exception exception) when (IsUnavailable(exception))
             {
@@ -49,23 +53,23 @@ public sealed class LocalClock
     }
 
     /// <summary>The person's offset from UTC, as the browser reports it.</summary>
-    public TimeSpan Offset => _offset;
+    public TimeSpan Offset => _zone?.GetUtcOffset(DateTimeOffset.UtcNow) ?? _offset;
 
     /// <summary>Now, in the person's zone.</summary>
-    public DateTimeOffset Now => DateTimeOffset.UtcNow.ToOffset(_offset);
+    public DateTimeOffset Now => Local(DateTimeOffset.UtcNow);
 
     /// <summary>The person's calendar day. What "this month" and a date picker open on.</summary>
     public DateTime Today => Now.Date;
 
     /// <summary>A stored instant in the person's zone, so it shows the day and time they would recognise.</summary>
-    public DateTimeOffset Local(DateTimeOffset instant) => instant.ToOffset(_offset);
+    public DateTimeOffset Local(DateTimeOffset instant) => instant.ToOffset(_zone?.GetUtcOffset(instant) ?? _offset);
 
     /// <summary>
     /// A date and a time as the person picked them, made into the instant they meant --
     /// which is then sent as UTC, like everything else.
     /// </summary>
     public DateTimeOffset At(DateTime date, TimeSpan time) =>
-        new DateTimeOffset(DateTime.SpecifyKind(date.Date + time, DateTimeKind.Unspecified), _offset)
+        new DateTimeOffset(DateTime.SpecifyKind(date.Date + time, DateTimeKind.Unspecified), _zone?.GetUtcOffset(date.Date + time) ?? _offset)
             .ToUniversalTime();
 
     /// <summary>
@@ -73,13 +77,40 @@ public sealed class LocalClock
     /// <c>Local(instant).Date</c>: a bank row is a date stored as midnight UTC, and that is the
     /// previous evening for anybody west of Greenwich. See <see cref="TransactionDay"/>.
     /// </summary>
-    public DateOnly Day(DateTimeOffset stored) => TransactionDay.Of(stored, _offset);
+    public DateOnly Day(DateTimeOffset stored) => TransactionDay.Of(stored, _zone?.GetUtcOffset(stored) ?? _offset);
 
     /// <summary>
     /// The time of day a transaction was recorded at, in the person's zone; none for a bank
     /// row, which is a date and has no time. See <see cref="TransactionDay"/>.
     /// </summary>
-    public TimeOnly? TimeOf(DateTimeOffset stored) => TransactionDay.TimeOf(stored, _offset);
+    public TimeOnly? TimeOf(DateTimeOffset stored) => TransactionDay.TimeOf(stored, _zone?.GetUtcOffset(stored) ?? _offset);
+
+    public bool UseAmPm => _timeFormat switch
+    {
+        "12" => true,
+        "24" => false,
+        _ => System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')
+    };
+
+    public void ApplyTimeFormat(string? value) => _timeFormat = value is "12" or "24" ? value : "system";
+
+    public string FormatTime(TimeOnly time, string fallback = "t") =>
+        time.ToString(_timeFormat switch
+        {
+            "12" => "h:mm tt",
+            "24" => "HH:mm",
+            _ => fallback
+        });
+
+    public string DisplayInstant(DateTimeOffset instant, bool longDate = false)
+    {
+        var local = Local(instant);
+        if (_timeFormat == "system")
+        {
+            return local.ToString(longDate ? "f" : "g");
+        }
+        return $"{local.ToString(longDate ? "D" : "d")} {FormatTime(TimeOnly.FromDateTime(local.DateTime))}";
+    }
 
     /// <summary>
     /// A transaction's day and time as one piece of text -- "9 Oct 2026, 14:32" -- or its day
@@ -88,7 +119,7 @@ public sealed class LocalClock
     /// </summary>
     public string Stamp(DateTimeOffset stored, string dayFormat, string timeFormat) =>
         TimeOf(stored) is { } time
-            ? $"{Day(stored).ToString(dayFormat)}, {time.ToString(timeFormat)}"
+            ? $"{Day(stored).ToString(dayFormat)}, {FormatTime(time, timeFormat)}"
             : Day(stored).ToString(dayFormat);
 
     /// <summary>The person's calendar day, as a <see cref="DateOnly"/> to compare a <see cref="Day"/> with.</summary>
@@ -150,7 +181,7 @@ public sealed class LocalClock
     /// The offset to send with a day the API counts activity through. See
     /// <see cref="TransactionDay.CutoffOffsetMinutes"/>.
     /// </summary>
-    public int CutoffOffsetMinutes => TransactionDay.CutoffOffsetMinutes(_offset);
+    public int CutoffOffsetMinutes => TransactionDay.CutoffOffsetMinutes(Offset);
 
     /// <summary>
     /// Asks the browser, for a host that could not ask synchronously. Safe to call more
@@ -168,7 +199,9 @@ public sealed class LocalClock
         {
             var before = _offset;
             Apply(await _js.InvokeAsync<int>("gs.tzOffsetMinutes"));
-            return before != _offset;
+            ApplyZone(await _js.InvokeAsync<string?>("gs.timeZone"));
+            ApplyTimeFormat(await _js.InvokeAsync<string?>("gs.timeFormat"));
+            return before != Offset || _zone is not null || _timeFormat != "system";
         }
         catch (Exception exception) when (IsUnavailable(exception))
         {
@@ -180,6 +213,19 @@ public sealed class LocalClock
     {
         _offset = TimeSpan.FromMinutes(minutes);
         _resolved = true;
+    }
+
+    /// <summary>Uses a browser time zone ID, including its daylight-saving rules.</summary>
+    public void ApplyZone(string? id)
+    {
+        try
+        {
+            _zone = string.IsNullOrWhiteSpace(id) ? null : TimeZoneInfo.FindSystemTimeZoneById(id);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            _zone = null;
+        }
     }
 
     private static bool IsUnavailable(Exception exception) =>

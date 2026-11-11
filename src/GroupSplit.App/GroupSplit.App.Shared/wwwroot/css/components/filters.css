@@ -207,4 +207,11 @@
     }
 }
 
-.gs-ledger-toolbar { position: sticky; top: var(--gs-topbar-h); z-index: 4; background: var(--gs-bg); padding: 8px 0; }
+.gs-ledger-toolbar {
+    position: sticky;
+    top: var(--gs-topbar-h);
+    z-index: 4;
+    padding: 8px 0;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}

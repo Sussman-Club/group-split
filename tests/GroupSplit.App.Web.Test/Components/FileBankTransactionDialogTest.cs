@@ -86,6 +86,33 @@ public class FileBankTransactionDialogTest : ComponentTest
     }
 
     [Fact]
+    public async Task Bank_payment_waits_for_group_choices_before_showing_the_form()
+    {
+        var groups = new TaskCompletionSource<ICollection<GroupResponse>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _groups.Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>())).Returns(groups.Task);
+        var (provider, _) = await OpenAsync();
+        provider.WaitForAssertion(() => Assert.Single(provider.FindAll("[aria-busy=true][role=status]")));
+        Assert.Empty(provider.FindComponents<ExpenseDecisions>());
+        Assert.True(provider.FindAll("button").Single(b => b.TextContent.Trim() == "Add expense").HasAttribute("disabled"));
+        groups.SetResult([Flat, Trip]);
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ExpenseDecisions>()));
+        Assert.DoesNotContain("Loading…", provider.Markup);
+    }
+
+    [Fact]
+    public async Task A_single_possible_match_is_selected_even_without_a_model_suggestion()
+    {
+        var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Painkillers", 100m, "USD", DateTimeOffset.UtcNow,
+            null, null, "Ana", 0m, 0, MatchConfidence.Confident);
+        var (provider, reference) = await OpenAsync(Row with { PossibleDuplicates = [candidate] });
+        Assert.Equal("true", provider.Find("button[role=radio]").GetAttribute("aria-checked"));
+        var attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
+        Assert.False(attach.HasAttribute("disabled"));
+        await attach.ClickAsync(new MouseEventArgs());
+        Assert.Equal(candidate.TransactionId, (await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>())!.AttachTo);
+    }
+
+    [Fact]
     public async Task Suggested_expense_is_preselected_before_attaching()
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,

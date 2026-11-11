@@ -212,11 +212,11 @@
                         <span class="gs-muted">
                             @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() : Detail(entry))
                         </span>
-                        <span class="gs-muted gs-feed-mobile-time">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } time) { <text> · @time.ToString("t")</text> }</span>
+                        <span class="gs-muted gs-feed-mobile-time">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } time) { <text> · @Clock.FormatTime(time)</text> }</span>
                     </span>
                     <span class="gs-feed-desktop-meta">
                         <span class="gs-feed-category">@(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value : string.IsNullOrWhiteSpace(entry.Category) ? Loc["Uncategorized"].Value : entry.Category)</span>
-                        <span class="gs-muted gs-feed-date">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } desktopTime) { <text> · @desktopTime.ToString("t")</text> }</span>
+                        <span class="gs-muted gs-feed-date">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } desktopTime) { <text> · @Clock.FormatTime(desktopTime)</text> }</span>
                     </span>
                     <span class="gs-feed-money">
                         <Money Value="entry.Amount" Class="gs-feed-amount" />

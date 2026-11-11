@@ -1,3 +1,4 @@
+@inject LocalClock Clock
 @namespace GroupSplit.App.Shared.Components
 
 <MudDialog Class="gs-selection-sheet">
@@ -11,7 +12,7 @@
         {
             <MudStack Spacing="4">
                 <MudDatePicker ShowToolbar="false" @bind-Date="_date" Label="@Loc["Date"]" Variant="Variant.Outlined" />
-                <MudTimePicker @bind-Time="_time" Label="@Loc["Time"]" Variant="Variant.Outlined" AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')" />
+                <MudTimePicker @bind-Time="_time" Label="@Loc["Time"]" Variant="Variant.Outlined" AmPm="@Clock.UseAmPm" />
             </MudStack>
         }
     </DialogContent>
