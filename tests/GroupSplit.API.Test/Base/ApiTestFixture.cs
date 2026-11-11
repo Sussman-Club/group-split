@@ -24,11 +24,8 @@ public class ApiTestFixture : IAsyncLifetime
 
     public ValueTask InitializeAsync()
     {
-        // Create the template service collection with all registrations
         ServiceCollectionTemplate = new ServiceCollection();
 
-        // Register all your API services here
-        // Note: We're just registering, not building the provider yet
         RegisterServices(ServiceCollectionTemplate);
 
         return ValueTask.CompletedTask;
@@ -36,7 +33,6 @@ public class ApiTestFixture : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
-        // Nothing to dispose at assembly level
         return ValueTask.CompletedTask;
     }
 
@@ -45,7 +41,6 @@ public class ApiTestFixture : IAsyncLifetime
     /// </summary>
     protected virtual void RegisterServices(IServiceCollection services)
     {
-        // Register your API services
         // The production list, so a test host cannot drift from what actually runs.
         services.AddDomainServices();
         // The API uses HybridCache for filing suggestions. Unit tests deliberately keep its

@@ -9,10 +9,8 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.AddServiceDefaults();
 
-// Configure auth
 builder.Services.AddAuthentication()
     .AddKeycloakJwtBearer(
         serviceName: "keycloak",
@@ -95,7 +93,6 @@ app.UseApiErrorHandling();
 
 app.MapDefaultEndpoints();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
