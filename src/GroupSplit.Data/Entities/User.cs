@@ -24,18 +24,30 @@ public class User : Entity
     /// The whole of the name for somebody a group typed in: splitting "Ana Ruiz" into two
     /// columns would be the app deciding which half is the surname.
     /// </summary>
-    public string? FirstName { get; set; }
+    public string? FirstName
+    {
+        get; set;
+    }
 
-    public string? LastName { get; set; }
+    public string? LastName
+    {
+        get; set;
+    }
 
-    public string? PreferredLanguage { get; set; }
+    public string? PreferredLanguage
+    {
+        get; set;
+    }
     public OnboardingState Onboarding { get; set; } = new();
 
     /// <summary>
     /// Null for anybody who has not signed in. Unique where it is set, so two accounts
     /// cannot answer to one address.
     /// </summary>
-    public string? Email { get; set; }
+    public string? Email
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Which of the three things this row is: somebody with an account, a stand-in a group
@@ -47,7 +59,10 @@ public class User : Entity
     /// every reader had to know and nothing checked. The table now refuses the combinations
     /// that cannot happen: a stand-in with an address, a deleted account with a name.
     /// </remarks>
-    public UserKind Kind { get; set; }
+    public UserKind Kind
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The sign-in behind this person, or null for a stand-in the group named and nobody

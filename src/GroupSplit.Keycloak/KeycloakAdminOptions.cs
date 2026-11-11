@@ -25,11 +25,20 @@ public class KeycloakAdminOptions
     /// client-credentials grant, and <see cref="AdminUser"/> and <see cref="AdminPassword"/>
     /// are not used.
     /// </summary>
-    public string? AdminClientSecret { get; init; }
+    public string? AdminClientSecret
+    {
+        get; init;
+    }
 
-    public string? AdminUser { get; init; }
+    public string? AdminUser
+    {
+        get; init;
+    }
 
-    public string? AdminPassword { get; init; }
+    public string? AdminPassword
+    {
+        get; init;
+    }
 
     /// <summary>
     /// The path Keycloak is served under, or empty when it is served at the root. Has to match
@@ -37,7 +46,10 @@ public class KeycloakAdminOptions
     /// <c>/idp</c>, and a worker calling <c>/realms/master/...</c> without it is told 404 by
     /// every endpoint it needs.
     /// </summary>
-    public string? RelativePath { get; init; }
+    public string? RelativePath
+    {
+        get; init;
+    }
 
     /// <summary>The base address for admin calls: the service address, the relative path, and a trailing slash.</summary>
     public Uri BaseAddressFor(string service)

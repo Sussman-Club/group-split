@@ -25,7 +25,7 @@ jobs:
   format:
     name: C# formatting
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -39,6 +39,17 @@ jobs:
           dotnet format whitespace src --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
           dotnet format whitespace tests --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
           dotnet format whitespace tools --folder --verify-no-changes --exclude '**/bin/**' '**/obj/**'
+      # The style analyzer loads the full solution, including the Android head.
+      - name: Install Android workload
+        run: dotnet workload install maui-android
+      - name: Restore solution
+        run: |
+          dotnet restore group-split.slnx
+          dotnet restore build/FormatTools.csproj
+      - name: Verify control-flow braces
+        run: |
+          dotnet format style group-split.slnx --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
+          dotnet format style build/FormatTools.csproj --no-restore --verify-no-changes --diagnostics IDE0011 --severity warn
 
   build-test:
     name: Build & unit tests

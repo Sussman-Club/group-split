@@ -102,7 +102,9 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
             // Prerendering may already have left a plan in the tracker. Nothing to fetch,
             // and nothing to await either.
             if (_loaded is null && Plan is not null)
+            {
                 _loaded = Task.CompletedTask;
+            }
 
             _loaded ??= ReadAsync(cancellationToken);
 
@@ -131,12 +133,16 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
         // Nothing has asked for any of this yet, so there is nothing to bring up to date.
         // Reading here would be a request on behalf of a page nobody is looking at.
         if (_loaded is null)
+        {
             return;
+        }
 
         await ReadAsync(CancellationToken.None);
 
         if (_historyWanted)
+        {
             await ReadHistoryAsync(CancellationToken.None);
+        }
     }
 
     public async Task<SettleWithPersonResponse?> SettleAsync(SettleWithPersonRequest request,
@@ -188,7 +194,9 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
                 UiText.Get("your settlement plan"));
 
             if (loaded && version == _planVersion)
+            {
                 Plan = plan;
+            }
         }
         finally
         {
@@ -210,7 +218,9 @@ public sealed class SettleStateService : ISettleStateService, IDisposable
             UiText.Get("your settlements"));
 
         if (loaded && version == _historyVersion)
+        {
             History = history;
+        }
 
         Announce();
     }

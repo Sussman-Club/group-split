@@ -10,11 +10,26 @@ public sealed class JobsBuilder
 {
     private readonly IServiceCollection _services = new ServiceCollection();
     private bool _built;
-    internal DependencyInjection.IJobsBuilder Inner { get; }
-    public DispatcherBuilder Dispatcher { get; }
-    public HandlersBuilder Handlers { get; }
-    public ReceiverBuilder Receiver { get; }
-    public SchedulerBuilder Scheduler { get; }
+    internal DependencyInjection.IJobsBuilder Inner
+    {
+        get;
+    }
+    public DispatcherBuilder Dispatcher
+    {
+        get;
+    }
+    public HandlersBuilder Handlers
+    {
+        get;
+    }
+    public ReceiverBuilder Receiver
+    {
+        get;
+    }
+    public SchedulerBuilder Scheduler
+    {
+        get;
+    }
 
     public JobsBuilder()
     {
@@ -41,7 +56,9 @@ public sealed class JobsBuilder
             .ConfigureServices(services =>
             {
                 foreach (var descriptor in _services)
+                {
                     services.Add(descriptor);
+                }
             })
             .Build();
 
@@ -55,15 +72,23 @@ public sealed class JobsBuilder
         catch
         {
             if (host is IAsyncDisposable disposable)
+            {
                 await disposable.DisposeAsync().ConfigureAwait(false);
+            }
             else
+            {
                 host.Dispose();
+            }
+
             throw;
         }
     }
 
     internal void EnsureMutable()
     {
-        if (_built) throw new InvalidOperationException("This builder has already built a runtime.");
+        if (_built)
+        {
+            throw new InvalidOperationException("This builder has already built a runtime.");
+        }
     }
 }

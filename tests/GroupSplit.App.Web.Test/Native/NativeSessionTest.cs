@@ -246,7 +246,10 @@ public sealed class NativeSessionTest
 
     private sealed class ClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
-        public int Created { get; private set; }
+        public int Created
+        {
+            get; private set;
+        }
         public HttpClient CreateClient(string name)
         {
             Assert.Equal(NativeSession.IdentityClientName, name);
@@ -257,22 +260,45 @@ public sealed class NativeSessionTest
 
     private sealed class Store : INativeTokenStore
     {
-        public string? Value { get; set; }
+        public string? Value
+        {
+            get; set;
+        }
         public Task<string?> ReadAsync() => Task.FromResult(Value);
-        public Task WriteAsync(string value) { Value = value; return Task.CompletedTask; }
+        public Task WriteAsync(string value)
+        {
+            Value = value;
+            return Task.CompletedTask;
+        }
         public void Clear() => Value = null;
     }
     private sealed class Browser : INativeBrowser
     {
-        public Uri? Url { get; private set; }
-        public bool WrongState { get; init; }
-        public bool Cancel { get; set; }
+        public Uri? Url
+        {
+            get; private set;
+        }
+        public bool WrongState
+        {
+            get; init;
+        }
+        public bool Cancel
+        {
+            get; set;
+        }
         public Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct)
         {
             Url = url;
-            if (Cancel) throw new OperationCanceledException();
+            if (Cancel)
+            {
+                throw new OperationCanceledException();
+            }
+
             return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>
-            { ["state"] = WrongState ? "wrong" : Fields(url.Query.TrimStart('?'))["state"], ["code"] = "returned-code" });
+            {
+                ["state"] = WrongState ? "wrong" : Fields(url.Query.TrimStart('?'))["state"],
+                ["code"] = "returned-code"
+            });
         }
     }
     private sealed class Transport : HttpMessageHandler
@@ -280,15 +306,28 @@ public sealed class NativeSessionTest
         public const string ValidBody = "{\"access_token\":\"access\",\"refresh_token\":\"refresh\",\"id_token\":\"id\",\"expires_in\":300,\"token_type\":\"Bearer\"}";
         public string Body { get; set; } = ValidBody;
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
-        public bool NetworkFailure { get; set; }
+        public bool NetworkFailure
+        {
+            get; set;
+        }
         public List<string> Bodies { get; } = [];
-        public string? Authorization { get; private set; }
+        public string? Authorization
+        {
+            get; private set;
+        }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
-            if (NetworkFailure) throw new HttpRequestException("Device is offline");
+            if (NetworkFailure)
+            {
+                throw new HttpRequestException("Device is offline");
+            }
+
             Authorization = request.Headers.Authorization?.ToString();
-            return new(Status) { Content = new StringContent(Body, Encoding.UTF8, "application/json") };
+            return new(Status)
+            {
+                Content = new StringContent(Body, Encoding.UTF8, "application/json")
+            };
         }
     }
 }

@@ -19,7 +19,10 @@ public sealed record CliError(
     /// failure can be matched to the server's own log line without asking for a repro.
     /// </summary>
     [JsonPropertyName("traceId")]
-    public string? TraceId { get; init; }
+    public string? TraceId
+    {
+        get; init;
+    }
 
     /// <summary>
     /// On a <c>RATE_LIMITED</c> refusal: whole seconds to wait before the same command will
@@ -27,7 +30,10 @@ public sealed record CliError(
     /// </summary>
     [JsonPropertyName("retryAfter")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? RetryAfter { get; init; }
+    public int? RetryAfter
+    {
+        get; init;
+    }
 }
 
 /// <summary>

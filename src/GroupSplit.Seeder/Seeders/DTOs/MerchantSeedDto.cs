@@ -11,9 +11,15 @@ namespace GroupSplit.Seeder.Seeders.DTOs;
 /// </remarks>
 public class MerchantSeedDto
 {
-    public required Guid Id { get; init; }
+    public required Guid Id
+    {
+        get; init;
+    }
 
-    public required string Name { get; init; }
+    public required string Name
+    {
+        get; init;
+    }
 
     /// <summary>
     /// The name of the mark to show, without a path or an extension -- <c>lidl</c> for
@@ -26,5 +32,8 @@ public class MerchantSeedDto
     /// <c>_content/GroupSplit.App.Shared/...</c> would be a seed file nobody could read.
     /// The seeder makes the URL; see <c>MerchantSeeder</c> for what these files are.
     /// </remarks>
-    public string? Logo { get; init; }
+    public string? Logo
+    {
+        get; init;
+    }
 }

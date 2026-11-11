@@ -27,17 +27,28 @@ public sealed class BufferedBrowserFile : IBrowserFile
         _content = content;
     }
 
-    public string Name { get; }
-    public DateTimeOffset LastModified { get; }
+    public string Name
+    {
+        get;
+    }
+    public DateTimeOffset LastModified
+    {
+        get;
+    }
     public long Size => _content.LongLength;
-    public string ContentType { get; }
+    public string ContentType
+    {
+        get;
+    }
 
     public Stream OpenReadStream(long maxAllowedSize, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (Size > maxAllowedSize)
+        {
             throw new IOException($"The file size ({Size} bytes) exceeds the maximum allowed size of {maxAllowedSize} bytes.");
+        }
 
         return new MemoryStream(_content, writable: false);
     }

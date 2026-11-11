@@ -35,7 +35,10 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
         if ((request.Type is not null && (!Enum.TryParse<SupportTicketType>(request.Type, false, out var type)
             || !Enum.IsDefined(type))) || request.Title?.Length > 200 || string.IsNullOrWhiteSpace(request.Description)
             || request.Description.Length > 10000 || request.ReproductionSteps?.Length > 10000)
+        {
             throw new ValidationException(ErrorCodes.InvalidSupportReport, "Check the report description and fields.");
+        }
+
         var description = request.Description.Trim();
         var summary = string.Join(" ", description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (summary.Length > 200)
@@ -82,7 +85,11 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
         var ticket = await db.Set<SupportTicket>().FindAsync([id], ct)
             ?? throw new NotFoundException(ErrorCodes.SupportTicketNotFound, "Ticket not found.");
         var assignee = request.AssignToMe ? actorUserId : request.ChangeAssignment ? request.AssignedUserId : ticket.AssignedUserId;
-        if (assignee != ticket.AssignedUserId) await team.ValidateAssigneeAsync(assignee, ct);
+        if (assignee != ticket.AssignedUserId)
+        {
+            await team.ValidateAssigneeAsync(assignee, ct);
+        }
+
         ApplyUpdate(ticket, request, actorUserId, assignee);
         await SaveTicketChanges(ct);
         return await DescribeWithNames(ticket, ct);
@@ -90,7 +97,11 @@ public sealed partial class SupportTicketService(AppDbContext db, TimeProvider c
 
     public async Task<List<SupportNoteResponse>> ListNotesAsync(Guid id, CancellationToken ct)
     {
-        if (!await db.Set<SupportTicket>().AnyAsync(t => t.Id == id, ct)) throw new NotFoundException(ErrorCodes.SupportTicketNotFound, "Ticket not found.");
+        if (!await db.Set<SupportTicket>().AnyAsync(t => t.Id == id, ct))
+        {
+            throw new NotFoundException(ErrorCodes.SupportTicketNotFound, "Ticket not found.");
+        }
+
         var notes = await db.Set<SupportTicketMessage>().AsNoTracking()
             .Where(m => m.TicketId == id && m.Visibility == SupportMessageVisibility.Internal)
             .OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id).Take(100)

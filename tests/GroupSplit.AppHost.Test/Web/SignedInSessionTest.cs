@@ -89,7 +89,11 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         }));
         var page = await reopened.NewPageAsync();
         await page.GotoAsync(Url("/groups"), new PageGotoOptions { Timeout = OperationTimeoutMs });
-        await Expect(page.GetByRole(AriaRole.Link, new() { Name = "Groups", Exact = true })
+        await Expect(page.GetByRole(AriaRole.Link, new()
+        {
+            Name = "Groups",
+            Exact = true
+        })
             .Filter(new LocatorFilterOptions { Visible = true }).First).ToBeVisibleAsync(Visible);
         Assert.Empty(await page.Locator("#password").AllAsync());
         // The stock Keycloak cookie was session-only and was not restored.
@@ -109,28 +113,63 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
         await otherPage.Locator("#username").FillAsync(email);
         await otherPage.Locator("#password").FillAsync(KeycloakAdmin.AccountPassword);
         await otherPage.Locator("#kc-login").ClickAsync();
-        await Expect(otherPage.GetByRole(AriaRole.Link, new() { Name = "Groups", Exact = true })
-            .Filter(new() { Visible = true }).First).ToBeVisibleAsync(Visible);
+        await Expect(otherPage.GetByRole(AriaRole.Link, new()
+        {
+            Name = "Groups",
+            Exact = true
+        })
+            .Filter(new()
+            {
+                Visible = true
+            }).First).ToBeVisibleAsync(Visible);
         await Page.GotoAsync(Url("/account"), new PageGotoOptions { Timeout = OperationTimeoutMs });
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Manage account", Exact = true }).ClickAsync();
-        var back = Page.GetByRole(AriaRole.Link, new() { NameRegex = new Regex("Back to Group Split") });
+        await Page.GetByRole(AriaRole.Button, new()
+        {
+            Name = "Manage account",
+            Exact = true
+        }).ClickAsync();
+        var back = Page.GetByRole(AriaRole.Link, new()
+        {
+            NameRegex = new Regex("Back to Group Split")
+        });
         await Expect(back).ToBeVisibleAsync(Visible);
         Assert.Equal(Url("/account"), await back.GetAttributeAsync("href"));
         Assert.True(await back.EvaluateAsync<bool>("el => el.getBoundingClientRect().height >= 44"));
 
-        var devices = Page.GetByRole(AriaRole.Link, new() { Name = "Device activity", Exact = true });
+        var devices = Page.GetByRole(AriaRole.Link, new()
+        {
+            Name = "Device activity",
+            Exact = true
+        });
         if (!await devices.IsVisibleAsync())
         {
-            var security = Page.GetByRole(AriaRole.Button, new() { Name = "Account security", Exact = true });
+            var security = Page.GetByRole(AriaRole.Button, new()
+            {
+                Name = "Account security",
+                Exact = true
+            });
             if (!await security.IsVisibleAsync())
+            {
                 await Page.Locator(".pf-v5-c-masthead__toggle button").ClickAsync();
+            }
+
             await security.ClickAsync();
         }
         await devices.ClickAsync();
-        await Page.GetByRole(AriaRole.Button, new() { NameRegex = new Regex("Sign out all") }).ClickAsync();
-        await Page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
+        await Page.GetByRole(AriaRole.Button, new()
+        {
+            NameRegex = new Regex("Sign out all")
+        }).ClickAsync();
+        await Page.EmulateMediaAsync(new()
+        {
+            ColorScheme = ColorScheme.Dark
+        });
         await Expect(Page.Locator("html")).ToHaveClassAsync(new Regex("pf-v5-theme-dark"));
-        var cancel = Page.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true });
+        var cancel = Page.GetByRole(AriaRole.Button, new()
+        {
+            Name = "Cancel",
+            Exact = true
+        });
         await Expect(cancel).ToBeVisibleAsync(Visible);
         Assert.Equal("0px", await cancel.EvaluateAsync<string>("el => getComputedStyle(el, '::after').borderTopWidth"));
         Assert.Equal("14px", await cancel.EvaluateAsync<string>("el => getComputedStyle(el).borderRadius"));
@@ -306,7 +345,10 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
             .First;
 
     private static LocatorAssertionsToBeVisibleOptions Visible =>
-        new() { Timeout = OperationTimeoutMs };
+        new()
+        {
+            Timeout = OperationTimeoutMs
+        };
 
     private string Url(string path) =>
         new Uri(_appHost.Application.GetEndpoint("web"), path).AbsoluteUri;

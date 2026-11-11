@@ -15,14 +15,26 @@ internal static class ExportCsv
             IFormattable number => number.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString()!
         };
-        if (value is string && CouldBeFormula(text)) text = "'" + text;
+        if (value is string && CouldBeFormula(text))
+        {
+            text = "'" + text;
+        }
+
         return "\"" + text.Replace("\"", "\"\"") + "\"";
     }
 
     private static bool CouldBeFormula(string text)
     {
-        if (text.Length == 0) return false;
-        if ("\t\r\n".Contains(text[0])) return true;
+        if (text.Length == 0)
+        {
+            return false;
+        }
+
+        if ("\t\r\n".Contains(text[0]))
+        {
+            return true;
+        }
+
         var trimmed = text.TrimStart();
         return trimmed.Length > 0 && "=+-@＝＋－＠".Contains(trimmed[0]);
     }

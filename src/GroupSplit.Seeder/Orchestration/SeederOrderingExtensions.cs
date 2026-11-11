@@ -30,9 +30,11 @@ public static class SeederOrderingExtensions
             foreach (var dep in deps)
             {
                 if (!typeLookup.ContainsKey(dep))
+                {
                     throw new InvalidOperationException(
                         $"Seeder {type.Name} depends on unregistered seeder: {dep.Name}"
                     );
+                }
 
                 edges[dep].Add(type); // dep → type
                 indegree[type]++; // type has one more incoming edge
@@ -60,7 +62,9 @@ public static class SeederOrderingExtensions
                 {
                     indegree[dependent]--;
                     if (indegree[dependent] == 0)
+                    {
                         nextQueue.Enqueue(dependent);
+                    }
                 }
             }
 

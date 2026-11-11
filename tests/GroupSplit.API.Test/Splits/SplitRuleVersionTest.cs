@@ -39,7 +39,10 @@ public class SplitRuleVersionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     private static SharesSplitRuleDto Shares(Guid a, int weightA, Guid b, int weightB) =>
-        new() { Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB } };
+        new()
+        {
+            Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB }
+        };
 
     private Task<List<SplitRuleVersion>> VersionsOf(Guid ruleId) =>
         DbContext.Set<SplitRuleVersion>()

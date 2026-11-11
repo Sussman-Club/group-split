@@ -41,6 +41,7 @@ public static class BillRetotal
         var tip = bill.Tip + amount - bill.Total;
 
         if (tip < 0)
+        {
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
                     $"The bill's tip is {bill.Tip}, so the amount cannot come down by " +
                     $"{bill.Total - amount} without changing what is on the bill. Correct the " +
@@ -49,6 +50,7 @@ public static class BillRetotal
                 .WithExtension("amount", amount)
                 .WithExtension("tip", bill.Tip)
                 .WithExtension("difference", amount - bill.Total);
+        }
 
         bill.Tip = tip;
         bill.Total = amount;

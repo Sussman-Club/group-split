@@ -959,7 +959,11 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         catch
         {
             Forget(recorded);
-            foreach (var name in names) Entry(name).State = EntityState.Detached;
+            foreach (var name in names)
+            {
+                Entry(name).State = EntityState.Detached;
+            }
+
             throw;
         }
     }
@@ -977,7 +981,11 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         catch
         {
             Forget(recorded);
-            foreach (var name in names) Entry(name).State = EntityState.Detached;
+            foreach (var name in names)
+            {
+                Entry(name).State = EntityState.Detached;
+            }
+
             throw;
         }
     }
@@ -1050,7 +1058,9 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             }
 
             if (change is null)
+            {
                 continue;
+            }
 
             change.GroupId = membership.GroupId;
             change.UserId = membership.UserId;
@@ -1090,7 +1100,9 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             }
 
             if (change is null)
+            {
                 continue;
+            }
 
             change.GroupId = guest.GroupId == default ? guest.Group.Id : guest.GroupId;
             change.UserId = guest.ParticipantUserId == default ? guest.Participant.Id : guest.ParticipantUserId;
@@ -1112,6 +1124,8 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
     private void Forget(List<GroupMembershipEvent> recorded)
     {
         foreach (var change in recorded)
+        {
             Entry(change).State = EntityState.Detached;
+        }
     }
 }

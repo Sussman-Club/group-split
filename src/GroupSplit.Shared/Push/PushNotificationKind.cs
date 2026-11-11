@@ -1,8 +1,14 @@
 namespace GroupSplit.Shared;
 
 // Values are persisted in jobs: append kinds without renumbering existing ones.
-public enum PushNotificationKind { ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue, StaffTicketCreated, StaffCustomerReplied }
-public enum PushNotificationCategory { Expenses, Settlements, GuestsJoining, BankSyncIssues, StaffSupport }
+public enum PushNotificationKind
+{
+    ExpenseCreated, ExpenseChanged, Settlement, PaymentRequest, InvitationAccepted, BankSyncIssue, StaffTicketCreated, StaffCustomerReplied
+}
+public enum PushNotificationCategory
+{
+    Expenses, Settlements, GuestsJoining, BankSyncIssues, StaffSupport
+}
 
 public sealed record PushNotificationDefinition(
     PushNotificationKind Kind, PushNotificationCategory Category, string BodyTemplate);
@@ -11,7 +17,10 @@ public static class PushNotificationKinds
 {
     // The server and native clients share this catalog. More events within an existing
     // category need no additional preference column or UI switch.
-    public static IReadOnlyList<PushNotificationDefinition> Definitions { get; } = Array.AsReadOnly<PushNotificationDefinition>(
+    public static IReadOnlyList<PushNotificationDefinition> Definitions
+    {
+        get;
+    } = Array.AsReadOnly<PushNotificationDefinition>(
     [
         new(PushNotificationKind.ExpenseCreated, PushNotificationCategory.Expenses, "An expense was added to {0}."),
         new(PushNotificationKind.ExpenseChanged, PushNotificationCategory.Expenses, "An expense was changed in {0}."),
@@ -23,7 +32,10 @@ public static class PushNotificationKinds
         new(PushNotificationKind.StaffCustomerReplied, PushNotificationCategory.StaffSupport, "A customer replied to a support ticket.")
     ]);
 
-    public static IReadOnlyList<PushNotificationKind> Settings { get; } = Array.AsReadOnly(
+    public static IReadOnlyList<PushNotificationKind> Settings
+    {
+        get;
+    } = Array.AsReadOnly(
         Definitions.DistinctBy(d => d.Category).Select(d => d.Kind).ToArray());
 
     private static PushNotificationDefinition Definition(PushNotificationKind kind) =>
@@ -65,13 +77,28 @@ public static class PushNotificationKinds
 
     public static string? Route(PushNotificationKind kind, Guid groupId, string? requestToken = null)
     {
-        if (!Enum.IsDefined(kind)) return null;
-        if (kind == PushNotificationKind.BankSyncIssue) return "/account";
-        if (kind is PushNotificationKind.StaffTicketCreated or PushNotificationKind.StaffCustomerReplied) return "/staff/tickets?status=";
+        if (!Enum.IsDefined(kind))
+        {
+            return null;
+        }
+
+        if (kind == PushNotificationKind.BankSyncIssue)
+        {
+            return "/account";
+        }
+
+        if (kind is PushNotificationKind.StaffTicketCreated or PushNotificationKind.StaffCustomerReplied)
+        {
+            return "/staff/tickets?status=";
+        }
+
         if (kind == PushNotificationKind.PaymentRequest)
+        {
             return requestToken is { Length: > 0 and <= 128 }
                 && requestToken.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')
                 ? "/settlement-requests/" + requestToken : null;
+        }
+
         return groupId == Guid.Empty ? null : $"/groups/{groupId}";
     }
 }

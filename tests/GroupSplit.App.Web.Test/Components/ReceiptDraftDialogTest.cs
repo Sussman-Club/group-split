@@ -26,7 +26,9 @@ public class ReceiptDraftDialogTest : ComponentTest
             Line("Water", 10m, "WATER 40 PK"),
             Line("Pizza", 20m, "LARGE CHEESE")
         ])
-    { CanEdit = true };
+    {
+        CanEdit = true
+    };
 
     private static ReceiptItemResponse Line(string name, decimal price, string description) =>
         new(Guid.NewGuid(), name, price, 1m, price, 0m, null, null, null)
@@ -106,7 +108,12 @@ public class ReceiptDraftDialogTest : ComponentTest
             Tax = .96m,
             Total = 28.96m,
             Items = Draft().Items.Select(item => new ReceiptItemInput
-            { Name = item.Name, UnitPrice = item.UnitPrice, TotalPrice = item.TotalPrice, IsTaxable = item.TotalPrice > 0 ? true : null }).ToArray()
+            {
+                Name = item.Name,
+                UnitPrice = item.UnitPrice,
+                TotalPrice = item.TotalPrice,
+                IsTaxable = item.TotalPrice > 0 ? true : null
+            }).ToArray()
         };
         var provider = Render<MudDialogProvider>();
         IDialogReference reference = null!;
@@ -409,7 +416,12 @@ public class ReceiptDraftDialogTest : ComponentTest
     {
         var original = Bill();
         var coupon = Line("Old coupon", -2m, "SAVE2");
-        var bill = original with { Subtotal = 28m, Total = 28m, Items = [.. original.Items, coupon] };
+        var bill = original with
+        {
+            Subtotal = 28m,
+            Total = 28m,
+            Items = [.. original.Items, coupon]
+        };
         _receipts.Setup(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(bill);

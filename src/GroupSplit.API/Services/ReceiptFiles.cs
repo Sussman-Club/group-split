@@ -22,14 +22,20 @@ public sealed class ReceiptFiles(
 {
     public void Enqueue(IEnumerable<string> objectKeys)
     {
-        foreach (var key in objectKeys.Distinct()) jobs.Enqueue(new DeleteReceiptFile(key));
+        foreach (var key in objectKeys.Distinct())
+        {
+            jobs.Enqueue(new DeleteReceiptFile(key));
+        }
     }
 
     public async Task DeleteAsync(IEnumerable<string> objectKeys, string why, CancellationToken ct = default)
     {
         foreach (var key in objectKeys.Distinct())
         {
-            try { await storage.DeleteObjectAsync(storageOptions.Value.BucketName, key, ct); }
+            try
+            {
+                await storage.DeleteObjectAsync(storageOptions.Value.BucketName, key, ct);
+            }
             catch (Exception error)
             {
                 logger.LogWarning("Receipt deletion deferred: {Reason} ({ErrorType})", why, error.GetType().Name);

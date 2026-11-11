@@ -236,7 +236,9 @@ public class GuestLinkExpiryTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (scope, opener) = await AnotherPerson();
 
         using (scope)
+        {
             await As<IInvitationService>(scope).Describe(expired, Ct);
+        }
 
         _clock.Advance(GroupGuest.LinkLifetime + TimeSpan.FromDays(5));
         var reissuedAt = _clock.GetUtcNow();

@@ -30,7 +30,10 @@ public record CategoryResponse(
 
 public record CreateCategoryRequest
 {
-    public Guid GroupId { get; init; }
+    public Guid GroupId
+    {
+        get; init;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
     [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
@@ -39,7 +42,10 @@ public record CreateCategoryRequest
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string Description { get; init; } = string.Empty;
 
-    public Guid? DefaultSplitRuleId { get; init; }
+    public Guid? DefaultSplitRuleId
+    {
+        get; init;
+    }
 }
 
 public record UpdateCategoryRequest
@@ -51,5 +57,8 @@ public record UpdateCategoryRequest
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
     public string Description { get; set; } = string.Empty;
 
-    public Guid? DefaultSplitRuleId { get; set; }
+    public Guid? DefaultSplitRuleId
+    {
+        get; set;
+    }
 }

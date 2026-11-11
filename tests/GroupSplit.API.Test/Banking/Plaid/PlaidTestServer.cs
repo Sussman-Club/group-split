@@ -29,7 +29,9 @@ internal sealed class PlaidTestServer : HttpMessageHandler
     public PlaidTestServer Answer(string path, string body, HttpStatusCode status = HttpStatusCode.OK)
     {
         if (!_answers.TryGetValue(path, out var queue))
+        {
             _answers[path] = queue = new Queue<(HttpStatusCode, string)>();
+        }
 
         queue.Enqueue((status, body));
 
@@ -60,7 +62,9 @@ internal sealed class PlaidTestServer : HttpMessageHandler
         Requests.Add((path, body));
 
         if (!_answers.TryGetValue(path, out var queue) || queue.Count == 0)
+        {
             throw new InvalidOperationException($"No recorded answer for {path}.");
+        }
 
         var (status, payload) = queue.Dequeue();
 

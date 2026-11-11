@@ -24,7 +24,10 @@ public class Merchant : Entity
     /// <summary>
     /// The name to show, cased as the provider wrote it the first time we saw it.
     /// </summary>
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get; set;
+    }
 
     /// <summary>
     /// <see cref="Name"/> folded for matching, and the key that keeps this table one row
@@ -35,20 +38,29 @@ public class Merchant : Entity
     /// resolver's lookup can use that index. A provider that starts sending "LIDL" where it
     /// used to send "Lidl" finds the row it already has instead of making a second one.
     /// </remarks>
-    public required string NormalizedName { get; set; }
+    public required string NormalizedName
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The merchant's logo, as the provider hosts it. Null for a place no provider had a
     /// logo for, which renders as initials -- the same fallback a person without a picture
     /// gets.
     /// </summary>
-    public string? LogoUrl { get; set; }
+    public string? LogoUrl
+    {
+        get; set;
+    }
 
     /// <summary>
     /// When this place was first seen. Kept because the row is created as a side effect of
     /// a sync, and a table that grows on its own is worth being able to date.
     /// </summary>
-    public required DateTimeOffset FirstSeenAt { get; set; }
+    public required DateTimeOffset FirstSeenAt
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What has been spent here, across every group.

@@ -85,7 +85,11 @@ public sealed class DeviceLoginTests : IDisposable
     {
         Device();
         _idp.Returns($"{Realm}/protocol/openid-connect/token",
-            new { error = "access_denied", error_description = "User denied." }, 400);
+            new
+            {
+                error = "access_denied",
+                error_description = "User denied."
+            }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -98,7 +102,10 @@ public sealed class DeviceLoginTests : IDisposable
     public async Task A_realm_without_the_device_grant_names_the_client_to_fix()
     {
         // What every environment looks like until the `cli` client is added to the realm.
-        _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new { error = "invalid_client" }, 401);
+        _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new
+        {
+            error = "invalid_client"
+        }, 401);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -147,7 +154,10 @@ public sealed class DeviceLoginTests : IDisposable
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(-1)
         });
 
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "invalid_grant" }, 400);
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            error = "invalid_grant"
+        }, 400);
 
         var result = await Cli.RunAsync("groups", "list");
 
@@ -165,7 +175,9 @@ public sealed class DeviceLoginTests : IDisposable
         Token(Jwt("anabel", DateTimeOffset.UtcNow.AddHours(1)));
         await Cli.RunAsync("auth", "login", "--no-browser");
 
-        _idp.Returns($"{Realm}/protocol/openid-connect/logout", new { });
+        _idp.Returns($"{Realm}/protocol/openid-connect/logout", new
+        {
+        });
 
         var result = await Cli.RunAsync("auth", "logout");
 

@@ -195,13 +195,20 @@ public static class TransactionApi
                     var details = await transactionService.GetDetails(id, ct);
 
                     if (details is null)
+                    {
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+                    }
 
                     // What a settlement made through a day covers, which the transaction service
                     // cannot work out itself: it takes the group's balances through the day.
                     // Only when there is a day, which most settlements do not have.
                     if (details.CoversThrough is not null)
-                        details = details with { Coverage = await settlements.GetCoverage(id, utcOffset ?? 0, ct) };
+                    {
+                        details = details with
+                        {
+                            Coverage = await settlements.GetCoverage(id, utcOffset ?? 0, ct)
+                        };
+                    }
 
                     return Results.Ok(details);
                 })
@@ -237,12 +244,16 @@ public static class TransactionApi
                     var expense = await (await transactionService.Get(id, ct)).FirstOrDefaultAsync(ct);
 
                     if (expense is null)
+                    {
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+                    }
 
                     var rows = await matcher.RowsLike(expense, ct);
 
                     if (rows.Count == 0)
+                    {
                         return Results.Ok<IReadOnlyList<BankTransactionResponse>>([]);
+                    }
 
                     // Through the inbox's own listing, so a suggested row is described by
                     // exactly the projection the inbox page shows -- account, institution,
@@ -365,7 +376,9 @@ public static class TransactionApi
                     var transactionUpdateRequest = await transactionService.GetUpdateModel(id, ct);
 
                     if (transactionUpdateRequest is null)
+                    {
                         return Problems.NotFound(ErrorCodes.TransactionNotFound, "Transaction not found.");
+                    }
 
                     if (patchDocument.Touches("/groupId") && !patchDocument.Touches("/splits"))
                     {
@@ -375,7 +388,9 @@ public static class TransactionApi
                     patchDocument.ApplyOrRefuse(transactionUpdateRequest);
 
                     if (!PatchedModel.IsValid(transactionUpdateRequest, out var invalid))
+                    {
                         return invalid;
+                    }
 
                     await transactionService.Update(id, transactionUpdateRequest, ct);
 
@@ -484,7 +499,9 @@ public static class TransactionApi
         internal IQueryable<Expense> ApplyFilter(TransactionFilter? filter)
         {
             if (filter is null)
+            {
                 return transactions;
+            }
 
             // Hoisted out of the expression, and normalised while they are here. Npgsql
             // writes a DateTimeOffset to a timestamptz column only at offset zero, so a
@@ -773,7 +790,9 @@ public static class TransactionApi
         var currencies = present.ToList();
 
         if (currencies.Count == 0 || currencies.Any(row => row.Currency == Currencies.Default))
+        {
             return Currencies.Default;
+        }
 
         return currencies
             .OrderByDescending(row => row.Count)

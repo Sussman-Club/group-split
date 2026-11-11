@@ -18,7 +18,10 @@ public interface IReceiptTranscriptionService
 /// </summary>
 public interface IReceiptTranscriptionProvider
 {
-    string Name { get; }
+    string Name
+    {
+        get;
+    }
     Task<TranscribedReceipt> Transcribe(ReceiptSourceDocument document, CancellationToken ct = default);
 }
 
@@ -37,8 +40,14 @@ public sealed record TranscribedReceipt(
     decimal Total,
     IReadOnlyList<TranscribedReceiptItem> Items)
 {
-    public string? MerchantName { get; init; }
-    public DateOnly? PurchaseDate { get; init; }
+    public string? MerchantName
+    {
+        get; init;
+    }
+    public DateOnly? PurchaseDate
+    {
+        get; init;
+    }
 }
 
 public sealed record TranscribedReceiptItem(
@@ -48,10 +57,22 @@ public sealed record TranscribedReceiptItem(
     decimal TotalPrice,
     decimal TaxAmount)
 {
-    public string? NormalizedName { get; init; }
-    public string? Description { get; init; }
-    public decimal? TaxRate { get; init; }
-    public bool? IsTaxable { get; init; }
+    public string? NormalizedName
+    {
+        get; init;
+    }
+    public string? Description
+    {
+        get; init;
+    }
+    public decimal? TaxRate
+    {
+        get; init;
+    }
+    public bool? IsTaxable
+    {
+        get; init;
+    }
 }
 
 public sealed class ReceiptTranscriptionService(

@@ -24,7 +24,10 @@ public class GroupsSearchTest : ComponentTest
         Assert.Contains("A home, with the bills made clear.", page.Markup);
         Assert.Contains("Create a group for your home", page.Markup);
 
-        await page.Find("input").InputAsync(new() { Value = "missing" });
+        await page.Find("input").InputAsync(new()
+        {
+            Value = "missing"
+        });
         page.WaitForAssertion(() => Assert.DoesNotContain("A home, with the bills made clear.", page.Markup));
     }
 
@@ -40,7 +43,10 @@ public class GroupsSearchTest : ComponentTest
         Services.AddSingleton(groups.Object);
         var page = Render<Groups>();
         Assert.False(page.Find("details").HasAttribute("open"));
-        await page.Find("input").InputAsync(new() { Value = "malaga" });
+        await page.Find("input").InputAsync(new()
+        {
+            Value = "malaga"
+        });
         page.WaitForAssertion(() =>
         {
             Assert.True(page.Find("details").HasAttribute("open"));

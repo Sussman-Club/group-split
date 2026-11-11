@@ -92,7 +92,10 @@ public sealed class PlaidLinkLauncher(IJSRuntime js) : IBankLinkLauncher, IAsync
     /// </summary>
     public sealed class Callback
     {
-        internal TaskCompletionSource<string?> Finished { get; } =
+        internal TaskCompletionSource<string?> Finished
+        {
+            get;
+        } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         [JSInvokable]

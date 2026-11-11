@@ -85,7 +85,13 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         var result = await inbox.File(id, new FileReceiptInboxRequest
         {
             NewExpense = new CreateTransactionRequest
-            { Name = "Test receipt", Amount = 11m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, Receipt = saved.Receipt }
+            {
+                Name = "Test receipt",
+                Amount = 11m,
+                Currency = "USD",
+                DateTime = DateTimeOffset.UtcNow,
+                Receipt = saved.Receipt
+            }
         }, Ct);
         Assert.NotNull(result.ExpenseId);
         Assert.Equal(1m, Assert.Single(result.Receipt.Items).TaxAmount);
@@ -117,7 +123,10 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         await removing.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         var link = linkingScope.ServiceProvider.GetRequiredService<IBankConnectionService>()
             .Link(new CreateBankConnectionRequest { PublicToken = "public-test" }, Ct);
-        try { Assert.False(link.IsCompleted); }
+        try
+        {
+            Assert.False(link.IsCompleted);
+        }
         finally { resume.TrySetResult(); }
 
         Assert.Empty(await deletion);
@@ -145,13 +154,20 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _storage.Setup(storage => storage.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()))
             .Returns(async (PutObjectRequest _, CancellationToken ct) =>
-            { putting.TrySetResult(); await resume.Task.WaitAsync(ct); return new PutObjectResponse(); });
+            {
+                putting.TrySetResult();
+                await resume.Task.WaitAsync(ct);
+                return new PutObjectResponse();
+            });
         using var content = new MemoryStream([1, 2, 3]);
         var file = new FormFile(content, 0, content.Length, "file", "receipt.png") { Headers = new HeaderDictionary(), ContentType = "image/png" };
         var upload = uploadingScope.ServiceProvider.GetRequiredService<IReceiptAttachmentService>().Upload(expense.Id, file, Ct);
         await putting.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         var deletion = deletingScope.ServiceProvider.GetRequiredService<IAccountService>().DeleteAccount(_userId, Ct);
-        try { Assert.False(deletion.IsCompleted); }
+        try
+        {
+            Assert.False(deletion.IsCompleted);
+        }
         finally { resume.TrySetResult(); }
 
         await upload;
@@ -176,7 +192,9 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
             Assert.False(upload.IsCompleted);
             var db = deletingScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var user = await db.Set<User>().SingleAsync(user => user.Id == _userId, Ct);
-            user.Kind = UserKind.Deleted; user.Email = null; user.FirstName = null;
+            user.Kind = UserKind.Deleted;
+            user.Email = null;
+            user.FirstName = null;
             await db.SaveChangesAsync(Ct);
         }
         finally { await lease.DisposeAsync(); }
@@ -218,7 +236,9 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
         await using var scope = _services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = await db.Set<User>().SingleAsync(user => user.Id == _userId, Ct);
-        user.Kind = UserKind.Deleted; user.FirstName = null; user.Email = null;
+        user.Kind = UserKind.Deleted;
+        user.FirstName = null;
+        user.Email = null;
         var item = new LinkedItem("held-token", "held-item", "Test bank", []);
         var pending = new PendingBankLink
         {
@@ -238,7 +258,11 @@ public class AccountDataConcurrencyTest(AppHostFixture appHost) : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (_services is null) return;
+        if (_services is null)
+        {
+            return;
+        }
+
         await using (var scope = _services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

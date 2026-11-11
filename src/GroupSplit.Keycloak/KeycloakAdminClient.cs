@@ -59,7 +59,11 @@ public sealed class KeycloakAdminClient(
         request.Content = JsonContent.Create(new JsonObject { ["name"] = name }, options: Json);
         using var response = await http.SendAsync(request, ct);
         // Another worker may create it concurrently; an existing role is already correct.
-        if (response.StatusCode == System.Net.HttpStatusCode.Conflict) return;
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            return;
+        }
+
         await ThrowOnFailure(response, $"create realm role {name} on realm {Realm}", ct);
     }
 
@@ -150,7 +154,10 @@ public sealed class KeycloakAdminClient(
     private async Task MapServiceAccountRolesAsync(
         HttpMethod method, string id, string roleClientId, IReadOnlyList<string> names, string verb, CancellationToken ct)
     {
-        if (names.Count == 0) return;
+        if (names.Count == 0)
+        {
+            return;
+        }
 
         var roleClient = await ClientUuidAsync(roleClientId, ct);
         var roles = new List<KeycloakRole>();
@@ -200,7 +207,10 @@ public sealed class KeycloakAdminClient(
             HttpMethod.Get, $"admin/realms/{Realm}/identity-provider/instances/{Uri.EscapeDataString(alias)}", ct);
         using var response = await http.SendAsync(request, ct);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
 
         await ThrowOnFailure(response, $"read identity provider {alias} on realm {Realm}", ct);
 
@@ -305,7 +315,10 @@ public sealed class KeycloakAdminClient(
         using var request = await AuthorizedAsync(HttpMethod.Delete, $"admin/realms/{Realm}", ct);
         using var response = await http.SendAsync(request, ct);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return;
+        }
 
         await ThrowOnFailure(response, $"delete realm {Realm}", ct);
     }
@@ -328,7 +341,10 @@ public sealed class KeycloakAdminClient(
         using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}/users/{id}", ct);
         using var response = await http.SendAsync(request, ct);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
 
         await ThrowOnFailure(response, $"look up user {id}", ct);
 
@@ -340,7 +356,11 @@ public sealed class KeycloakAdminClient(
         using var request = await AuthorizedAsync(HttpMethod.Get,
             $"admin/realms/{Realm}/users/{Uri.EscapeDataString(id)}/role-mappings/realm/composite", ct);
         using var response = await http.SendAsync(request, ct);
-        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
         await ThrowOnFailure(response, $"read the roles of user {id}", ct);
         var roles = await response.Content.ReadFromJsonAsync<List<KeycloakRole>>(Json, ct) ?? [];
         return roles.Any(item => string.Equals(item.Name, role, StringComparison.Ordinal));
@@ -390,7 +410,10 @@ public sealed class KeycloakAdminClient(
 
         if (!user.RealmRoles.Contains(defaultRole.Name, StringComparer.Ordinal))
         {
-            user = user with { RealmRoles = [defaultRole.Name, .. user.RealmRoles] };
+            user = user with
+            {
+                RealmRoles = [defaultRole.Name, .. user.RealmRoles]
+            };
         }
 
         using var request = await AuthorizedAsync(HttpMethod.Post, $"admin/realms/{Realm}/partialImport", ct);
@@ -455,7 +478,10 @@ public sealed class KeycloakAdminClient(
         using var request = await AuthorizedAsync(HttpMethod.Delete, $"admin/realms/{Realm}/users/{id}", ct);
         using var response = await http.SendAsync(request, ct);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return;
+        }
 
         await ThrowOnFailure(response, $"delete user {id}", ct);
     }
@@ -475,7 +501,10 @@ public sealed class KeycloakAdminClient(
         using (var request = await AuthorizedAsync(HttpMethod.Post, $"admin/realms/{Realm}/users/{id}/logout", ct))
         using (var response = await http.SendAsync(request, ct))
         {
-            if (response.StatusCode == HttpStatusCode.NotFound) return;
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return;
+            }
 
             await ThrowOnFailure(response, $"end the sessions of user {id}", ct);
         }
@@ -490,7 +519,10 @@ public sealed class KeycloakAdminClient(
     /// </summary>
     private async Task<KeycloakRole> DefaultRoleAsync(CancellationToken ct)
     {
-        if (_defaultRole is not null) return _defaultRole;
+        if (_defaultRole is not null)
+        {
+            return _defaultRole;
+        }
 
         using var request = await AuthorizedAsync(HttpMethod.Get, $"admin/realms/{Realm}", ct);
         using var response = await http.SendAsync(request, ct);
@@ -570,7 +602,10 @@ public sealed class KeycloakAdminClient(
     /// </summary>
     private static async Task ThrowOnFailure(HttpResponseMessage response, string attempt, CancellationToken ct)
     {
-        if (response.IsSuccessStatusCode) return;
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
 
@@ -580,6 +615,10 @@ public sealed class KeycloakAdminClient(
 
     private sealed record TokenResponse
     {
-        [JsonPropertyName("access_token")] public string? AccessToken { get; init; }
+        [JsonPropertyName("access_token")]
+        public string? AccessToken
+        {
+            get; init;
+        }
     }
 }

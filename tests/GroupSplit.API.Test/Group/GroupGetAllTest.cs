@@ -36,7 +36,9 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var ct = TestContext.Current.CancellationToken;
         var service = GetService<IGroupService>();
         foreach (var name in new[] { "A archived", "B trip", "C flat", "D team", "E lunch", "F holiday" })
+        {
             await service.CreateGroup(new CreateGroupRequest { Name = name }, ct);
+        }
 
         var all = await service.GetAllGroups(ct);
         var archived = await all.SingleAsync(g => g.Name == "A archived", ct);

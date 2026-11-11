@@ -84,7 +84,9 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEmpty(transactions);
 
         foreach (var transaction in transactions)
+        {
             Assert.Equal(transaction.Amount, transaction.Splits.Sum(split => split.Amount));
+        }
     }
 
     // ---- Adding ------------------------------------------------------------------------
@@ -106,7 +108,10 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await DbContext.SaveChangesAsync(Ct);
         var (scope, carlos) = await Signing();
         using (scope)
+        {
             await scope.ServiceProvider.GetRequiredService<IInvitationService>().Claim(token, Ct);
+        }
+
         var jobs = DbContext.Set<GroupSplit.Data.Entities.BackgroundJob>()
             .Where(j => j.Type == GroupSplit.API.Services.Push.SendPushNotification.Name).ToList();
         var stored = Assert.Single(jobs);

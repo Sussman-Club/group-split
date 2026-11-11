@@ -8,17 +8,29 @@ public sealed class StoredCredential
     public string AccessToken { get; set; } = string.Empty;
 
     [JsonPropertyName("refreshToken")]
-    public string? RefreshToken { get; set; }
+    public string? RefreshToken
+    {
+        get; set;
+    }
 
     [JsonPropertyName("expiresAt")]
-    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresAt
+    {
+        get; set;
+    }
 
     /// <summary>Shown by `auth status`. Informational only -- the API decides who you are.</summary>
     [JsonPropertyName("username")]
-    public string? Username { get; set; }
+    public string? Username
+    {
+        get; set;
+    }
 
     [JsonPropertyName("subject")]
-    public string? Subject { get; set; }
+    public string? Subject
+    {
+        get; set;
+    }
 
     /// <summary>
     /// A minute of slack, so a token that would expire mid-request is treated as already

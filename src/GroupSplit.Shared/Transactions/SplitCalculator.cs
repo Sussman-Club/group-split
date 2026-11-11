@@ -67,18 +67,26 @@ public static class SplitCalculator
         ArgumentNullException.ThrowIfNull(weights);
 
         if (weights.Count == 0)
+        {
             throw new ArgumentException("A split needs at least one participant.", nameof(weights));
+        }
 
         if (weights.Select(w => w.UserId).Distinct().Count() != weights.Count)
+        {
             throw new ArgumentException("A participant may appear in a split only once.", nameof(weights));
+        }
 
         if (weights.Any(w => w.Weight < 0))
+        {
             throw new ArgumentException("A weight cannot be negative.", nameof(weights));
+        }
 
         var totalWeight = weights.Sum(w => (long)w.Weight);
 
         if (totalWeight == 0)
+        {
             throw new ArgumentException("Weights must not all be zero.", nameof(weights));
+        }
 
         var remainderIndex = RemainderIndex(payerId, weights);
 
@@ -88,7 +96,9 @@ public static class SplitCalculator
         for (var i = 0; i < weights.Count; i++)
         {
             if (i == remainderIndex)
+            {
                 continue;
+            }
 
             var share = TruncateToCents(amount * weights[i].Weight / totalWeight);
 
@@ -119,7 +129,10 @@ public static class SplitCalculator
 
         for (var i = 0; i < weights.Count; i++)
         {
-            if (weights[i].UserId != payerId) continue;
+            if (weights[i].UserId != payerId)
+            {
+                continue;
+            }
 
             payerIndex = i;
             break;
@@ -128,7 +141,9 @@ public static class SplitCalculator
         // A weight of zero is a participant who owes nothing; handing them the remainder
         // would charge them the one thing they were excluded from.
         if (payerIndex >= 0 && weights[payerIndex].Weight > 0)
+        {
             return payerIndex;
+        }
 
         var fallback = 0;
 

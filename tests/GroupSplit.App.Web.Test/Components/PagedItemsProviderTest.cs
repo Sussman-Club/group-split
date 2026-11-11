@@ -16,7 +16,11 @@ public class PagedItemsProviderTest
             calls++;
             return Task.FromResult(new PagedResponse<int>([calls], page, size, 500));
         }
-        for (var page = 1; page <= 9; page++) await cache.GetAsync(page, 50, CancellationToken.None, Fetch);
+        for (var page = 1; page <= 9; page++)
+        {
+            await cache.GetAsync(page, 50, CancellationToken.None, Fetch);
+        }
+
         await cache.GetAsync(9, 50, CancellationToken.None, Fetch);
         Assert.Equal(9, calls);
         await cache.GetAsync(1, 50, CancellationToken.None, Fetch);

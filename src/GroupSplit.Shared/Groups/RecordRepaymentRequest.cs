@@ -32,15 +32,24 @@ namespace GroupSplit.Shared;
 public record RecordRepaymentRequest
 {
     /// <summary>Who handed the money over.</summary>
-    public Guid FromUserId { get; set; }
+    public Guid FromUserId
+    {
+        get; set;
+    }
 
     /// <summary>Who received it.</summary>
-    public Guid ToUserId { get; set; }
+    public Guid ToUserId
+    {
+        get; set;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
-    public decimal Amount { get; set; }
+    public decimal Amount
+    {
+        get; set;
+    }
 
     /// <summary>
     /// When the money moved. Null means now.
@@ -50,14 +59,23 @@ public record RecordRepaymentRequest
     /// history is recording repayments that closed months years ago, and dating them the day
     /// somebody typed them in would put every one of them in the same week.
     /// </remarks>
-    public DateTimeOffset? Date { get; set; }
+    public DateTimeOffset? Date
+    {
+        get; set;
+    }
 
     /// <summary>The last day of activity this repayment covers.</summary>
-    public DateOnly? Through { get; set; }
+    public DateOnly? Through
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What to remember about it -- "cash", "end of September 2024".
     /// </summary>
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 }

@@ -23,7 +23,10 @@ public sealed class PlaidConnectorOptions
     /// take them away from the app. Must be registered in the Plaid dashboard first, so it
     /// stays unset until somebody has done that.
     /// </summary>
-    public string? RedirectUri { get; set; }
+    public string? RedirectUri
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The countries whose institutions to offer, as ISO 3166-1 alpha-2.

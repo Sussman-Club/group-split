@@ -278,7 +278,12 @@ public sealed class ConfirmCommandTests : IDisposable
     [Fact]
     public async Task The_profile_the_prompt_was_about_is_the_one_confirming_acts_on()
     {
-        _api.Returns("/api/users/me", new { id = Omar, fullName = "Anabel Benitez", email = "anabel@example.com" });
+        _api.Returns("/api/users/me", new
+        {
+            id = Omar,
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
+        });
 
         var prompt = await Cli.RunAsync("--profile", "staging", "users", "delete");
 
@@ -293,7 +298,12 @@ public sealed class ConfirmCommandTests : IDisposable
         new ConfigStore().Save(new CliConfigFile());
 
         var origin = _api.BaseAddress[..^"/api".Length];
-        _api.Returns("/native/api/users/me", new { id = Omar, fullName = "Anabel Benitez", email = "anabel@example.com" });
+        _api.Returns("/native/api/users/me", new
+        {
+            id = Omar,
+            fullName = "Anabel Benitez",
+            email = "anabel@example.com"
+        });
 
         var prompt = await Cli.RunAsync("users", "delete", "--server", origin);
         var words = PosixShell.Split(prompt.Json.GetProperty("confirmCommand").GetString()!);

@@ -246,7 +246,10 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            transactions.Update(created.Id, model with { PaidByUserId = Guid.NewGuid() },
+            transactions.Update(created.Id, model with
+            {
+                PaidByUserId = Guid.NewGuid()
+            },
                 TestContext.Current.CancellationToken).AsTask());
     }
 
@@ -268,7 +271,10 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            transactions.Update(created.Id, model with { CategoryId = Guid.NewGuid() },
+            transactions.Update(created.Id, model with
+            {
+                CategoryId = Guid.NewGuid()
+            },
                 TestContext.Current.CancellationToken).AsTask());
     }
 
@@ -292,7 +298,10 @@ public class TransactionDetailsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.NotNull(model);
 
         var updated = await transactions.Update(created.Id,
-            model with { CategoryId = categoryId },
+            model with
+            {
+                CategoryId = categoryId
+            },
             TestContext.Current.CancellationToken);
 
         Assert.Equal(categoryId, (updated as Expense)?.CategoryId);

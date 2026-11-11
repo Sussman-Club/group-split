@@ -218,7 +218,9 @@ public class GroupJoinLinkTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (scope, follower) = await AnotherPerson();
 
         using (scope)
+        {
             await scope.ServiceProvider.GetRequiredService<IJoinLinkService>().Accept(link.Token, Ct);
+        }
 
         var membership = await DbContext.Set<GroupMembership>()
             .FirstAsync(row => row.GroupId == group.Id && row.UserId == follower.Id, Ct);

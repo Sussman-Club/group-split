@@ -37,7 +37,9 @@ public class SeederCompositionTest
         // The seed files are opened only when a seeder runs, so the paths need not exist;
         // they only need to be there for the options to bind.
         foreach (var file in new[] { "Groups", "Users", "Categories", "Transactions", "Guests" })
+        {
             builder.Configuration[$"Seeder:Paths:{file}"] = $"SeedData/{file.ToLowerInvariant()}.json";
+        }
 
         builder.AddPostgreSqlAppDbContext("db");
         builder.Services.Configure<SeederOptions>(builder.Configuration.GetSection("Seeder"));

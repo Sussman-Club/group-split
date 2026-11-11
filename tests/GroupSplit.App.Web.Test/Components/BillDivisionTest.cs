@@ -69,7 +69,9 @@ public class BillDivisionTest : ComponentTest
     private ReceiptResponse Bill(params ReceiptItemResponse[] items) =>
         new(Guid.NewGuid(), _expense, items.Sum(i => i.TotalPrice), 0, 0, items.Sum(i => i.TotalPrice),
             items.Count(i => i.SplitRuleVersionId is null), false, true, items)
-        { CanEdit = true };
+        {
+            CanEdit = true
+        };
 
     private IRenderedComponent<BillDivision> Open(ReceiptResponse bill, decimal? amount = null) =>
         Render<BillDivision>(p => p

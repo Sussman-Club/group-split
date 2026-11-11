@@ -150,4 +150,15 @@ dotnet format whitespace tests --folder --exclude '**/bin/**' '**/obj/**'
 dotnet format whitespace tools --folder --exclude '**/bin/**' '**/obj/**'
 ```
 
-Add `--verify-no-changes` to either command to check without modifying files. Folder mode also covers the native app without requiring MAUI workloads. This check covers C# whitespace; Razor, CSS, JavaScript, and code-style analyzers are outside its scope.
+Add `--verify-no-changes` to any command to check without modifying files. Folder mode covers the native app without requiring MAUI workloads.
+
+CI also checks that control-flow statements use braces. To apply that rule locally, install the Android MAUI workload and run:
+
+```sh
+dotnet restore group-split.slnx
+dotnet restore build/FormatTools.csproj
+dotnet format style group-split.slnx --no-restore --diagnostics IDE0011 --severity warn
+dotnet format style build/FormatTools.csproj --no-restore --diagnostics IDE0011 --severity warn
+```
+
+Add `--verify-no-changes` to the style commands to check without modifying files. Razor, CSS, JavaScript, and other code-style analyzers are outside these checks.

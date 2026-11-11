@@ -90,7 +90,9 @@ public static class WebhookTunnelExtensions
             var builder = api.ApplicationBuilder;
 
             if (!builder.Configuration.GetValue(EnabledKey, false))
+            {
                 return api;
+            }
 
             // Named for what it is for rather than for what it fronts, the way the webhook
             // route itself is: lowercase and hyphenated, which is what Aspire allows in a

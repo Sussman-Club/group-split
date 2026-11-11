@@ -16,28 +16,58 @@ namespace GroupSplit.Seeder.Seeders.DTOs;
 /// </remarks>
 public class BankConnectionSeedDto
 {
-    public required Guid Id { get; init; }
+    public required Guid Id
+    {
+        get; init;
+    }
 
-    public required Guid UserId { get; init; }
+    public required Guid UserId
+    {
+        get; init;
+    }
 
-    public required string InstitutionName { get; init; }
+    public required string InstitutionName
+    {
+        get; init;
+    }
 
-    public required List<LinkedAccountSeedDto> Accounts { get; init; }
+    public required List<LinkedAccountSeedDto> Accounts
+    {
+        get; init;
+    }
 }
 
 public class LinkedAccountSeedDto
 {
-    public required Guid Id { get; init; }
+    public required Guid Id
+    {
+        get; init;
+    }
 
-    public required string Name { get; init; }
+    public required string Name
+    {
+        get; init;
+    }
 
-    public string? Mask { get; init; }
+    public string? Mask
+    {
+        get; init;
+    }
 
-    public required string Type { get; init; }
+    public required string Type
+    {
+        get; init;
+    }
 
-    public string? Subtype { get; init; }
+    public string? Subtype
+    {
+        get; init;
+    }
 
-    public required List<BankTransactionSeedDto> Transactions { get; init; }
+    public required List<BankTransactionSeedDto> Transactions
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -45,26 +75,47 @@ public class LinkedAccountSeedDto
 /// </summary>
 public class BankTransactionSeedDto
 {
-    public required Guid Id { get; init; }
+    public required Guid Id
+    {
+        get; init;
+    }
 
     /// <summary>Days before the seeding run, so demo data never looks stale.</summary>
-    public required int DaysAgo { get; init; }
+    public required int DaysAgo
+    {
+        get; init;
+    }
 
-    public required decimal Amount { get; init; }
+    public required decimal Amount
+    {
+        get; init;
+    }
 
-    public required string Description { get; init; }
+    public required string Description
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Who was paid. Matched against <c>merchants.json</c> by name to find the shop -- and
     /// with it the logo, which is the merchant's and not the row's. A name that file does
     /// not list still shows on the row; it just has no mark to go with it.
     /// </summary>
-    public string? MerchantName { get; init; }
+    public string? MerchantName
+    {
+        get; init;
+    }
 
-    public string? ProviderCategory { get; init; }
+    public string? ProviderCategory
+    {
+        get; init;
+    }
 
     /// <summary>The provider's finer category, under the primary one.</summary>
-    public string? ProviderCategoryDetailed { get; init; }
+    public string? ProviderCategoryDetailed
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Days before the run that the money was actually spent, when that differs from when
@@ -76,12 +127,24 @@ public class BankTransactionSeedDto
     /// ordinary case, and demo data that never showed it would hide the one date somebody
     /// actually recognises.
     /// </remarks>
-    public int? AuthorizedDaysAgo { get; init; }
+    public int? AuthorizedDaysAgo
+    {
+        get; init;
+    }
 
     /// <summary>How it was paid: <c>in store</c>, <c>online</c>, <c>other</c>.</summary>
-    public string? PaymentChannel { get; init; }
+    public string? PaymentChannel
+    {
+        get; init;
+    }
 
-    public string? City { get; init; }
+    public string? City
+    {
+        get; init;
+    }
 
-    public bool Pending { get; init; }
+    public bool Pending
+    {
+        get; init;
+    }
 }

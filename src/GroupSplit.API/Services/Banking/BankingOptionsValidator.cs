@@ -23,25 +23,33 @@ internal sealed class BankingOptionsValidator : IValidateOptions<BankingOptions>
     public ValidateOptionsResult Validate(string? name, BankingOptions options)
     {
         if (options.PublicOrigin is not { } origin || string.IsNullOrWhiteSpace(origin))
+        {
             return ValidateOptionsResult.Success;
+        }
 
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} is not an absolute URL. Write the origin scheme first, "
                 + "e.g. https://groupsplit.example.com.");
+        }
 
         if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} is {uri.Scheme} rather than https. Bank providers refuse a webhook "
                 + "address that is not HTTPS, so no bank could be linked at all.");
+        }
 
         // A path here would land the webhook route under it, and it is served at the origin.
         // Query and fragment are meaningless in an origin and mean the value is something
         // else that was pasted in -- a full link-token URL, say.
         if (uri.PathAndQuery is not "/" || uri.Fragment.Length > 0)
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} carries a path, query or fragment. It is an origin, "
                 + "e.g. https://groupsplit.example.com, and the webhook path is appended to it.");
+        }
 
         return ValidateOptionsResult.Success;
     }

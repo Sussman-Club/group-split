@@ -5,7 +5,10 @@ namespace GroupSplit.Cli.Configuration;
 /// <summary>The URLs a command needs, plus where they came from so errors can say so.</summary>
 public sealed record Endpoints
 {
-    public required Uri Api { get; init; }
+    public required Uri Api
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Null when neither a server origin nor an explicit authority was configured.
@@ -16,7 +19,10 @@ public sealed record Endpoints
     /// were perfectly well specified.
     /// </para>
     /// </summary>
-    public Uri? AuthorityOrNull { get; init; }
+    public Uri? AuthorityOrNull
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Where the app is published, when a server origin was configured -- the base a join
@@ -28,14 +34,26 @@ public sealed record Endpoints
     /// nothing at all about where a browser would find the app -- so the token is printed
     /// on its own rather than pasted into a guess.
     /// </remarks>
-    public Uri? WebOrNull { get; init; }
+    public Uri? WebOrNull
+    {
+        get; init;
+    }
 
-    public required string ClientId { get; init; }
+    public required string ClientId
+    {
+        get; init;
+    }
 
-    public required string ProfileName { get; init; }
+    public required string ProfileName
+    {
+        get; init;
+    }
 
     /// <summary>Human-readable provenance, e.g. "--server" or "GROUPSPLIT_SERVER" or the config path.</summary>
-    public required string Source { get; init; }
+    public required string Source
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Things worth saying about this configuration once, when it is first used. Carried

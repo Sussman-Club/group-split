@@ -62,7 +62,11 @@ public sealed class CurrencyCommandTests : IDisposable
     {
         _api.Problem("/api/transactions", 409, "CURRENCY_MISMATCH",
             "This is in EUR and the group keeps its balances in USD.",
-            new { TransactionCurrency = "EUR", GroupCurrency = "USD" });
+            new
+            {
+                TransactionCurrency = "EUR",
+                GroupCurrency = "USD"
+            });
 
         var result = await Cli.RunAsync(
             "transactions", "create", "Dinner", "20", "--currency", "EUR", "--group", Guid.NewGuid().ToString());
@@ -82,7 +86,11 @@ public sealed class CurrencyCommandTests : IDisposable
         _api.Returns($"/api/transactions/{id}", Transaction("Dinner in Lisbon", 20m, "EUR"), method: "GET");
         _api.Problem($"/api/transactions/{id}", 409, "CURRENCY_MISMATCH",
             "This is in EUR and the group keeps its balances in USD.",
-            new { TransactionCurrency = "EUR", GroupCurrency = "USD" }, method: "PATCH");
+            new
+            {
+                TransactionCurrency = "EUR",
+                GroupCurrency = "USD"
+            }, method: "PATCH");
 
         var result = await Cli.RunAsync(
             "transactions", "update", id.ToString(), "--group", Guid.NewGuid().ToString());
@@ -125,7 +133,11 @@ public sealed class CurrencyCommandTests : IDisposable
         var id = Guid.NewGuid();
         _api.Problem($"/api/inbox/{id}/file", 409, "CURRENCY_MISMATCH",
             "This is in EUR and the group keeps its balances in USD.",
-            new { TransactionCurrency = "EUR", GroupCurrency = "USD" });
+            new
+            {
+                TransactionCurrency = "EUR",
+                GroupCurrency = "USD"
+            });
 
         var result = await Cli.RunAsync("inbox", "file", id.ToString(), "--group", Guid.NewGuid().ToString());
 

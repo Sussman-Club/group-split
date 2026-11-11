@@ -6,13 +6,22 @@ namespace GroupSplit.App.Shared.Services.Users;
 public class UserTracker
 {
     [PersistentState]
-    public UserInfo? User { get; set; }
+    public UserInfo? User
+    {
+        get; set;
+    }
 
     [PersistentState]
-    public bool LoginAttempted { get; set; }
+    public bool LoginAttempted
+    {
+        get; set;
+    }
 
     [PersistentState]
-    public bool LoginFailed { get; set; }
+    public bool LoginFailed
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Why the API would not let this person in at all, when that is the reason there is no
@@ -20,7 +29,10 @@ public class UserTracker
     /// prerender found instead of asking again and flashing the app in between.
     /// </summary>
     [PersistentState]
-    public SignInRefusal? Refusal { get; set; }
+    public SignInRefusal? Refusal
+    {
+        get; set;
+    }
 }
 
 /// <summary>

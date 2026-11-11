@@ -53,7 +53,10 @@ public class GroupGuest : Entity
 
     public virtual Group Group { get; set; } = null!;
 
-    public Guid GroupId { get; set; }
+    public Guid GroupId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What the group calls them. The only thing it knows, and what every listing shows:
@@ -63,7 +66,10 @@ public class GroupGuest : Entity
     /// Not unique within the group. Two people can be called Dani, and refusing the second
     /// would be the app telling a group it has misremembered its own friends.
     /// </remarks>
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The person this guest is money-wise: the row every share recorded against them
@@ -83,17 +89,29 @@ public class GroupGuest : Entity
     /// </remarks>
     public virtual User Participant { get; set; } = null!;
 
-    public Guid ParticipantUserId { get; set; }
+    public Guid ParticipantUserId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who added them. Nullable so that an account deleting itself does not take the
     /// guests it added with it -- the group still means them.
     /// </summary>
-    public virtual User? AddedBy { get; set; }
+    public virtual User? AddedBy
+    {
+        get; set;
+    }
 
-    public Guid? AddedByUserId { get; set; }
+    public Guid? AddedByUserId
+    {
+        get; set;
+    }
 
-    public required DateTimeOffset AddedAt { get; set; }
+    public required DateTimeOffset AddedAt
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The random part of the URL a member sends, when one has been issued: whoever opens it
@@ -108,7 +126,10 @@ public class GroupGuest : Entity
     /// or not: an expired link stays in this column until a member issues another, but
     /// nothing answers to it.
     /// </remarks>
-    public string? Token { get; set; }
+    public string? Token
+    {
+        get; set;
+    }
 
     /// <summary>When the current link was issued. Set exactly when <see cref="Token"/> is.</summary>
     /// <remarks>
@@ -116,7 +137,10 @@ public class GroupGuest : Entity
     /// them back, whenever the guest it belongs to was added. And what the link's expiry is
     /// counted from (<see cref="LinkLifetime"/>), so issuing a link again restarts both.
     /// </remarks>
-    public DateTimeOffset? LinkIssuedAt { get; set; }
+    public DateTimeOffset? LinkIssuedAt
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The moment the current link stops working, or null when there is none.
@@ -140,23 +164,38 @@ public class GroupGuest : Entity
         Token is not null && LinkIssuedAt > IssuedSince(now);
 
     /// <summary>Who issued the current link, while it stands.</summary>
-    public virtual User? LinkIssuedBy { get; set; }
+    public virtual User? LinkIssuedBy
+    {
+        get; set;
+    }
 
-    public Guid? LinkIssuedByUserId { get; set; }
+    public Guid? LinkIssuedByUserId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// When they stopped being a guest, or null while they are one. Set together with
     /// <see cref="EndReason"/>.
     /// </summary>
-    public DateTimeOffset? EndedAt { get; set; }
+    public DateTimeOffset? EndedAt
+    {
+        get; set;
+    }
 
-    public GuestEndReason? EndReason { get; set; }
+    public GuestEndReason? EndReason
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who ended it: the member who removed them, or the account that claimed them. Null
     /// while they are a guest, and once that account is gone.
     /// </summary>
-    public Guid? EndedByUserId { get; set; }
+    public Guid? EndedByUserId
+    {
+        get; set;
+    }
 }
 
 /// <summary>Why somebody stopped being a guest.</summary>

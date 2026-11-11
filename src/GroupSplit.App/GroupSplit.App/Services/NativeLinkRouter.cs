@@ -11,17 +11,33 @@ public sealed class NativeLinkRouter(NativeOptions options)
 
     public void OpenGroup(Guid groupId)
     {
-        if (groupId == Guid.Empty) return;
+        if (groupId == Guid.Empty)
+        {
+            return;
+        }
+
         var route = $"/groups/{groupId}";
-        lock (gate) pending = route;
+        lock (gate)
+        {
+            pending = route;
+        }
+
         Changed?.Invoke(route);
     }
 
     public bool OpenNotification(PushNotificationKind kind, Guid groupId, string? requestToken)
     {
         var route = PushNotificationKinds.Route(kind, groupId, requestToken);
-        if (route is null) return false;
-        lock (gate) pending = route;
+        if (route is null)
+        {
+            return false;
+        }
+
+        lock (gate)
+        {
+            pending = route;
+        }
+
         Changed?.Invoke(route);
         return true;
     }
@@ -29,8 +45,16 @@ public sealed class NativeLinkRouter(NativeOptions options)
     public bool Open(Uri uri)
     {
         var route = Route(uri, options.WebBaseAddress);
-        if (route is null) return false;
-        lock (gate) pending = route;
+        if (route is null)
+        {
+            return false;
+        }
+
+        lock (gate)
+        {
+            pending = route;
+        }
+
         Changed?.Invoke(route);
         return true;
     }
@@ -47,16 +71,32 @@ public sealed class NativeLinkRouter(NativeOptions options)
 
     public static string? Route(Uri uri, Uri website)
     {
-        if (!uri.IsAbsoluteUri || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0) return null;
+        if (!uri.IsAbsoluteUri || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+        {
+            return null;
+        }
+
         var isWebsite = uri.Scheme == website.Scheme && uri.Authority == website.Authority;
         var isScheme = uri.Scheme == "groupsplit" && uri.Host == "invite" && uri.IsDefaultPort;
-        if (!isWebsite && !isScheme) return null;
+        if (!isWebsite && !isScheme)
+        {
+            return null;
+        }
+
         var path = uri.AbsolutePath;
         var prefix = isWebsite ? website.AbsolutePath.TrimEnd('/') + "/" : "/";
-        if (!path.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        if (!path.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
         var parts = path[prefix.Length..].Split('/');
         if (parts.Length != 2 || parts[0] is not ("join" or "claim") || parts[1].Length is < 1 or > 256
-            || parts[1].Any(value => !char.IsAsciiLetterOrDigit(value) && value is not ('_' or '-'))) return null;
+            || parts[1].Any(value => !char.IsAsciiLetterOrDigit(value) && value is not ('_' or '-')))
+        {
+            return null;
+        }
+
         return "/" + string.Join('/', parts);
     }
 }

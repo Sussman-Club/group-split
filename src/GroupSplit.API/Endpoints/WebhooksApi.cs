@@ -88,7 +88,9 @@ public static class WebhooksApi
                     // server's default a stranger could spend 30MB of disk and twice that in
                     // memory per call, and a provider's notification is a fraction of this.
                     if (httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
+                    {
                         size.MaxRequestBodySize = MaxBodyBytes;
+                    }
 
                     // The raw bytes, because the signature is over exactly these and a
                     // round trip through a deserializer would not reproduce them.

@@ -70,8 +70,10 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         var item = Assert.Single(receipt.Items);
         Assert.Equal(expected, item.TaxRate);
         if (tax != 0)
+        {
             Assert.Equal(tax, Assert.Single(ReceiptTaxes.Calculate(receipt.Tax,
                 [new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)])));
+        }
     }
 
     [Theory]
@@ -360,7 +362,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
                 message.Contents.OfType<DataContent>().Select(content => content.Name ?? string.Empty));
 
             if (failure is not null)
+            {
                 throw failure;
+            }
 
             var assistant = new ChatMessage(ChatRole.Assistant, response!);
             return Task.FromResult(new ChatResponse(assistant));

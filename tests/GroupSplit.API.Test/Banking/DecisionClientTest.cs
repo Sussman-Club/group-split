@@ -30,7 +30,10 @@ public class DecisionClientTest
         var client = Client(handler);
 
         var answer = await client.ChooseAsync(
-            new { merchant = "Lidl" },
+            new
+            {
+                merchant = "Lidl"
+            },
             "Which one?",
             new Dictionary<string, string> { ["Home · Groceries"] = "food", ["cannot tell"] = "no idea" },
             Ct);
@@ -72,7 +75,10 @@ public class DecisionClientTest
     {
         using var spans = new Spans();
 
-        await Client(new Recording(Answered)).ChooseAsync(new { merchant = "Lidl" }, "Which one?", TwoOptions, Ct);
+        await Client(new Recording(Answered)).ChooseAsync(new
+        {
+            merchant = "Lidl"
+        }, "Which one?", TwoOptions, Ct);
 
         var span = Assert.Single(spans.Stopped);
 
@@ -95,7 +101,10 @@ public class DecisionClientTest
     {
         using var spans = new Spans();
 
-        await Client(new Recording(Answered)).ChooseAsync(new { merchant = "Lidl" }, "Which one?", TwoOptions, Ct);
+        await Client(new Recording(Answered)).ChooseAsync(new
+        {
+            merchant = "Lidl"
+        }, "Which one?", TwoOptions, Ct);
 
         var span = Assert.Single(spans.Stopped);
 
@@ -110,7 +119,10 @@ public class DecisionClientTest
         using var spans = new Spans();
 
         await Client(new Recording(Answered), captureMessageContent: true)
-            .ChooseAsync(new { merchant = "Lidl" }, "Which one?", TwoOptions, Ct);
+            .ChooseAsync(new
+            {
+                merchant = "Lidl"
+            }, "Which one?", TwoOptions, Ct);
 
         var span = Assert.Single(spans.Stopped);
 
@@ -130,7 +142,9 @@ public class DecisionClientTest
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
             Client(new Recording("""{"error":{"code":"DeploymentNotFound"}}""", HttpStatusCode.NotFound))
-                .ChooseAsync(new { }, "Which one?", TwoOptions, Ct));
+                .ChooseAsync(new
+                {
+                }, "Which one?", TwoOptions, Ct));
 
         var span = Assert.Single(spans.Stopped);
 
@@ -158,7 +172,9 @@ public class DecisionClientTest
         var client = Client(new Recording("""{"error":{"code":"DeploymentNotFound"}}""", HttpStatusCode.NotFound));
 
         await Assert.ThrowsAsync<HttpRequestException>(() => client.ChooseAsync(
-            new { }, "Which one?", new Dictionary<string, string> { ["a"] = "a", ["b"] = "b" }, Ct));
+            new
+            {
+            }, "Which one?", new Dictionary<string, string> { ["a"] = "a", ["b"] = "b" }, Ct));
     }
 
     [Fact]
@@ -245,8 +261,12 @@ public class DecisionClientTest
                 ActivityStopped = activity =>
                 {
                     if (Current.Value is { } spans)
+                    {
                         lock (spans.Stopped)
+                        {
                             spans.Stopped.Add(activity);
+                        }
+                    }
                 }
             };
             ActivitySource.AddActivityListener(_listener);
@@ -257,11 +277,26 @@ public class DecisionClientTest
 
     private sealed class Recording(string response, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
-        public HttpMethod? Method { get; private set; }
-        public Uri? Uri { get; private set; }
-        public string? ApiKey { get; private set; }
-        public string? Body { get; private set; }
-        public long? ContentLength { get; private set; }
+        public HttpMethod? Method
+        {
+            get; private set;
+        }
+        public Uri? Uri
+        {
+            get; private set;
+        }
+        public string? ApiKey
+        {
+            get; private set;
+        }
+        public string? Body
+        {
+            get; private set;
+        }
+        public long? ContentLength
+        {
+            get; private set;
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {

@@ -33,7 +33,9 @@ internal sealed class SweepBankConnectionsHandler(
             .ToListAsync(cancellationToken);
 
         foreach (var id in ids)
+        {
             await jobs.DispatchAsync(new SyncBankConnection(id), cancellationToken);
+        }
 
         logger.LogInformation("Bank sweep queued {Count} connections.", ids.Count);
     }

@@ -28,15 +28,27 @@ internal static class StaffConsoleFixtures
     public static void Export(string markup, string view)
     {
         var output = Environment.GetEnvironmentVariable("GROUPSPLIT_STAFF_PREVIEW");
-        if (string.IsNullOrEmpty(output)) return;
+        if (string.IsNullOrEmpty(output))
+        {
+            return;
+        }
+
         output = Path.Combine(Path.GetDirectoryName(output)!, $"staff-{view}.html");
         var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root is not null && !File.Exists(Path.Combine(root.FullName, "group-split.slnx"))) root = root.Parent;
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "group-split.slnx")))
+        {
+            root = root.Parent;
+        }
+
         var cssRoot = Path.Combine(root!.FullName, "src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/css");
         var css = string.Join("\n", new[] { "tokens.css", "base.css", "layout.css", "components/cards.css", "components/avatars.css", "mudblazor.css", "components/staff.css" }
             .Select(file => File.ReadAllText(Path.Combine(cssRoot, file))));
         var mudCss = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget/packages/mudblazor/9.9.0/staticwebassets/MudBlazor.min.css");
-        if (File.Exists(mudCss)) css = File.ReadAllText(mudCss) + "\n" + css;
+        if (File.Exists(mudCss))
+        {
+            css = File.ReadAllText(mudCss) + "\n" + css;
+        }
+
         File.WriteAllText(output, "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><style>" + css
             + "body{margin:0;font-family:var(--gs-font-body);color:var(--gs-ink)}.gs-brand{display:flex;align-items:center;text-decoration:none;color:inherit}.gs-card{background:var(--gs-surface);border:1px solid var(--gs-line);border-radius:var(--gs-radius-lg);box-shadow:var(--gs-shadow-sm)}</style>"
             + markup + "</html>");

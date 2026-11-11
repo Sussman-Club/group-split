@@ -230,7 +230,11 @@ public sealed class PushCategoriesTest(ApiTestFixture fixture) : ApiUnitTest(fix
         bank.Status = BankConnectionStatus.Active;
         await DbContext.SaveChangesAsync(Ct);
         await handler.HandleAsync(job, Ct);
-        await handler.HandleAsync(job with { DeviceId = otherDevice.Id, UserId = other.Id }, Ct);
+        await handler.HandleAsync(job with
+        {
+            DeviceId = otherDevice.Id,
+            UserId = other.Id
+        }, Ct);
         sender.VerifyNoOtherCalls();
     }
 }

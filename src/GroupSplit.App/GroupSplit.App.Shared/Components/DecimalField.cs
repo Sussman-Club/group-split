@@ -37,7 +37,9 @@ public class DecimalField<T> : MudNumericField<T>
     public DecimalField()
     {
         if (typeof(T) != typeof(decimal) && typeof(T) != typeof(decimal?))
+        {
             throw new InvalidOperationException($"{nameof(DecimalField<T>)} holds a decimal, not a {typeof(T).Name}.");
+        }
     }
 
     /// <summary>
@@ -109,10 +111,14 @@ public class DecimalField<T> : MudNumericField<T>
             // Cleared is no amount: null where the model can hold that, zero where it cannot,
             // which is what MudBlazor's own converter did before this one.
             if (string.IsNullOrWhiteSpace(input))
+            {
                 return default;
+            }
 
             if (!DecimalText.TryParse(input, field.Places, commaIsDecimal: true, out var value, out var problem))
+            {
                 throw new ConversionException(problem);
+            }
 
             return (T)(object)value;
         }

@@ -63,7 +63,10 @@ public sealed class AuthHardeningTests : IDisposable
     public async Task An_expired_device_code_says_to_start_again()
     {
         Device();
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "expired_token" }, 400);
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            error = "expired_token"
+        }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -77,7 +80,11 @@ public sealed class AuthHardeningTests : IDisposable
     {
         Device();
         _idp.Returns($"{Realm}/protocol/openid-connect/token",
-            new { error = "invalid_scope", error_description = "Scope not permitted." }, 400);
+            new
+            {
+                error = "invalid_scope",
+                error_description = "Scope not permitted."
+            }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -99,7 +106,10 @@ public sealed class AuthHardeningTests : IDisposable
             expires_in = 0,
             interval = 0
         });
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "authorization_pending" }, 400);
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            error = "authorization_pending"
+        }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -210,7 +220,11 @@ public sealed class AuthHardeningTests : IDisposable
 
         // No refresh_token in the response: nulling the stored one would strand the user at
         // the next expiry with nothing to point at.
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { access_token = "fresh", expires_in = 3600 });
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            access_token = "fresh",
+            expires_in = 3600
+        });
         _idp.Returns("/api/groups", Array.Empty<object>());
 
         Assert.Equal(ExitCodes.Success, (await Cli.RunAsync("groups", "list")).ExitCode);

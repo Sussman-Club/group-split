@@ -24,7 +24,12 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var me = GetService<ICurrentUser>().User;
         const string name = "=SUM(1,2)\n\"Dinner\"";
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { Name = name, Amount = 12.50m, DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
+        {
+            Name = name,
+            Amount = 12.50m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
         var attachment = new ReceiptAttachment
         {
             ExpenseId = expense.Id,
@@ -77,7 +82,12 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     {
         var me = GetService<ICurrentUser>().User;
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { Name = "Dinner", Amount = 12m, DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
+        {
+            Name = "Dinner",
+            Amount = 12m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
         var file = new ReceiptAttachment
         {
             ExpenseId = expense.Id,
@@ -113,7 +123,14 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var me = GetService<ICurrentUser>().User;
         var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Visible" }, Ct);
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { GroupId = group.Id, Name = "Dinner", Amount = 12.50m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
+        {
+            GroupId = group.Id,
+            Name = "Dinner",
+            Amount = 12.50m,
+            Currency = "USD",
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
 
         await using var scope = ServiceProvider.CreateAsyncScope();
         await InitializeCurrentUser(scope.ServiceProvider);

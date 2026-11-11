@@ -335,7 +335,10 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.Members, Members)
             .Add(e => e.Amount, 100m)
             .Add(e => e.ShowByBill, true)
-            .Add(e => e.Bill, Bill() with { DividesItsExpense = false })
+            .Add(e => e.Bill, Bill() with
+            {
+                DividesItsExpense = false
+            })
             .Add(e => e.BillRuleId, rule)
             .Add(e => e.Preview, Divided(null))
             .Add(e => e.SplitRuleIdChanged, id => named = id));
@@ -407,7 +410,10 @@ public class SplitEditorTest : ComponentTest
             .Add(e => e.Members, Members)
             .Add(e => e.Amount, 100m)
             .Add(e => e.ShowByBill, true)
-            .Add(e => e.Bill, Bill() with { DividesItsExpense = false })
+            .Add(e => e.Bill, Bill() with
+            {
+                DividesItsExpense = false
+            })
             .Add(e => e.BillRuleId, Guid.NewGuid())
             .Add(e => e.Preview, Divided(null)));
 

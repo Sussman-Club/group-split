@@ -207,7 +207,9 @@ public sealed class BankSyncService(
             cursor = page.NextCursor;
 
             if (!page.HasMore)
+            {
                 break;
+            }
         }
 
         if (await SupersededAsync(connection, item, ct))
@@ -274,7 +276,9 @@ public sealed class BankSyncService(
         suspects.ExceptWith(finished.Reported);
 
         if (suspects.Count == 0)
+        {
             return;
+        }
 
         var phantoms = await dbContext.Set<BankTransaction>()
             .Where(row => suspects.Contains(row.Id)
@@ -282,7 +286,9 @@ public sealed class BankSyncService(
             .ToListAsync(ct);
 
         if (phantoms.Count == 0)
+        {
             return;
+        }
 
         logger.LogInformation(
             "Bank connection {ConnectionId}: dropping {Count} row(s) a restarted page run did not report again.",
@@ -321,7 +327,9 @@ public sealed class BankSyncService(
         }
 
         if (connection.ProviderItemId == item)
+        {
             return false;
+        }
 
         logger.LogInformation(
             "Bank connection {ConnectionId} moved from item {Item} to {Current} while it was syncing, so what "
@@ -336,10 +344,15 @@ public sealed class BankSyncService(
         BankConnection connection, string item, BankConnectionStatus status, CancellationToken ct)
     {
         if (await SupersededAsync(connection, item, ct))
+        {
             return;
+        }
 
         if (connection.Status != status && status != BankConnectionStatus.Active)
+        {
             await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+        }
+
         connection.Status = status;
         await dbContext.SaveChangesAsync(ct);
     }
@@ -365,13 +378,19 @@ public sealed class BankSyncService(
         var now = clock.GetUtcNow();
 
         foreach (var imported in page.Added)
+        {
             await AddAsync(connection, accounts, index, rekeying, attempt, imported, now, ct);
+        }
 
         foreach (var imported in page.Modified)
+        {
             await ModifyAsync(connection, accounts, index, rekeying, attempt, imported, now, ct);
+        }
 
         foreach (var removed in page.Removed)
+        {
             Remove(connection, accounts, index, removed, now);
+        }
 
         await dbContext.SaveChangesAsync(ct);
     }
@@ -662,7 +681,9 @@ public sealed class BankSyncService(
         var missing = Unknown(accounts, page);
 
         if (missing.Count == 0)
+        {
             return askedAgain;
+        }
 
         // Both of the writes below are to the connection, so both answer the question every
         // write in this file has to: has it been re-linked underneath this run? Account ids
@@ -670,7 +691,9 @@ public sealed class BankSyncService(
         // accounts that no longer name anything -- and the flag would be about an item
         // nobody is using. Answering once stops the reload happening per page as well.
         if (await SupersededAsync(connection, item, ct))
+        {
             return true;
+        }
 
         if (!askedAgain)
         {
@@ -682,7 +705,9 @@ public sealed class BankSyncService(
                 await dbContext.SaveChangesAsync(ct);
 
                 foreach (var account in connection.Accounts)
+                {
                     accounts.TryAdd(account.ProviderAccountId, account);
+                }
             }
             catch (Exception e) when (e is BankSyncException or HttpRequestException)
             {
@@ -700,7 +725,9 @@ public sealed class BankSyncService(
         missing = Unknown(accounts, page);
 
         if (missing.Count == 0)
+        {
             return askedAgain;
+        }
 
         // The provider has accounts this connection is not importing, and only the person
         // can hand them over. Flagged rather than logged: a warning nobody reads was how
@@ -805,7 +832,9 @@ public sealed class BankSyncService(
             foreach (var row in rows)
             {
                 if (!rekeying._carried.TryGetValue(Key(row), out var carried))
+                {
                     rekeying._carried[Key(row)] = carried = [];
+                }
 
                 carried.Add(row);
             }
@@ -823,7 +852,9 @@ public sealed class BankSyncService(
         public void Exclude(IEnumerable<BankTransaction> known)
         {
             foreach (var row in known)
+            {
                 _spokenFor.Add(row.Id);
+            }
         }
 
         /// <summary>The stored row this reported one is, if it is one of them. Once each.</summary>
@@ -832,10 +863,14 @@ public sealed class BankSyncService(
             var key = (accountId, imported.Date, imported.Amount, Clip(imported.Description, 256));
 
             if (!_carried.TryGetValue(key, out var carried))
+            {
                 return null;
+            }
 
             if (carried.FirstOrDefault(row => !_spokenFor.Contains(row.Id)) is not { } claimed)
+            {
                 return null;
+            }
 
             _spokenFor.Add(claimed.Id);
             _claimed++;
@@ -879,7 +914,9 @@ public sealed class BankSyncService(
                 .ToList();
 
             if (providerIds.Count == 0)
+            {
                 return index;
+            }
 
             var accountIds = accounts.Values.Select(account => account.Id).ToList();
 
@@ -888,7 +925,9 @@ public sealed class BankSyncService(
                 .ToListAsync(ct);
 
             foreach (var row in rows)
+            {
                 index.Add(row);
+            }
 
             return index;
         }

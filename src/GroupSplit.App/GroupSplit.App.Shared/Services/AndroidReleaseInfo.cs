@@ -6,4 +6,6 @@ public sealed record AndroidReleaseInfo(string Version, string DownloadUrl, stri
 
 [JsonSerializable(typeof(AndroidReleaseInfo))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal partial class AndroidDownloadJsonContext : JsonSerializerContext { }
+internal partial class AndroidDownloadJsonContext : JsonSerializerContext
+{
+}

@@ -99,8 +99,10 @@ public class ExpenseSplitter(
         // name rather than left to fall out of the membership check below, which would
         // report a share for somebody who is not in the group.
         if (given is not null && expense.IsPersonal)
+        {
             throw new ValidationException(ErrorCodes.SplitOnAPersonalExpense,
                 "A personal expense is not shared with anybody, so it cannot be split.");
+        }
 
         var members = await MembersOf(expense, ct);
 
@@ -169,7 +171,9 @@ public class ExpenseSplitter(
         // Evenly between the members, which is what every uncategorized expense did before
         // the group had a rule it could name for one.
         if (version is null)
+        {
             return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
+        }
 
         var rule = version.SplitRule;
 
@@ -235,14 +239,18 @@ public class ExpenseSplitter(
         ArgumentNullException.ThrowIfNull(expense);
 
         if (expense.Splits.Count == 0)
+        {
             return false;
+        }
 
         var payerId = expense.Payer;
         var members = await MembersOf(expense, ct);
         var version = await HeldVersion(expense, ct);
 
         if (version is not null)
+        {
             await LoadBillIfItDividesByOne(expense, version, ct);
+        }
 
         IReadOnlyList<SplitAmount> wouldBe;
 
@@ -318,7 +326,9 @@ public class ExpenseSplitter(
         Expense expense, SplitRuleVersion version, CancellationToken ct)
     {
         if (version is not ItemizedSplitRuleVersion || expense.Receipt is not null)
+        {
             return;
+        }
 
         expense.Receipt = await dbContext.Set<Receipt>()
             .Include(r => r.Items).ThenInclude(i => i.SplitRuleVersion)
@@ -344,7 +354,9 @@ public class ExpenseSplitter(
         // name nobody -- which this would read as "no rule could have produced these shares"
         // and answer false to, on exactly the expenses where the answer matters most.
         if (expense.SplitRuleVersionId is { } id)
+        {
             return await Versions().FirstOrDefaultAsync(version => version.Id == id, ct);
+        }
 
         return expense.SplitRuleVersion;
     }
@@ -352,7 +364,9 @@ public class ExpenseSplitter(
     private static bool IsWhatItAlreadyHolds(Expense expense, IReadOnlyList<SplitAmount> stated)
     {
         if (expense.Splits.Count != stated.Count)
+        {
             return false;
+        }
 
         // A share at a time rather than through a dictionary keyed by member: the ids in
         // stated are distinct by the time this runs, but the stored rows are whatever is in
@@ -390,11 +404,13 @@ public class ExpenseSplitter(
         var total = splits.Sum(split => split.Amount);
 
         if (total != expense.Amount)
+        {
             throw new UnprocessableException(ErrorCodes.SplitsDoNotSumToAmount,
                     $"The shares add up to {total}, but the expense is {expense.Amount}.")
                 .WithExtension("amount", expense.Amount)
                 .WithExtension("splitTotal", total)
                 .WithExtension("difference", expense.Amount - total);
+        }
 
         var strangers = splits
             .Where(split => !members.Contains(split.UserId))
@@ -402,6 +418,7 @@ public class ExpenseSplitter(
             .ToList();
 
         if (strangers.Count > 0)
+        {
             throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
                     "The division gives a share to somebody who is neither a member of the " +
                     "group nor invited to it.")
@@ -409,6 +426,7 @@ public class ExpenseSplitter(
                 // bill or in its rule, and which person it is is the whole of what a caller
                 // needs to go and fix.
                 .WithExtension("userIds", strangers);
+        }
     }
 
     /// <summary>
@@ -424,30 +442,39 @@ public class ExpenseSplitter(
         IReadOnlyList<SplitInput> given, decimal amount, IReadOnlyCollection<Guid> members)
     {
         if (given.Count == 0)
+        {
             throw new ValidationException(ErrorCodes.SplitsInvalid,
                 "A split has to name somebody. Leave the splits out entirely to divide by the category.");
+        }
 
         if (given.Select(split => split.UserId).Distinct().Count() != given.Count)
+        {
             throw new ValidationException(ErrorCodes.SplitsInvalid,
                 "A member may appear in a split only once.");
+        }
 
         if (given.Any(split => !members.Contains(split.UserId)))
+        {
             throw new ConflictException(ErrorCodes.SplitUserNotInGroup,
                 "A split names somebody who is neither a member of the group nor invited to it.");
+        }
 
         // Every share goes the way the money went: a cost on an expense, money back on a
         // refund. A share the other way is a repayment folded into a row that says it is an
         // expense -- {A: 150, B: -100} on 50 sums correctly and moves 100 between two people
         // that nobody recorded as a payment.
         if (given.Any(split => Math.Sign(split.Amount) == -Math.Sign(amount)))
+        {
             throw new ValidationException(ErrorCodes.SplitsInvalid,
                 amount > 0
                     ? "A share of an expense cannot be negative."
                     : "A share of a refund cannot be positive.");
+        }
 
         var total = given.Sum(split => split.Amount);
 
         if (total != amount)
+        {
             throw new UnprocessableException(ErrorCodes.SplitsDoNotSumToAmount,
                     $"The shares add up to {total}, but the expense is {amount}.")
                 // The shortfall, so a dialog can say "8.00 left to assign" rather than
@@ -455,6 +482,7 @@ public class ExpenseSplitter(
                 .WithExtension("amount", amount)
                 .WithExtension("splitTotal", total)
                 .WithExtension("difference", amount - total);
+        }
 
         return [.. given.Select(split => new SplitAmount(split.UserId, split.Amount))];
     }
@@ -529,20 +557,26 @@ public class ExpenseSplitter(
         // amount. Asking outright to divide it again is what gives it up, and that arrives
         // here as an expense holding no version at all.
         if (held is SoleSplitRuleVersion)
+        {
             return held;
+        }
 
         if (await CategoryRule(expense, ct) is { } filedUnder)
         {
             // The one it already holds, when that is still a version of this category's rule.
             if (held is not null && held.SplitRuleId == filedUnder)
+            {
                 return held;
+            }
 
             return await CurrentVersionOf(filedUnder, ct);
         }
 
         // Filed under nothing, or under a category that names no rule.
         if (held is not null && !await ACategorysRule(expense, held.SplitRuleId, ct))
+        {
             return held;
+        }
 
         return await GroupDefault(expense, ct) is { } fallback
             ? await CurrentVersionOf(fallback, ct)
@@ -553,7 +587,9 @@ public class ExpenseSplitter(
     private async Task<Guid?> CategoryRule(Expense expense, CancellationToken ct)
     {
         if ((expense.Category?.Id ?? expense.CategoryId) is not { } categoryId)
+        {
             return null;
+        }
 
         return await dbContext.Set<Category>()
             .Where(category => category.Id == categoryId)
@@ -638,10 +674,14 @@ public class ExpenseSplitter(
             // deletions of rows the context has never seen, and the next save on the scope
             // would try to carry them out.
             if (expenseIsTracked)
+            {
                 dbContext.RemoveRange(superseded);
+            }
 
             foreach (var split in superseded)
+            {
                 expense.Splits.Remove(split);
+            }
         }
 
         foreach (var split in splits)
@@ -656,7 +696,9 @@ public class ExpenseSplitter(
             expense.Splits.Add(row);
 
             if (expenseIsTracked)
+            {
                 dbContext.Entry(row).State = EntityState.Added;
+            }
         }
     }
 }

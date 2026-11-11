@@ -20,7 +20,16 @@ public sealed class FileParameter
         ContentType = contentType;
     }
 
-    public Stream Data { get; }
-    public string? FileName { get; }
-    public string? ContentType { get; }
+    public Stream Data
+    {
+        get;
+    }
+    public string? FileName
+    {
+        get;
+    }
+    public string? ContentType
+    {
+        get;
+    }
 }

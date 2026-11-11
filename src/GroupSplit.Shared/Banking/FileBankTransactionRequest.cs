@@ -14,15 +14,24 @@ namespace GroupSplit.Shared;
 public record FileBankTransactionRequest
 {
     /// <summary>The group to file it in, or null to keep it personal.</summary>
-    public Guid? GroupId { get; set; }
+    public Guid? GroupId
+    {
+        get; set;
+    }
 
     /// <summary>What it was for. A category naming a rule divides the expense by it.</summary>
-    public Guid? CategoryId { get; set; }
+    public Guid? CategoryId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who paid, when it was not the person filing. Only meaningful in a group.
     /// </summary>
-    public Guid? PaidByUserId { get; set; }
+    public Guid? PaidByUserId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// A rule to divide by, whatever the category says, or null to let the category decide.
@@ -33,21 +42,33 @@ public record FileBankTransactionRequest
     /// not ours, it was Ana's" is said most often, and it is said about a row whose category
     /// divides between everybody.
     /// </remarks>
-    public Guid? SplitRuleId { get; set; }
+    public Guid? SplitRuleId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
     /// </summary>
-    public IReadOnlyList<SplitInput>? Splits { get; set; }
+    public IReadOnlyList<SplitInput>? Splits
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What to call the expense. Defaults to the merchant the bank named.
     /// </summary>
     [StringLength(TransactionNames.MaxLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength))]
-    public string? Name { get; set; }
+    public string? Name
+    {
+        get; set;
+    }
 
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionShort))]
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Record it even though an expense already there looks like the same payment.
@@ -59,5 +80,8 @@ public record FileBankTransactionRequest
     /// twice. Pointing the row at the expense that is already there is <c>POST
     /// /inbox/{id}/link</c> instead.
     /// </remarks>
-    public bool FileAnyway { get; set; }
+    public bool FileAnyway
+    {
+        get; set;
+    }
 }

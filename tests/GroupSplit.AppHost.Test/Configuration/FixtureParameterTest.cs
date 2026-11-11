@@ -43,7 +43,9 @@ public sealed class FixtureParameterTest(AppHostFixture appHost)
                 $"The AppHost no longer declares '{name}'; the fixture should stop setting it.");
 
             if (!string.Equals(await parameter.GetValueAsync(ct), expected, StringComparison.Ordinal))
+            {
                 overridden.Add(name);
+            }
         }
 
         Assert.Empty(overridden);

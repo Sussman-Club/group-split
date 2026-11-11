@@ -63,7 +63,9 @@ public class UserProvisioningTest(AppHostFixture appHost) : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_services is null)
+        {
             return;
+        }
 
         using (var scope = _services.CreateScope())
         {
@@ -118,7 +120,10 @@ public class UserProvisioningTest(AppHostFixture appHost) : IAsyncLifetime
             new(ClaimTypes.GivenName, "Ada")
         ];
 
-        if (lastName is not null) claims.Add(new Claim(ClaimTypes.Surname, lastName));
+        if (lastName is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Surname, lastName));
+        }
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
     }
@@ -315,7 +320,10 @@ public class UserProvisioningTest(AppHostFixture appHost) : IAsyncLifetime
     {
         private Func<Task>? _action;
 
-        public bool Fired { get; private set; }
+        public bool Fired
+        {
+            get; private set;
+        }
 
         public void Arm(Func<Task> action)
         {

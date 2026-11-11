@@ -4,32 +4,68 @@ namespace GroupSplit.Data.Entities;
 public class ReceiptItem : Entity
 {
     public virtual Receipt Receipt { get; set; } = null!;
-    public Guid ReceiptId { get; set; }
+    public Guid ReceiptId
+    {
+        get; set;
+    }
     /// <summary>
     /// Where the line sits on the paper. Stored rather than left to the database, because a
     /// bill is read against the receipt in somebody's hand -- and because the division breaks
     /// its rounding ties on a stable order, which an unordered read would not give it.
     /// </summary>
-    public int Position { get; set; }
-    public required string Name { get; set; }
-    public required string NormalizedName { get; set; }
+    public int Position
+    {
+        get; set;
+    }
+    public required string Name
+    {
+        get; set;
+    }
+    public required string NormalizedName
+    {
+        get; set;
+    }
     /// <summary>The original extracted wording, retained separately from the display name.</summary>
-    public string? Description { get; set; }
-    public decimal UnitPrice { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
+    public decimal UnitPrice
+    {
+        get; set;
+    }
     public decimal Quantity { get; set; } = 1;
     // Signed and kept as printed: coupons are negative, free items are zero, and till
     // rounding need not equal quantity * unit price.
-    public required decimal TotalPrice { get; set; }
+    public required decimal TotalPrice
+    {
+        get; set;
+    }
     /// <summary>
     /// The tax charged on this line, which is zero unless the bill said otherwise: a
     /// restaurant bill under VAT charges none on top of its prices.
     /// </summary>
-    public decimal TaxAmount { get; set; }
+    public decimal TaxAmount
+    {
+        get; set;
+    }
     /// <summary>Percent tax rate printed for this line; null when the paper did not say.</summary>
-    public decimal? TaxRate { get; set; }
+    public decimal? TaxRate
+    {
+        get; set;
+    }
     /// <summary>Whether the line was marked taxable. Null means the source was inconclusive.</summary>
-    public bool? IsTaxable { get; set; }
+    public bool? IsTaxable
+    {
+        get; set;
+    }
     /// <summary>Null while editing; required before division. Never follows later rule edits.</summary>
-    public Guid? SplitRuleVersionId { get; set; }
-    public virtual SplitRuleVersion? SplitRuleVersion { get; set; }
+    public Guid? SplitRuleVersionId
+    {
+        get; set;
+    }
+    public virtual SplitRuleVersion? SplitRuleVersion
+    {
+        get; set;
+    }
 }

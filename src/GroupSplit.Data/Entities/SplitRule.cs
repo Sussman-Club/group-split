@@ -25,9 +25,15 @@ public class SplitRule : Entity
 {
     public virtual Group Group { get; set; } = null!;
 
-    internal Guid GroupId { get; set; }
+    internal Guid GroupId
+    {
+        get; set;
+    }
 
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Whether the group was given this rule rather than writing it: the one it holds per
@@ -54,7 +60,10 @@ public class SplitRule : Entity
     /// <c>IMemberSplitRules.HandOver</c> is that place.
     /// </para>
     /// </remarks>
-    public bool BuiltIn { get; set; }
+    public bool BuiltIn
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Every division this rule has stood for, newest last. Exactly one of them has no

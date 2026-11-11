@@ -19,13 +19,26 @@ public sealed class ReceiptSuggestionCache : IDisposable
         changes.TransactionsChanged += Invalidate;
     }
 
-    public long Generation { get { lock (_entries) return _generation; } }
+    public long Generation
+    {
+        get
+        {
+            lock (_entries)
+            {
+                return _generation;
+            }
+        }
+    }
 
     public FilingDestinationSuggestion? Get(ReceiptInboxResponse receipt)
     {
         lock (_entries)
         {
-            if (!_entries.TryGetValue(receipt.Id, out var entry)) return null;
+            if (!_entries.TryGetValue(receipt.Id, out var entry))
+            {
+                return null;
+            }
+
             if (entry.Expires <= DateTimeOffset.UtcNow || entry.Fingerprint != Fingerprint(receipt))
             {
                 _entries.Remove(receipt.Id);
@@ -39,7 +52,11 @@ public sealed class ReceiptSuggestionCache : IDisposable
     {
         lock (_entries)
         {
-            if (generation != _generation) return;
+            if (generation != _generation)
+            {
+                return;
+            }
+
             _entries[receipt.Id] = new(Fingerprint(receipt), suggestion, DateTimeOffset.UtcNow.Add(Lifetime));
         }
     }
@@ -48,12 +65,21 @@ public sealed class ReceiptSuggestionCache : IDisposable
     {
         var ids = receipts.Select(receipt => receipt.Id).ToHashSet();
         lock (_entries)
-            foreach (var id in _entries.Keys.Where(id => !ids.Contains(id)).ToArray()) _entries.Remove(id);
+        {
+            foreach (var id in _entries.Keys.Where(id => !ids.Contains(id)).ToArray())
+            {
+                _entries.Remove(id);
+            }
+        }
     }
 
     private Task Invalidate()
     {
-        lock (_entries) { _generation++; _entries.Clear(); }
+        lock (_entries)
+        {
+            _generation++;
+            _entries.Clear();
+        }
         return Task.CompletedTask;
     }
 

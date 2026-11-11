@@ -23,7 +23,10 @@ public sealed class LanguagePickerTest : ComponentTest
     public async Task Selection_saves_the_account_then_the_device_and_reloads(string language)
     {
         var picker = Render<LanguagePicker>();
-        await picker.Find("select").ChangeAsync(new() { Value = language });
+        await picker.Find("select").ChangeAsync(new()
+        {
+            Value = language
+        });
         _users.Verify(x => x.SetCurrentUserLanguageAsync(
             It.Is<LanguagePreferenceRequest>(r => r.Language == language), It.IsAny<CancellationToken>()), Times.Once);
         Assert.Equal(language, Assert.Single(JSInterop.Invocations["gs.language.save"]).Arguments[0]);
@@ -35,7 +38,10 @@ public sealed class LanguagePickerTest : ComponentTest
         _users.Setup(x => x.SetCurrentUserLanguageAsync(It.IsAny<LanguagePreferenceRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException());
         var picker = Render<LanguagePicker>();
-        await picker.Find("select").ChangeAsync(new() { Value = "es" });
+        await picker.Find("select").ChangeAsync(new()
+        {
+            Value = "es"
+        });
         Assert.Contains("could not be saved", picker.Find("[role=alert]").TextContent);
         Assert.Empty(JSInterop.Invocations["gs.language.save"]);
         Assert.False(picker.Find("select").HasAttribute("disabled"));

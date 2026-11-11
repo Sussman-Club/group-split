@@ -31,7 +31,9 @@ public sealed class PersonalDataReader(AppDbContext db, ICurrentUser currentUser
             .OrderBy(file => file.Id).Select(file => new ExportAttachment(file.Id, file.ExpenseId,
                 null, file.FileName,
                 file.ContentType, file.Length, file.UploadedAt)
-            { ReceiptId = file.ReceiptId }).ToListAsync(ct);
+            {
+                ReceiptId = file.ReceiptId
+            }).ToListAsync(ct);
 
         return new ExportRecords(
             clock.GetUtcNow(),
@@ -59,7 +61,9 @@ public sealed class PersonalDataReader(AppDbContext db, ICurrentUser currentUser
                     row.MerchantName, row.PurchaseDate, row.Items.OrderBy(item => item.Position).ThenBy(item => item.Id)
                         .Select(item => new ExportReceiptItem(item.Id, item.Position, item.Name, item.Description,
                             item.UnitPrice, item.Quantity, item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToList())
-                { Currency = row.Currency }).AsAsyncEnumerable(),
+                {
+                    Currency = row.Currency
+                }).AsAsyncEnumerable(),
             db.Set<BankConnection>().Where(row => row.UserId == user.Id).OrderBy(row => row.Id)
                 .Select(row => new ExportBankConnection(row.Id, row.Provider, row.InstitutionName,
                     row.Status, row.LinkedAt, row.LastSyncedAt)).AsAsyncEnumerable(),

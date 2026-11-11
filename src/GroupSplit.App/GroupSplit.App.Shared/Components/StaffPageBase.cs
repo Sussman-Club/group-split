@@ -13,7 +13,10 @@ public abstract class StaffPageBase : ComponentBase
     [Inject] protected NavigationManager Navigation { get; set; } = null!;
     [Inject] private IStringLocalizer<AppStrings> Text { get; set; } = null!;
     protected bool Loading { get; private set; } = true;
-    protected string? LoadError { get; private set; }
+    protected string? LoadError
+    {
+        get; private set;
+    }
     private int _request;
 
     protected async Task LoadAsync<T>(Func<Task<T>> read, Action<T> apply)
@@ -24,7 +27,10 @@ public abstract class StaffPageBase : ComponentBase
         try
         {
             var result = await read();
-            if (request == _request) apply(result);
+            if (request == _request)
+            {
+                apply(result);
+            }
         }
         catch (HttpRequestException e) when (request == _request)
         {
@@ -41,6 +47,12 @@ public abstract class StaffPageBase : ComponentBase
         }
         catch (HttpRequestException) { }
         catch (TaskCanceledException) { }
-        finally { if (request == _request) Loading = false; }
+        finally
+        {
+            if (request == _request)
+            {
+                Loading = false;
+            }
+        }
     }
 }

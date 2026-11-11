@@ -81,7 +81,10 @@ public class ReceiptSectionTest : ComponentTest
     [Fact]
     public void View_original_renders_the_pdf_preview_with_download_available()
     {
-        var attachment = Attachment("dinner.pdf") with { ContentType = "application/pdf" };
+        var attachment = Attachment("dinner.pdf") with
+        {
+            ContentType = "application/pdf"
+        };
         var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p
             .Add(c => c.TransactionId, _expense)
@@ -101,7 +104,10 @@ public class ReceiptSectionTest : ComponentTest
     [Fact]
     public void Read_and_remove_actions_are_forwarded_to_the_parent()
     {
-        var attachment = Attachment("dinner.pdf") with { ContentType = "application/pdf" };
+        var attachment = Attachment("dinner.pdf") with
+        {
+            ContentType = "application/pdf"
+        };
         ReceiptAttachmentResponse? read = null;
         ReceiptAttachmentResponse? removed = null;
         var dialogs = Render<MudDialogProvider>();
@@ -124,7 +130,10 @@ public class ReceiptSectionTest : ComponentTest
     [Fact]
     public void An_editable_itemized_receipt_forwards_the_edit_action()
     {
-        var bill = Bill(_expense) with { CanEdit = true };
+        var bill = Bill(_expense) with
+        {
+            CanEdit = true
+        };
         ReceiptResponse? edited = null;
         var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptSection>(p => p

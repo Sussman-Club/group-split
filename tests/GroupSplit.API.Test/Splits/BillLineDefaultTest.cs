@@ -25,7 +25,14 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Guid Self => GetService<ICurrentUser>().User.Id;
 
     private static ReceiptItemInput Item(string name, decimal price, Guid? rule = null, Guid? id = null) =>
-        new() { Id = id, Name = name, UnitPrice = price, TotalPrice = price, SplitRuleVersionId = rule };
+        new()
+        {
+            Id = id,
+            Name = name,
+            UnitPrice = price,
+            TotalPrice = price,
+            SplitRuleVersionId = rule
+        };
 
     private static SaveReceiptRequest Bill(params ReceiptItemInput[] items) => new()
     {
@@ -46,13 +53,21 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private async Task<(Guid Rule, Guid Version)> ARule(Guid group, string name, SplitRuleDto definition)
     {
         var rule = await Rules.Create(new CreateSplitRuleRequest
-        { GroupId = group, Name = name, Definition = definition }, Ct);
+        {
+            GroupId = group,
+            Name = name,
+            Definition = definition
+        }, Ct);
         return (rule.Id, rule.Current!.Id);
     }
 
     private async Task<Guid> ACategory(Guid group, string name, Guid rule) =>
         (await GetService<ICategoryService>().Create(new CreateCategoryRequest
-        { GroupId = group, Name = name, DefaultSplitRuleId = rule }, Ct)).Id;
+        {
+            GroupId = group,
+            Name = name,
+            DefaultSplitRuleId = rule
+        }, Ct)).Id;
 
     /// <summary>An expense of 30 in the group, divided by hand so its category moves nothing.</summary>
     private async Task<Expense> AnExpense(Guid group, Guid? category) =>
@@ -265,7 +280,11 @@ public class BillLineDefaultTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task A_personal_expenses_lines_start_on_no_rule()
     {
         var expense = await Transactions.Create(new CreateTransactionRequest
-        { Name = "Lunch", Amount = 10m, DateTime = DateTimeOffset.UtcNow }, Ct);
+        {
+            Name = "Lunch",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct);
 
         var bill = await Receipts.SaveForExpense(expense.Id, Bill(Item("Sandwich", 10m)), Ct);
 

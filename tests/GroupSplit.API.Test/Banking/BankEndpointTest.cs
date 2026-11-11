@@ -285,12 +285,22 @@ public class BankEndpointTest : IAsyncLifetime
     {
         public string Choice { get; set; } = "cannot tell";
         public double Confidence { get; set; } = .95;
-        public int Calls { get; private set; }
-        public bool Fail { get; set; }
+        public int Calls
+        {
+            get; private set;
+        }
+        public bool Fail
+        {
+            get; set;
+        }
         public Task<DecisionAnswer?> ChooseAsync(object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
         {
             Calls++;
-            if (Fail) throw new HttpRequestException("Unavailable");
+            if (Fail)
+            {
+                throw new HttpRequestException("Unavailable");
+            }
+
             return Task.FromResult<DecisionAnswer?>(new DecisionAnswer(Choice, Confidence));
         }
     }
@@ -1169,7 +1179,9 @@ public class BankEndpointTest : IAsyncLifetime
         var paged = new List<JsonElement>();
 
         for (var page = 1; page <= 4; page++)
+        {
             paged.AddRange(await ItemsAsync($"/inbox?From=2026-09-01&To=2026-09-30&Page={page}&PageSize=1"));
+        }
 
         Assert.Equal(4, whole.Count);
         Assert.Equal(["2026-09-28", "2026-09-28", "2026-09-25", "2026-09-20"], SpentOn(paged));
@@ -1255,6 +1267,8 @@ public class BankEndpointTest : IAsyncLifetime
         var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
 
         while (_bank.CursorsSeen.Count == 0 && DateTimeOffset.UtcNow < deadline)
+        {
             await Task.Delay(25, Ct);
+        }
     }
 }

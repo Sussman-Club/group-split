@@ -33,11 +33,19 @@ public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sen
     public async ValueTask HandleAsync(SendPushNotification job, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        if (job.ExpiresAt <= now || !Enum.IsDefined(job.Kind)) return;
+        if (job.ExpiresAt <= now || !Enum.IsDefined(job.Kind))
+        {
+            return;
+        }
+
         var device = await db.Set<PushDevice>().Where(PushNotificationQueue.Enabled(job.Kind))
             .SingleOrDefaultAsync(d => d.Id == job.DeviceId && d.UserId == job.UserId
                 && d.UpdatedAt > now.AddDays(-30), ct);
-        if (device is null) return;
+        if (device is null)
+        {
+            return;
+        }
+
         string? groupName = null;
         string? requestToken = null;
         if (job.Kind == PushNotificationKind.BankSyncIssue)
@@ -46,25 +54,39 @@ public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sen
                 && b.UserId == job.UserId && b.User.Kind == UserKind.Account
                 && (b.Status != BankConnectionStatus.Active || b.SignInExpiring || b.AccountsNotShared
                     || b.Accounts.Any(a => a.AccessRevoked)), ct);
-            if (!relevant) return;
+            if (!relevant)
+            {
+                return;
+            }
         }
         else if (PushNotificationKinds.Category(job.Kind) == PushNotificationCategory.StaffSupport)
         {
             var eligible = await db.Set<StaffMember>().AnyAsync(m => m.UserId == job.UserId && m.Active, ct)
                 && await db.Set<SupportTicket>().AnyAsync(t => t.Id == job.SubjectId, ct);
-            if (!eligible) return;
+            if (!eligible)
+            {
+                return;
+            }
+
             var subject = await db.Set<User>().Where(u => u.Id == job.UserId && u.Kind == UserKind.Account)
                 .Select(u => u.Identity.IdentityId).SingleOrDefaultAsync(ct);
             // A cached staff roster is not an authorization source: recheck the actual
             // Keycloak role at delivery so revocation stops notifications immediately.
-            if (subject is null || keycloak is null || !await keycloak.HasRealmRoleAsync(subject, StaffAccess.Role, ct)) return;
+            if (subject is null || keycloak is null || !await keycloak.HasRealmRoleAsync(subject, StaffAccess.Role, ct))
+            {
+                return;
+            }
         }
         else
         {
             groupName = await db.Set<Group>()
                 .Where(g => g.Id == job.GroupId && g.Users.Any(u => u.Id == job.UserId && u.Kind == UserKind.Account))
                 .Select(g => g.Name).SingleOrDefaultAsync(ct);
-            if (groupName is null) return;
+            if (groupName is null)
+            {
+                return;
+            }
+
             if (job.Kind == PushNotificationKind.PaymentRequest)
             {
                 requestToken = await db.Set<SettlementRequest>()
@@ -72,7 +94,10 @@ public sealed class SendPushNotificationHandler(AppDbContext db, IPushSender sen
                         && r.CancelledAt == null && r.ResolvedAt == null && r.StaleAt == null
                         && r.Groups.Any(g => g.GroupId == job.GroupId))
                     .Select(r => r.Token).SingleOrDefaultAsync(ct);
-                if (requestToken is null) return;
+                if (requestToken is null)
+                {
+                    return;
+                }
             }
         }
         if (!await sender.SendAsync(device.Token, job.GroupId, groupName ?? "", job.DeliveryId, ct,

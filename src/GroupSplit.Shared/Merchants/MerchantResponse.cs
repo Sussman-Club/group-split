@@ -25,7 +25,10 @@ public sealed record MerchantResponse(
     DateTimeOffset FirstSeenAt,
     int TransactionCount)
 {
-    public Guid Version { get; init; }
+    public Guid Version
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -43,7 +46,10 @@ public record CreateMerchantRequest
     public string Name { get; init; } = null!;
 
     [StringLength(512, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.LogoLength))]
-    public string? LogoUrl { get; init; }
+    public string? LogoUrl
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -57,12 +63,18 @@ public record CreateMerchantRequest
 /// </remarks>
 public record UpdateMerchantRequest
 {
-    public Guid? ExpectedVersion { get; set; }
+    public Guid? ExpectedVersion
+    {
+        get; set;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequiredShort))]
     [StringLength(128, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength128))]
     public string Name { get; set; } = null!;
 
     [StringLength(512, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.LogoLength))]
-    public string? LogoUrl { get; set; }
+    public string? LogoUrl
+    {
+        get; set;
+    }
 }

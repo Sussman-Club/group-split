@@ -20,7 +20,11 @@ public partial class MerchantService
 
     public async Task<DirectoryPage<MerchantResponse>> ListDirectory(string? search, int? page, string? sort, CancellationToken ct)
     {
-        if (page is < 0 or > 10000 || search?.Length > 200) throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        if (page is < 0 or > 10000 || search?.Length > 200)
+        {
+            throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        }
+
         var query = dbContext.Set<Merchant>().AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -39,7 +43,9 @@ public partial class MerchantService
                          orderby (count.Count ?? 0) descending, merchant.Id
                          select new MerchantResponse(merchant.Id, merchant.Name, merchant.LogoUrl, merchant.FirstSeenAt,
                              count.Count ?? 0)
-                         { Version = merchant.Version };
+                         {
+                             Version = merchant.Version
+                         };
             var pageRows = await ranked.Skip((page ?? 0) * DirectoryPageSize).Take(DirectoryPageSize + 1).ToListAsync(ct);
             return new DirectoryPage<MerchantResponse>(pageRows.Take(DirectoryPageSize).ToList(), pageRows.Count > DirectoryPageSize);
         }
@@ -60,11 +66,18 @@ public partial class MerchantService
 
     public async Task<MerchantResponse> CreateDirectory(CreateMerchantRequest request, Guid? actorId, CancellationToken ct)
     {
-        if (!ValidMerchant(request.Name, request.LogoUrl)) throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        if (!ValidMerchant(request.Name, request.LogoUrl))
+        {
+            throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        }
+
         var name = request.Name.Trim();
         var normalized = name.ToLowerInvariant();
         if (await dbContext.Set<MerchantAlias>().AnyAsync(m => m.NormalizedName == normalized, ct) || await dbContext.Set<Merchant>().AnyAsync(m => m.NormalizedName == normalized, ct))
+        {
             throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists.");
+        }
+
         var merchant = new Merchant
         {
             Name = name,
@@ -75,9 +88,14 @@ public partial class MerchantService
         dbContext.Add(merchant);
         StaffActivityService.Record(dbContext, actorId, "Merchants", merchant.Id, "Merchant created", clock.GetUtcNow(),
             new("Name", null, name), new("Image", null, merchant.LogoUrl));
-        try { await dbContext.SaveChangesAsync(ct); }
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
         catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
-        { throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists."); }
+        {
+            throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists.");
+        }
         return new MerchantResponse(merchant.Id, merchant.Name, merchant.LogoUrl, merchant.FirstSeenAt, 0) { Version = merchant.Version };
     }
 
@@ -85,27 +103,58 @@ public partial class MerchantService
 
     public async Task UpdateDirectory(Guid id, UpdateMerchantRequest request, Guid? actorId, CancellationToken ct)
     {
-        if (!ValidMerchant(request.Name, request.LogoUrl)) throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        if (!ValidMerchant(request.Name, request.LogoUrl))
+        {
+            throw new ValidationException(ErrorCodes.InvalidMerchant, "Check the merchant fields and filters.");
+        }
+
         var merchant = await dbContext.Set<Merchant>().FindAsync([id], ct);
-        if (merchant is null) throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.");
+        if (merchant is null)
+        {
+            throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.");
+        }
+
         if (request.ExpectedVersion is { } expected && merchant.Version != expected)
+        {
             throw new ConflictException(ErrorCodes.Conflict, "This merchant changed. Reload before saving.");
+        }
+
         var normalized = request.Name.Trim().ToLowerInvariant();
         if (await dbContext.Set<MerchantAlias>().AnyAsync(a => a.MerchantId != id && a.NormalizedName == normalized, ct) || await dbContext.Set<Merchant>().AnyAsync(m => m.Id != id && m.NormalizedName == normalized, ct))
+        {
             throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists.");
+        }
+
         var changes = new List<ActivityChange>();
-        if (merchant.Name != request.Name.Trim()) changes.Add(new("Name", merchant.Name, request.Name.Trim()));
-        if (merchant.LogoUrl != AllowedLogo(request.LogoUrl)) changes.Add(new("Image", merchant.LogoUrl, AllowedLogo(request.LogoUrl)));
-        if (changes.Count == 0) return;
+        if (merchant.Name != request.Name.Trim())
+        {
+            changes.Add(new("Name", merchant.Name, request.Name.Trim()));
+        }
+
+        if (merchant.LogoUrl != AllowedLogo(request.LogoUrl))
+        {
+            changes.Add(new("Image", merchant.LogoUrl, AllowedLogo(request.LogoUrl)));
+        }
+
+        if (changes.Count == 0)
+        {
+            return;
+        }
+
         merchant.Version = Guid.NewGuid();
         StaffActivityService.Record(dbContext, actorId, "Merchants", id, "Merchant updated", clock.GetUtcNow(), changes.ToArray());
         merchant.Name = request.Name.Trim();
         merchant.NormalizedName = normalized;
         merchant.LogoUrl = AllowedLogo(request.LogoUrl);
-        try { await dbContext.SaveChangesAsync(ct); }
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
         catch (DbUpdateConcurrencyException) { throw new ConflictException(ErrorCodes.Conflict, "This merchant changed. Reload before saving."); }
         catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" })
-        { throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists."); }
+        {
+            throw new ConflictException(ErrorCodes.MerchantNameExists, "A merchant with this name already exists.");
+        }
     }
 
     private static bool ValidMerchant(string? name, string? logo) =>

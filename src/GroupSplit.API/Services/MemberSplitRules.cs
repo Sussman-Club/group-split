@@ -91,7 +91,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             var existing = await ExistingFor(group.Id, user.Id, ct);
 
             if (existing is not null)
+            {
                 return existing;
+            }
 
             var name = await FreeName(group.Id, user, ct);
 
@@ -101,7 +103,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             // collides with nothing: two rules for one person. The names read saw that
             // commit, so looking again now finds the rule.
             if (name != Stem(user) && await ExistingFor(group.Id, user.Id, ct) is { } written)
+            {
                 return written;
+            }
 
             var version = new SoleSplitRuleVersion { UserId = user.Id };
 
@@ -137,7 +141,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
                 // somebody else taking the name first -- two members inviting a "Dani" in the
                 // same second -- and the next free name is one read away.
                 if (attempt >= 3)
+                {
                     throw;
+                }
             }
         }
     }
@@ -145,13 +151,17 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
     public async Task HandOver(Guid groupId, Guid fromUserId, Guid toUserId, CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
+        {
             return;
+        }
 
         // None for invitations sent before invitees were given one, and nothing to move.
         var theirs = await ExistingFor(groupId, fromUserId, ct);
 
         if (theirs is null)
+        {
             return;
+        }
 
         var receiverHasOne = await ExistingFor(groupId, toUserId, ct) is not null;
 
@@ -164,7 +174,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         }
 
         foreach (var version in theirs.Versions.OfType<SoleSplitRuleVersion>())
+        {
             version.UserId = toUserId;
+        }
 
         // Named for whom it is now for. A rule called "All for Luz" that puts everything on
         // Ana -- the absorber, or the account Luz claimed as -- is the name telling a category
@@ -178,7 +190,9 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
         // retired: kept, out of the picker, and no longer built in, which is what lets the
         // receiver's stay the one.
         if (receiverHasOne)
+        {
             theirs.BuiltIn = false;
+        }
     }
 
     /// <summary>
@@ -239,14 +253,18 @@ public sealed class MemberSplitRules(AppDbContext context) : IMemberSplitRules
             .ToListAsync(ct);
 
         if (!taken.Contains(stem, StringComparer.OrdinalIgnoreCase))
+        {
             return stem;
+        }
 
         for (var suffix = 2; ; suffix++)
         {
             var candidate = $"{stem} ({suffix})";
 
             if (!taken.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
                 return candidate;
+            }
         }
     }
 

@@ -26,12 +26,21 @@ public class Expense : Transaction
     /// category at a different rule does not restate what anybody owed last March.
     /// </para>
     /// </remarks>
-    public virtual Category? Category { get; set; }
+    public virtual Category? Category
+    {
+        get; set;
+    }
 
-    public Guid? CategoryId { get; set; }
+    public Guid? CategoryId
+    {
+        get; set;
+    }
 
     /// <summary>The itemized bill owned by this expense.</summary>
-    public virtual Receipt? Receipt { get; set; }
+    public virtual Receipt? Receipt
+    {
+        get; set;
+    }
 
     /// <summary>Source images and documents attached to this expense.</summary>
     public virtual ICollection<ReceiptAttachment> ReceiptAttachments { get; } = [];

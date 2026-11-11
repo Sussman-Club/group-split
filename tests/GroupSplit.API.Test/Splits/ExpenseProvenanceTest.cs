@@ -55,7 +55,10 @@ public class ExpenseProvenanceTest(ApiTestFixture fixture) : ApiUnitTest(fixture
     }
 
     private static SharesSplitRuleDto Shares(Guid a, int weightA, Guid b, int weightB) =>
-        new() { Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB } };
+        new()
+        {
+            Shares = new Dictionary<Guid, int> { [a] = weightA, [b] = weightB }
+        };
 
     private Task<Expense> AnExpense(Guid groupId, Guid? categoryId, decimal amount, DateTimeOffset on) =>
         Transactions.Create(new CreateTransactionRequest

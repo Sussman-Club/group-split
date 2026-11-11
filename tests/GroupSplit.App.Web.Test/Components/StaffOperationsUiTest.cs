@@ -20,17 +20,24 @@ public class StaffOperationsUiTest : ComponentTest
     [Fact]
     public async Task Staff_composer_defaults_to_internal_and_public_reply_requires_explicit_mode_selection()
     {
-        var id = Guid.NewGuid(); var version = DateTimeOffset.UtcNow;
+        var id = Guid.NewGuid();
+        var version = DateTimeOffset.UtcNow;
         _staff.Setup(s => s.MessagesAsync(id)).ReturnsAsync([]);
         var composer = Render<SupportConversation>(p => p.Add(c => c.TicketId, id).Add(c => c.ExpectedUpdatedAt, version));
         Assert.Contains("Only staff can see this note", composer.Markup);
-        await composer.Find("textarea").ChangeAsync(new() { Value = "Investigating privately" });
+        await composer.Find("textarea").ChangeAsync(new()
+        {
+            Value = "Investigating privately"
+        });
         await composer.Find("form").SubmitAsync();
         _staff.Verify(s => s.AddNoteAsync(id, "Investigating privately"), Times.Once);
         _staff.Verify(s => s.ReplyAsync(It.IsAny<Guid>(), It.IsAny<CreateSupportMessageRequest>()), Times.Never);
         await composer.FindAll(".staff-compose-modes button")[1].ClickAsync();
         Assert.Contains("The reporter can see this reply", composer.Markup);
-        await composer.Find("textarea").ChangeAsync(new() { Value = "Please try again" });
+        await composer.Find("textarea").ChangeAsync(new()
+        {
+            Value = "Please try again"
+        });
         await composer.Find("form").SubmitAsync();
         _staff.Verify(s => s.ReplyAsync(id, It.Is<CreateSupportMessageRequest>(r => r.Body == "Please try again" && r.ExpectedUpdatedAt == version && r.WaitForCustomer)), Times.Once);
     }
@@ -43,7 +50,10 @@ public class StaffOperationsUiTest : ComponentTest
         _reports.Setup(s => s.ReplyAsync(id, It.IsAny<CreateSupportMessageRequest>())).ThrowsAsync(new HttpRequestException());
         var composer = Render<SupportConversation>(p => p.Add(c => c.TicketId, id).Add(c => c.ForReporter, true));
         Assert.Empty(composer.FindAll(".staff-compose-modes"));
-        await composer.Find("textarea").ChangeAsync(new() { Value = "My reply" });
+        await composer.Find("textarea").ChangeAsync(new()
+        {
+            Value = "My reply"
+        });
         await composer.Find("form").SubmitAsync();
         Assert.True(composer.Instance.HasDraft);
         Assert.Contains("Your draft is still here", composer.Markup);
@@ -53,7 +63,8 @@ public class StaffOperationsUiTest : ComponentTest
     [Fact]
     public async Task Merge_cannot_execute_until_the_destination_is_previewed_and_confirmation_checked()
     {
-        var source = StaffConsoleFixtures.Merchants()[0]; var target = StaffConsoleFixtures.Merchants()[1];
+        var source = StaffConsoleFixtures.Merchants()[0];
+        var target = StaffConsoleFixtures.Merchants()[1];
         _staff.Setup(s => s.AliasesAsync(source.Id)).ReturnsAsync([]);
         _staff.Setup(s => s.MerchantsAsync("Corner", 0)).ReturnsAsync(new DirectoryPage<MerchantResponse>([target], false));
         _staff.Setup(s => s.MergePreviewAsync(source.Id, target.Id)).ReturnsAsync(new MerchantMergePreview(source, target, 42, 3, 2));

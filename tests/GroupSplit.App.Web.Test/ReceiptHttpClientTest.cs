@@ -28,7 +28,10 @@ public class ReceiptHttpClientTest
 
     private sealed class FailingUploadHandler : HttpMessageHandler
     {
-        public int Attempts { get; private set; }
+        public int Attempts
+        {
+            get; private set;
+        }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Attempts++;

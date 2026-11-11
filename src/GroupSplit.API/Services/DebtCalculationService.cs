@@ -170,7 +170,9 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
     {
         var user = currentUser.User;
         if (!settlements.TryGetValue(user.Id, out var balance))
+        {
             throw new InvalidOperationException($"User {user.Id} not found in settlements.");
+        }
 
         return balance;
     }
@@ -261,12 +263,24 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             debtor.Balance += payment;
             creditor.Balance -= payment;
 
-            if (creditor.Balance == 0) i++;
-            if (debtor.Balance == 0) j++;
+            if (creditor.Balance == 0)
+            {
+                i++;
+            }
+
+            if (debtor.Balance == 0)
+            {
+                j++;
+            }
         }
 
         foreach (var userId in result.Keys.ToList())
-            result[userId] = result[userId] with { Plan = plan };
+        {
+            result[userId] = result[userId] with
+            {
+                Plan = plan
+            };
+        }
 
         return result;
     }

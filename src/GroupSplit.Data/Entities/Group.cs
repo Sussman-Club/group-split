@@ -30,10 +30,16 @@ public class Group : Entity
     public virtual ICollection<Category> Categories { get; } = [];
 
     /// <summary>The rule used when a new expense names neither a category nor a rule.</summary>
-    public virtual SplitRule? DefaultSplitRule { get; set; }
+    public virtual SplitRule? DefaultSplitRule
+    {
+        get; set;
+    }
 
     /// <summary>The id of <see cref="DefaultSplitRule"/>, exposed for group settings writes.</summary>
-    public Guid? DefaultSplitRuleId { get; set; }
+    public Guid? DefaultSplitRuleId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The people it shares costs with who have no account in it. Current guests only: a
@@ -48,7 +54,10 @@ public class Group : Entity
     /// </summary>
     public virtual ICollection<GroupJoinLink> JoinLinks { get; } = [];
 
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Optional context for people and the filing suggester, such as which trip this is.

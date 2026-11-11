@@ -46,7 +46,11 @@ public sealed class BankingCommandTests : IDisposable
     [Fact]
     public async Task Bank_list_says_bank_sync_is_off_rather_than_showing_an_empty_list()
     {
-        _api.Returns("/api/bank-connections", new { enabled = false, connections = Array.Empty<object>() });
+        _api.Returns("/api/bank-connections", new
+        {
+            enabled = false,
+            connections = Array.Empty<object>()
+        });
 
         var result = await Cli.RunAsync("bank", "list", "--output", "text");
 
@@ -107,7 +111,9 @@ public sealed class BankingCommandTests : IDisposable
     public async Task Bank_sync_reports_the_queue_rather_than_claiming_it_is_done()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/bank-connections/{id}/sync", new { }, status: 202);
+        _api.Returns($"/api/bank-connections/{id}/sync", new
+        {
+        }, status: 202);
 
         var result = await Cli.RunAsync("bank", "sync", id.ToString());
 
@@ -246,7 +252,10 @@ public sealed class BankingCommandTests : IDisposable
     [Fact]
     public async Task Inbox_summary_counts_what_is_waiting()
     {
-        _api.Returns("/api/inbox/summary", new { newCount = 7 });
+        _api.Returns("/api/inbox/summary", new
+        {
+            newCount = 7
+        });
 
         var result = await Cli.RunAsync("inbox", "summary", "--output", "text");
 
@@ -575,7 +584,10 @@ public sealed class BankingCommandTests : IDisposable
 
         _api.Problem($"/api/inbox/{id}/file", 409, "POSSIBLE_DUPLICATE_EXPENSE",
             "This looks like an expense you have already recorded.",
-            new { Matches = new[] { Match("Dinner", 40m, transactionId) } });
+            new
+            {
+                Matches = new[] { Match("Dinner", 40m, transactionId) }
+            });
 
         var result = await Cli.RunAsync("inbox", "file", id.ToString());
 

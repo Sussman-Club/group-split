@@ -34,7 +34,11 @@ public static class Extensions
                 .GetOrAdd(appHost, []);
 
             var methodResult = memberCache.GetOrAdd(memberName,
-                static (_, funcWithArgs) => funcWithArgs.factory(funcWithArgs.args), new { factory, args });
+                static (_, funcWithArgs) => funcWithArgs.factory(funcWithArgs.args), new
+                {
+                    factory,
+                    args
+                });
 
             return (T?)methodResult!; // This is very hard to properly annotate with nullability.
         }

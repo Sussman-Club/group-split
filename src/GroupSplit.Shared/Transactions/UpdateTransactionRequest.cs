@@ -5,7 +5,11 @@ namespace GroupSplit.Shared;
 
 public record UpdateTransactionRequest
 {
-    [Required] public Guid PaidByUserId { get; set; }
+    [Required]
+    public Guid PaidByUserId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The group the expense belongs to after the edit, or null for the caller's own ledger.
@@ -26,13 +30,19 @@ public record UpdateTransactionRequest
     /// nothing about it leaves the expense where it is.
     /// </para>
     /// </remarks>
-    public Guid? GroupId { get; set; }
+    public Guid? GroupId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What it is filed under, or null for none. Optional, unlike the rule version it
     /// replaces: an expense under no category divides evenly.
     /// </summary>
-    public Guid? CategoryId { get; set; }
+    public Guid? CategoryId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Where it was spent, or null for none. See
@@ -43,7 +53,10 @@ public record UpdateTransactionRequest
     /// never follows the link again, so a provider that named the wrong shop is a thing a
     /// person can correct without the next sync undoing them.
     /// </remarks>
-    public Guid? MerchantId { get; set; }
+    public Guid? MerchantId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The rule the expense divides by, whatever its category says, or null to let the
@@ -55,7 +68,10 @@ public record UpdateTransactionRequest
     /// Moving it is an edit to the division, so the shares are worked out again from it --
     /// the same as moving the amount, the payer or the category.
     /// </remarks>
-    public Guid? SplitRuleId { get; set; }
+    public Guid? SplitRuleId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Exactly how to divide it, or null to divide it the way the category says.
@@ -90,14 +106,20 @@ public record UpdateTransactionRequest
     /// unreachable. See <c>TransactionSplitPatchTest</c> for the behaviour as it stands.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<SplitInput>? Splits { get; set; }
+    public IReadOnlyList<SplitInput>? Splits
+    {
+        get; set;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequired))]
     [StringLength(TransactionNames.MaxLength, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength))]
     public string Name { get; set; } = null!;
 
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionShort))]
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What it came to. Never zero, as on create; a settlement must also be more than zero,
@@ -106,11 +128,17 @@ public record UpdateTransactionRequest
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [NotZero(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountNotZero))]
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
-    public decimal Amount { get; set; }
+    public decimal Amount
+    {
+        get; set;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
     [NotDefault(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]
-    public DateTimeOffset DateTime { get; set; }
+    public DateTimeOffset DateTime
+    {
+        get; set;
+    }
 
     /// <summary>
     /// On a settlement, the last day of activity it was meant to settle, or null for none.
@@ -120,5 +148,8 @@ public record UpdateTransactionRequest
     /// The model a patch is applied to carries the stored day, so a patch that says nothing
     /// about it keeps it, and <c>replace /coversThrough null</c> clears it.
     /// </remarks>
-    public DateOnly? CoversThrough { get; set; }
+    public DateOnly? CoversThrough
+    {
+        get; set;
+    }
 };

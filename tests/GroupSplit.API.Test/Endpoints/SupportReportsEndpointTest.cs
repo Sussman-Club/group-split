@@ -22,7 +22,12 @@ public class SupportReportsEndpointTest : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
         var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
-        { Type = "Bug", Title = "Problem", Description = "Details", ReproductionSteps = "Open the page" }, ct);
+        {
+            Type = "Bug",
+            Title = "Problem",
+            Description = "Details",
+            ReproductionSteps = "Open the page"
+        }, ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var created = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(ct))!;
         Assert.Equal("New", created.Status);
@@ -42,7 +47,10 @@ public class SupportReportsEndpointTest : IAsyncLifetime
     public async Task Description_supplies_a_summary_when_no_title_is_given()
     {
         var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
-        { Type = "Bug", Description = "  The app\n   stops responding  " }, TestContext.Current.CancellationToken);
+        {
+            Type = "Bug",
+            Description = "  The app\n   stops responding  "
+        }, TestContext.Current.CancellationToken);
         var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(TestContext.Current.CancellationToken))!;
         Assert.Equal("The app stops responding", report.Title);
     }
@@ -69,7 +77,10 @@ public class SupportReportsEndpointTest : IAsyncLifetime
             });
         });
         var ct = TestContext.Current.CancellationToken;
-        var response = await host.Client.PostAsJsonAsync("/support-reports", new { Description = "My feedback" }, ct);
+        var response = await host.Client.PostAsJsonAsync("/support-reports", new
+        {
+            Description = "My feedback"
+        }, ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(ct))!;
         Assert.Equal(type, report.Type);
@@ -86,7 +97,10 @@ public class SupportReportsEndpointTest : IAsyncLifetime
     public async Task Unconfigured_classifier_accepts_description_only_with_safe_defaults()
     {
         var ct = TestContext.Current.CancellationToken;
-        var response = await _host.Client.PostAsJsonAsync("/support-reports", new { Description = "My feedback" }, ct);
+        var response = await _host.Client.PostAsJsonAsync("/support-reports", new
+        {
+            Description = "My feedback"
+        }, ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var report = (await response.Content.ReadFromJsonAsync<SupportReportResponse>(ct))!;
         Assert.Equal("Support", report.Type);
@@ -102,7 +116,11 @@ public class SupportReportsEndpointTest : IAsyncLifetime
     public async Task Invalid_reports_are_rejected(string type, string title, string description)
     {
         var response = await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
-        { Type = type, Title = title, Description = description }, TestContext.Current.CancellationToken);
+        {
+            Type = type,
+            Title = title,
+            Description = description
+        }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

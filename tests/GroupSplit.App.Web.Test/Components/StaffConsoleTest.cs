@@ -98,7 +98,11 @@ public class StaffConsoleTest : ComponentTest
         _staff.Setup(s => s.TicketAsync(ticket.Id)).ReturnsAsync(ticket);
         _staff.Setup(s => s.NotesAsync(ticket.Id)).ReturnsAsync([]);
         _staff.Setup(s => s.SaveTicketAsync(ticket.Id, It.IsAny<UpdateSupportTicketRequest>()))
-            .ReturnsAsync(ticket with { Status = "InProgress", ClassificationNeedsReview = false });
+            .ReturnsAsync(ticket with
+            {
+                Status = "InProgress",
+                ClassificationNeedsReview = false
+            });
         Navigation.NavigateTo($"/staff/tickets/{ticket.Id}?returnTo=%2Fstaff%2Ftickets%3Fstatus%3DNew%26page%3D2");
         var page = Render<StaffTicketDetail>(p => p.Add(c => c.Id, ticket.Id));
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".staff-triage")));
@@ -120,7 +124,10 @@ public class StaffConsoleTest : ComponentTest
         Navigation.NavigateTo($"/staff/merchants/{merchant.Id}?returnTo=%2Fstaff%2Fmerchants%3Fq%3Dcoffee");
         var page = Render<StaffMerchantDetail>(p => p.Add(c => c.Id, merchant.Id));
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".staff-merchant-form")));
-        await page.Find(".staff-field input").ChangeAsync(new() { Value = "Blue Bottle Coffee Roasters" });
+        await page.Find(".staff-field input").ChangeAsync(new()
+        {
+            Value = "Blue Bottle Coffee Roasters"
+        });
         await page.Find(".staff-merchant-form form").SubmitAsync();
         _staff.Verify(s => s.SaveMerchantAsync(merchant.Id, It.Is<UpdateMerchantRequest>(r => r.Name == "Blue Bottle Coffee Roasters")), Times.Once);
         Assert.EndsWith("/staff/merchants?q=coffee", Navigation.Uri);
@@ -131,7 +138,10 @@ public class StaffConsoleTest : ComponentTest
     public async Task Cancelling_a_dirty_merchant_edit_requires_discard_confirmation()
     {
         var editor = Render<MerchantDirectoryEditor>();
-        await editor.Find("input").ChangeAsync(new() { Value = "Corner shop" });
+        await editor.Find("input").ChangeAsync(new()
+        {
+            Value = "Corner shop"
+        });
         JSInterop.Setup<bool>("confirm", _ => true).SetResult(false);
         Assert.False(await editor.InvokeAsync(() => editor.Instance.CanDiscardAsync()));
         Assert.True(editor.Instance.HasUnsavedChanges);
@@ -186,7 +196,11 @@ public class StaffConsoleTest : ComponentTest
         Render<StaffLayout>(parameters => parameters.Add(layout => layout.Body, builder =>
         {
             builder.OpenComponent<T>(0);
-            if (id is not null) builder.AddAttribute(1, "Id", id);
+            if (id is not null)
+            {
+                builder.AddAttribute(1, "Id", id);
+            }
+
             builder.CloseComponent();
         }));
 }

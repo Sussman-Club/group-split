@@ -302,7 +302,10 @@ public class GuestCommandTest
             ["code"] = ErrorCodes.GroupMemberNotSettled
         };
 
-        if (balance is { } value) members["balance"] = value;
+        if (balance is { } value)
+        {
+            members["balance"] = value;
+        }
 
         var json = JsonSerializer.Serialize(members, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var problem = JsonSerializer.Deserialize<ProblemDetails>(json, GroupSplitSerializer.Options)!;

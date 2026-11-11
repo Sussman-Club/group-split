@@ -724,7 +724,10 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         _transactions
             .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId) with { SplitRuleId = departedRule });
+            .ReturnsAsync(Details(transactionId) with
+            {
+                SplitRuleId = departedRule
+            });
 
         _splitRules
             .Setup(rules => rules.ForGroupAsync(GroupId, It.IsAny<CancellationToken>()))
@@ -1389,11 +1392,17 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         _transactions
             .Setup(t => t.GetTransactionAsync(transactionId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Details(transactionId) with { DateTime = PostedOnTheNinth });
+            .ReturnsAsync(Details(transactionId) with
+            {
+                DateTime = PostedOnTheNinth
+            });
 
         Render<MudPopoverProvider>();
 
-        return await OpenAsync(Row(transactionId) with { DateTime = PostedOnTheNinth });
+        return await OpenAsync(Row(transactionId) with
+        {
+            DateTime = PostedOnTheNinth
+        });
     }
 
     /// <summary>

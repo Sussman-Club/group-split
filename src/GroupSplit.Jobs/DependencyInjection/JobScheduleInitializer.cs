@@ -9,10 +9,16 @@ internal sealed class JobScheduleInitializer(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var registrations = builder.Registrations;
-        if (registrations.Count == 0) return;
+        if (registrations.Count == 0)
+        {
+            return;
+        }
+
         var scheduler = services.GetRequiredService<IJobScheduler>();
         foreach (var (job, schedule) in registrations)
+        {
             await scheduler.ScheduleAsync(job, schedule, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -8,10 +8,16 @@ internal sealed class AuthDelegatingHandler(NativeSession session) : DelegatingH
     {
         var token = await session.AccessTokenAsync(cancellationToken);
         if (token is not null)
+        {
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
         var response = await base.SendAsync(request, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && token is not null)
+        {
             await session.InvalidateAsync(token, cancellationToken);
+        }
+
         return response;
     }
 }

@@ -10,7 +10,11 @@ public static class BackgroundJobExtensions
     /// <summary>Opt-in persistence beside the existing in-memory dispatcher and scheduler.</summary>
     public static IServiceCollection AddBackgroundJobs(this IServiceCollection services)
     {
-        if (services.Any(service => service.ServiceType == typeof(Registration))) return services;
+        if (services.Any(service => service.ServiceType == typeof(Registration)))
+        {
+            return services;
+        }
+
         services.AddSingleton(new Registration());
         services.AddJobs()
             .Handlers.AddJobHandler<ProcessBackgroundJobs, ProcessBackgroundJobsHandler>()

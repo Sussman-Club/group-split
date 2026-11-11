@@ -16,10 +16,18 @@ public sealed partial class SupportTicketService
 
     private async Task<List<SupportMessageResponse>> Messages(Guid id, Guid? reporterId, int page, CancellationToken ct)
     {
-        if (page is < 0 or > 10000) throw InvalidFields();
+        if (page is < 0 or > 10000)
+        {
+            throw InvalidFields();
+        }
+
         var ticket = await VisibleTicket(id, reporterId, ct);
         var query = db.Set<SupportTicketMessage>().AsNoTracking().Where(m => m.TicketId == id);
-        if (reporterId is not null) query = query.Where(m => m.Visibility == SupportMessageVisibility.Public);
+        if (reporterId is not null)
+        {
+            query = query.Where(m => m.Visibility == SupportMessageVisibility.Public);
+        }
+
         var rows = await query.OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id).Skip(page * 100).Take(100).ToListAsync(ct);
         rows.Reverse();
         var names = await Names(rows.Where(m => m.AuthorUserId is not null).Select(m => m.AuthorUserId!.Value), ct);
@@ -36,9 +44,17 @@ public sealed partial class SupportTicketService
 
     private async Task<SupportMessageResponse> PostMessage(Guid id, CreateSupportMessageRequest request, Guid actor, bool isPublic, bool fromReporter, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Body) || request.Body.Length > 10000) throw InvalidFields();
+        if (string.IsNullOrWhiteSpace(request.Body) || request.Body.Length > 10000)
+        {
+            throw InvalidFields();
+        }
+
         var ticket = await VisibleTicket(id, fromReporter ? actor : null, ct);
-        if (request.ExpectedUpdatedAt is { } expected && ticket.UpdatedAt != expected) throw Changed();
+        if (request.ExpectedUpdatedAt is { } expected && ticket.UpdatedAt != expected)
+        {
+            throw Changed();
+        }
+
         var now = NextTime(ticket);
         var message = new SupportTicketMessage
         {
@@ -51,12 +67,20 @@ public sealed partial class SupportTicketService
         db.Add(message);
         var beforeStatus = ticket.Status;
         if (isPublic && fromReporter)
+        {
             ChangeStatus(ticket, ticket.AssignedUserId is null ? SupportTicketStatus.New : SupportTicketStatus.InProgress, actor, now);
+        }
         else if (isPublic && request.WaitForCustomer)
+        {
             ChangeStatus(ticket, SupportTicketStatus.WaitingForCustomer, actor, now);
+        }
+
         ticket.UpdatedAt = now;
         if (fromReporter)
+        {
             await push.ForStaff(PushNotificationKind.StaffCustomerReplied, id, actor, ct);
+        }
+
         StaffActivityService.Record(db, actor, "Tickets", id, fromReporter ? "Customer replied" : isPublic ? "Reply sent to customer" : "Internal note added", now,
             new ActivityChange("Status", beforeStatus.ToString(), ticket.Status.ToString()));
         await SaveTicketChanges(ct);

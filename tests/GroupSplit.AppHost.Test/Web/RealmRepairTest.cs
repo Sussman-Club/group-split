@@ -111,13 +111,27 @@ public class RealmRepairTest(AppHostFixture appHost)
         // collides with.
         var subflow = $"{Flow} user creation or linking {Guid.NewGuid():N}"[..80];
 
-        await Admin.SendAsync(HttpMethod.Post, $"{FlowExecutions}/execution", new { provider = "idp-review-profile" }, Ct);
+        await Admin.SendAsync(HttpMethod.Post, $"{FlowExecutions}/execution", new
+        {
+            provider = "idp-review-profile"
+        }, Ct);
         await Admin.SendAsync(HttpMethod.Post, $"{FlowExecutions}/flow",
-            new { alias = subflow, type = "basic-flow", description = "Put back by RealmRepairTest." }, Ct);
+            new
+            {
+                alias = subflow,
+                type = "basic-flow",
+                description = "Put back by RealmRepairTest."
+            }, Ct);
 
         var subflowExecutions = $"admin/realms/{Realm}/authentication/flows/{Uri.EscapeDataString(subflow)}/executions";
-        await Admin.SendAsync(HttpMethod.Post, $"{subflowExecutions}/execution", new { provider = "idp-detect-existing-broker-user" }, Ct);
-        await Admin.SendAsync(HttpMethod.Post, $"{subflowExecutions}/execution", new { provider = "idp-auto-link" }, Ct);
+        await Admin.SendAsync(HttpMethod.Post, $"{subflowExecutions}/execution", new
+        {
+            provider = "idp-detect-existing-broker-user"
+        }, Ct);
+        await Admin.SendAsync(HttpMethod.Post, $"{subflowExecutions}/execution", new
+        {
+            provider = "idp-auto-link"
+        }, Ct);
 
         foreach (var execution in (await Admin.GetAsync(FlowExecutions, Ct)).EnumerateArray())
         {

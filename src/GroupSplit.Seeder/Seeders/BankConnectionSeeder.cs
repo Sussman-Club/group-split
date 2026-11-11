@@ -45,7 +45,9 @@ public class BankConnectionSeeder(
         var user = await DbContext.Set<User>().FindAsync([dto.UserId], ct);
 
         if (user is null)
+        {
             return null;
+        }
 
         var now = clock.GetUtcNow();
 
@@ -116,12 +118,16 @@ public class BankConnectionSeeder(
     private Merchant? Merchant(BankTransactionSeedDto row)
     {
         if (string.IsNullOrWhiteSpace(row.MerchantName))
+        {
             return null;
+        }
 
         var normalized = row.MerchantName.Trim().ToLowerInvariant();
 
         if (_merchants.TryGetValue(normalized, out var seen))
+        {
             return seen;
+        }
 
         var merchant = DbContext.Set<Merchant>()
             .FirstOrDefault(candidate => candidate.NormalizedName == normalized);

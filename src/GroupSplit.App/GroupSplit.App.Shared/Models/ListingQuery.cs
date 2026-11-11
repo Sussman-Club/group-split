@@ -39,14 +39,20 @@ public static class ListingQuery
     public static (string? Range, string? From, string? To) FormatRange(DateFilter range, DateFilter opensOn)
     {
         if (range == opensOn)
+        {
             return (null, null, null);
+        }
 
         if (range.IsAllTime)
+        {
             return ("all", null, null);
+        }
 
         if (range.Preset is DateFilterPreset.Custom)
+        {
             return (null, range.CustomFrom?.ToString(DayFormat, CultureInfo.InvariantCulture),
                 range.CustomTo?.ToString(DayFormat, CultureInfo.InvariantCulture));
+        }
 
         return (Presets.First(preset => preset.Preset == range.Preset).Name, null, null);
     }
@@ -57,12 +63,16 @@ public static class ListingQuery
         var end = ParseDay(to);
 
         if (start is not null || end is not null)
+        {
             return start > end ? opensOn : new DateFilter(DateFilterPreset.Custom, start, end);
+        }
 
         foreach (var (name, preset) in Presets)
         {
             if (string.Equals(name, range, StringComparison.OrdinalIgnoreCase))
+            {
                 return new DateFilter(preset);
+            }
         }
 
         return opensOn;

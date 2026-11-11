@@ -4,12 +4,27 @@ namespace GroupSplit.Jobs.DependencyInjection;
 
 internal class JobsBuilder : IJobsBuilder
 {
-    public IServiceCollection Services { get; }
+    public IServiceCollection Services
+    {
+        get;
+    }
 
-    public IJobHandlersBuilder Handlers { get; }
-    public IJobDispatcherBuilder Dispatcher { get; }
-    public IJobReceiverBuilder Receiver { get; }
-    public IJobSchedulerBuilder Scheduler { get; }
+    public IJobHandlersBuilder Handlers
+    {
+        get;
+    }
+    public IJobDispatcherBuilder Dispatcher
+    {
+        get;
+    }
+    public IJobReceiverBuilder Receiver
+    {
+        get;
+    }
+    public IJobSchedulerBuilder Scheduler
+    {
+        get;
+    }
 
     public JobsBuilder(IServiceCollection services)
     {

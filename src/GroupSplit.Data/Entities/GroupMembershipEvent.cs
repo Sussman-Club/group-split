@@ -20,21 +20,36 @@ namespace GroupSplit.Data.Entities;
 /// </remarks>
 public class GroupMembershipEvent : Entity
 {
-    public Guid GroupId { get; set; }
+    public Guid GroupId
+    {
+        get; set;
+    }
 
     /// <summary>Whose membership this is about: for a guest, their stand-in.</summary>
-    public Guid UserId { get; set; }
+    public Guid UserId
+    {
+        get; set;
+    }
 
-    public MembershipEventKind Kind { get; set; }
+    public MembershipEventKind Kind
+    {
+        get; set;
+    }
 
     /// <summary>When it happened: the join time for a join, the departure time for a departure.</summary>
-    public DateTimeOffset At { get; set; }
+    public DateTimeOffset At
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who did it: the person themselves for a join, a return, leaving or deleting their
     /// account, and the remover for a removal. Null once that account is gone.
     /// </summary>
-    public Guid? ByUserId { get; set; }
+    public Guid? ByUserId
+    {
+        get; set;
+    }
 }
 
 /// <summary>What happened to a membership.</summary>

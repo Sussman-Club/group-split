@@ -31,7 +31,9 @@ public static class PlaidServiceExtensions
             var section = configuration.GetSection(PlaidConnectorOptions.SectionName);
 
             if (string.IsNullOrWhiteSpace(section["ClientId"]) || string.IsNullOrWhiteSpace(section["Secret"]))
+            {
                 return services;
+            }
 
             // The section, never the root. Going.Plaid has two overloads: one takes a
             // configuration root and finds its own section, the other binds whatever it is

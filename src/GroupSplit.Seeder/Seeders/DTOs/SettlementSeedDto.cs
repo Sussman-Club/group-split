@@ -12,18 +12,36 @@ namespace GroupSplit.Seeder.Seeders.DTOs;
 /// </remarks>
 public class SettlementSeedDto
 {
-    public required Guid GroupId { get; init; }
+    public required Guid GroupId
+    {
+        get; init;
+    }
 
     /// <summary>Who handed the money over.</summary>
-    public required Guid FromUserId { get; init; }
+    public required Guid FromUserId
+    {
+        get; init;
+    }
 
     /// <summary>Who received it.</summary>
-    public required Guid ToUserId { get; init; }
+    public required Guid ToUserId
+    {
+        get; init;
+    }
 
-    public required decimal Amount { get; init; }
+    public required decimal Amount
+    {
+        get; init;
+    }
 
-    public required DateTimeOffset DateTime { get; init; }
+    public required DateTimeOffset DateTime
+    {
+        get; init;
+    }
 
     /// <summary>What was remembered about it -- "cash", "end of September".</summary>
-    public string? Description { get; init; }
+    public string? Description
+    {
+        get; init;
+    }
 }

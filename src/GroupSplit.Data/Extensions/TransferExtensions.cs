@@ -51,7 +51,9 @@ public static class TransferExtensions
             ArgumentNullException.ThrowIfNull(to);
 
             if (from == to)
+            {
                 throw new ArgumentException("A transfer needs two different people.", nameof(to));
+            }
 
             var transfer = new Transfer
             {

@@ -21,12 +21,18 @@ public enum SettlementDirection
 
 public record SettleRequest
 {
-    public Guid UserId { get; set; }
+    public Guid UserId
+    {
+        get; set;
+    }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
-    public decimal Amount { get; set; }
+    public decimal Amount
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who paid whom. Defaults to the creditor's side, which is the only side the app could
@@ -44,7 +50,10 @@ public record SettleRequest
     /// Until this existed the recorded moment was the only moment available, so a group
     /// closing September could not put September's payments in September.
     /// </remarks>
-    public DateTimeOffset? Date { get; set; }
+    public DateTimeOffset? Date
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What the payer wants remembered -- "cash", "bank transfer, ref 4821".
@@ -54,7 +63,10 @@ public record SettleRequest
     /// can skip is the thing that would stop it being one.
     /// </remarks>
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The last day of activity this payment is for, or null when it is not for a period.
@@ -65,5 +77,8 @@ public record SettleRequest
     /// group's balances through it first -- which is what the Settle dialog does when a day
     /// is picked.
     /// </remarks>
-    public DateOnly? Through { get; set; }
+    public DateOnly? Through
+    {
+        get; set;
+    }
 }

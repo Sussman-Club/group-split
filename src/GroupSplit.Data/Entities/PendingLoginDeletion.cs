@@ -19,10 +19,19 @@ namespace GroupSplit.Data.Entities;
 public class PendingLoginDeletion : Entity
 {
     /// <summary>The identity provider's subject, as <see cref="UserIdentity.IdentityId"/> holds it.</summary>
-    public required string IdentityId { get; set; }
+    public required string IdentityId
+    {
+        get; set;
+    }
 
-    public required DateTimeOffset RequestedAt { get; set; }
+    public required DateTimeOffset RequestedAt
+    {
+        get; set;
+    }
 
     /// <summary>How many times deleting the login has failed. Read by the sweep's log, never to give up.</summary>
-    public int Attempts { get; set; }
+    public int Attempts
+    {
+        get; set;
+    }
 }

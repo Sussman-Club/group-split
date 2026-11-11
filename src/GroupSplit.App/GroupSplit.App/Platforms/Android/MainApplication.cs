@@ -21,8 +21,10 @@ public class MainApplication : MauiApplication
         {
             var manager = (NotificationManager?)GetSystemService(NotificationService);
             foreach (var kind in PushNotificationKinds.Settings)
+            {
                 manager?.CreateNotificationChannel(new NotificationChannel(PushNotificationKinds.Channel(kind),
                     PushNotificationKinds.Label(kind), NotificationImportance.Default));
+            }
         }
     }
 }

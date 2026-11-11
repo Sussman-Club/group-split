@@ -16,9 +16,18 @@ public sealed record ReceiptResponse(
     int MissingRuleItemCount, bool CanDivide, bool DividesItsExpense,
     IReadOnlyList<ReceiptItemResponse> Items)
 {
-    public bool CanEdit { get; init; }
-    public string? MerchantName { get; init; }
-    public DateOnly? PurchaseDate { get; init; }
+    public bool CanEdit
+    {
+        get; init;
+    }
+    public string? MerchantName
+    {
+        get; init;
+    }
+    public DateOnly? PurchaseDate
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -30,9 +39,18 @@ public sealed record ReceiptItemResponse(
     decimal TaxAmount, Guid? SplitRuleVersionId, string? SplitRuleName, SplitRuleDto? SplitRule)
 {
     public string NormalizedName { get; init; } = string.Empty;
-    public string? Description { get; init; }
-    public decimal? TaxRate { get; init; }
-    public bool? IsTaxable { get; init; }
+    public string? Description
+    {
+        get; init;
+    }
+    public decimal? TaxRate
+    {
+        get; init;
+    }
+    public bool? IsTaxable
+    {
+        get; init;
+    }
 }
 
 public sealed record ReceiptDivisionResponse(

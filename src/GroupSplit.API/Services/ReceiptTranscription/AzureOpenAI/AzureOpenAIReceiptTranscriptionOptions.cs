@@ -4,5 +4,8 @@
 public sealed class AzureOpenAIReceiptTranscriptionOptions
 {
     public const string SectionName = "AzureOpenAI";
-    public bool Enabled { get; set; }
+    public bool Enabled
+    {
+        get; set;
+    }
 }

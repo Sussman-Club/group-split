@@ -10,16 +10,25 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SettlementPayment
 {
-    public Guid FromUserId { get; init; }
+    public Guid FromUserId
+    {
+        get; init;
+    }
 
     /// <summary>Empty when the payer is the caller, who does not need naming to themselves.</summary>
     public string FromUserName { get; init; } = "";
 
-    public Guid ToUserId { get; init; }
+    public Guid ToUserId
+    {
+        get; init;
+    }
 
     public string ToUserName { get; init; } = "";
 
-    public decimal Amount { get; init; }
+    public decimal Amount
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -31,13 +40,22 @@ public record SettleUpResponse
     public IReadOnlyList<SettlementPayment> Payments { get; init; } = [];
 
     /// <summary>The date they all carry.</summary>
-    public DateTimeOffset Date { get; init; }
+    public DateTimeOffset Date
+    {
+        get; init;
+    }
 
     /// <summary>The note they all carry, when there was one.</summary>
-    public string? Description { get; init; }
+    public string? Description
+    {
+        get; init;
+    }
 
     /// <summary>The day they were worked out through, when one was given.</summary>
-    public DateOnly? CoversThrough { get; init; }
+    public DateOnly? CoversThrough
+    {
+        get; init;
+    }
 
     /// <summary>What changed hands in total, both directions added up.</summary>
     public decimal Total => Payments.Sum(payment => payment.Amount);

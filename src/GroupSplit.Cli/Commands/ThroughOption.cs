@@ -20,7 +20,10 @@ internal static class ThroughOption
 {
     public static Option<DateOnly?> Create(string description =
         "Only activity dated up to this day, e.g. 2026-08-31. Later payments count only as far as they pay it down.") =>
-        new("--through") { Description = description };
+        new("--through")
+        {
+            Description = description
+        };
 
     /// <summary>This machine's offset from UTC, in minutes, when a day was given.</summary>
     public static int? OffsetFor(DateOnly? through) =>

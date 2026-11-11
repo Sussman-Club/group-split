@@ -45,9 +45,15 @@ public sealed class ApiRateLimits
 
 public sealed class RateLimit
 {
-    public int PermitLimit { get; set; }
+    public int PermitLimit
+    {
+        get; set;
+    }
 
-    public TimeSpan Window { get; set; }
+    public TimeSpan Window
+    {
+        get; set;
+    }
 }
 
 /// <summary>

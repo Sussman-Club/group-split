@@ -29,7 +29,10 @@ public abstract class Transaction : Entity
     /// </summary>
     public virtual User User { get; set; } = null!;
 
-    public Guid UserId { get; set; }
+    public Guid UserId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The group this belongs to.
@@ -41,7 +44,10 @@ public abstract class Transaction : Entity
     /// </remarks>
     public virtual Group Group { get; set; } = null!;
 
-    public Guid GroupId { get; set; }
+    public Guid GroupId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Stored to two decimal places, which the column enforces rather than the callers
@@ -53,7 +59,10 @@ public abstract class Transaction : Entity
     /// an amount carrying a third decimal would push a fraction of a cent nobody can pay
     /// onto whoever holds the remainder, on every expense filed under the rule.
     /// </remarks>
-    public required decimal Amount { get; set; }
+    public required decimal Amount
+    {
+        get; set;
+    }
 
     /// <summary>
     /// ISO 4217. Must match the group's -- conversion is out of scope, and a group whose
@@ -71,11 +80,20 @@ public abstract class Transaction : Entity
     /// this value without converting back moves it a day for anybody far enough east or
     /// west. The clients have a clock for that.
     /// </remarks>
-    public required DateTimeOffset DateTime { get; set; }
+    public required DateTimeOffset DateTime
+    {
+        get; set;
+    }
 
-    public required string Name { get; set; }
+    public required string Name
+    {
+        get; set;
+    }
 
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The imported row this was filed from, when it was. The one trace on the ledger of
@@ -87,9 +105,15 @@ public abstract class Transaction : Entity
     /// Unlinking a bank sets it to null and leaves everything else as it was. Deferred
     /// from Phase 1, where it would have been a column with no writer.
     /// </remarks>
-    public virtual BankTransaction? BankTransaction { get; set; }
+    public virtual BankTransaction? BankTransaction
+    {
+        get; set;
+    }
 
-    public Guid? BankTransactionId { get; set; }
+    public Guid? BankTransactionId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Where the money went, when it went somewhere with a name. Copied from the imported
@@ -106,9 +130,15 @@ public abstract class Transaction : Entity
     /// is a row of its own; see <see cref="Entities.Merchant"/>.
     /// </para>
     /// </remarks>
-    public virtual Merchant? Merchant { get; set; }
+    public virtual Merchant? Merchant
+    {
+        get; set;
+    }
 
-    public Guid? MerchantId { get; set; }
+    public Guid? MerchantId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The division this was written under: the version its category's rule was on at the
@@ -135,9 +165,15 @@ public abstract class Transaction : Entity
     /// rule has always meant.
     /// </para>
     /// </remarks>
-    public virtual SplitRuleVersion? SplitRuleVersion { get; set; }
+    public virtual SplitRuleVersion? SplitRuleVersion
+    {
+        get; set;
+    }
 
-    public Guid? SplitRuleVersionId { get; set; }
+    public Guid? SplitRuleVersionId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What each person owed on this. Sums to <see cref="Amount"/>, always.

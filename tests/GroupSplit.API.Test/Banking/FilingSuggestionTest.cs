@@ -33,11 +33,13 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         services.AddKeyedSingleton<IBankConnector>(FakeBankConnector.Name, _bank);
         services.AddSingleton<IDecisionClient>(_model);
-        services.Configure<ApiRateLimits>(options => { if (_modelCallLimit is { } limit) options.SuggestionModelCalls.PermitLimit = limit; });
+        services.Configure<ApiRateLimits>(options => { if (_modelCallLimit is { } limit) { options.SuggestionModelCalls.PermitLimit = limit; } });
         services.Configure<FilingSuggestionOptions>(options =>
         {
             if (!_configured)
+            {
                 return;
+            }
 
             options.Deployment = "Decision-1";
             options.Endpoint = new Uri("https://decision.test/");
@@ -60,7 +62,13 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var service = GetService<IFilingSuggester>();
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
-        Assert.Null(await service.SuggestReceipt(request with { Receipt = request.Receipt with { Total = 24m } }, Ct));
+        Assert.Null(await service.SuggestReceipt(request with
+        {
+            Receipt = request.Receipt with
+            {
+                Total = 24m
+            }
+        }, Ct));
         Assert.Single(_model.Asked);
     }
 
@@ -107,7 +115,13 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
         Assert.NotNull(await service.SuggestReceipt(request, Ct));
         Assert.Single(_model.Asked);
-        Assert.NotNull(await service.SuggestReceipt(request with { Receipt = request.Receipt with { Total = 24m } }, Ct));
+        Assert.NotNull(await service.SuggestReceipt(request with
+        {
+            Receipt = request.Receipt with
+            {
+                Total = 24m
+            }
+        }, Ct));
         Assert.Equal(2, _model.Asked.Count);
     }
 
@@ -329,7 +343,9 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEmpty(members);
 
         foreach (var name in members.SelectMany(user => new[] { user.FirstName, user.LastName, user.Email }).OfType<string>())
+        {
             Assert.DoesNotContain(name, everything);
+        }
     }
 
     [Fact]
@@ -509,7 +525,9 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             object state, string instructions, IReadOnlyDictionary<string, string> options, CancellationToken ct = default)
         {
             lock (Asked)
+            {
                 Asked.Add((JsonSerializer.Serialize(state, Readable), options, instructions));
+            }
 
             return _fail
                 ? Task.FromException<DecisionAnswer?>(new HttpRequestException("model unavailable"))

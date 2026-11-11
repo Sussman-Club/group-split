@@ -8,12 +8,24 @@ namespace GroupSplit.App.Shared.Services.Banking;
 public interface IInboxStateService
 {
     /// <summary>The rows currently shown, for the filter in force.</summary>
-    IReadOnlyList<BankTransactionResponse> Rows { get; }
-    bool RowsLoaded { get; }
-    bool IsLoading { get; }
+    IReadOnlyList<BankTransactionResponse> Rows
+    {
+        get;
+    }
+    bool RowsLoaded
+    {
+        get;
+    }
+    bool IsLoading
+    {
+        get;
+    }
 
     /// <summary>How many rows are waiting, whatever the filter shows. What the nav badge reads.</summary>
-    int NewCount { get; }
+    int NewCount
+    {
+        get;
+    }
 
     /// <summary>
     /// How many of those look like an expense already recorded, or null if nobody has asked
@@ -24,30 +36,54 @@ public interface IInboxStateService
     /// with the expenses around it, which the badge on every page has no use for, so it is
     /// asked for only where it is said out loud -- see <see cref="WantDuplicateCountAsync"/>.
     /// </remarks>
-    int? PossibleDuplicates { get; }
+    int? PossibleDuplicates
+    {
+        get;
+    }
 
     /// <summary>Which rows the page is asking for.</summary>
-    InboxStatus Filter { get; }
+    InboxStatus Filter
+    {
+        get;
+    }
 
     /// <summary>
     /// The span of days the page is asking for, as the person chose it. All time until they
     /// narrow it: a bank sends months of rows, and sorting them out a month at a time is how
     /// anybody actually gets through a backlog.
     /// </summary>
-    DateFilter Range { get; }
-    string? Search { get; }
+    DateFilter Range
+    {
+        get;
+    }
+    string? Search
+    {
+        get;
+    }
 
     /// <summary>How many rows the filter in force has in total, not how many are loaded.</summary>
-    int TotalCount { get; }
+    int TotalCount
+    {
+        get;
+    }
 
     /// <summary>Whether the server has rows this has not asked for yet.</summary>
-    bool HasMore { get; }
+    bool HasMore
+    {
+        get;
+    }
 
     /// <summary>How many pages of rows are shown: one, plus one per "Load more".</summary>
-    int Pages { get; }
+    int Pages
+    {
+        get;
+    }
 
     /// <summary>The linked banks, and whether linking one is possible at all here.</summary>
-    BankConnectionsResponse? Connections { get; }
+    BankConnectionsResponse? Connections
+    {
+        get;
+    }
 
     /// <summary>
     /// Reads what this holds, once, and completes when that first read is done. Calling it
@@ -123,7 +159,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     private readonly Lock _lock = new();
 
-    public bool RowsLoaded { get; private set; }
+    public bool RowsLoaded
+    {
+        get; private set;
+    }
     public bool IsLoading => _pendingLoads > 0;
     private int _pendingLoads;
 
@@ -191,22 +230,37 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
     public IReadOnlyList<BankTransactionResponse> Rows { get; private set; } = [];
 
-    public int NewCount { get; private set; }
+    public int NewCount
+    {
+        get; private set;
+    }
 
-    public int? PossibleDuplicates { get; private set; }
+    public int? PossibleDuplicates
+    {
+        get; private set;
+    }
 
     public InboxStatus Filter { get; private set; } = InboxStatus.New;
 
     public DateFilter Range { get; private set; } = DateFilter.AllTime;
-    public string? Search { get; private set; }
+    public string? Search
+    {
+        get; private set;
+    }
 
-    public int TotalCount { get; private set; }
+    public int TotalCount
+    {
+        get; private set;
+    }
 
     public bool HasMore => Rows.Count < TotalCount;
 
     public int Pages => _pages;
 
-    public BankConnectionsResponse? Connections { get; private set; }
+    public BankConnectionsResponse? Connections
+    {
+        get; private set;
+    }
 
     public event Action? OnChanged;
 
@@ -224,7 +278,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public async Task SetFilterAsync(InboxStatus status, CancellationToken ct = default)
     {
         if (Filter == status)
+        {
             return;
+        }
 
         Filter = status;
         _rowsWanted = true;
@@ -239,7 +295,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public async Task SetRangeAsync(DateFilter range, CancellationToken ct = default)
     {
         if (Range == range)
+        {
             return;
+        }
 
         Range = range;
         _rowsWanted = true;
@@ -253,7 +311,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public async Task SetSearchAsync(string? search, CancellationToken ct = default)
     {
         search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
-        if (Search == search) return;
+        if (Search == search)
+        {
+            return;
+        }
+
         Search = search;
         _rowsWanted = true;
         _pages = 1;
@@ -264,12 +326,16 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public Task WantDuplicateCountAsync(CancellationToken ct = default)
     {
         if (_duplicatesWanted && PossibleDuplicates is not null)
+        {
             return Task.CompletedTask;
+        }
 
         _duplicatesWanted = true;
 
         lock (_lock)
+        {
             _loaded ??= Task.CompletedTask;
+        }
 
         return RefreshAsync(ct);
     }
@@ -280,7 +346,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         _rowsWanted = true;
 
         lock (_lock)
+        {
             _loaded ??= Task.CompletedTask;
+        }
 
         return RefreshAsync(ct);
     }
@@ -303,7 +371,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public async Task LoadMoreAsync(CancellationToken ct = default)
     {
         if (!HasMore)
+        {
             return;
+        }
 
         var page = ++_pages;
 
@@ -325,7 +395,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             var next = await PageAsync(filter, range.Days(_clock.Today), Search, page, ct);
 
             if (version != _version)
+            {
                 return;
+            }
 
             // The rows are paged by offset, so a row arriving since the last read pushes the
             // last one shown onto this page as well. Shown once.
@@ -333,7 +405,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
             var combined = Rows.Concat(next.Items.Where(row => !shown.Contains(row.Id))).ToArray();
             await Task.WhenAll(SuggestAsync(combined, version, ct), SuggestMatchesAsync(combined, version, ct));
-            if (version != _version) return;
+            if (version != _version)
+            {
+                return;
+            }
+
             Rows = WithSuggestions(combined);
             TotalCount = next.TotalCount;
             _written = version;
@@ -342,7 +418,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         // Not loaded, so not shown: the next "Load more" asks for this page again rather
         // than the one after it.
         if (!loaded && _pages == page)
+        {
             _pages--;
+        }
     }
 
     /// <summary>One page of the rows the filter and span ask for.</summary>
@@ -393,7 +471,10 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
             await _guard.RunAsync(async () =>
             {
                 var version = ++_version;
-                if (_rowsWanted) RowsLoaded = false;
+                if (_rowsWanted)
+                {
+                    RowsLoaded = false;
+                }
 
                 // Read once, here: the filter and the span can move while this is in flight,
                 // and the rows have to be the answer to one question.
@@ -418,7 +499,9 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 // Something has been asked for since this went out. That answer is the one
                 // the page is waiting for; this one would put the previous filter's rows back.
                 if (version != _version)
+                {
                     return;
+                }
 
                 NewCount = summary.NewCount;
                 PossibleDuplicates = summary.PossibleDuplicates;
@@ -427,7 +510,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 if (shown is { } read)
                 {
                     await Task.WhenAll(SuggestAsync(read.Rows, version, ct), SuggestMatchesAsync(read.Rows, version, ct));
-                    if (version != _version) return;
+                    if (version != _version)
+                    {
+                        return;
+                    }
+
                     RowsLoaded = true;
                     Rows = WithSuggestions(read.Rows);
                     TotalCount = read.TotalCount;
@@ -457,22 +544,36 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
         foreach (var row in rows.Where(row => row.Status == InboxStatus.New))
         {
             var key = string.Join(",", row.PossibleDuplicates.Select(match => match.TransactionId).OrderBy(id => id));
-            if (_matchCandidateKeys.GetValueOrDefault(row.Id) != key) _matchSuggestions.Remove(row.Id);
+            if (_matchCandidateKeys.GetValueOrDefault(row.Id) != key)
+            {
+                _matchSuggestions.Remove(row.Id);
+            }
         }
         foreach (var row in rows.Where(row => row.Status == InboxStatus.New && row.PossibleDuplicates.Count > 1))
         {
             var key = string.Join(",", row.PossibleDuplicates.Select(match => match.TransactionId).OrderBy(id => id));
-            if (_matchCandidateKeys.GetValueOrDefault(row.Id) == key && _matchSuggestions.ContainsKey(row.Id)) continue;
+            if (_matchCandidateKeys.GetValueOrDefault(row.Id) == key && _matchSuggestions.ContainsKey(row.Id))
+            {
+                continue;
+            }
+
             try
             {
                 var matches = await _inbox.GetBankTransactionMatchesAsync(row.Id, ct);
-                if (version != _version) return;
+                if (version != _version)
+                {
+                    return;
+                }
+
                 _matchCandidateKeys[row.Id] = key;
                 _matchSuggestions[row.Id] = matches.FirstOrDefault(match => match.IsSuggested)?.TransactionId;
             }
             catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
             {
-                if (ct.IsCancellationRequested) throw;
+                if (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
             }
         }
     }
@@ -490,13 +591,27 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
                 {
                     Rows = [.. chunk.Select(id => new SuggestFilingRow { Id = id })]
                 }, ct);
-                if (version != _version) return;
-                foreach (var id in chunk) _suggestions[id] = null;
-                foreach (var answer in answers) _suggestions[answer.BankTransactionId] = answer;
+                if (version != _version)
+                {
+                    return;
+                }
+
+                foreach (var id in chunk)
+                {
+                    _suggestions[id] = null;
+                }
+
+                foreach (var answer in answers)
+                {
+                    _suggestions[answer.BankTransactionId] = answer;
+                }
             }
             catch (Exception exception) when (exception is ApiException or HttpRequestException or TaskCanceledException)
             {
-                if (ct.IsCancellationRequested) throw;
+                if (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
             }
         }
     }

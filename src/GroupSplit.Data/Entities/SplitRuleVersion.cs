@@ -33,7 +33,10 @@ public abstract class SplitRuleVersion : Entity
     /// Public, unlike the foreign keys elsewhere that are EF's business, because which rule
     /// a version belongs to is what tells a transaction's version apart from a category's.
     /// </summary>
-    public Guid SplitRuleId { get; set; }
+    public Guid SplitRuleId
+    {
+        get; set;
+    }
 
     /// <summary>When this became what the rule said.</summary>
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -42,7 +45,10 @@ public abstract class SplitRuleVersion : Entity
     /// When it stopped being what the rule said, or null while it still is. At most one
     /// version of a rule is null here, which the database enforces.
     /// </summary>
-    public DateTimeOffset? SupersededAt { get; set; }
+    public DateTimeOffset? SupersededAt
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The transactions divided by this version. Why a version is never deleted while

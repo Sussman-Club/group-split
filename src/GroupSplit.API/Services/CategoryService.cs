@@ -110,7 +110,9 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         // and re-stamping the date would move a record of when the group stopped using it
         // for no reason anybody asked for.
         if (archived == category.ArchivedAt.HasValue)
+        {
             return category;
+        }
 
         category.ArchivedAt = archived ? clock.GetUtcNow() : null;
 
@@ -129,8 +131,10 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         // category cannot take the group's spending history with it -- but a foreign-key
         // violation is not something a member can act on.
         if (stillUsed)
+        {
             throw new ConflictException(ErrorCodes.CategoryInUse,
                 "This category still has expenses filed under it. Archive it instead.");
+        }
 
         dbContext.Remove(category);
         await dbContext.SaveChangesAsync(ct);
@@ -154,7 +158,9 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
     private async Task<SplitRule?> RuleOf(Group group, Guid? splitRuleId, CancellationToken ct)
     {
         if (splitRuleId is null)
+        {
             return null;
+        }
 
         // A personal group has no rules to name, and no reason ever to have one.
         group.RefuseIfPersonalOf(userContext.User.Id);
@@ -177,7 +183,9 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
             category.Name.ToLower() == name.ToLower(), ct);
 
         if (taken)
+        {
             throw new ConflictException(ErrorCodes.CategoryNameTaken,
                 $"This group already has a category called \"{name}\".");
+        }
     }
 }

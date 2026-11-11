@@ -89,7 +89,11 @@ public class PlaidSandboxTest(AppHostFixture appHost)
         {
             // ------------------------------------------------------------ link
             var publicToken = await SandboxAsync("/sandbox/public_token/create",
-                new { institution_id = Institution, initial_products = new[] { "transactions" } }, ct);
+                new
+                {
+                    institution_id = Institution,
+                    initial_products = new[] { "transactions" }
+                }, ct);
 
             Guid connectionId;
 
@@ -208,7 +212,10 @@ public class PlaidSandboxTest(AppHostFixture appHost)
             }
 
             // ------------------------------------- a real ITEM_LOGIN_REQUIRED
-            await SandboxAsync("/sandbox/item/reset_login", new { access_token = accessToken }, ct);
+            await SandboxAsync("/sandbox/item/reset_login", new
+            {
+                access_token = accessToken
+            }, ct);
 
             await using (var scope = services.CreateAsyncScope())
             {
@@ -245,7 +252,10 @@ public class PlaidSandboxTest(AppHostFixture appHost)
 
             // The point of telling the provider before deleting the row: the item stops
             // being counted against whatever the plan counts.
-            var gone = await SandboxAsync("/item/get", new { access_token = accessToken }, ct);
+            var gone = await SandboxAsync("/item/get", new
+            {
+                access_token = accessToken
+            }, ct);
             Assert.True(gone.TryGetProperty("error_code", out _), "Plaid still knows the item.");
 
             accessToken = null;
@@ -254,7 +264,10 @@ public class PlaidSandboxTest(AppHostFixture appHost)
         {
             if (accessToken is not null)
             {
-                await SandboxAsync("/item/remove", new { access_token = accessToken }, CancellationToken.None);
+                await SandboxAsync("/item/remove", new
+                {
+                    access_token = accessToken
+                }, CancellationToken.None);
             }
         }
     }
@@ -342,7 +355,9 @@ public class PlaidSandboxTest(AppHostFixture appHost)
                 .CountAsync(row => row.Account.BankConnectionId == connectionId, ct);
 
             if (rows > 0 || DateTimeOffset.UtcNow > deadline)
+            {
                 return rows;
+            }
 
             await Task.Delay(TimeSpan.FromSeconds(3), ct);
         }

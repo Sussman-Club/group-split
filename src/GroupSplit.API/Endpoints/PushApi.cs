@@ -21,17 +21,26 @@ public static class PushApi
             // Keep the unique PostgreSQL index below its per-entry byte limit, including UTF-8 input.
             if (id == Guid.Empty || string.IsNullOrWhiteSpace(request.Token)
                 || System.Text.Encoding.UTF8.GetByteCount(request.Token) > 2048)
+            {
                 return Results.BadRequest();
+            }
 
             var device = await db.Set<PushDevice>().FindAsync([id], ct);
 
             // An installation id is scoped to its owner. Sign-out unregisters it before a new login.
-            if (device is not null && device.UserId != current.User.Id) return Results.NotFound();
+            if (device is not null && device.UserId != current.User.Id)
+            {
+                return Results.NotFound();
+            }
 
             var duplicate = await db.Set<PushDevice>().SingleOrDefaultAsync(d => d.Token == request.Token && d.Id != id, ct);
             if (duplicate is not null)
             {
-                if (duplicate.UserId != current.User.Id) return Results.Conflict();
+                if (duplicate.UserId != current.User.Id)
+                {
+                    return Results.Conflict();
+                }
+
                 db.Remove(duplicate);
                 await db.SaveChangesAsync(ct);
             }

@@ -5,7 +5,10 @@ public sealed class VeryfiReceiptTranscriptionOptions
 {
     public const string SectionName = "Veryfi";
 
-    public bool Enabled { get; set; }
+    public bool Enabled
+    {
+        get; set;
+    }
     public string ClientId { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
@@ -23,5 +26,8 @@ public sealed class VeryfiReceiptTranscriptionOptions
     /// for one investigation shipped every receipt after it.
     /// </para>
     /// </summary>
-    public bool LogRawResponses { get; set; }
+    public bool LogRawResponses
+    {
+        get; set;
+    }
 }

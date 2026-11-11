@@ -87,7 +87,10 @@ public class ApiErrorPresenterTest
     {
         public RecordingNavigationManager(string uri) => Initialize("https://localhost/", uri);
 
-        public string? Went { get; private set; }
+        public string? Went
+        {
+            get; private set;
+        }
 
         protected override void NavigateToCore(string uri, bool forceLoad) => Went = uri;
     }

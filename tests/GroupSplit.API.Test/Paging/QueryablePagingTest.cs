@@ -17,9 +17,15 @@ public class QueryablePagingTest : IAsyncLifetime
 {
     private sealed class Row
     {
-        public int Id { get; init; }
+        public int Id
+        {
+            get; init;
+        }
         public string Name { get; init; } = "";
-        public decimal Amount { get; init; }
+        public decimal Amount
+        {
+            get; init;
+        }
     }
 
     private sealed class RowContext(DbContextOptions<RowContext> options) : DbContext(options)

@@ -76,8 +76,10 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         // is claimed and a deleted account holds nothing; either one here is a bug in the
         // caller, and a membership row for it would be one nobody could ever use or leave.
         if (user.Kind is not UserKind.Account)
+        {
             throw new InvalidOperationException(
                 $"Only an account can join a group, and user {user.Id} is a {user.Kind}.");
+        }
 
         // Nothing here answers an invitation, and there is nothing for it to answer. An
         // invitation names a person the group invented and holds a stand-in of its own, so a
@@ -91,10 +93,14 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         var membership = await Row(group.Id, user.Id, ct);
 
         if (membership is { LeftAt: null })
+        {
             return JoinOutcome.AlreadyAMember;
+        }
 
         if (membership is { LeftAt: { } leftAt } && leftAt >= issuedAt)
+        {
             throw Refusal(membership, issuedAt);
+        }
 
         var now = clock.GetUtcNow();
         JoinOutcome outcome;
@@ -146,7 +152,9 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         // EF fixes the skip navigations up from a tracked join row with both keys set, but
         // the responses count group.Users, so this does not lean on it.
         if (group.Users.All(member => member.Id != user.Id))
+        {
             group.Users.Add(user);
+        }
 
         // And the rule that says an expense is all theirs, which every member has and
         // nobody writes. Here rather than beside each way in, for the reason this class
@@ -163,7 +171,9 @@ public sealed class GroupJoiner(AppDbContext context, IMemberSplitRules memberRu
         var membership = await Row(groupId, userId, ct);
 
         if (membership is { LeftAt: { } leftAt } && leftAt >= issuedAt)
+        {
             throw Refusal(membership, issuedAt);
+        }
     }
 
     /// <summary>The membership row for the pair, open or closed.</summary>

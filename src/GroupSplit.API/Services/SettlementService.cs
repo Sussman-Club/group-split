@@ -176,9 +176,11 @@ public class SettlementService(
         var payments = position.Payments(userContext.User.Id);
 
         if (payments.Count is 0)
+        {
             throw new ConflictException(ErrorCodes.SettlementNothingToSettle, cutoff is null
                 ? "You are already square with everybody in this group."
                 : $"You are already square with everybody in this group for everything through {cutoff.Through:d MMM yyyy}.");
+        }
 
         var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
 
@@ -195,8 +197,11 @@ public class SettlementService(
         // One save. Half a settling-up would leave somebody looking at a balance that had
         // moved for some of the people in it and not the others, with no way to tell which.
         foreach (var payment in payments)
+        {
             await SettlementRequestResolution.ResolveMatching(context, clock, payment.FromUserId, payment.ToUserId,
                 [new GroupDebt(groupId, group.Name, payment.Amount)], cancellationToken);
+        }
+
         await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
@@ -265,8 +270,10 @@ public class SettlementService(
         group.RefuseIfPersonalOf(userContext.User.Id);
 
         if (fromUserId == toUserId)
+        {
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
                 "A settlement needs two different people.");
+        }
 
         // Participants, not only members, at either end: the members record what a guest
         // pays and is paid -- to a member, or to another guest. Somebody who has gone is not.
@@ -340,8 +347,10 @@ public class SettlementService(
         var caller = userContext.User;
 
         if (request.UserId == caller.Id)
+        {
             throw new ConflictException(ErrorCodes.SettlementWithSelf,
                 "A settlement needs two different people.");
+        }
 
         var cutoff = Cutoff.Of(request.Through, request.UtcOffset);
 
@@ -451,7 +460,9 @@ public class SettlementService(
             .FirstOrDefaultAsync(cancellationToken);
 
         if (transfer?.CoversThrough is not { } through)
+        {
             return null;
+        }
 
         // Where the period starts: after the last day an earlier settlement the payer was part
         // of covered, whoever it was with and whichever way it went. Not the pair, because who
@@ -487,10 +498,14 @@ public class SettlementService(
 
         // Every group has at least the caller, so no rows means it is not one of theirs.
         if (rows.Length == 0)
+        {
             return null;
+        }
 
         if (cutoff is null)
+        {
             return await debtCalculator.GetUserBalance(rows);
+        }
 
         var later = await LaterPayments([groupId], cutoff, cancellationToken);
 
@@ -505,9 +520,14 @@ public class SettlementService(
             .MaxAsync(transfer => transfer.CoversThrough, cancellationToken);
 
         if (settledLater is not { } day)
+        {
             return period;
+        }
 
-        var closed = await GetPosition(groupId, cutoff with { Through = day }, cancellationToken);
+        var closed = await GetPosition(groupId, cutoff with
+        {
+            Through = day
+        }, cancellationToken);
 
         return closed is null ? period : debtCalculator.CappedAt(period, closed);
     }
@@ -576,7 +596,9 @@ public class SettlementService(
             // Nothing outstanding here at all. Worth skipping rather than minimising an
             // all-zero group, which produces no payments anyway.
             if (balances.TrueForAll(balance => balance.Balance == 0))
+            {
                 continue;
+            }
 
             // Through a day, the group's position exactly as its own balances read it: the
             // repayments made for later, and any later period since settled, are its business.
@@ -585,15 +607,21 @@ public class SettlementService(
                 : await GetPosition(inGroup.Key.GroupId, cutoff, cancellationToken);
 
             if (position is null)
+            {
                 continue;
+            }
 
             var guests = balances.Where(balance => balance.IsGuest).Select(balance => balance.UserId).ToHashSet();
 
             foreach (var debt in position.YouOwed)
+            {
                 Accumulate(youPay, debt, inGroup.Key.GroupId, inGroup.Key.GroupName, guests.Contains(debt.UserId));
+            }
 
             foreach (var credit in position.OwedToYou)
+            {
                 Accumulate(owedToYou, credit, inGroup.Key.GroupId, inGroup.Key.GroupName, guests.Contains(credit.UserId));
+            }
         }
 
         return (Finish(youPay), Finish(owedToYou));
@@ -616,10 +644,14 @@ public class SettlementService(
         Guid groupId, string groupName, bool isGuest)
     {
         if (debt.Amount <= 0)
+        {
             return;
+        }
 
         if (!side.TryGetValue(debt.UserId, out var person))
+        {
             side[debt.UserId] = person = new PersonBuilder(debt.UserName, isGuest);
+        }
 
         person.Groups.Add(new GroupDebt(groupId, groupName, debt.Amount));
     }

@@ -54,7 +54,9 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
+        {
             await _services.DisposeAsync();
+        }
     }
 
     private async Task<Guid> Someone()
@@ -337,7 +339,10 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
     /// </summary>
     private sealed class BeforeNaming(Func<Task> run) : DbCommandInterceptor
     {
-        public bool Fired { get; private set; }
+        public bool Fired
+        {
+            get; private set;
+        }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command,

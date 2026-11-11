@@ -35,7 +35,9 @@ public class MainActivity : MauiAppCompatActivity
                 .OpenNotification(kind, groupId, intent?.GetStringExtra("requestToken"));
         }
         if (intent?.Action == Intent.ActionView && Uri.TryCreate(intent.DataString, UriKind.Absolute, out var uri))
+        {
             Microsoft.Maui.Controls.Application.Current?.SendOnAppLinkRequestReceived(uri);
+        }
     }
 
     protected override async void OnResume()
@@ -44,7 +46,9 @@ public class MainActivity : MauiAppCompatActivity
         try
         {
             if (IPlatformApplication.Current?.Services.GetService<GroupSplit.App.Shared.Services.IPushNotifications>() is { } push)
+            {
                 await push.RefreshAsync();
+            }
         }
         catch (Exception) { /* Retry token registration when the app next resumes. */ }
     }

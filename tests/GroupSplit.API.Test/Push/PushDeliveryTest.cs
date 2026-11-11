@@ -33,7 +33,11 @@ public sealed class PushDeliveryTest : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = new Data.Entities.User { FirstName = "Recipient" };
         var group = new Data.Entities.Group { Name = "Trip" };
-        if (scenario != "departed") group.Users.Add(user);
+        if (scenario != "departed")
+        {
+            group.Users.Add(user);
+        }
+
         db.AddRange(user, group);
         var device = new PushDevice
         {
@@ -42,8 +46,16 @@ public sealed class PushDeliveryTest : IAsyncLifetime
             ExpensesEnabled = scenario != "disabled",
             UpdatedAt = DateTimeOffset.UtcNow
         };
-        if (scenario == "stale") device.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-31);
-        if (scenario == "deleted") user.Kind = UserKind.Deleted;
+        if (scenario == "stale")
+        {
+            device.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-31);
+        }
+
+        if (scenario == "deleted")
+        {
+            user.Kind = UserKind.Deleted;
+        }
+
         var delivery = new SendExpensePush(device.Id,
             scenario == "reassigned" ? Guid.NewGuid() : user.Id, group.Id, Guid.NewGuid(),
             DateTimeOffset.UtcNow.AddHours(scenario == "expired" ? -1 : 1));
@@ -51,13 +63,25 @@ public sealed class PushDeliveryTest : IAsyncLifetime
         await db.SaveChangesAsync(Ct);
         var sender = new Mock<IPushSender>();
         var setup = sender.Setup(s => s.SendAsync("token", group.Id, group.Name, delivery.DeliveryId, It.IsAny<CancellationToken>(), PushNotificationKind.ExpenseCreated, null));
-        if (scenario == "retry") setup.ThrowsAsync(new HttpRequestException("Unavailable"));
-        else setup.ReturnsAsync(scenario != "unregistered");
+        if (scenario == "retry")
+        {
+            setup.ThrowsAsync(new HttpRequestException("Unavailable"));
+        }
+        else
+        {
+            setup.ReturnsAsync(scenario != "unregistered");
+        }
+
         var handler = new SendExpensePushHandler(new SendPushNotificationHandler(db, sender.Object, TimeProvider.System));
         if (scenario == "retry")
+        {
             await Assert.ThrowsAsync<HttpRequestException>(() => handler.HandleAsync(delivery, Ct).AsTask());
+        }
         else
+        {
             await handler.HandleAsync(delivery, Ct);
+        }
+
         sender.Verify(s => s.SendAsync("token", group.Id, group.Name, delivery.DeliveryId, It.IsAny<CancellationToken>(), PushNotificationKind.ExpenseCreated, null), Times.Exactly(sends));
         db.ChangeTracker.Clear();
         Assert.Equal(deviceCount, await db.Set<PushDevice>().CountAsync(Ct));

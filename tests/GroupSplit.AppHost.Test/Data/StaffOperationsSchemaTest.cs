@@ -22,7 +22,11 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
         var database = "staff_verify_" + Guid.NewGuid().ToString("N");
         await using var admin = new NpgsqlConnection(cs.ConnectionString);
         await admin.OpenAsync();
-        await using (var create = new NpgsqlCommand($"CREATE DATABASE {database}", admin)) await create.ExecuteNonQueryAsync();
+        await using (var create = new NpgsqlCommand($"CREATE DATABASE {database}", admin))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
+
         try
         {
             cs.Database = database;
@@ -37,7 +41,8 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
                 Assert.True((bool)(await tableCheck.ExecuteScalarAsync())!);
             }
             var user = new User { FirstName = "Staff", LastName = "Verification", Email = "verify@example.test", Kind = UserKind.Account };
-            db.Add(user); await db.SaveChangesAsync();
+            db.Add(user);
+            await db.SaveChangesAsync();
             var merchantService = new MerchantService(new VerificationUser(user), db, TimeProvider.System);
             var source = await merchantService.CreateDirectory(new CreateMerchantRequest { Name = "Old shop" }, user.Id, default);
             var target = await merchantService.CreateDirectory(new CreateMerchantRequest { Name = "Canonical shop" }, user.Id, default);
@@ -45,10 +50,14 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var connection = new BankConnection { UserId = user.Id, Provider = "test", ProviderItemId = Guid.NewGuid().ToString(), InstitutionName = "Test bank", AccessTokenCiphertext = "test", LinkedAt = DateTimeOffset.UtcNow };
             var account = new LinkedAccount { Connection = connection, ProviderAccountId = "123", Name = "Test", Type = "depository" };
             var group = new Group { Name = "Verification" };
-            db.Add(group); db.Add(account);
+            db.Add(group);
+            db.Add(account);
             var expense = new Expense { UserId = user.Id, Group = group, Amount = 12.34m, Currency = "USD", Name = "Purchase", DateTime = DateTimeOffset.UtcNow, MerchantId = source.Id };
             var row = new BankTransaction { Account = account, ProviderTransactionId = "verify-row", Date = DateOnly.FromDateTime(DateTime.UtcNow), Amount = 12.34m, Description = "Purchase", RawJson = "{}", ImportedAt = DateTimeOffset.UtcNow, MerchantId = source.Id };
-            db.Add(expense); db.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            db.Add(expense);
+            db.Add(row);
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
             var ranked = await merchantService.ListDirectory(null, 0, "usage", default);
             Assert.Equal(source.Id, ranked.Items[0].Id);
             Assert.Equal(1, ranked.Items[0].TransactionCount);
@@ -90,5 +99,8 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
         }
     }
     private static void Check(bool value, string name) => Assert.True(value, name);
-    private sealed class VerificationUser(User user) : ICurrentUser { public User User => user; }
+    private sealed class VerificationUser(User user) : ICurrentUser
+    {
+        public User User => user;
+    }
 }

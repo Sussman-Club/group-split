@@ -4,7 +4,10 @@ namespace GroupSplit.App.Services;
 
 public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
 {
-    public int? AndroidBuild { get; init; }
+    public int? AndroidBuild
+    {
+        get; init;
+    }
     public Uri WebBaseAddress { get; init; } = new("https://groupsplit.sussman.win/");
     public const string ClientId = "native";
     public static readonly Uri Callback = new("groupsplit://auth/callback");
@@ -31,7 +34,10 @@ public sealed record NativeOptions(Uri ApiBaseAddress, Uri Authority)
                 || (uri.Scheme != "https" && !(development && uri.Scheme == "http"))
                 || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query)
                 || !string.IsNullOrEmpty(uri.Fragment))
+            {
                 throw new InvalidOperationException("Configure the native API URL and realm authority with absolute HTTPS URLs (HTTP is allowed only in Debug).");
+            }
+
             return new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
         }
         return new(Validate(api, development), Validate(authority, development))

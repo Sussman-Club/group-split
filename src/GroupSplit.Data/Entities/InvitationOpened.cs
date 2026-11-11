@@ -35,13 +35,22 @@ namespace GroupSplit.Data.Entities;
 public class InvitationOpened
 {
     /// <summary>The <see cref="GroupGuest"/> whose link was opened.</summary>
-    public Guid GuestId { get; init; }
+    public Guid GuestId
+    {
+        get; init;
+    }
 
-    public Guid UserId { get; init; }
+    public Guid UserId
+    {
+        get; init;
+    }
 
     /// <summary>
     /// When they first opened it. Not updated on later visits: what the list wants is the
     /// order the invitations arrived in, and re-reading one does not make it newer.
     /// </summary>
-    public required DateTimeOffset OpenedAt { get; init; }
+    public required DateTimeOffset OpenedAt
+    {
+        get; init;
+    }
 }

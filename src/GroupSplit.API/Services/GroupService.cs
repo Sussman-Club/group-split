@@ -264,7 +264,9 @@ public class GroupService(
         // later groups do not receive a fresh checklist.
         if (user.Onboarding.GroupId is null && !await context.Set<GroupMembership>().IgnoreQueryFilters()
                 .AnyAsync(membership => membership.UserId == user.Id && membership.GroupId != user.Id, cancellationToken))
+        {
             user.Onboarding.GroupId = group.Id;
+        }
 
         context.Add(group);
         await context.SaveChangesAsync(cancellationToken);
@@ -316,8 +318,16 @@ public class GroupService(
         var userId = userContext.User.Id;
         IQueryable<Group> groups = from g in GroupsOf(userId)
                                    join membership in context.Set<GroupMembership>()
-                                       on new { GroupId = g.Id, UserId = userId }
-                                       equals new { membership.GroupId, membership.UserId }
+                                       on new
+                                       {
+                                           GroupId = g.Id,
+                                           UserId = userId
+                                       }
+                                       equals new
+                                       {
+                                           membership.GroupId,
+                                           membership.UserId
+                                       }
                                    where archived == null || (membership.ArchivedAt != null) == archived
                                    orderby g.Id == userId descending, g.Name, g.Id
                                    select g;
@@ -344,8 +354,16 @@ public class GroupService(
 
         return from @group in groups
                join membership in context.Set<GroupMembership>()
-                   on new { GroupId = @group.Id, UserId = userId }
-                   equals new { membership.GroupId, membership.UserId }
+                   on new
+                   {
+                       GroupId = @group.Id,
+                       UserId = userId
+                   }
+                   equals new
+                   {
+                       membership.GroupId,
+                       membership.UserId
+                   }
                orderby @group.Id == userId descending, @group.Name, @group.Id
                select new GroupResponse(@group.Id, @group.Name, @group.Users.Count,
                    membership.ArchivedAt != null)
@@ -380,7 +398,9 @@ public class GroupService(
         var existingGroup = await group.FirstOrDefaultAsync(cancellationToken);
 
         if (existingGroup is null)
+        {
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+        }
 
         existingGroup.Name = request.Name;
         existingGroup.Description = request.Description;
@@ -493,12 +513,16 @@ public class GroupService(
     {
         var currentUser = userContext.User;
         if (userId == currentUser.Id)
+        {
             throw new ForbiddenException(ErrorCodes.GroupCannotRemoveSelf, "You cannot remove yourself from a group.");
+        }
 
         var groupQuery = (await GetGroupById(groupId, cancellationToken)).Include(g => g.Users);
         var group = await groupQuery.FirstOrDefaultAsync(cancellationToken);
         if (group is null)
+        {
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+        }
 
         group.RefuseIfPersonalOf(currentUser.Id);
 
@@ -509,8 +533,10 @@ public class GroupService(
         var standing = await participants.StandingOf(groupId, userId, cancellationToken);
 
         if (standing is ParticipantStanding.Departed or ParticipantStanding.Stranger)
+        {
             throw new NotFoundException(ErrorCodes.UserNotFound,
                 "That person is not a member or guest of this group.");
+        }
 
         // The same rule for both: square first. Somebody who goes while owing or owed takes
         // that with them, and the group's balances would no longer add up among the people
@@ -521,11 +547,13 @@ public class GroupService(
             .FirstOrDefaultAsync(cancellationToken);
 
         if (userBalance is not 0)
+        {
             throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
                     standing is ParticipantStanding.Guest
                         ? "That guest has to be square with the group before they can be removed. Record what they paid or were paid back first."
                         : "The member has to settle up before leaving the group.")
                 .WithExtension("balance", userBalance);
+        }
 
         if (standing is ParticipantStanding.Guest)
         {
@@ -798,8 +826,10 @@ public class GroupService(
         // its last member is walking away from. Archiving is what they actually want here,
         // and it is one tap away, so this says so rather than quietly orphaning the rows.
         if (group.Users.Count <= 1)
+        {
             throw new ConflictException(ErrorCodes.GroupCannotLeaveLastMember,
                 "You are the only member left, so leaving would leave the group with nobody in it. Archive it instead.");
+        }
 
         var balance = await (await GetGroupNetBalance(groupId, cancellationToken))
             .Where(netBalance => netBalance.UserId == user.Id)
@@ -807,9 +837,11 @@ public class GroupService(
             .FirstOrDefaultAsync(cancellationToken);
 
         if (balance is not 0)
+        {
             throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
                     "Settle up before leaving the group.")
                 .WithExtension("balance", balance);
+        }
 
         await DetachMember(group, user, LeftReason.Left, user.Id, cancellationToken);
 
@@ -829,8 +861,16 @@ public class GroupService(
                 from @group in GroupsOf(user.Id)
                 where @group.Id != user.Id
                 join membership in context.Set<GroupMembership>()
-                    on new { GroupId = @group.Id, UserId = user.Id }
-                    equals new { membership.GroupId, membership.UserId }
+                    on new
+                    {
+                        GroupId = @group.Id,
+                        UserId = user.Id
+                    }
+                    equals new
+                    {
+                        membership.GroupId,
+                        membership.UserId
+                    }
                 select new GroupPosition(
                     @group.Id,
                     @group.Name,
@@ -878,7 +918,9 @@ public class GroupService(
             .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == user.Id, cancellationToken);
 
         if (membership is null)
+        {
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
+        }
 
         // Archiving tidies a group away, and a personal group is where the owner's own
         // spending goes whatever else they tidy.

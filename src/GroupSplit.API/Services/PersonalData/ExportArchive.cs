@@ -12,7 +12,12 @@ internal sealed class ExportArchive(ZipArchive zip)
     internal async Task Complete(CancellationToken ct)
     {
         await using var entry = zip.CreateEntry("manifest.json").Open();
-        await JsonSerializer.SerializeAsync(entry, new { SchemaVersion = 1, Algorithm = "SHA-256", Files = _manifest }, ExportJson.Options, ct);
+        await JsonSerializer.SerializeAsync(entry, new
+        {
+            SchemaVersion = 1,
+            Algorithm = "SHA-256",
+            Files = _manifest
+        }, ExportJson.Options, ct);
     }
 
     private sealed record ExportFile(string Path, long Bytes, string Sha256);
@@ -34,13 +39,24 @@ internal sealed class ExportArchive(ZipArchive zip)
         public override bool CanSeek => false;
         public override bool CanWrite => true;
         public override long Length => _bytes;
-        public override long Position { get => _bytes; set => throw new NotSupportedException(); }
+        public override long Position
+        {
+            get => _bytes; set => throw new NotSupportedException();
+        }
         public override void Flush() => target.Flush();
         public override Task FlushAsync(CancellationToken ct) => target.FlushAsync(ct);
         public override void Write(byte[] buffer, int offset, int count)
-        { hash.AppendData(buffer, offset, count); target.Write(buffer, offset, count); _bytes += count; }
+        {
+            hash.AppendData(buffer, offset, count);
+            target.Write(buffer, offset, count);
+            _bytes += count;
+        }
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
-        { hash.AppendData(buffer.Span); await target.WriteAsync(buffer, ct); _bytes += buffer.Length; }
+        {
+            hash.AppendData(buffer.Span);
+            await target.WriteAsync(buffer, ct);
+            _bytes += buffer.Length;
+        }
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();

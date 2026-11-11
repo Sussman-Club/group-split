@@ -20,7 +20,10 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SplitInput
 {
-    public Guid UserId { get; init; }
+    public Guid UserId
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Goes the same way as the amount: zero or more on an expense, zero or less on a
@@ -28,5 +31,8 @@ public record SplitInput
     /// a share the other way sums correctly and moves money nobody recorded as a payment.
     /// </summary>
     [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.SharePrecision))]
-    public decimal Amount { get; init; }
+    public decimal Amount
+    {
+        get; init;
+    }
 }

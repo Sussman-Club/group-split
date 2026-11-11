@@ -66,7 +66,9 @@ public sealed class AccountDataGuard(AppDbContext db) : IAccountDataGuard
             // Query scalar database state after waiting, never the middleware's tracked user.
             if (!allowDeleted && !await db.Set<User>().AsNoTracking()
                     .AnyAsync(user => user.Id == userId && user.Kind != UserKind.Deleted, ct))
+            {
                 throw new NotFoundException(ErrorCodes.AccountNotFound, "This account no longer exists.");
+            }
 
             return lease;
         }

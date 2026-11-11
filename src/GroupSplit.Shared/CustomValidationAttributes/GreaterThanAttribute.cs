@@ -13,7 +13,11 @@ public class GreaterThanAttribute : ValidationAttribute
 
     protected override ValidationResult? IsValid(object? value, ValidationContext context)
     {
-        if (value is not decimal dec) return new ValidationResult(FormatErrorMessage(context.DisplayName));
+        if (value is not decimal dec)
+        {
+            return new ValidationResult(FormatErrorMessage(context.DisplayName));
+        }
+
         return dec > _min ? ValidationResult.Success : new ValidationResult(FormatErrorMessage(context.DisplayName));
     }
 

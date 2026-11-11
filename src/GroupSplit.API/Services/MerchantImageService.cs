@@ -26,11 +26,16 @@ public sealed class MerchantImageService(
     public async Task<MerchantResponse> SaveAsync(Guid? merchantId, string name, IFormFile file, Guid? actorId, Guid? expectedVersion, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128)
+        {
             throw new ValidationException(ErrorCodes.InvalidMerchant, "A merchant name is required, up to 128 characters.");
+        }
 
         var previous = merchantId is { } id ? await merchants.GetDirectory(id, ct) : null;
         if (previous is not null && expectedVersion is not null && previous.Version != expectedVersion)
+        {
             throw new ConflictException(ErrorCodes.Conflict, "This merchant changed. Reload before saving.");
+        }
+
         var bytes = await ReadUploadAsync(file, ct);
         ValidatePng(bytes);
         var imageId = Guid.NewGuid();
@@ -66,7 +71,10 @@ public sealed class MerchantImageService(
         {
             if (!committed)
             {
-                try { await storage.DeleteObjectAsync(Bucket, Key(imageId), CancellationToken.None); }
+                try
+                {
+                    await storage.DeleteObjectAsync(Bucket, Key(imageId), CancellationToken.None);
+                }
                 catch (Exception e) { logger.LogWarning(e, "Could not remove uncommitted merchant image {ImageId}", imageId); }
             }
         }
@@ -90,14 +98,21 @@ public sealed class MerchantImageService(
     private static async Task<byte[]> ReadUploadAsync(IFormFile file, CancellationToken ct)
     {
         if (file.Length is <= 0 or > MerchantLogos.MaximumUploadBytes)
+        {
             throw InvalidImage();
+        }
+
         await using var source = file.OpenReadStream();
         using var target = new MemoryStream();
         var buffer = new byte[8192];
         int read;
         while ((read = await source.ReadAsync(buffer, ct)) > 0)
         {
-            if (target.Length + read > MerchantLogos.MaximumUploadBytes) throw InvalidImage();
+            if (target.Length + read > MerchantLogos.MaximumUploadBytes)
+            {
+                throw InvalidImage();
+            }
+
             target.Write(buffer, 0, read);
         }
         return target.ToArray();
@@ -110,11 +125,17 @@ public sealed class MerchantImageService(
         if (bytes.Length < 45 || !bytes.AsSpan(0, 8).SequenceEqual(signature)
             || !bytes.AsSpan(12, 4).SequenceEqual("IHDR"u8)
             || BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(8, 4)) != 13
-            || !bytes.AsSpan(bytes.Length - 12).SequenceEqual(ending)) throw InvalidImage();
+            || !bytes.AsSpan(bytes.Length - 12).SequenceEqual(ending))
+        {
+            throw InvalidImage();
+        }
+
         var width = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4));
         var height = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
         if (width is 0 or > MerchantLogos.MaximumImageDimension || height is 0 or > MerchantLogos.MaximumImageDimension)
+        {
             throw InvalidImage();
+        }
     }
 
     private static ValidationException InvalidImage() => new(ErrorCodes.MerchantImageInvalid,

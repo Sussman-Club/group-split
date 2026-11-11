@@ -20,7 +20,9 @@ public sealed class PublishedPushConfigurationTest
             builder.AddContainer("api", "example-api").WithFirebasePush();
             builder.AddContainer("web", "example-web");
             await using (var app = builder.Build())
+            {
                 await app.RunAsync(TestContext.Current.CancellationToken);
+            }
 
             var compose = await File.ReadAllTextAsync(Path.Combine(output.FullName, "docker-compose.yaml"),
                 TestContext.Current.CancellationToken);

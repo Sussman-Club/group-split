@@ -16,7 +16,10 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
     public async Task SeedAsync(CancellationToken ct = default)
     {
         var expense = await db.Set<Expense>().SingleOrDefaultAsync(e => e.Id == ExpenseId, ct);
-        if (expense is null) return;
+        if (expense is null)
+        {
+            return;
+        }
 
         if (!await db.Set<Receipt>().AnyAsync(r => r.Id == ReceiptId, ct))
         {
@@ -53,7 +56,11 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
         foreach (var (id, merchant, item, total, daysAgo, ignored) in examples)
         {
             var receiptId = Guid.Parse(id);
-            if (existing.Contains(receiptId)) continue;
+            if (existing.Contains(receiptId))
+            {
+                continue;
+            }
+
             var receipt = new Receipt
             {
                 Id = receiptId,
@@ -87,6 +94,7 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
                 Total = original.Total
             };
             foreach (var item in original.Items)
+            {
                 duplicate.Items.Add(new ReceiptItem
                 {
                     Name = item.Name,
@@ -95,6 +103,8 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
                     Quantity = item.Quantity,
                     TotalPrice = item.TotalPrice
                 });
+            }
+
             db.Add(duplicate);
         }
         await db.SaveChangesAsync(ct);

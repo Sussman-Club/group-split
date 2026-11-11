@@ -20,7 +20,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
         PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null)
     {
         if (!config.GetValue<bool>("Push:Enabled"))
+        {
             throw new InvalidOperationException("Push delivery is disabled.");
+        }
+
         app ??= FirebaseApp.Create(new AppOptions
         {
             Credential = await CredentialAsync(config, ct),
@@ -41,7 +44,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     internal static Task<GoogleCredential> CredentialAsync(IConfiguration config, CancellationToken ct)
     {
         var encoded = config["Push:ServiceAccountBase64"];
-        if (string.IsNullOrWhiteSpace(encoded)) return GoogleCredential.GetApplicationDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            return GoogleCredential.GetApplicationDefaultAsync(ct);
+        }
         // Select the credential type explicitly: deployment configuration must never load
         // arbitrary external-account credential definitions or write a private key to disk.
         try
@@ -91,8 +97,16 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken)
     {
         var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString() };
-        if (groupId != Guid.Empty) data["groupId"] = groupId.ToString();
-        if (requestToken is not null) data["requestToken"] = requestToken;
+        if (groupId != Guid.Empty)
+        {
+            data["groupId"] = groupId.ToString();
+        }
+
+        if (requestToken is not null)
+        {
+            data["requestToken"] = requestToken;
+        }
+
         return data;
     }
 

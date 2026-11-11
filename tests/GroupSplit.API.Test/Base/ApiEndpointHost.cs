@@ -61,10 +61,16 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
     }
 
     /// <summary>A client whose requests arrive authenticated as the host's own user.</summary>
-    public HttpClient Client { get; }
+    public HttpClient Client
+    {
+        get;
+    }
 
     /// <summary>The identity provider subject <see cref="Client"/> signs in as.</summary>
-    public string Subject { get; }
+    public string Subject
+    {
+        get;
+    }
 
     public IServiceProvider Services => _app.Services;
 
@@ -233,7 +239,9 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
                 SchemeName);
 
             if (Request.Headers.TryGetValue("X-Test-Realm-Access", out var realmAccess))
+            {
                 identity.AddClaim(new Claim("realm_access", realmAccess.ToString()));
+            }
 
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));

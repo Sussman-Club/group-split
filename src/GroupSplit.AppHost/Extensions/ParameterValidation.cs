@@ -30,7 +30,9 @@ internal static class ParameterValidation
             IReadOnlyList<IResourceBuilder<ParameterResource>> required)
         {
             if (!await flag.IsTrueAsync(context.CancellationToken))
+            {
                 return;
+            }
 
             var missing = new List<string>();
 
@@ -39,11 +41,15 @@ internal static class ParameterValidation
                 var value = await parameter.Resource.GetValueAsync(context.CancellationToken);
 
                 if (string.IsNullOrWhiteSpace(value))
+                {
                     missing.Add(parameter.Resource.Name);
+                }
             }
 
             if (missing.Count == 0)
+            {
                 return;
+            }
 
             throw new InvalidOperationException(
                 $"{flag.Resource.Name} is true but {string.Join(", ", missing)} "

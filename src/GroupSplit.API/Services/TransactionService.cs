@@ -209,7 +209,12 @@ public class TransactionService(
 
         var owed = await (from split in shares
                           join expense in transactions on split.TransactionId equals expense.Id
-                          group split.Amount by new { expense.DateTime.Year, expense.DateTime.Month, expense.Currency }
+                          group split.Amount by new
+                          {
+                              expense.DateTime.Year,
+                              expense.DateTime.Month,
+                              expense.Currency
+                          }
                           into month
                           select new
                           {
@@ -275,8 +280,10 @@ public class TransactionService(
             .AnyAsync(@group => @group.Id == groupId, ct);
 
         if (!stillIn)
+        {
             throw new ConflictException(ErrorCodes.TransactionGroupLeft,
                 "You are no longer in this transaction's group, so it cannot be changed.");
+        }
     }
 
     public async Task<IQueryable<Expense>> Get(Guid id, CancellationToken ct = default)
@@ -341,9 +348,13 @@ public class TransactionService(
         }
 
         if (selectedRuleVersionId is { } selected)
+        {
             await splitter.WriteSplitsByRuleAsync(expense, selected, ct);
+        }
         else
+        {
             await splitter.WriteSplitsAsync(expense, request.Splits, ct);
+        }
 
         dbContext.Add(expense);
         await GroupSplit.API.Services.Push.ExpensePushQueue.Enqueue(dbContext, backgroundJobs, clock, group.Id, currentUser.Id, ct);
@@ -385,12 +396,18 @@ public class TransactionService(
         };
 
         if (request.Receipt is { } receipt)
+        {
             draft.Receipt = await receipts.PrepareDraft(draft, receipt, ct);
+        }
 
         if (selectedRuleVersionId is { } selected)
+        {
             await splitter.WriteSplitsByRuleAsync(draft, selected, ct);
+        }
         else
+        {
             await splitter.WriteSplitsAsync(draft, request.Splits, ct);
+        }
 
         return await Describe(draft, group.Id, ct);
     }
@@ -565,13 +582,19 @@ public class TransactionService(
         if (!groupMoved)
         {
             foreach (var split in existing.Splits)
+            {
                 draft.Splits.Add(new TransactionSplit { UserId = split.UserId, Amount = split.Amount });
+            }
         }
 
         if (request.SplitRuleId is not null)
+        {
             await splitter.WriteSplitsByRuleAsync(draft, version!.Value, ct);
+        }
         else
+        {
             await splitter.WriteSplitsAsync(draft, stated, ct);
+        }
 
         DepartedPositions.RefuseIfMoved(departed, draft, existing.GroupId);
 
@@ -633,7 +656,9 @@ public class TransactionService(
             .FirstOrDefaultAsync(ct);
 
         if (transaction is null)
+        {
             return null;
+        }
 
         // Who among the people on this transaction is one of the group's guests. One query
         // for the whole transaction rather than one per share, and empty for a personal
@@ -689,7 +714,9 @@ public class TransactionService(
             .FirstOrDefaultAsync(ct);
 
         if (transaction is null)
+        {
             return null;
+        }
 
         var expense = transaction as Expense;
 
@@ -719,7 +746,9 @@ public class TransactionService(
             .FirstOrDefaultAsync(ct);
 
         if (transaction is null)
+        {
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
+        }
 
         await RefuseIfLeft(transaction, ct);
 
@@ -743,12 +772,16 @@ public class TransactionService(
             // one expenses use and cannot carry them: a refund is a negative expense, while
             // a negative repayment is a debt filed as paying one back.
             if (request.Amount <= 0)
+            {
                 throw new ValidationException(ErrorCodes.SettlementAmountNotPositive,
                     "A settlement's amount must be greater than 0.");
+            }
 
             if (request.Splits is { Count: > 1 })
+            {
                 throw new ValidationException(ErrorCodes.SplitsInvalid,
                     "A settlement is paid to exactly one person.");
+            }
 
             // Whoever ends up on the receiving end, asked whichever way the patch got there:
             // the share it states, or -- when it removed or emptied the shares -- the one the
@@ -759,8 +792,10 @@ public class TransactionService(
                                   "This settlement records nobody it was paid to. Name them in /splits.");
 
             if (recipientId == payerId)
+            {
                 throw new ConflictException(ErrorCodes.SettlementWithSelf,
                     "A settlement needs two different people.");
+            }
 
             if (payerId != transfer.UserId)
             {
@@ -815,8 +850,10 @@ public class TransactionService(
         var expense = (Expense)transaction;
 
         if (request.CoversThrough is not null)
+        {
             throw new ValidationException(ErrorCodes.NotASettlement,
                 "Only a settlement settles a period. An expense has no day it covers through.");
+        }
 
         // Asked before a single field moves, because both questions are about the expense as
         // it stands and neither can be asked afterwards: the first re-runs the division the
@@ -844,7 +881,9 @@ public class TransactionService(
         if (amountMoved &&
             departed.FirstOrDefault(position => position.UserId == expense.UserId && position.Paid != 0m)
                 is { } departedPayer)
+        {
             throw DepartedPositions.Refusal([departedPayer.UserId]);
+        }
 
         // The destination, which is the group it is already in unless the request moves it.
         // Resolved the way a create resolves its group -- one of the caller's, their
@@ -888,7 +927,9 @@ public class TransactionService(
             // And so do the rules on its bill's lines, for the same reason one level down:
             // they are the old group's rules, and the new group can read the bill.
             if (await BillOf(expense, ct) is { } moved)
+            {
                 BillRetotal.ClearRules(moved);
+            }
         }
 
         // Asked of the payer only when it is changing. The person who paid for a dinner a
@@ -933,16 +974,22 @@ public class TransactionService(
             && await DividesByItsBill(expense, request.SplitRuleId is not null ? division : null, ct)
             && await BillOf(expense, ct) is { } bill
             && bill.Total == previousAmount)
+        {
             BillRetotal.To(bill, expense.Amount);
+        }
 
         // The amount, the payer and the category can all have changed, and each of them
         // changes what everybody owed. Recomputed rather than adjusted, because there is no
         // edit for which keeping the old split would be right -- unless the caller stated
         // the division itself, which is the one case where keeping it is the whole point.
         if (request.SplitRuleId is not null)
+        {
             await splitter.WriteSplitsByRuleAsync(expense, division!.Value, ct);
+        }
         else if (cameFromRule && inputsMoved && saysNothingNew)
+        {
             await splitter.WriteSplitsAsync(expense, null, ct);
+        }
         else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved)
         {
             // The shares the expense already holds, carried in by the endpoint, on an edit
@@ -952,7 +999,9 @@ public class TransactionService(
             // has since left could not be renamed at all. There is nothing to write.
         }
         else
+        {
             await splitter.WriteSplitsAsync(expense, request.Splits, ct);
+        }
 
         // Last, against the positions taken before anything moved: whatever the edit was,
         // what a departed participant paid and owed here is what it was.
@@ -961,7 +1010,9 @@ public class TransactionService(
         await notifications.ForGroup(PushNotificationKind.ExpenseChanged, expense.GroupId,
             userContext.User.Id, ct);
         if (recordedIn != expense.GroupId)
+        {
             await notifications.ForGroup(PushNotificationKind.ExpenseChanged, recordedIn, userContext.User.Id, ct);
+        }
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -1039,10 +1090,14 @@ public class TransactionService(
         ICollection<TransactionSplit> stored, IReadOnlyList<SplitInput>? stated)
     {
         if (stated is null)
+        {
             return true;
+        }
 
         if (stated.Count != stored.Count)
+        {
             return false;
+        }
 
         return stated.All(share => stored.Any(held =>
             held.UserId == share.UserId && held.Amount == share.Amount));
@@ -1089,7 +1144,9 @@ public class TransactionService(
             .FirstOrDefaultAsync(ct);
 
         if (transaction is null)
+        {
             throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
+        }
 
         await RefuseIfLeft(transaction, ct);
 
@@ -1103,7 +1160,9 @@ public class TransactionService(
             .ToList();
 
         if (moved.Count > 0)
+        {
             throw DepartedPositions.Refusal(moved);
+        }
 
         var row = transaction is Expense ? await FiledFrom(transaction, ct) : null;
 
@@ -1123,20 +1182,28 @@ public class TransactionService(
                 inboxReceipt.Expense = null;
                 inboxReceipt.IsIgnored = false;
                 foreach (var item in inboxReceipt.Items)
+                {
                     item.SplitRuleVersionId = null;
+                }
             }
         }
 
         // Saved with the delete rather than before it, so a delete that fails leaves the row
         // filed against the expense that is still there.
         if (returning is not null)
+        {
             returning.Status = BankTransactionStatus.New;
+        }
         else if (row is not null)
+        {
             dbContext.Remove(row);
+        }
 
         dbContext.Remove(transaction);
         if (transaction is Expense)
+        {
             await notifications.ForGroup(PushNotificationKind.ExpenseChanged, transaction.GroupId, userContext.User.Id, ct);
+        }
 
         await dbContext.SaveChangesAsync(ct);
         await receiptFiles.DeleteAsync(deletedReceiptFiles, "Could not remove receipt object for deleted expense.", ct);
@@ -1159,7 +1226,9 @@ public class TransactionService(
     private async Task<BankTransaction?> FiledFrom(Transaction transaction, CancellationToken ct)
     {
         if (transaction.BankTransactionId is not { } rowId)
+        {
             return null;
+        }
 
         return await dbContext.Set<BankTransaction>()
             .FirstOrDefaultAsync(row => row.Id == rowId && row.Status == BankTransactionStatus.Filed, ct);
@@ -1209,10 +1278,14 @@ public class TransactionService(
         var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
 
         if (IsPersonal(group))
+        {
             return currency ?? group.Currency;
+        }
 
         if (currency is not null && !SameCurrency(currency, group.Currency))
+        {
             throw CurrencyMismatch(currency, group);
+        }
 
         return group.Currency;
     }
@@ -1230,7 +1303,9 @@ public class TransactionService(
     {
         if (!IsPersonal(destination) && destination.Id != expense.GroupId &&
             !SameCurrency(expense.Currency, destination.Currency))
+        {
             throw CurrencyMismatch(expense.Currency, destination);
+        }
     }
 
     private static bool SameCurrency(string left, string right) =>
@@ -1268,7 +1343,9 @@ public class TransactionService(
     private async Task<Category?> CategoryFor(Group group, Guid? categoryId, CancellationToken ct)
     {
         if (categoryId is null)
+        {
             return null;
+        }
 
         return await dbContext.Set<Category>()
                    .FirstOrDefaultAsync(category =>
@@ -1317,11 +1394,15 @@ public class TransactionService(
         Expense expense, UpdateTransactionRequest request, Group group, bool asked, CancellationToken ct)
     {
         if (request.SplitRuleId is { } named)
+        {
             return await VersionOfRuleFor(
                 group, named, SaysNothingNew(expense.Splits, request.Splits) ? null : request.Splits, ct);
+        }
 
         if (group.Id != expense.GroupId)
+        {
             return null;
+        }
 
         if (asked && expense.SplitRuleVersionId is { } held &&
             await dbContext.Set<SoleSplitRuleVersion>().AnyAsync(version => version.Id == held, ct))
@@ -1359,16 +1440,22 @@ public class TransactionService(
         Group group, Guid? splitRuleId, IReadOnlyList<SplitInput>? stated, CancellationToken ct)
     {
         if (splitRuleId is null)
+        {
             return null;
+        }
 
         if (stated is not null)
+        {
             throw new ValidationException(ErrorCodes.SplitsInvalid,
                 "An expense divides by a rule or by the shares you state, not both. Leave the "
                 + "shares out to divide by the rule.");
+        }
 
         if (IsPersonal(group))
+        {
             throw new ConflictException(ErrorCodes.SplitRuleNotInGroup,
                 "A personal expense is not shared with anybody, so there is nothing for a rule to divide.");
+        }
 
         var version = await dbContext.Set<SplitRuleVersion>()
             .Where(candidate => candidate.SplitRuleId == splitRuleId &&
@@ -1378,9 +1465,11 @@ public class TransactionService(
             .FirstOrDefaultAsync(ct);
 
         if (version is null)
+        {
             throw new ConflictException(ErrorCodes.SplitRuleNotInGroup,
                     "That split rule does not belong to this group.")
                 .WithExtension("splitRuleId", splitRuleId);
+        }
 
         return version;
     }
@@ -1393,14 +1482,18 @@ public class TransactionService(
     private async Task<Guid?> MerchantFor(Guid? merchantId, CancellationToken ct)
     {
         if (merchantId is null)
+        {
             return null;
+        }
 
         var redirect = await dbContext.Set<MerchantRedirect>().Where(r => r.Id == merchantId).Select(r => (Guid?)r.MerchantId).SingleOrDefaultAsync(ct);
         merchantId = redirect ?? merchantId;
         var exists = await dbContext.Set<Merchant>().AnyAsync(merchant => merchant.Id == merchantId, ct);
 
         if (!exists)
+        {
             throw new NotFoundException(ErrorCodes.MerchantNotFound, "Merchant not found.");
+        }
 
         return merchantId;
     }

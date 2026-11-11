@@ -65,7 +65,11 @@ public sealed partial class StaffClient
     private async Task SendAsync(HttpMethod method, string url, object? body)
     {
         using var request = new HttpRequestMessage(method, url);
-        if (body is not null) request.Content = JsonContent.Create(body, body.GetType());
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body, body.GetType());
+        }
+
         using var response = await http.SendAsync(request);
         await response.EnsureApiSuccessAsync();
     }

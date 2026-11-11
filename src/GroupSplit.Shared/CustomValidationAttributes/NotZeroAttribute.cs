@@ -16,7 +16,9 @@ public class NotZeroAttribute : ValidationAttribute
     protected override ValidationResult? IsValid(object? value, ValidationContext context)
     {
         if (value is not decimal dec)
+        {
             return ValidationResult.Success;
+        }
 
         return dec == 0m ? new ValidationResult(FormatErrorMessage(context.DisplayName)) : ValidationResult.Success;
     }

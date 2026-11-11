@@ -90,8 +90,13 @@ public class FileBankTransactionDialogTest : ComponentTest
     {
         var candidate = new ExpenseMatchResponse(Guid.NewGuid(), "Groceries", 100m, "USD", DateTimeOffset.UtcNow,
             Trip.Id, Trip.Name, "Ana", 0m, 0, MatchConfidence.Confident)
-        { IsSuggested = true };
-        var (provider, reference) = await OpenAsync(Row with { PossibleDuplicates = [candidate] });
+        {
+            IsSuggested = true
+        };
+        var (provider, reference) = await OpenAsync(Row with
+        {
+            PossibleDuplicates = [candidate]
+        });
         Assert.Contains("Suggested match", provider.Markup);
         Assert.Contains("Create a new expense", provider.Markup);
         var attach = provider.FindAll("button").Single(button => button.TextContent.Trim() == "Attach to this expense");
@@ -121,7 +126,10 @@ public class FileBankTransactionDialogTest : ComponentTest
     [Fact]
     public async Task Incoming_money_previews_and_files_negative_shares()
     {
-        var (provider, reference) = await OpenAsync(Row with { Amount = -25.01m });
+        var (provider, reference) = await OpenAsync(Row with
+        {
+            Amount = -25.01m
+        });
         var decisions = provider.FindComponent<ExpenseDecisions>();
         await provider.InvokeAsync(() => decisions.Instance.GroupIdChanged.InvokeAsync(Trip.Id));
         var editor = provider.FindComponent<SplitEditor>();

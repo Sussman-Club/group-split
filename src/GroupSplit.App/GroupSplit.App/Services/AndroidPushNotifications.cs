@@ -26,20 +26,36 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
         await gate.WaitAsync();
         try
         {
-            if (!Supported) throw new InvalidOperationException("Firebase is not configured.");
+            if (!Supported)
+            {
+                throw new InvalidOperationException("Firebase is not configured.");
+            }
+
             if (enabled && OperatingSystem.IsAndroidVersionAtLeast(33)
                 && await Permissions.RequestAsync<NotificationPermission>() != PermissionStatus.Granted)
+            {
                 throw new InvalidOperationException("Notification permission was not granted.");
+            }
+
             if (enabled && AndroidX.Core.App.NotificationManagerCompat.From(Android.App.Application.Context)?.AreNotificationsEnabled() != true)
+            {
                 throw new InvalidOperationException("Notifications are disabled in Android settings.");
+            }
+
             var key = PushNotificationKinds.Preference(kind);
             var previous = IsEnabled(kind);
             Preferences.Default.Set(key, enabled);
             try
             {
                 FirebaseMessaging.Instance.AutoInitEnabled = Enabled;
-                if (Enabled) await RegisterAsync();
-                else await RemoveAsync();
+                if (Enabled)
+                {
+                    await RegisterAsync();
+                }
+                else
+                {
+                    await RemoveAsync();
+                }
             }
             catch
             {
@@ -53,17 +69,28 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
 
     public async Task RefreshAsync(Guid? userId = null)
     {
-        if (!Supported) return;
+        if (!Supported)
+        {
+            return;
+        }
+
         await gate.WaitAsync();
         try
         {
             if (userId is { } owner)
             {
                 var previous = Preferences.Default.Get("push.owner", "");
-                if (previous.Length != 0 && previous != owner.ToString()) await RemoveAsync();
+                if (previous.Length != 0 && previous != owner.ToString())
+                {
+                    await RemoveAsync();
+                }
+
                 Preferences.Default.Set("push.owner", owner.ToString());
             }
-            if (Enabled) await RegisterAsync();
+            if (Enabled)
+            {
+                await RegisterAsync();
+            }
         }
         finally { gate.Release(); }
     }
@@ -78,7 +105,11 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
     private async Task RegisterAsync()
     {
         var access = await session.AccessTokenAsync();
-        if (access is null) throw new InvalidOperationException("Sign in to enable alerts.");
+        if (access is null)
+        {
+            throw new InvalidOperationException("Sign in to enable alerts.");
+        }
+
         var result = await FirebaseMessaging.Instance.GetToken();
         var token = result?.ToString() ?? throw new InvalidOperationException("No push token.");
         var id = Preferences.Default.Get(InstallationKey, "");
@@ -99,7 +130,10 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
     private async Task RemoveAsync(bool skipServer = false)
     {
         foreach (var kind in Enum.GetValues<PushNotificationKind>())
+        {
             Preferences.Default.Set(PushNotificationKinds.Preference(kind), false);
+        }
+
         Exception? failure = null;
         try
         {
@@ -129,7 +163,10 @@ public sealed class AndroidPushNotifications(NativeSession session, NativeOption
             }
             finally { AndroidX.Core.App.NotificationManagerCompat.From(Android.App.Application.Context)?.CancelAll(); }
         }
-        if (failure is not null) throw new InvalidOperationException("Server unregister failed.", failure);
+        if (failure is not null)
+        {
+            throw new InvalidOperationException("Server unregister failed.", failure);
+        }
     }
 
     public sealed class NotificationPermission : Permissions.BasePlatformPermission

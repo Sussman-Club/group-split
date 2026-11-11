@@ -135,7 +135,12 @@ public static class SettleCommands
                 // "settle with them", and a script that had to read a 409 to find that out
                 // would treat squareness as a failure.
                 context.Output.Write(
-                    new { status = "nothing-outstanding", userId, direction = chosen.ToString() },
+                    new
+                    {
+                        status = "nothing-outstanding",
+                        userId,
+                        direction = chosen.ToString()
+                    },
                     _ => new Markup("Nothing outstanding between the two of you in that direction.\n"));
 
                 return ExitCodes.Success;
@@ -152,7 +157,14 @@ public static class SettleCommands
             if (parse.GetValue(dryRun))
             {
                 context.Output.Write(
-                    new { userId, person.UserName, amount = paying, groups = lines, through = day },
+                    new
+                    {
+                        userId,
+                        person.UserName,
+                        amount = paying,
+                        groups = lines,
+                        through = day
+                    },
                     _ => new Rows(
                         new Markup($"[bold]{paying:N2}[/] to {Markup.Escape(person.UserName)}, "
                                    + $"across {lines.Count} {(lines.Count == 1 ? "group" : "groups")}.\n"),
@@ -263,7 +275,9 @@ public static class SettleCommands
     private static IRenderable Side(string title, IReadOnlyList<PersonSettlement> people)
     {
         if (people.Count == 0)
+        {
             return new Markup($"[dim]{title}: nothing.[/]\n");
+        }
 
         var table = Tables.Grid(title, "Groups", "Amount");
 

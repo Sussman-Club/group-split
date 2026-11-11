@@ -5,7 +5,10 @@ namespace GroupSplit.API.Services;
 
 public interface ICurrentUser
 {
-    User User { get; }
+    User User
+    {
+        get;
+    }
 }
 
 public interface ICurrentUserInitializer

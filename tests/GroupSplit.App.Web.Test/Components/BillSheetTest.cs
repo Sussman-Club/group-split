@@ -11,7 +11,9 @@ public class BillSheetTest : ComponentTest
         new ReceiptItemResponse(Guid.NewGuid(), name, price, 1, price, tax,
             rule is null ? null : Guid.NewGuid(), rule,
             rule is null ? null : new EvenSplitRuleDto()) with
-        { Description = description };
+        {
+            Description = description
+        };
 
     private static ReceiptResponse Bill(params ReceiptItemResponse[] items) =>
         new(Guid.NewGuid(), Guid.NewGuid(), items.Sum(i => i.TotalPrice), items.Sum(i => i.TaxAmount), 0,
@@ -33,7 +35,11 @@ public class BillSheetTest : ComponentTest
     [Fact]
     public void Prints_extracted_merchant_date_coupon_and_tax_rate()
     {
-        var item = Line("Coffee", 12m, null, tax: .90m) with { TaxRate = 10m, IsTaxable = true };
+        var item = Line("Coffee", 12m, null, tax: .90m) with
+        {
+            TaxRate = 10m,
+            IsTaxable = true
+        };
         var receipt = Bill(item, Line("Loyalty coupon SAVE2", -2m, null), Line("Free sample", 0m, null)) with
         {
             MerchantName = "Corner Store",
@@ -52,8 +58,16 @@ public class BillSheetTest : ComponentTest
     [Fact]
     public void Tax_exempt_lines_do_not_print_a_tax_rate()
     {
-        var exempt = Line("Exempt item", 10m, null) with { TaxRate = 5m, IsTaxable = false };
-        var taxable = Line("Taxable item", 10m, null) with { TaxRate = 8m, IsTaxable = true };
+        var exempt = Line("Exempt item", 10m, null) with
+        {
+            TaxRate = 5m,
+            IsTaxable = false
+        };
+        var taxable = Line("Taxable item", 10m, null) with
+        {
+            TaxRate = 8m,
+            IsTaxable = true
+        };
         var page = Render<BillSheet>(p => p.Add(c => c.Receipt, Bill(exempt, taxable)));
 
         Assert.DoesNotContain("5% rate", page.Markup);
@@ -68,7 +82,10 @@ public class BillSheetTest : ComponentTest
     public void A_bill_that_divides_nothing_does_not_ask_for_rules()
     {
         var page = Render<BillSheet>(p => p.Add(c => c.Receipt,
-            Bill(Line("Pizza", 20, null)) with { DividesItsExpense = false }));
+            Bill(Line("Pizza", 20, null)) with
+            {
+                DividesItsExpense = false
+            }));
 
         Assert.DoesNotContain("no split rule", page.Markup);
     }

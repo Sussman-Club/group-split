@@ -213,7 +213,9 @@ public class DecimalFieldTest : ComponentTest
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
             if (File.Exists(Path.Combine(directory.FullName, "group-split.slnx")))
+            {
                 return directory.FullName;
+            }
         }
 
         throw new InvalidOperationException("The test is not running inside the repository.");

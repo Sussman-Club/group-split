@@ -42,10 +42,12 @@ public static class UserApi
                     ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
                 {
                     if (!AppLanguages.IsSupported(request.Language))
+                    {
                         return Results.ValidationProblem(new Dictionary<string, string[]>
                         {
                             [nameof(request.Language)] = ["Choose a supported language: en, es, pt."]
                         });
+                    }
 
                     currentUser.User.PreferredLanguage = request.Language;
                     await db.SaveChangesAsync(ct);
@@ -61,10 +63,23 @@ public static class UserApi
             return group.MapPut("/me/onboarding/{part}/dismiss", async (string part,
                 ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
             {
-                if (part == "checklist") currentUser.User.Onboarding.ChecklistDismissed = true;
-                else if (part == "expense") currentUser.User.Onboarding.ExpenseDismissed = true;
-                else if (part == "bank") currentUser.User.Onboarding.BankDismissed = true;
-                else return Results.BadRequest();
+                if (part == "checklist")
+                {
+                    currentUser.User.Onboarding.ChecklistDismissed = true;
+                }
+                else if (part == "expense")
+                {
+                    currentUser.User.Onboarding.ExpenseDismissed = true;
+                }
+                else if (part == "bank")
+                {
+                    currentUser.User.Onboarding.BankDismissed = true;
+                }
+                else
+                {
+                    return Results.BadRequest();
+                }
+
                 await db.SaveChangesAsync(ct);
                 return Results.NoContent();
             }).WithName("DismissOnboarding").Produces(StatusCodes.Status204NoContent)
@@ -84,7 +99,10 @@ public static class UserApi
                 {
                     // ZIP bytes are a binary download, not a base64 JSON string.
                     if (operation.Responses?["200"].Content?["application/zip"].Schema is Microsoft.OpenApi.OpenApiSchema schema)
+                    {
                         schema.Format = "binary";
+                    }
+
                     return Task.CompletedTask;
                 });
         }
@@ -230,7 +248,9 @@ public static class UserApi
                     var outstanding = await accounts.DeleteAccount(currentUser.User.Id, ct);
 
                     if (outstanding.Count == 0)
+                    {
                         return Results.NoContent();
+                    }
 
                     // Settling up first is the rule that already governs leaving a single
                     // group, so a refusal names the groups that are in the way instead of

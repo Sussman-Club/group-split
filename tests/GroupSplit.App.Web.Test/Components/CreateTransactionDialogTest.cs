@@ -683,7 +683,10 @@ public class CreateTransactionDialogTest : ComponentTest
         var options = provider.FindAll(".gs-selection-option");
         Assert.Equal(5, options.Count);
         foreach (var label in new[] { "Receipt items", "One person", "Evenly" })
+        {
             Assert.True(options.Single(option => option.QuerySelector("strong")!.TextContent == label).HasAttribute("disabled"));
+        }
+
         await CancelChoiceAsync(provider, opening);
 
     }

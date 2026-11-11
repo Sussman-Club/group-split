@@ -83,8 +83,10 @@ public sealed class GuestService(
         // existing guests, which would read as success for a request that asked for
         // something and got nothing.
         if (names.Count == 0)
+        {
             throw new ValidationException(ErrorCodes.GroupInvitationNoName,
                 "A guest needs a name.");
+        }
 
         var addedAt = clock.GetUtcNow();
         var added = new List<Guid>();
@@ -177,13 +179,17 @@ public sealed class GuestService(
         // copying one that has expired would hand somebody a dead URL with nothing to say
         // so, and issuing again is what a member would do next anyway.
         if (guest.HasWorkingLink(now) && !replace)
+        {
             return await Read(guest.Id, ct);
+        }
 
         // Replacing ends the old link properly -- the people who opened it are forgotten too,
         // so they are not handed this one -- and then issues the new. An expired link is
         // ended the same way, for the same reason.
         if (guest.Token is not null)
+        {
             await context.EndLink(guest, ct);
+        }
 
         // Issued now, so the new link's expiry and the rejoin rule both count from here:
         // somebody who left the group after the old link went out, and before this one,
@@ -206,8 +212,10 @@ public sealed class GuestService(
             var current = await Guest(groupId, userId, ct);
 
             if (!current.HasWorkingLink(clock.GetUtcNow()))
+            {
                 throw new ConflictException(ErrorCodes.GroupGuestChanged,
                     "Somebody else changed this guest at the same moment. Try again.");
+            }
 
             return await Read(current.Id, ct);
         }
@@ -220,7 +228,9 @@ public sealed class GuestService(
         var guest = await Guest(groupId, userId, ct);
 
         if (guest.Token is null)
+        {
             return;
+        }
 
         await context.EndLink(guest, ct);
 

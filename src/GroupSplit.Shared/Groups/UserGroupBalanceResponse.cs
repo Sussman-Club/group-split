@@ -31,11 +31,23 @@ public record UserGroupBalanceResponse
 
 public record GroupNetBalance
 {
-    public Guid UserId { get; set; }
+    public Guid UserId
+    {
+        get; set;
+    }
     public string UserName { get; set; } = string.Empty;
-    public decimal AmountPaid { get; set; }
-    public decimal AmountOwed { get; set; }
-    public decimal Balance { get; set; }
+    public decimal AmountPaid
+    {
+        get; set;
+    }
+    public decimal AmountOwed
+    {
+        get; set;
+    }
+    public decimal Balance
+    {
+        get; set;
+    }
 
     /// <summary>
     /// True for one of the group's guests: somebody it shares costs with who has no account
@@ -46,7 +58,10 @@ public record GroupNetBalance
     /// members record what a guest pays and is paid, so a payment naming one can be recorded
     /// and the plan clears the whole group.
     /// </remarks>
-    public bool IsGuest { get; set; }
+    public bool IsGuest
+    {
+        get; set;
+    }
 
     /// <summary>The name <see cref="IsGuest"/> had before guests were renamed; still written for older clients.</summary>
     [Obsolete("Use IsGuest.")]
@@ -59,7 +74,13 @@ public record GroupNetBalance
 
 public record DebtInfo
 {
-    public Guid UserId { get; set; }
+    public Guid UserId
+    {
+        get; set;
+    }
     public string UserName { get; set; } = "";
-    public decimal Amount { get; set; }
+    public decimal Amount
+    {
+        get; set;
+    }
 }

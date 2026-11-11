@@ -84,7 +84,10 @@ public class NotifierFailureTest
             .ReturnsAsync((Guid id, FileBankTransactionRequest request, CancellationToken _) =>
             {
                 var row = _rows.Single(candidate => candidate.Id == id);
-                _rows[_rows.IndexOf(row)] = row with { Status = InboxStatus.Filed };
+                _rows[_rows.IndexOf(row)] = row with
+                {
+                    Status = InboxStatus.Filed
+                };
 
                 return new TransactionResponse
                 {

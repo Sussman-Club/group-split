@@ -42,7 +42,9 @@ public class CategorySeeder(
         var group = await DbContext.Set<Group>().FindAsync([dto.GroupId], ct);
 
         if (group is null)
+        {
             return null;
+        }
 
         // "Divide it by the bill" is not written, it is given: one per group. A seeded
         // category that divides that way points at the one the group already has, or the

@@ -102,7 +102,9 @@ public class TransactionSummaryTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var home = await GroupWithCategory("Home", "Groceries");
 
         foreach (var i in Enumerable.Range(1, 7))
+        {
             await Expense(home, $"Shop {i}", i * 10m, DateTimeOffset.UtcNow.AddDays(-i));
+        }
 
         var filter = new TransactionFilter(Search: "shop");
         var transactions = await GetService<ITransactionService>().List(TestContext.Current.CancellationToken);

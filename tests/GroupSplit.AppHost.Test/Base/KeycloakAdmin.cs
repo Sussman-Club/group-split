@@ -102,7 +102,10 @@ public sealed class KeycloakAdmin(HttpClient client, string username, string pas
 
         using var response = await client.SendAsync(request, ct);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
 
         response.EnsureSuccessStatusCode();
         return true;

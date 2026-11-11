@@ -225,7 +225,12 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var file = new FileReceiptInboxRequest
         {
             NewExpense = new CreateTransactionRequest
-            { Name = "Lunch", Amount = 10m, Currency = "USD", DateTime = DateTimeOffset.UtcNow }
+            {
+                Name = "Lunch",
+                Amount = 10m,
+                Currency = "USD",
+                DateTime = DateTimeOffset.UtcNow
+            }
         };
         var filedResponse = await Client.PostAsJsonAsync($"/receipts/inbox/{receiptId}/file", file, Json, Ct);
         filedResponse.EnsureSuccessStatusCode();
@@ -352,7 +357,10 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var content = new MultipartFormDataContent();
         var file = new ByteArrayContent(StoredFile);
         if (!string.IsNullOrWhiteSpace(contentType))
+        {
             file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        }
+
         content.Add(file, "file", name);
         return content;
     }

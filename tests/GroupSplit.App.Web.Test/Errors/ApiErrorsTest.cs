@@ -40,9 +40,20 @@ public class ApiErrorsTest
             ["detail"] = "A detail for developers"
         };
 
-        if (code is not null) members["code"] = code;
-        if (traceId is not null) members["traceId"] = traceId;
-        foreach (var (name, value) in extensions) members[name] = value;
+        if (code is not null)
+        {
+            members["code"] = code;
+        }
+
+        if (traceId is not null)
+        {
+            members["traceId"] = traceId;
+        }
+
+        foreach (var (name, value) in extensions)
+        {
+            members[name] = value;
+        }
 
         return JsonSerializer.Deserialize<ProblemDetails>(
             JsonSerializer.Serialize(members, Api), GroupSplitSerializer.Options)!;

@@ -51,7 +51,11 @@ public static class JoinLinkCommands
                 // `hasLink` and not a null member, because the JSON writer drops nulls --
                 // an absent field would have to be told apart from a field it never emits.
                 context.Output.Write(
-                    new { groupId = id, hasLink = false },
+                    new
+                    {
+                        groupId = id,
+                        hasLink = false
+                    },
                     _ => new Markup(Tables.Empty("join link") +
                                     $" [grey]Make one with: groupsplit groups link create {id}[/]\n"));
 
@@ -133,7 +137,12 @@ public static class JoinLinkCommands
             await context.Groups.RevokeGroupJoinLinksAsync(id, ct);
 
             context.Output.Write(
-                new { status = "revoked", groupId = id, name = group.Name },
+                new
+                {
+                    status = "revoked",
+                    groupId = id,
+                    name = group.Name
+                },
                 value => new Markup(
                     $"[green]Turned off[/] the join link for {Markup.Escape(value.name)}.\n"));
 

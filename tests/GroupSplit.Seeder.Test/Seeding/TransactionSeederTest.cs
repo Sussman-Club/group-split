@@ -28,7 +28,14 @@ public class TransactionSeederTest
     {
         var on = new DateTimeOffset(2025, 3, 6, 12, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal(on, When(new() { Id = Guid.NewGuid(), PayerId = Guid.NewGuid(), Amount = 14.02m, Name = "Coffee", DateTime = on }));
+        Assert.Equal(on, When(new()
+        {
+            Id = Guid.NewGuid(),
+            PayerId = Guid.NewGuid(),
+            Amount = 14.02m,
+            Name = "Coffee",
+            DateTime = on
+        }));
     }
 
     [Fact]

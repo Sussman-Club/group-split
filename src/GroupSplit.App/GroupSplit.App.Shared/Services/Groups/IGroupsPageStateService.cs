@@ -11,17 +11,29 @@ namespace GroupSplit.App.Shared.Services.Groups;
 /// </summary>
 public interface IGroupsPageStateService
 {
-    ICollection<GroupResponse> Groups { get; }
+    ICollection<GroupResponse> Groups
+    {
+        get;
+    }
 
-    GroupResponse? SelectedGroup { get; set; }
+    GroupResponse? SelectedGroup
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The newest expenses in the selected group -- one page of them, which is what the
     /// card on the page shows -- and, on the page itself, how many there are in all.
     /// </summary>
-    PagedResponse<TransactionResponse>? Transactions { get; }
+    PagedResponse<TransactionResponse>? Transactions
+    {
+        get;
+    }
 
-    UserGroupBalanceResponse? Balance { get; }
+    UserGroupBalanceResponse? Balance
+    {
+        get;
+    }
 
     /// <summary>
     /// Where this person stands across every group at once: what they are owed, what they
@@ -32,10 +44,16 @@ public interface IGroupsPageStateService
     /// -- and because the question it answers is not about the selected group at all. The
     /// home page leads with it.
     /// </remarks>
-    UserPositionResponse? Position { get; }
+    UserPositionResponse? Position
+    {
+        get;
+    }
 
     /// <summary>True while the selected group's expenses and balances are on their way.</summary>
-    bool IsLoading { get; }
+    bool IsLoading
+    {
+        get;
+    }
 
     /// <summary>
     /// Makes sure <see cref="Transactions"/> and <see cref="Balance"/> are the selected
@@ -52,7 +70,10 @@ public interface IGroupsPageStateService
     event Action? OnTransactionsChanged;
     event Action? OnGroupsChanged;
 
-    Task IsReadyTask { get; }
+    Task IsReadyTask
+    {
+        get;
+    }
     Task RefreshAsync();
 
     Task<bool> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default);

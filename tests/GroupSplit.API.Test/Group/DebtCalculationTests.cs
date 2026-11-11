@@ -26,7 +26,12 @@ public class DebtCalculationTests
     }
 
     private static GroupNetBalance Balance(Guid userId, string name, decimal balance) =>
-        new() { UserId = userId, UserName = name, Balance = balance };
+        new()
+        {
+            UserId = userId,
+            UserName = name,
+            Balance = balance
+        };
 
     [Fact]
     public async Task A_settled_group_produces_no_payments()

@@ -19,13 +19,25 @@ public class DbContextSeeder<TEntity, TDto>(
         await foreach (var dto in source.ReadAsync(ct))
         {
             var entity = await MapAsync(dto, ct);
-            if (entity is null) continue;
-            if (await ExistsAsync(entity, ct)) continue;
+            if (entity is null)
+            {
+                continue;
+            }
+
+            if (await ExistsAsync(entity, ct))
+            {
+                continue;
+            }
+
             await AddEntityAsync(entity, dto, ct);
             count++;
         }
 
-        if (count > 0) await SaveAsync(ct);
+        if (count > 0)
+        {
+            await SaveAsync(ct);
+        }
+
         logger.LogInformation("Seeded {Count} {Entity}", count, typeof(TEntity).Name);
     }
 

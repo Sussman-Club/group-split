@@ -21,26 +21,47 @@ public enum ActivityKind
 /// </remarks>
 public record GroupActivityResponse
 {
-    public Guid Id { get; init; }
+    public Guid Id
+    {
+        get; init;
+    }
 
-    public ActivityKind Kind { get; init; }
+    public ActivityKind Kind
+    {
+        get; init;
+    }
 
     public string Name { get; init; } = "";
 
-    public string? Description { get; init; }
+    public string? Description
+    {
+        get; init;
+    }
 
     /// <summary>
     /// On a transfer settled through a day, that day -- "through 31 Aug" on the row. Null on
     /// an expense and on a transfer that claims no period.
     /// </summary>
-    public DateOnly? CoversThrough { get; init; }
+    public DateOnly? CoversThrough
+    {
+        get; init;
+    }
 
-    public decimal Amount { get; init; }
+    public decimal Amount
+    {
+        get; init;
+    }
 
-    public DateTimeOffset DateTime { get; init; }
+    public DateTimeOffset DateTime
+    {
+        get; init;
+    }
 
     /// <summary>Who paid: the person who spent it, or the person who paid somebody back.</summary>
-    public Guid PaidByUserId { get; init; }
+    public Guid PaidByUserId
+    {
+        get; init;
+    }
 
     public string PaidByUserName { get; init; } = "";
 
@@ -49,7 +70,10 @@ public record GroupActivityResponse
     /// group like anybody else, so their name turns up in the ledger without their ever
     /// signing in -- and the ledger should say which kind of person it is naming.
     /// </summary>
-    public bool PaidByIsGuest { get; init; }
+    public bool PaidByIsGuest
+    {
+        get; init;
+    }
 
     /// <summary>The name <see cref="PaidByIsGuest"/> had before guests were renamed; still written for older clients.</summary>
     [Obsolete("Use PaidByIsGuest.")]
@@ -63,27 +87,45 @@ public record GroupActivityResponse
     /// Who received it, on a transfer, and null on an expense -- where the money went to a
     /// shop rather than to a member, and the shares say who carried it.
     /// </summary>
-    public Guid? PaidToUserId { get; init; }
+    public Guid? PaidToUserId
+    {
+        get; init;
+    }
 
-    public string? PaidToUserName { get; init; }
+    public string? PaidToUserName
+    {
+        get; init;
+    }
 
     /// <summary>What the expense was filed under, when it was an expense filed under anything.</summary>
-    public Guid? CategoryId { get; init; }
+    public Guid? CategoryId
+    {
+        get; init;
+    }
 
-    public string? Category { get; init; }
+    public string? Category
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Where it was spent, for an expense filed from a bank row that named a place. Null on
     /// a transfer and on anything somebody typed in: those went to a person, or to a shop
     /// nobody wrote down.
     /// </summary>
-    public string? MerchantName { get; init; }
+    public string? MerchantName
+    {
+        get; init;
+    }
 
     /// <summary>
     /// The merchant's logo, where there is one. Read through the merchant and not stored
     /// per row, so a logo that arrives later arrives on every expense at that place at once.
     /// </summary>
-    public string? MerchantLogoUrl { get; init; }
+    public string? MerchantLogoUrl
+    {
+        get; init;
+    }
 
     /// <summary>
     /// What this cost the caller: their split of an expense, or null on a transfer.
@@ -98,7 +140,10 @@ public record GroupActivityResponse
     /// in the app used to show only the first.
     /// </para>
     /// </remarks>
-    public decimal? Share { get; init; }
+    public decimal? Share
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -132,7 +177,10 @@ public record GroupLedgerEntryResponse : GroupActivityResponse
     /// filters: a balance as at a date is what it is whether or not the rows above it are
     /// currently on screen. Narrowing the list to settlements does not rewrite history.
     /// </remarks>
-    public decimal RunningBalance { get; init; }
+    public decimal RunningBalance
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -162,9 +210,15 @@ public record UserActivityResponse : GroupActivityResponse
     /// id is their user id. Nullable only for clients written when a personal expense had
     /// no group; the API always sends one now.
     /// </summary>
-    public Guid? GroupId { get; init; }
+    public Guid? GroupId
+    {
+        get; init;
+    }
 
-    public string? GroupName { get; init; }
+    public string? GroupName
+    {
+        get; init;
+    }
 }
 
 /// <summary>

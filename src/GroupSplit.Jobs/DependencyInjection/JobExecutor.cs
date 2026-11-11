@@ -11,7 +11,9 @@ internal class JobExecutor(
     {
         ArgumentNullException.ThrowIfNull(job);
         if (!executions.TryGetValue(job.GetType(), out var execute))
+        {
             throw new InvalidOperationException($"No handler registered for job type {job.GetType().FullName}");
+        }
 
         return execute(serviceProvider, job, cancellationToken);
     }

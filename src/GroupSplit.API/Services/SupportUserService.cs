@@ -14,7 +14,10 @@ public sealed class SupportUserService(AppDbContext db)
     {
         var needle = search?.Trim().ToLowerInvariant() ?? "";
         if (needle.Length < 2 || needle.Length > 200)
+        {
             throw new ValidationException(ErrorCodes.BadRequest, "Search for at least two characters, up to two hundred.");
+        }
+
         return await Describe(db.Set<User>().Where(u => u.Kind == UserKind.Account
             && ((u.Email != null && u.Email.ToLower().Contains(needle))
                 || ((u.FirstName ?? "") + " " + (u.LastName ?? "")).ToLower().Contains(needle))).OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id).Take(20)).ToListAsync(ct);
@@ -24,11 +27,17 @@ public sealed class SupportUserService(AppDbContext db)
     {
         var needle = search?.Trim().ToLowerInvariant() ?? "";
         if (needle.Length > 200 || page is < 0 or > 10000)
+        {
             throw new ValidationException(ErrorCodes.BadRequest, "Check the search and page number.");
+        }
+
         var query = db.Set<User>().AsNoTracking().Where(u => u.Kind == UserKind.Account);
         if (needle.Length > 0)
+        {
             query = query.Where(u => (u.Email != null && u.Email.ToLower().Contains(needle))
                 || ((u.FirstName ?? "") + " " + (u.LastName ?? "")).ToLower().Contains(needle));
+        }
+
         var rows = await Describe(query.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id)
             .Skip(page * 30).Take(31)).ToListAsync(ct);
         return new(rows.Take(30).ToList(), rows.Count > 30);

@@ -32,7 +32,10 @@ public sealed class SupportReportClassifier(
         var typeCertain = false;
         var priorityCertain = false;
         var settings = options.Value;
-        if (!settings.IsConfigured) return (type, priority, !(typeCertain && priorityCertain));
+        if (!settings.IsConfigured)
+        {
+            return (type, priority, !(typeCertain && priorityCertain));
+        }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(settings.Timeout);
@@ -41,14 +44,26 @@ public sealed class SupportReportClassifier(
             + "For priority, use actual impact rather than the reporter's requested urgency.";
         try
         {
-            var typeAnswer = await decisions.ChooseAsync(new { description }, instructions + " Identify the report type.", Types, timeout.Token);
+            var typeAnswer = await decisions.ChooseAsync(new
+            {
+                description
+            }, instructions + " Identify the report type.", Types, timeout.Token);
             if (typeAnswer is not null && double.IsFinite(typeAnswer.Confidence)
                 && typeAnswer.Confidence >= settings.Threshold && Types.ContainsKey(typeAnswer.Choice))
-            { type = Enum.Parse<SupportTicketType>(typeAnswer.Choice); typeCertain = true; }
-            var priorityAnswer = await decisions.ChooseAsync(new { description }, instructions + " Identify the priority.", Priorities, timeout.Token);
+            {
+                type = Enum.Parse<SupportTicketType>(typeAnswer.Choice);
+                typeCertain = true;
+            }
+            var priorityAnswer = await decisions.ChooseAsync(new
+            {
+                description
+            }, instructions + " Identify the priority.", Priorities, timeout.Token);
             if (priorityAnswer is not null && double.IsFinite(priorityAnswer.Confidence)
                 && priorityAnswer.Confidence >= settings.Threshold && Priorities.ContainsKey(priorityAnswer.Choice))
-            { priority = Enum.Parse<SupportTicketPriority>(priorityAnswer.Choice); priorityCertain = true; }
+            {
+                priority = Enum.Parse<SupportTicketPriority>(priorityAnswer.Choice);
+                priorityCertain = true;
+            }
         }
         catch (Exception exception) when (!ct.IsCancellationRequested
             && exception is HttpRequestException or OperationCanceledException or JsonException)

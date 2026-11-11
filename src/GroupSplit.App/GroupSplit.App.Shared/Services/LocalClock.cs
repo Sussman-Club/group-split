@@ -137,7 +137,9 @@ public sealed class LocalClock
         var day = date ?? Today;
 
         if (!TransactionDay.IsDate(original) || time is not null)
+        {
             return At(day, time ?? TimeSpan.Zero);
+        }
 
         return DateOnly.FromDateTime(day) == Day(original)
             ? original
@@ -158,7 +160,9 @@ public sealed class LocalClock
     public async ValueTask<bool> InitializeAsync()
     {
         if (_resolved)
+        {
             return false;
+        }
 
         try
         {

@@ -24,14 +24,20 @@ public record SettleUpRequest
     /// The last day of activity to settle, or null for everything. See <see cref="Cutoff"/>.
     /// Every payment it records remembers it.
     /// </summary>
-    public DateOnly? Through { get; set; }
+    public DateOnly? Through
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The caller's offset from UTC in minutes, which says when <see cref="Through"/> ends.
     /// </summary>
     [Range(-Cutoff.MaxOffsetMinutes, Cutoff.MaxOffsetMinutes,
         ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.UtcOffset))]
-    public int? UtcOffset { get; set; }
+    public int? UtcOffset
+    {
+        get; set;
+    }
 
     /// <summary>
     /// When the money moved. Null means now.
@@ -41,7 +47,10 @@ public record SettleUpRequest
     /// up on the 3rd for a month that ended on the 30th wants these dated the 30th, so the
     /// month they are closing contains the payments that closed it.
     /// </remarks>
-    public DateTimeOffset? Date { get; set; }
+    public DateTimeOffset? Date
+    {
+        get; set;
+    }
 
     /// <summary>
     /// What to remember about it -- "end of September", "bank transfer". Written onto every
@@ -53,5 +62,8 @@ public record SettleUpRequest
     /// the thing that would stop it being one.
     /// </remarks>
     [StringLength(256, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DescriptionLength))]
-    public string? Description { get; set; }
+    public string? Description
+    {
+        get; set;
+    }
 }

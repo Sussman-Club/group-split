@@ -159,7 +159,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -563,7 +568,12 @@ public sealed class MutationCommandTests : IDisposable
             new { id = guest, firstName = "Pat", isGuest = true }
         });
 
-        _api.Returns($"/api/groups/{id}/members/{guest}", new { id, name = "The flat", memberCount = 1 });
+        _api.Returns($"/api/groups/{id}/members/{guest}", new
+        {
+            id,
+            name = "The flat",
+            memberCount = 1
+        });
 
         var result = await Cli.RunAsync("groups", "remove-member", id.ToString(), guest.ToString(), "--yes");
 
@@ -1056,7 +1066,12 @@ public sealed class MutationCommandTests : IDisposable
         var id = Guid.NewGuid();
         var omar = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1100,7 +1115,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1127,7 +1147,12 @@ public sealed class MutationCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
 
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Rent", amount = 900m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Rent",
+            amount = 900m
+        });
 
         _api.Returns($"/api/transactions/{id}/preview", new
         {
@@ -1159,7 +1184,13 @@ public sealed class MutationCommandTests : IDisposable
         var id = Guid.NewGuid();
 
         _api.Returns($"/api/transactions/{id}",
-            new { id, name = "Settle up", amount = 50m, kind = (int)ActivityKind.Transfer });
+            new
+            {
+                id,
+                name = "Settle up",
+                amount = 50m,
+                kind = (int)ActivityKind.Transfer
+            });
 
         var result = await Cli.RunAsync(
             "transactions", "update", id.ToString(), "--amount", "60", "--preview");

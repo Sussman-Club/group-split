@@ -65,7 +65,9 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
+        {
             await _services.DisposeAsync();
+        }
     }
 
     /// <summary>Three seeded people with accounts, in a stable order.</summary>
@@ -365,7 +367,9 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
                 """).SingleAsync(Ct);
 
             if (waiting > 0)
+            {
                 return;
+            }
 
             await Task.Delay(50, Ct);
         }
@@ -494,7 +498,10 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     {
         private string? _token;
 
-        public bool Fired { get; private set; }
+        public bool Fired
+        {
+            get; private set;
+        }
 
         public void Arm(string token)
         {
@@ -545,7 +552,9 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
             var link = await Service<IJoinLinkService>(scope).Create(groupId, Ct);
 
             using (var joining = await As(guest))
+            {
                 await Service<IJoinLinkService>(joining).Accept(link.Token, Ct);
+            }
 
             await Service<IGroupService>(scope).RemoveGroupMember(groupId, guest, Ct);
         }
@@ -583,7 +592,9 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
         // And a link made after the removal brings them back, onto the same row.
         string fresh;
         using (var scope = await As(host))
+        {
             fresh = (await Service<IJoinLinkService>(scope).Create(groupId, Ct)).Token;
+        }
 
         using (var scope = await As(guest))
         {

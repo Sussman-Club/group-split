@@ -25,7 +25,10 @@ public record AddGuestsRequest
     /// Whether to issue each of them a link straight away. Off by default: most guests never
     /// sign up, and a link can be sent at any time later.
     /// </summary>
-    public bool IssueLinks { get; set; }
+    public bool IssueLinks
+    {
+        get; set;
+    }
 }
 
 /// <summary>How to issue a guest's link.</summary>
@@ -36,5 +39,8 @@ public record IssueGuestLinkRequest
     /// again returns the link already out, so "send link" can always just copy -- unless
     /// that link has expired, when a new one is issued in its place either way.
     /// </summary>
-    public bool Replace { get; set; }
+    public bool Replace
+    {
+        get; set;
+    }
 }

@@ -12,8 +12,20 @@ namespace GroupSplit.Seeder.Seeders.DTOs;
 /// </remarks>
 public class CategorySeedDto
 {
-    public required Guid Id { get; init; }
-    public required Guid GroupId { get; init; }
-    public required string Category { get; init; }
-    public required SplitRuleDto SplitRule { get; init; }
+    public required Guid Id
+    {
+        get; init;
+    }
+    public required Guid GroupId
+    {
+        get; init;
+    }
+    public required string Category
+    {
+        get; init;
+    }
+    public required SplitRuleDto SplitRule
+    {
+        get; init;
+    }
 }

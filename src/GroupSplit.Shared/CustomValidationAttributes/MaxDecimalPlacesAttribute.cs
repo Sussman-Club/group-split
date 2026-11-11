@@ -15,7 +15,9 @@ public class MaxDecimalPlacesAttribute : ValidationAttribute
     public override bool IsValid(object? value)
     {
         if (value is not decimal dec)
+        {
             return true;
+        }
 
         try
         {

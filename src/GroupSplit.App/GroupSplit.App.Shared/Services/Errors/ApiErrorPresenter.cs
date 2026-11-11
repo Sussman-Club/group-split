@@ -48,7 +48,10 @@ public sealed class ApiErrorPresenter(NavigationManager nav, ISnackbar snackbar)
     {
         var error = await CaptureAsync(action);
 
-        if (error is null) return true;
+        if (error is null)
+        {
+            return true;
+        }
 
         await ShowAsync(error, context);
         return false;

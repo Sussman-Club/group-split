@@ -49,7 +49,9 @@ public class SettlementRequestService(
     {
         var settlementRequest = await Find(token, cancellationToken);
         if (settlementRequest.RecipientUserId != currentUser.User.Id)
+        {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only the named recipient can open this settlement request.");
+        }
 
         await MarkStaleIfChanged(settlementRequest, cancellationToken);
         return ToResponse(settlementRequest);
@@ -59,10 +61,15 @@ public class SettlementRequestService(
     {
         var settlementRequest = await Find(token, cancellationToken);
         if (settlementRequest.RequesterUserId != currentUser.User.Id)
+        {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only the requester can cancel this settlement request.");
+        }
 
         if (settlementRequest.ResolvedAt is not null || settlementRequest.CancelledAt is not null)
+        {
             EnsureOpen(settlementRequest);
+        }
+
         settlementRequest.CancelledAt = clock.GetUtcNow();
         await SaveRequest(cancellationToken);
         return ToResponse(settlementRequest);
@@ -73,7 +80,9 @@ public class SettlementRequestService(
     {
         var settlementRequest = await Find(token, cancellationToken);
         if (settlementRequest.RecipientUserId != currentUser.User.Id)
+        {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only the named recipient can record this repayment.");
+        }
 
         await MarkStaleIfChanged(settlementRequest, cancellationToken);
         EnsureOpen(settlementRequest);
@@ -90,8 +99,11 @@ public class SettlementRequestService(
         {
             var group = groups[part.GroupId];
             if (!group.Users.Any(user => user.Id == requester.Id) || !group.Users.Any(user => user.Id == recipient.Id))
+            {
                 throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,
                     "This settlement request no longer names two active group members.");
+            }
+
             context.Add(group.SettlementBetween(recipient, requester, part.RequestedAmount, now,
                 "Settlement request", settlementRequest.Through));
         }
@@ -105,12 +117,21 @@ public class SettlementRequestService(
         Group group, decimal debt, CancellationToken cancellationToken)
     {
         if (request.RecipientUserId == currentUser.User.Id)
+        {
             throw new ConflictException(ErrorCodes.SettlementWithSelf, "A settlement needs two different people.");
+        }
+
         if (request.Amount <= 0)
+        {
             throw new ConflictException(ErrorCodes.SettlementAmountNotPositive,
                 "A settlement request must be for more than zero.");
+        }
+
         if (decimal.Round(request.Amount, 2) != request.Amount)
+        {
             throw new ValidationException(ErrorCodes.ValidationFailed, "Use no more than two decimal places.");
+        }
+
         var recipient = await context.Set<User>().SingleOrDefaultAsync(user => user.Id == request.RecipientUserId,
             cancellationToken) ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
         var recipientIsMember = await context.Set<User>()
@@ -118,7 +139,9 @@ public class SettlementRequestService(
             .Select(user => user.Groups.Any(candidate => candidate.Id == group.Id))
             .SingleAsync(cancellationToken);
         if (!recipientIsMember)
+        {
             throw NothingToRequest();
+        }
 
         var created = new SettlementRequest
         {
@@ -153,7 +176,9 @@ public class SettlementRequestService(
     private async Task MarkStaleIfChanged(SettlementRequest request, CancellationToken cancellationToken)
     {
         if (request.CancelledAt is not null || request.ResolvedAt is not null || request.StaleAt is not null)
+        {
             return;
+        }
 
         foreach (var part in request.Groups)
         {
@@ -162,7 +187,10 @@ public class SettlementRequestService(
             var current = position?.Plan.FirstOrDefault(payment => payment.FromUserId == request.RecipientUserId &&
                 payment.ToUserId == request.RequesterUserId)?.Amount ?? 0m;
             if (current == part.DebtAtCreation)
+            {
                 continue;
+            }
+
             request.StaleAt = clock.GetUtcNow();
             await context.SaveChangesAsync(cancellationToken);
             return;
@@ -172,13 +200,18 @@ public class SettlementRequestService(
     private static void EnsureOpen(SettlementRequest request)
     {
         if (request.CancelledAt is not null || request.ResolvedAt is not null || request.StaleAt is not null)
+        {
             throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,
                 "This settlement request is no longer open.");
+        }
     }
 
     private async Task SaveRequest(CancellationToken ct)
     {
-        try { await context.SaveChangesAsync(ct); }
+        try
+        {
+            await context.SaveChangesAsync(ct);
+        }
         catch (DbUpdateConcurrencyException)
         {
             throw new ConflictException(ErrorCodes.SettlementRequestNotOpen,

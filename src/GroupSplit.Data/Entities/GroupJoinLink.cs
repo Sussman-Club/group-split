@@ -35,25 +35,46 @@ public class GroupJoinLink : Entity
 
     public virtual Group Group { get; set; } = null!;
 
-    public Guid GroupId { get; set; }
+    public Guid GroupId
+    {
+        get; set;
+    }
 
     /// <summary>
     /// The random part of the URL, and the only thing that authorises the join.
     /// </summary>
-    public required string Token { get; set; }
+    public required string Token
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Who made it. Nullable for the same reason an invitation's inviter is: an account
     /// deleting itself must not take a link the group is still sharing with it.
     /// </summary>
-    public virtual User? CreatedBy { get; set; }
+    public virtual User? CreatedBy
+    {
+        get; set;
+    }
 
-    public Guid? CreatedByUserId { get; set; }
+    public Guid? CreatedByUserId
+    {
+        get; set;
+    }
 
-    public required DateTimeOffset CreatedAt { get; set; }
+    public required DateTimeOffset CreatedAt
+    {
+        get; set;
+    }
 
-    public required DateTimeOffset ExpiresAt { get; set; }
+    public required DateTimeOffset ExpiresAt
+    {
+        get; set;
+    }
 
     /// <summary>When it was withdrawn, or null while it still stands.</summary>
-    public DateTimeOffset? RevokedAt { get; set; }
+    public DateTimeOffset? RevokedAt
+    {
+        get; set;
+    }
 }

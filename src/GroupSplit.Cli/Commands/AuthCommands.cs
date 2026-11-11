@@ -110,7 +110,11 @@ public static class AuthCommands
             }
 
             context.Output.Write(
-                new { status = "signed_out", profile = endpoints.ProfileName },
+                new
+                {
+                    status = "signed_out",
+                    profile = endpoints.ProfileName
+                },
                 _ => new Markup("[green]Signed out.[/]\n"));
 
             return ExitCodes.Success;

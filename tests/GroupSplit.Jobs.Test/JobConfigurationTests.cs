@@ -66,9 +66,17 @@ public class JobConfigurationTests
             jobs.Dispatcher.Use(_ => dispatcher);
             jobs.Receiver.Use(_ => receiver);
         }
-        if (configureFirst) Configure();
+        if (configureFirst)
+        {
+            Configure();
+        }
+
         jobs.WithoutDefaults();
-        if (!configureFirst) Configure();
+        if (!configureFirst)
+        {
+            Configure();
+        }
+
         using var provider = services.BuildServiceProvider();
         Assert.Same(dispatcher, provider.GetRequiredService<IJobDispatcher>());
         Assert.Same(receiver, provider.GetRequiredService<IJobReceiver>());

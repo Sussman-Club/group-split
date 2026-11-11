@@ -19,7 +19,11 @@ public static class ValidationMessages
             var pattern = Regex.Replace(Regex.Escape(template), @"\\\{(\d+)}",
                 match => $"(?<arg{match.Groups[1].Value}>[0-9]+)");
             var found = Regex.Match(message, "\\A" + pattern + "\\z", RegexOptions.CultureInvariant);
-            if (!found.Success) continue;
+            if (!found.Success)
+            {
+                continue;
+            }
+
             var translated = Resources.GetString((string)entry.Key, CultureInfo.CurrentUICulture)!;
             return Regex.Replace(translated, @"\{(\d+)\}",
                 match => found.Groups["arg" + match.Groups[1].Value].Value);

@@ -34,7 +34,11 @@ public sealed class JsonOutputWriterTests
     {
         var (writer, stdout, stderr) = Create();
 
-        writer.Write(new { GroupName = "Trip", MemberCount = 3 }, _ => new Markup("ignored"));
+        writer.Write(new
+        {
+            GroupName = "Trip",
+            MemberCount = 3
+        }, _ => new Markup("ignored"));
 
         var json = JsonDocument.Parse(stdout.ToString()).RootElement;
 
@@ -76,7 +80,12 @@ public sealed class JsonOutputWriterTests
     {
         var (writer, stdout, _) = Create(["id"]);
 
-        writer.Write(new { Id = 7, Name = "Trip", Secret = "x" }, _ => new Markup("ignored"));
+        writer.Write(new
+        {
+            Id = 7,
+            Name = "Trip",
+            Secret = "x"
+        }, _ => new Markup("ignored"));
 
         var json = JsonDocument.Parse(stdout.ToString()).RootElement;
 
@@ -111,7 +120,10 @@ public sealed class JsonOutputWriterTests
     {
         var (writer, stdout, _) = Create(["Id"]);
 
-        writer.Write(new { Id = 7 }, _ => new Markup("ignored"));
+        writer.Write(new
+        {
+            Id = 7
+        }, _ => new Markup("ignored"));
 
         Assert.Equal(7, JsonDocument.Parse(stdout.ToString()).RootElement.GetProperty("id").GetInt32());
     }

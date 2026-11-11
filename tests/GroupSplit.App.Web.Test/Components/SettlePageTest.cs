@@ -62,7 +62,10 @@ public class SettlePageTest : ComponentTest
     }
 
     /// <summary>Omar, owed 50 from Home and 40 from Trip: one payment for two groups.</summary>
-    private static PersonSettlement OmarAcrossBoth { get; } =
+    private static PersonSettlement OmarAcrossBoth
+    {
+        get;
+    } =
         new(Omar, "Omar", 90m, [new GroupDebt(Home, "Home", 50m), new GroupDebt(Trip, "Trip", 40m)]);
 
     private static PersonSettlement DaniInTrip { get; } = new(Dani, "Dani", 25m, [new GroupDebt(Trip, "Trip", 25m)]);
@@ -127,7 +130,10 @@ public class SettlePageTest : ComponentTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((SettleWithPersonRequest request, CancellationToken _) =>
             {
-                _plan = Square with { LastSettled = ThirdOfSeptember };
+                _plan = Square with
+                {
+                    LastSettled = ThirdOfSeptember
+                };
                 _history = [Paid("You", "Omar", byYou: true, "Home")];
 
                 return new SettleWithPersonResponse(Omar, "Omar", request.Amount, request.Direction,
@@ -379,7 +385,10 @@ public class SettlePageTest : ComponentTest
     [Fact]
     public async Task Nothing_owed_either_way_is_all_settled_since_the_last_payment()
     {
-        _plan = Square with { LastSettled = ThirdOfSeptember };
+        _plan = Square with
+        {
+            LastSettled = ThirdOfSeptember
+        };
 
         var (page, _) = await Open();
 

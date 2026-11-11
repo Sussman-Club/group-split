@@ -19,11 +19,20 @@ public class BankMatchDismissal : Entity
 {
     public virtual BankTransaction BankTransaction { get; set; } = null!;
 
-    public Guid BankTransactionId { get; set; }
+    public Guid BankTransactionId
+    {
+        get; set;
+    }
 
     public virtual Transaction Transaction { get; set; } = null!;
 
-    public Guid TransactionId { get; set; }
+    public Guid TransactionId
+    {
+        get; set;
+    }
 
-    public required DateTimeOffset DismissedAt { get; set; }
+    public required DateTimeOffset DismissedAt
+    {
+        get; set;
+    }
 }

@@ -28,7 +28,9 @@ public static class MoneyExtensions
     public static string CurrencySymbol(string? currency)
     {
         if (string.IsNullOrWhiteSpace(currency))
+        {
             return Symbols["USD"];
+        }
 
         var code = currency.Trim().ToUpperInvariant();
 
@@ -57,7 +59,9 @@ public static class MoneyExtensions
     public static string ToMoney(this decimal amount, string? currency)
     {
         if (string.IsNullOrWhiteSpace(currency))
+        {
             return amount.ToMoney();
+        }
 
         var format = (NumberFormatInfo)CultureInfo.CurrentCulture.NumberFormat.Clone();
         var code = currency.Trim().ToUpperInvariant();

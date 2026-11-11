@@ -39,7 +39,10 @@ public sealed class EnvironmentFixture : IDisposable
         Environment.SetEnvironmentVariable(EnvironmentVariables.DataHome, Path.Combine(Root, "data"));
     }
 
-    public string Root { get; }
+    public string Root
+    {
+        get;
+    }
 
     public void Set(string name, string? value) => Environment.SetEnvironmentVariable(name, value);
 

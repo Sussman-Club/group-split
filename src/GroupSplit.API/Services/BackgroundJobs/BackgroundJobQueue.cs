@@ -33,7 +33,11 @@ public sealed class BackgroundJobQueue(AppDbContext db, BackgroundJobRegistry re
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        if (type.Length > 128 || reason.Length > 256) throw new ArgumentOutOfRangeException(nameof(reason));
+        if (type.Length > 128 || reason.Length > 256)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason));
+        }
+
         return Add(new BackgroundJob
         {
             Type = type,
@@ -45,5 +49,9 @@ public sealed class BackgroundJobQueue(AppDbContext db, BackgroundJobRegistry re
         });
     }
 
-    private BackgroundJob Add(BackgroundJob job) { db.Add(job); return job; }
+    private BackgroundJob Add(BackgroundJob job)
+    {
+        db.Add(job);
+        return job;
+    }
 }

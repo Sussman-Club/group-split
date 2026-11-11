@@ -71,7 +71,9 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
         ArgumentNullException.ThrowIfNull(other);
 
         if (rule.Participants.Count != other.Participants.Count)
+        {
             return false;
+        }
 
         var theirs = other.Participants.ToDictionary(
             participant => participant.UserId, participant => participant.Weight);
@@ -91,7 +93,9 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
         where TNew : WeightedSplitRuleVersion
     {
         foreach (var (userId, weight) in weights)
+        {
             rule.Participants.Add(new SplitRuleParticipant { UserId = userId, Weight = weight });
+        }
 
         return rule;
     }

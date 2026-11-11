@@ -157,7 +157,12 @@ public static class SplitRuleCommands
             if (parse.GetValue(dryRun))
             {
                 context.Output.Write(
-                    new { status = "dryRun", ruleId = id, versions = entries },
+                    new
+                    {
+                        status = "dryRun",
+                        ruleId = id,
+                        versions = entries
+                    },
                     _ => new Rows(
                         new Markup("[grey]Dry run. Nothing was sent.[/]\n"),
                         Chain(entries)));
@@ -201,7 +206,10 @@ public static class SplitRuleCommands
     /// leaves to the machine.
     /// </summary>
     private static readonly JsonSerializerOptions HistoryFormat =
-        new(GroupSplitSerializer.Options) { Converters = { new HistoryDate() } };
+        new(GroupSplitSerializer.Options)
+        {
+            Converters = { new HistoryDate() }
+        };
 
     /// <summary>
     /// Reads a <c>from</c> as the instant it names, and a bare date as midnight UTC.
@@ -476,7 +484,12 @@ public static class SplitRuleCommands
             await client.DeleteSplitRuleAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", ruleId = id, name = rule.Name },
+                new
+                {
+                    status = "deleted",
+                    ruleId = id,
+                    name = rule.Name
+                },
                 value => new Markup($"[green]Deleted[/] {Markup.Escape(value.name)}.\n"));
 
             return ExitCodes.Success;

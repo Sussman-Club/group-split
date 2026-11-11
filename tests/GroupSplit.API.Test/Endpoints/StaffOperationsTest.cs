@@ -92,7 +92,11 @@ public class StaffOperationsTest : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var reporterId = (await db.Set<SupportTicket>().FindAsync([report.Id], Ct))!.ReporterUserId;
-            for (var i = 0; i < 101; i++) db.Add(new SupportTicketMessage { TicketId = report.Id, AuthorUserId = reporterId, Body = $"Public {i}", Visibility = SupportMessageVisibility.Public, CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-i) });
+            for (var i = 0; i < 101; i++)
+            {
+                db.Add(new SupportTicketMessage { TicketId = report.Id, AuthorUserId = reporterId, Body = $"Public {i}", Visibility = SupportMessageVisibility.Public, CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-i) });
+            }
+
             db.Add(new SupportTicketMessage { TicketId = report.Id, Body = "Private", Visibility = SupportMessageVisibility.Internal, CreatedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync(Ct);
         }
@@ -107,8 +111,10 @@ public class StaffOperationsTest : IAsyncLifetime
     [Fact]
     public async Task Assignment_uses_verified_staff_and_bulk_edits_refuse_stale_versions_atomically()
     {
-        var first = await Report(); var second = await Report("Another invitation issue");
-        using var staff = Staff(); using var colleague = Staff();
+        var first = await Report();
+        var second = await Report("Another invitation issue");
+        using var staff = Staff();
+        using var colleague = Staff();
         (await staff.GetAsync("/staff/access", Ct)).EnsureSuccessStatusCode();
         (await colleague.GetAsync("/staff/access", Ct)).EnsureSuccessStatusCode();
         var team = (await staff.GetFromJsonAsync<List<StaffPersonResponse>>("/staff/team", Ct))!;
@@ -134,13 +140,17 @@ public class StaffOperationsTest : IAsyncLifetime
     public async Task Saved_views_are_private_and_user_lookup_returns_only_bounded_support_context()
     {
         var report = await Report();
-        using var staff = Staff(); using var colleague = Staff();
+        using var staff = Staff();
+        using var colleague = Staff();
         var request = new SaveStaffViewRequest("My urgent queue", "Tickets", "/staff/tickets?assignee=me&priority=Urgent");
         (await staff.PostAsJsonAsync("/staff/views", request, Ct)).EnsureSuccessStatusCode();
         var view = Assert.Single((await staff.GetFromJsonAsync<List<SavedStaffViewResponse>>("/staff/views?resource=Tickets", Ct))!);
         Assert.Empty((await colleague.GetFromJsonAsync<List<SavedStaffViewResponse>>("/staff/views?resource=Tickets", Ct))!);
         Assert.Equal(HttpStatusCode.NotFound, (await colleague.DeleteAsync($"/staff/views/{view.Id}", Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await staff.PostAsJsonAsync("/staff/views", request with { Url = "https://external.test" }, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await staff.PostAsJsonAsync("/staff/views", request with
+        {
+            Url = "https://external.test"
+        }, Ct)).StatusCode);
         var ticket = (await staff.GetFromJsonAsync<SupportTicketResponse>($"/staff/tickets/{report.Id}", Ct))!;
         var userResponse = await staff.GetAsync($"/staff/users/{ticket.ReporterUserId}", Ct);
         userResponse.EnsureSuccessStatusCode();
@@ -163,7 +173,8 @@ public class StaffOperationsTest : IAsyncLifetime
         var old = new StaffActivity { Resource = "Tickets", ResourceId = report.Id, Action = "Old event", ChangesJson = "[]", At = now.AddDays(-8) };
         var recent = new StaffActivity { Resource = "Tickets", ResourceId = report.Id, Action = "Recent event", ChangesJson = "[]", At = now.AddDays(-6) };
         var view = new StaffActivity { Resource = "Users", ResourceId = Guid.NewGuid(), Action = "Account viewed", ChangesJson = "[]", At = now };
-        db.AddRange(old, recent, view); await db.SaveChangesAsync(Ct);
+        db.AddRange(old, recent, view);
+        await db.SaveChangesAsync(Ct);
         var service = scope.ServiceProvider.GetRequiredService<GroupSplit.API.Services.StaffActivityService>();
         var visible = await service.ListAsync(null, null, 0, Ct);
         Assert.DoesNotContain(visible.Items, a => a.Action == "Account viewed");
@@ -201,7 +212,11 @@ public class StaffOperationsTest : IAsyncLifetime
         using (var scope = _host.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            for (var i = 0; i < 35; i++) db.Add(new GroupSplit.Data.Entities.User { FirstName = $"Directory {i:00}", Email = $"directory{i:00}@example.test", Kind = UserKind.Account });
+            for (var i = 0; i < 35; i++)
+            {
+                db.Add(new GroupSplit.Data.Entities.User { FirstName = $"Directory {i:00}", Email = $"directory{i:00}@example.test", Kind = UserKind.Account });
+            }
+
             db.Add(new GroupSplit.Data.Entities.User { FirstName = "Former account", Kind = UserKind.Deleted });
             await db.SaveChangesAsync(Ct);
         }
@@ -222,7 +237,10 @@ public class StaffOperationsTest : IAsyncLifetime
     public async Task Ticket_queue_returns_summary_without_report_content()
     {
         (await _host.Client.PostAsJsonAsync("/support-reports", new CreateSupportReportRequest
-        { Title = "A report", Description = "Private description that belongs on the detail page" }, Ct)).EnsureSuccessStatusCode();
+        {
+            Title = "A report",
+            Description = "Private description that belongs on the detail page"
+        }, Ct)).EnsureSuccessStatusCode();
         using var staff = Staff();
         var response = await staff.GetAsync("/staff/tickets", Ct);
         response.EnsureSuccessStatusCode();
@@ -245,7 +263,8 @@ public class StaffOperationsTest : IAsyncLifetime
     public async Task Merchant_aliases_survive_rename_and_merge_with_a_stale_preview_refused()
     {
         using var staff = Staff();
-        var source = await Merchant(staff, "Corner Store"); var target = await Merchant(staff, "Corner Market");
+        var source = await Merchant(staff, "Corner Store");
+        var target = await Merchant(staff, "Corner Market");
         (await staff.PostAsJsonAsync($"/staff/merchants/{source.Id}/aliases", new CreateMerchantAliasRequest("CORNER #123"), Ct)).EnsureSuccessStatusCode();
         var aliases = (await staff.GetFromJsonAsync<List<MerchantAliasResponse>>($"/staff/merchants/{source.Id}/aliases", Ct))!;
         Assert.Equal(2, aliases.Count);

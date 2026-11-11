@@ -8,19 +8,34 @@ namespace GroupSplit.Cli.Output;
 /// </summary>
 public sealed record OutputSettings
 {
-    public required OutputFormat Format { get; init; }
+    public required OutputFormat Format
+    {
+        get; init;
+    }
 
     /// <summary>Colour is off whenever stdout is redirected, NO_COLOR is set, or --no-color was passed.</summary>
-    public required bool Color { get; init; }
+    public required bool Color
+    {
+        get; init;
+    }
 
     /// <summary>True when stdin is a terminal, so a prompt would actually reach someone.</summary>
-    public required bool Interactive { get; init; }
+    public required bool Interactive
+    {
+        get; init;
+    }
 
     /// <summary>Suppresses progress and advisory notes on stderr. Never suppresses errors.</summary>
-    public required bool Quiet { get; init; }
+    public required bool Quiet
+    {
+        get; init;
+    }
 
     /// <summary>Top-level fields to keep in JSON output, or null for all of them.</summary>
-    public IReadOnlyList<string>? Fields { get; init; }
+    public IReadOnlyList<string>? Fields
+    {
+        get; init;
+    }
 
     public bool IsJson => Format == OutputFormat.Json;
 

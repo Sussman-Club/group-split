@@ -111,7 +111,10 @@ public sealed class CommandTests : IDisposable
     public async Task Validation_messages_reach_the_envelope_as_details()
     {
         _api.Problem("/api/transactions", 400, "VALIDATION_FAILED", "Validation failed",
-            new { Errors = new Dictionary<string, string[]> { ["Name"] = ["Name is required."] } });
+            new
+            {
+                Errors = new Dictionary<string, string[]> { ["Name"] = ["Name is required."] }
+            });
 
         var result = await Cli.RunAsync("transactions", "create", "x", "1.00");
 
@@ -338,7 +341,9 @@ public sealed class CommandTests : IDisposable
     public async Task A_settlement_the_expense_read_cannot_see_is_still_offered_for_deletion()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString());
 
@@ -361,7 +366,9 @@ public sealed class CommandTests : IDisposable
     public async Task A_settlement_is_deleted_once_the_confirmation_is_given()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
 
@@ -378,7 +385,9 @@ public sealed class CommandTests : IDisposable
     {
         var id = Guid.NewGuid();
         _api.Problem($"/api/transactions/{id}", 500, "SERVER_ERROR", "Something broke.", method: "GET");
-        _api.Returns($"/api/transactions/{id}", new { }, method: "DELETE");
+        _api.Returns($"/api/transactions/{id}", new
+        {
+        }, method: "DELETE");
 
         var result = await Cli.RunAsync("transactions", "delete", id.ToString(), "--yes");
 
@@ -637,7 +646,11 @@ public sealed class CommandTests : IDisposable
         var groupId = Guid.NewGuid();
 
         _api.Returns($"/api/groups/{groupId}/transactions/summary",
-            new { count = 1411, total = 39429.42m });
+            new
+            {
+                count = 1411,
+                total = 39429.42m
+            });
 
         var result = await Cli.RunAsync("transactions", "summary", "--group", groupId.ToString());
 
@@ -653,7 +666,11 @@ public sealed class CommandTests : IDisposable
     public async Task Without_a_group_both_commands_still_read_your_own_listing()
     {
         _api.Returns("/api/transactions", Page());
-        _api.Returns("/api/transactions/summary", new { count = 0, total = 0m });
+        _api.Returns("/api/transactions/summary", new
+        {
+            count = 0,
+            total = 0m
+        });
 
         await Cli.RunAsync("transactions", "list");
         await Cli.RunAsync("transactions", "summary");
@@ -944,7 +961,11 @@ public sealed class CommandTests : IDisposable
     [Fact]
     public async Task Transactions_summary_totals_what_it_was_given()
     {
-        _api.Returns("/api/transactions/summary", new { count = 7, total = 123.45m });
+        _api.Returns("/api/transactions/summary", new
+        {
+            count = 7,
+            total = 123.45m
+        });
 
         var result = await Cli.RunAsync("transactions", "summary", "--output", "text");
 
@@ -1062,7 +1083,9 @@ public sealed class CommandTests : IDisposable
     public async Task Ignoring_a_row_needs_no_confirmation_because_restore_undoes_it()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/inbox/{id}/ignore", new { }, 204);
+        _api.Returns($"/api/inbox/{id}/ignore", new
+        {
+        }, 204);
 
         var result = await Cli.RunAsync("inbox", "ignore", id.ToString());
 

@@ -13,15 +13,35 @@ namespace GroupSplit.Keycloak;
 /// </remarks>
 public sealed record KeycloakUser
 {
-    [JsonPropertyName("id")] public required string Id { get; init; }
+    [JsonPropertyName("id")]
+    public required string Id
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("username")] public required string Username { get; init; }
+    [JsonPropertyName("username")]
+    public required string Username
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("email")] public required string Email { get; init; }
+    [JsonPropertyName("email")]
+    public required string Email
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("firstName")] public string? FirstName { get; init; }
+    [JsonPropertyName("firstName")]
+    public string? FirstName
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("lastName")] public string? LastName { get; init; }
+    [JsonPropertyName("lastName")]
+    public string? LastName
+    {
+        get; init;
+    }
 
     [JsonPropertyName("enabled")] public bool Enabled { get; init; } = true;
 
@@ -47,10 +67,18 @@ public sealed record KeycloakCredential
 {
     [JsonPropertyName("type")] public string Type { get; init; } = "password";
 
-    [JsonPropertyName("value")] public required string Value { get; init; }
+    [JsonPropertyName("value")]
+    public required string Value
+    {
+        get; init;
+    }
 
     /// <summary>Not temporary: a demo account that demands a password change at first sign-in is a nuisance.</summary>
-    [JsonPropertyName("temporary")] public bool Temporary { get; init; }
+    [JsonPropertyName("temporary")]
+    public bool Temporary
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -62,33 +90,73 @@ public sealed record KeycloakCredential
 /// </remarks>
 public sealed record KeycloakRole
 {
-    [JsonPropertyName("id")] public required string Id { get; init; }
+    [JsonPropertyName("id")]
+    public required string Id
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("name")] public required string Name { get; init; }
+    [JsonPropertyName("name")]
+    public required string Name
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("description")] public string? Description { get; init; }
+    [JsonPropertyName("description")]
+    public string? Description
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("composite")] public bool Composite { get; init; }
+    [JsonPropertyName("composite")]
+    public bool Composite
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("clientRole")] public bool ClientRole { get; init; }
+    [JsonPropertyName("clientRole")]
+    public bool ClientRole
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("containerId")] public string? ContainerId { get; init; }
+    [JsonPropertyName("containerId")]
+    public string? ContainerId
+    {
+        get; init;
+    }
 }
 
 /// <summary>The slice of a realm the seeder reads: which role every account starts with.</summary>
 public sealed record KeycloakRealmSummary
 {
-    [JsonPropertyName("defaultRole")] public KeycloakRole? DefaultRole { get; init; }
+    [JsonPropertyName("defaultRole")]
+    public KeycloakRole? DefaultRole
+    {
+        get; init;
+    }
 }
 
 /// <summary>What a lookup hands back. Only the fields the seeder decides on.</summary>
 public sealed record KeycloakUserSummary
 {
-    [JsonPropertyName("id")] public required string Id { get; init; }
+    [JsonPropertyName("id")]
+    public required string Id
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("username")] public string? Username { get; init; }
+    [JsonPropertyName("username")]
+    public string? Username
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("email")] public string? Email { get; init; }
+    [JsonPropertyName("email")]
+    public string? Email
+    {
+        get; init;
+    }
 }
 
 /// <summary>The body of a partial import.</summary>
@@ -101,14 +169,30 @@ public sealed record KeycloakPartialImport
     /// </summary>
     [JsonPropertyName("ifResourceExists")] public string IfResourceExists { get; init; } = "FAIL";
 
-    [JsonPropertyName("users")] public required IReadOnlyList<KeycloakUser> Users { get; init; }
+    [JsonPropertyName("users")]
+    public required IReadOnlyList<KeycloakUser> Users
+    {
+        get; init;
+    }
 }
 
 public sealed record KeycloakPartialImportResult
 {
-    [JsonPropertyName("added")] public int Added { get; init; }
+    [JsonPropertyName("added")]
+    public int Added
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("skipped")] public int Skipped { get; init; }
+    [JsonPropertyName("skipped")]
+    public int Skipped
+    {
+        get; init;
+    }
 
-    [JsonPropertyName("overwritten")] public int Overwritten { get; init; }
+    [JsonPropertyName("overwritten")]
+    public int Overwritten
+    {
+        get; init;
+    }
 }
