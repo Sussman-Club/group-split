@@ -1,0 +1,46 @@
+@inject IServiceProvider Services
+@inject GroupSplit.App.Shared.Services.AppLinks Links
+
+@if (_failed)
+{
+    <p role="alert">@Loc["Preview unavailable"]</p>
+}
+else if (_source is null)
+{
+    <p role="status">@Loc["Loading…"]</p>
+}
+else if (ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+{
+    <img src="@_source" alt="@Loc["Original receipt"]" style="max-width:100%" />
+}
+else
+{
+    <PdfReceiptPreview Url="@_source" DownloadUrl="@(Links.IsNative ? _source : DownloadUrl ?? Url)" FileName="@FileName" />
+}
+
+@code {
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+    [Parameter, EditorRequired] public string ContentType { get; set; } = "";
+    [Parameter] public string? DownloadUrl { get; set; }
+    [Parameter] public string FileName { get; set; } = "receipt";
+    private string? _source;
+    private bool _failed;
+    private string? _loadedUrl;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedUrl == Url) return;
+        _loadedUrl = Url;
+        _source = null;
+        _failed = false;
+        if (!Links.IsNative) { _source = Url; return; }
+        try
+        {
+            var loader = Services.GetService(typeof(GroupSplit.App.Shared.Services.IReceiptPreviewLoader))
+                as GroupSplit.App.Shared.Services.IReceiptPreviewLoader;
+            _source = loader is null ? null : await loader.LoadAsync(Url, ContentType);
+            _failed = _source is null;
+        }
+        catch (HttpRequestException) { _failed = true; }
+    }
+}

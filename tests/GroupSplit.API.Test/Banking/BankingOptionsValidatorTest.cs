@@ -79,7 +79,9 @@ public class BankingOptionsValidatorTest
     public void Every_refusal_names_the_setting()
     {
         foreach (var origin in new[] { "groupsplit.example.com", "http://x.test", "https://x.test/app" })
+        {
             Assert.Contains("Banking:PublicOrigin", Validate(origin).FailureMessage);
+        }
     }
 
     private ValidateOptionsResult Validate(string? origin) =>

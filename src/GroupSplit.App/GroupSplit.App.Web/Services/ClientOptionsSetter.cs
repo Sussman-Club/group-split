@@ -9,7 +9,7 @@ public class ClientOptionsSetter : IClientOptionsSetter
     {
         options.HttpClientActions.Add(client => { client.BaseAddress = new Uri("https+http://api"); });
 
-        options.HttpMessageHandlerBuilderActions.Add(b 
+        options.HttpMessageHandlerBuilderActions.Add(b
             => b.AdditionalHandlers.Add(ActivatorUtilities.GetServiceOrCreateInstance<AuthDelegatingHandler>(b.Services)));
     }
 }

@@ -84,10 +84,12 @@ public sealed class ExpenseProvenance(ICurrentUser userContext, AppDbContext dbC
             // The same refusal whether the version is another group's or is nothing at all,
             // so guessing ids teaches nobody what rules another group keeps.
             if (!belongs)
+            {
                 throw new ConflictException(ErrorCodes.SplitRuleVersionNotInGroup,
                         "That division is not one of this expense's group's, so it cannot be " +
                         "what divided it.")
                     .WithExtension("splitRuleVersionId", versionId);
+            }
         }
 
         expense.SplitRuleVersionId = request.SplitRuleVersionId;

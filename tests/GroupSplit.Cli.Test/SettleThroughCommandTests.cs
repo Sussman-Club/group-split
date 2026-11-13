@@ -210,7 +210,13 @@ public sealed class SettleThroughCommandTests : IDisposable
     public async Task An_expense_cannot_be_given_a_period()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { id, kind = 0, name = "Dinner", amount = 40m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            kind = 0,
+            name = "Dinner",
+            amount = 40m
+        });
 
         var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--covers-through", "2026-08-31");
 
@@ -244,7 +250,12 @@ public sealed class SettleThroughCommandTests : IDisposable
         paidToUserName = "Me",
         coversThrough = coversThrough?.ToString("yyyy-MM-dd"),
         coverage = coversThrough is { } day
-            ? new { through = day.ToString("yyyy-MM-dd"), from = (string?)null, stillOwed }
+            ? new
+            {
+                through = day.ToString("yyyy-MM-dd"),
+                from = (string?)null,
+                stillOwed
+            }
             : null
     };
 

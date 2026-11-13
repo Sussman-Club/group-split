@@ -88,20 +88,28 @@ public sealed class PlaidWebhookVerifier(
         CancellationToken ct = default)
     {
         if (!headers.TryGetValue(HeaderName, out var token) || string.IsNullOrWhiteSpace(token))
+        {
             return Refuse("no {Header} header", HeaderName);
+        }
 
         var parts = token.Split('.');
 
         if (parts.Length != 3)
+        {
             return Refuse("the token is not a three-part JWT");
+        }
 
         if (!TryReadJson(parts[0], out var header))
+        {
             return Refuse("the token header is not readable");
+        }
 
         using (header)
         {
             if (!header.RootElement.TryGetProperty("alg", out var alg) || alg.GetString() != "ES256")
+            {
                 return Refuse("the algorithm is not ES256");
+            }
 
             if (!header.RootElement.TryGetProperty("kid", out var kidValue)
                 || kidValue.GetString() is not { Length: > 0 } kid)
@@ -115,17 +123,25 @@ public sealed class PlaidWebhookVerifier(
             // unauthenticated caller. Without it, a stranger inventing a fresh kid per
             // request turns this route into a one-for-one amplifier at our own provider.
             if (!PlausibleKeyId(kid))
+            {
                 return Refuse("the token names a key that is not shaped like one");
+            }
 
             if (await KeyAsync(kid, ct) is not { } key)
+            {
                 return Refuse("no key is available for kid {Kid}", kid);
+            }
 
             if (!Signed(parts, key))
+            {
                 return Refuse("the signature does not verify");
+            }
         }
 
         if (!TryReadJson(parts[1], out var payload))
+        {
             return Refuse("the token payload is not readable");
+        }
 
         using (payload)
         {
@@ -139,7 +155,9 @@ public sealed class PlaidWebhookVerifier(
             var age = clock.GetUtcNow() - issued;
 
             if (age > MaxAge || age < -MaxAge)
+            {
                 return Refuse("the token was issued {Age} ago", age);
+            }
 
             if (!payload.RootElement.TryGetProperty("request_body_sha256", out var claimed)
                 || claimed.GetString() is not { Length: > 0 } expected)
@@ -160,7 +178,9 @@ public sealed class PlaidWebhookVerifier(
             // Last, so that only a webhook that passed everything else is remembered: a
             // forgery must not be able to spend the slot a genuine one would need.
             if (!FirstSighting(issuedAtSeconds, actual, issued))
+            {
                 return Refuse("the same webhook was already received");
+            }
         }
 
         return true;
@@ -177,7 +197,9 @@ public sealed class PlaidWebhookVerifier(
         foreach (var (key, at) in _seen)
         {
             if (now - at > MaxAge)
+            {
                 _seen.TryRemove(key, out _);
+            }
         }
 
         return _seen.TryAdd($"{issuedAtSeconds}:{bodyHash}", issued);
@@ -190,13 +212,17 @@ public sealed class PlaidWebhookVerifier(
     private async Task<JWKPublicKey?> KeyAsync(string kid, CancellationToken ct)
     {
         if (_keys.TryGetValue(kid, out var cached) && !Expired(cached))
+        {
             return cached;
+        }
 
         // Remembered for a while, the same way a hit is. Only successes were cached before,
         // so a kid Plaid does not know cost an outbound call every single time it was
         // offered -- and offering one is free to anybody who can reach this route.
         if (_unknown.TryGetValue(kid, out var refusedAt) && clock.GetUtcNow() - refusedAt < UnknownKeyMemory)
+        {
             return null;
+        }
 
         // No cancellation token: Going.Plaid's generated client does not take one here. The
         // outbound call is bounded by the HttpClient's own timeout instead.
@@ -215,7 +241,9 @@ public sealed class PlaidWebhookVerifier(
             // would refuse ten minutes of genuine webhooks signed with a key that is real
             // and current -- turning a blip at the provider into lost notifications here.
             if (Refused(response.StatusCode))
+            {
                 Remember(kid);
+            }
 
             return null;
         }
@@ -223,7 +251,9 @@ public sealed class PlaidWebhookVerifier(
         _unknown.TryRemove(kid, out _);
 
         if (Expired(key))
+        {
             return null;
+        }
 
         _keys[kid] = key;
 
@@ -255,7 +285,9 @@ public sealed class PlaidWebhookVerifier(
         // policy: the entries are a courtesy to Plaid's rate limit, and losing all of them
         // costs one lookup each.
         if (_unknown.Count >= MaxUnknownKeys)
+        {
             _unknown.Clear();
+        }
 
         _unknown[kid] = clock.GetUtcNow();
     }

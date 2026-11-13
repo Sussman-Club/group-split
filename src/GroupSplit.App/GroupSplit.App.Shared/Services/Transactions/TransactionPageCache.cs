@@ -16,14 +16,24 @@ public sealed class TransactionPageCache<T>
         ct.ThrowIfCancellationRequested();
         var key = (page, size);
         lock (_sync)
-            if (_pages.TryGetValue(key, out var cached)) return cached;
+        {
+            if (_pages.TryGetValue(key, out var cached))
+            {
+                return cached;
+            }
+        }
+
         var result = await fetch(page, size, ct);
         ct.ThrowIfCancellationRequested();
         lock (_sync)
         {
             if (!_pages.ContainsKey(key))
             {
-                if (_pages.Count == Capacity) _pages.Remove(_order.Dequeue());
+                if (_pages.Count == Capacity)
+                {
+                    _pages.Remove(_order.Dequeue());
+                }
+
                 _pages.Add(key, result);
                 _order.Enqueue(key);
             }

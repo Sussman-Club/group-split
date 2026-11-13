@@ -13,7 +13,10 @@ namespace GroupSplit.Cli.Output;
 /// </summary>
 public interface IOutputWriter
 {
-    OutputSettings Settings { get; }
+    OutputSettings Settings
+    {
+        get;
+    }
 
     /// <summary>
     /// Writes the result. <paramref name="payload"/> is what JSON callers get, verbatim;

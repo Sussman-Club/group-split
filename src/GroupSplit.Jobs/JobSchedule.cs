@@ -2,13 +2,19 @@ namespace GroupSplit.Jobs;
 
 public abstract record JobSchedule
 {
-    private JobSchedule() { }
+    private JobSchedule()
+    {
+    }
 
     public static OnceSchedule Once(DateTimeOffset at) => new(at);
 
     public static EverySchedule Every(TimeSpan interval, DateTimeOffset firstRun)
     {
-        if (interval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be positive.");
+        if (interval <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be positive.");
+        }
+
         return new(interval, firstRun);
     }
 

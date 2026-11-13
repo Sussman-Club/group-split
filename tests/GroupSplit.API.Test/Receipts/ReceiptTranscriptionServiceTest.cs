@@ -34,7 +34,10 @@ public class ReceiptTranscriptionServiceTest
             [new TranscribedReceiptItem("Item", 1m, 1m, 1m, 0m)]));
         await using var content = new MemoryStream([1, 2, 3]);
         var file = new FormFile(content, 0, content.Length, "receipt", name)
-            { Headers = new HeaderDictionary(), ContentType = type };
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = type
+        };
         await new ReceiptTranscriptionService(Mock.Of<IReceiptAttachmentService>(), provider)
             .Transcribe(file, TestContext.Current.CancellationToken);
         Assert.Equal(expected, provider.Document!.ContentType);
@@ -52,7 +55,10 @@ public class ReceiptTranscriptionServiceTest
         var provider = new StubProvider(new TranscribedReceipt(0m, 0m, 0m, 0m, []));
         await using var content = new MemoryStream([1, 2, 3]);
         var file = new FormFile(content, 0, content.Length, "receipt", name)
-            { Headers = new HeaderDictionary(), ContentType = type };
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = type
+        };
         await Assert.ThrowsAsync<ValidationException>(() =>
             new ReceiptTranscriptionService(Mock.Of<IReceiptAttachmentService>(), provider)
                 .Transcribe(file, TestContext.Current.CancellationToken));
@@ -68,7 +74,10 @@ public class ReceiptTranscriptionServiceTest
                 new TranscribedReceiptItem("Apples", 3m, 1m, 3m, 0m) { TaxRate = 7.5m }]));
         await using var content = new MemoryStream([1]);
         var file = new FormFile(content, 0, content.Length, "receipt", "receipt.jpg")
-            { Headers = new HeaderDictionary(), ContentType = "image/jpeg" };
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/jpeg"
+        };
         var result = await new ReceiptTranscriptionService(Mock.Of<IReceiptAttachmentService>(), provider)
             .Transcribe(file, TestContext.Current.CancellationToken);
         Assert.Equal([.30m, .22m, .23m], result.Receipt.Items.Select(item => item.TaxAmount));
@@ -116,7 +125,8 @@ public class ReceiptTranscriptionServiceTest
                 TaxRate = 6.75m, IsTaxable = true
             }, new TranscribedReceiptItem("Loyalty coupon SAVE250", -2.50m, 1m, -2.50m, 0m)])
         {
-            MerchantName = "Corner Store", PurchaseDate = new DateOnly(2026, 9, 23),
+            MerchantName = "Corner Store",
+            PurchaseDate = new DateOnly(2026, 9, 23),
         });
 
         var response = await new ReceiptTranscriptionService(attachments.Object, provider)
@@ -163,7 +173,8 @@ public class ReceiptTranscriptionServiceTest
     {
         var payload = System.Text.Json.JsonSerializer.Serialize(new
         {
-            tax, total = 10m + tax,
+            tax,
+            total = 10m + tax,
             line_items = new[] { new { description = "Item", price = 10m, quantity = 1,
                 total = 10m, tax_rate = rate } }
         });
@@ -171,7 +182,10 @@ public class ReceiptTranscriptionServiceTest
         using var client = new HttpClient(server) { BaseAddress = new Uri("https://veryfi.test/") };
         var provider = new VeryfiReceiptTranscriptionProvider(client, Options.Create(new VeryfiReceiptTranscriptionOptions
         {
-            Enabled = true, ClientId = "client-id", Username = "username", ApiKey = "api-key"
+            Enabled = true,
+            ClientId = "client-id",
+            Username = "username",
+            ApiKey = "api-key"
         }), NullLogger<VeryfiReceiptTranscriptionProvider>.Instance);
         var receipt = await provider.Transcribe(new ReceiptSourceDocument(
             Guid.NewGuid(), "receipt.jpg", "image/jpeg", [1]), TestContext.Current.CancellationToken);

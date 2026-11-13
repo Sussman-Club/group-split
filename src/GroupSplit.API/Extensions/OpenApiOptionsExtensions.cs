@@ -56,8 +56,11 @@ public static class OpenApiOptionsExtensions
                     options.AddSchemaTransformer((schema, context, _) =>
                     {
                         if (context.JsonTypeInfo.Type is not
-                                { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
-                            type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>)) return Task.CompletedTask;
+                            { IsGenericType: true, GenericTypeArguments: [var modelType] } type ||
+                            type.GetGenericTypeDefinition() != typeof(JsonPatchDocument<>))
+                        {
+                            return Task.CompletedTask;
+                        }
 
                         var modelTypeInfo = JsonTypeInfo.CreateJsonTypeInfo(modelType, context.JsonTypeInfo.Options);
                         schema.Title = "JsonPatchDocumentOf" + OpenApiOptions.CreateDefaultSchemaReferenceId(modelTypeInfo);
@@ -99,7 +102,9 @@ public static class OpenApiOptionsExtensions
             options.AddOperationTransformer((operation, context, _) =>
             {
                 if (!context.Description.ActionDescriptor.EndpointMetadata.OfType<IAuthorizeData>().Any())
+                {
                     return Task.CompletedTask;
+                }
 
                 operation.Security ??= [];
                 operation.Security.Add(new OpenApiSecurityRequirement

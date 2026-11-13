@@ -41,7 +41,9 @@ public sealed class JobsBuilder
             .ConfigureServices(services =>
             {
                 foreach (var descriptor in _services)
+                {
                     services.Add(descriptor);
+                }
             })
             .Build();
 
@@ -55,15 +57,23 @@ public sealed class JobsBuilder
         catch
         {
             if (host is IAsyncDisposable disposable)
+            {
                 await disposable.DisposeAsync().ConfigureAwait(false);
+            }
             else
+            {
                 host.Dispose();
+            }
+
             throw;
         }
     }
 
     internal void EnsureMutable()
     {
-        if (_built) throw new InvalidOperationException("This builder has already built a runtime.");
+        if (_built)
+        {
+            throw new InvalidOperationException("This builder has already built a runtime.");
+        }
     }
 }

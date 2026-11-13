@@ -36,6 +36,7 @@
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeTokenStore.cs" Link="Native/NativeTokenStore.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/ClientOptionsSetter.cs" Link="Native/ClientOptionsSetter.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeServiceExtensions.cs" Link="Native/NativeServiceExtensions.cs" />
+    <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeReceiptPreviewLoader.cs" Link="Native/NativeReceiptPreviewLoader.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthDelegatingHandler.cs" Link="Native/AuthDelegatingHandler.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/AuthService.cs" Link="Native/AuthService.cs" />
     <Compile Include="../../src/GroupSplit.App/GroupSplit.App/Services/NativeBankLinkLauncher.cs" Link="Native/NativeBankLinkLauncher.cs" />

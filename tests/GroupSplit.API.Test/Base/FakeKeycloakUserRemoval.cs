@@ -19,7 +19,10 @@ public sealed class FakeKeycloakUserRemoval : IKeycloakUserRemoval
     {
         get
         {
-            lock (_removed) return [.. _removed];
+            lock (_removed)
+            {
+                return [.. _removed];
+            }
         }
     }
 

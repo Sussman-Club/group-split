@@ -1,0 +1,49 @@
+@layout InboxLayout
+@page "/inbox"
+@using GroupSplit.App.Shared.Components
+@using GroupSplit.App.Shared.Services
+@inject InboxOverview Overview
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
+<div class="gs-inbox-home-heading">
+    <h2>@Loc["Review purchases and decide where they belong."]</h2>
+</div>
+<div class="gs-inbox-home-grid">
+    <section class="gs-card gs-inbox-home-card">
+        <div class="gs-inbox-home-top"><span class="gs-inbox-home-icon"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
+            @if (Overview.ReceiptCount is { } receiptCount) { <span class="gs-inbox-home-count">@Loc["{0} waiting", receiptCount]</span> }
+        </div>
+        <h3>@Loc["Receipts"]</h3>
+        <p>@Loc["Add receipts to expenses or create a new expense."]</p>
+        <MudButton Href="/inbox/receipts" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Rounded.ArrowForward">@Loc["Review receipts"]</MudButton>
+    </section>
+    <section class="gs-card gs-inbox-home-card">
+        <div class="gs-inbox-home-top"><span class="gs-inbox-home-icon"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" /></span>
+            @if (_loaded) { <span class="gs-inbox-home-count">@Loc["{0} waiting", Overview.BankCount]</span> }
+        </div>
+        <h3>@Loc["Bank transactions"]</h3>
+        <p>@Loc["Add transactions to a group or match an expense."]</p>
+        <MudButton Href="/inbox/bank" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Rounded.ArrowForward">@Loc["Review transactions"]</MudButton>
+    </section>
+</div>
+
+@code {
+    private bool _loaded;
+    protected override async Task OnInitializedAsync()
+    {
+        // Existing links to filtered bank inbox views retain their meaning.
+        var query = new Uri(Nav.Uri).Query;
+        if (!string.IsNullOrEmpty(query))
+        {
+            Nav.NavigateTo($"/inbox/bank{query}", replace: true);
+            return;
+        }
+        Overview.Changed += Refresh;
+        await Overview.EnsureLoaded();
+        _loaded = true;
+    }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Overview.Changed -= Refresh;
+}

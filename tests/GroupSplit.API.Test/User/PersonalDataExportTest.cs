@@ -24,10 +24,22 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var me = GetService<ICurrentUser>().User;
         const string name = "=SUM(1,2)\n\"Dinner\"";
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { Name = name, Amount = 12.50m, DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
-        var attachment = new ReceiptAttachment { ExpenseId = expense.Id, FileName = "../../outside.png",
-            ObjectKey = "PRIVATE-OBJECT-KEY", ContentType = "image/png", Length = 3,
-            UploadedByUserId = me.Id, UploadedAt = DateTimeOffset.UtcNow };
+        {
+            Name = name,
+            Amount = 12.50m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
+        var attachment = new ReceiptAttachment
+        {
+            ExpenseId = expense.Id,
+            FileName = "../../outside.png",
+            ObjectKey = "PRIVATE-OBJECT-KEY",
+            ContentType = "image/png",
+            Length = 3,
+            UploadedByUserId = me.Id,
+            UploadedAt = DateTimeOffset.UtcNow
+        };
         DbContext.Add(attachment);
         await DbContext.SaveChangesAsync(Ct);
         _files.Setup(files => files.Download(expense.Id, attachment.Id, It.IsAny<CancellationToken>()))
@@ -70,9 +82,22 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
     {
         var me = GetService<ICurrentUser>().User;
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { Name = "Dinner", Amount = 12m, DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
-        var file = new ReceiptAttachment { ExpenseId = expense.Id, FileName = "receipt.jpg", ObjectKey = "key",
-            ContentType = "image/jpeg", Length = 10, UploadedByUserId = me.Id, UploadedAt = DateTimeOffset.UtcNow };
+        {
+            Name = "Dinner",
+            Amount = 12m,
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
+        var file = new ReceiptAttachment
+        {
+            ExpenseId = expense.Id,
+            FileName = "receipt.jpg",
+            ObjectKey = "key",
+            ContentType = "image/jpeg",
+            Length = 10,
+            UploadedByUserId = me.Id,
+            UploadedAt = DateTimeOffset.UtcNow
+        };
         DbContext.Add(file);
         await DbContext.SaveChangesAsync(Ct);
         _files.Setup(files => files.Download(expense.Id, file.Id, It.IsAny<CancellationToken>()))
@@ -98,15 +123,29 @@ public class PersonalDataExportTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var me = GetService<ICurrentUser>().User;
         var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Visible" }, Ct);
         var expense = await GetService<ITransactionService>().Create(new CreateTransactionRequest
-        { GroupId = group.Id, Name = "Dinner", Amount = 12.50m, Currency = "USD", DateTime = DateTimeOffset.UtcNow, PaidByUserId = me.Id }, Ct);
+        {
+            GroupId = group.Id,
+            Name = "Dinner",
+            Amount = 12.50m,
+            Currency = "USD",
+            DateTime = DateTimeOffset.UtcNow,
+            PaidByUserId = me.Id
+        }, Ct);
 
         await using var scope = ServiceProvider.CreateAsyncScope();
         await InitializeCurrentUser(scope.ServiceProvider);
         var other = scope.ServiceProvider.GetRequiredService<ICurrentUser>().User;
         var hidden = await scope.ServiceProvider.GetRequiredService<IGroupService>()
             .CreateGroup(new CreateGroupRequest { Name = "Unrelated private group" }, Ct);
-        DbContext.Add(new BankConnection { UserId = other.Id, Provider = "test", ProviderItemId = "private-item",
-            InstitutionName = "Hidden bank", AccessTokenCiphertext = "NEVER-EXPORT-CREDENTIAL", LinkedAt = DateTimeOffset.UtcNow });
+        DbContext.Add(new BankConnection
+        {
+            UserId = other.Id,
+            Provider = "test",
+            ProviderItemId = "private-item",
+            InstitutionName = "Hidden bank",
+            AccessTokenCiphertext = "NEVER-EXPORT-CREDENTIAL",
+            LinkedAt = DateTimeOffset.UtcNow
+        });
         await DbContext.SaveChangesAsync(Ct);
 
         await using var stream = await GetService<IPersonalDataExport>().Create(Ct);

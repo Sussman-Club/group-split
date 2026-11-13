@@ -87,7 +87,12 @@ public static class ConfigCommands
             var value = Read(profile, key);
 
             context.Output.Write(
-                new { profile = name, key, value },
+                new
+                {
+                    profile = name,
+                    key,
+                    value
+                },
                 result => new Markup(Markup.Escape(result.value ?? string.Empty) + "\n"));
 
             return Task.FromResult(ExitCodes.Success);
@@ -118,7 +123,13 @@ public static class ConfigCommands
             context.Config.Save(config);
 
             context.Output.Write(
-                new { profile = name, key, value = newValue, configFile = context.Config.Path },
+                new
+                {
+                    profile = name,
+                    key,
+                    value = newValue,
+                    configFile = context.Config.Path
+                },
                 result => new Markup(
                     $"Set [bold]{Markup.Escape(result.key)}[/] on profile "
                     + $"[bold]{Markup.Escape(result.profile)}[/] in {Markup.Escape(result.configFile)}\n"));
@@ -146,7 +157,12 @@ public static class ConfigCommands
             }
 
             context.Output.Write(
-                new { profile = name, key, value = (string?)null },
+                new
+                {
+                    profile = name,
+                    key,
+                    value = (string?)null
+                },
                 result => new Markup($"Unset [bold]{Markup.Escape(result.key)}[/].\n"));
 
             return Task.FromResult(ExitCodes.Success);
@@ -208,7 +224,11 @@ public static class ConfigCommands
         command.SetHandler((context, _) =>
         {
             context.Output.Write(
-                new { configFile = context.Config.Path, credentialsFile = context.Tokens.Path },
+                new
+                {
+                    configFile = context.Config.Path,
+                    credentialsFile = context.Tokens.Path
+                },
                 value => new Markup(Markup.Escape(value.configFile) + "\n"));
 
             return Task.FromResult(ExitCodes.Success);

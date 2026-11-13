@@ -14,8 +14,9 @@ else
         </div>
     </div>
     <nav class="gs-inbox-tabs" aria-label="@Loc["Inbox views"]">
+        <NavLink href="/inbox" Match="NavLinkMatch.All" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.Dashboard" /><span>@Loc["Overview"]</span></NavLink>
         <NavLink href="/inbox/receipts" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /><span>@Loc["Receipts"]</span>@if (Overview.ReceiptCount is { } count) { <span class="gs-inbox-count">@count</span> }</NavLink>
-        <NavLink href="/inbox" Match="NavLinkMatch.All" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" /><span>@Loc["Bank transactions"]</span><span class="gs-inbox-count">@Overview.BankCount</span></NavLink>
+        <NavLink href="/inbox/bank" Match="NavLinkMatch.All" class="gs-inbox-tab"><MudIcon Icon="@Icons.Material.Rounded.AccountBalance" /><span class="gs-inbox-bank-full">@Loc["Bank transactions"]</span><span class="gs-inbox-bank-short">@Loc["Bank"]</span><span class="gs-inbox-count">@Overview.BankCount</span></NavLink>
     </nav>
 }
 @code {

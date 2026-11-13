@@ -92,7 +92,10 @@ public partial class PasswordResetMailTest(AppHostFixture appHost)
             using var search = JsonDocument.Parse(await mailpit.GetStringAsync(
                 $"api/v1/search?query={Uri.EscapeDataString($"to:\"{recipient}\"")}", Ct));
 
-            if (search.RootElement.GetProperty("messages_count").GetInt32() > 0) return true;
+            if (search.RootElement.GetProperty("messages_count").GetInt32() > 0)
+            {
+                return true;
+            }
 
             await Task.Delay(TimeSpan.FromSeconds(1), Ct);
         }

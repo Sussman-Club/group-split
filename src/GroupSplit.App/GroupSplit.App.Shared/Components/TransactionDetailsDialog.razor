@@ -66,7 +66,7 @@
         <ReceiptReadLock IsLocked="@(_transcribingAttachmentId is not null)">
         @if (details is null)
         {
-            <div class="gs-dialog-loading" role="status" aria-label="@Loc["Loading transaction"]">
+            <div class="gs-dialog-loading" role="status" aria-live="polite" aria-busy="true" aria-label="@Loc["Loading transaction"]">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
             </div>
         }

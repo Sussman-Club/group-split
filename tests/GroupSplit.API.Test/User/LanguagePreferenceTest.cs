@@ -32,7 +32,10 @@ public sealed class LanguagePreferenceTest
     {
         await using var host = await ApiEndpointHost.StartAsync();
         var ct = TestContext.Current.CancellationToken;
-        var response = await host.Client.PutAsJsonAsync("/users/me/language", new { Language = language }, ct);
+        var response = await host.Client.PutAsJsonAsync("/users/me/language", new
+        {
+            Language = language
+        }, ct);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null((await host.Client.GetFromJsonAsync<UserInfo>("/users/me", ct))!.PreferredLanguage);
     }

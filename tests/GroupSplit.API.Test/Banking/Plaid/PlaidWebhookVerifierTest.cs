@@ -199,7 +199,10 @@ public class PlaidWebhookVerifierTest
     // ---- signing, the way Plaid does it ----------------------------------------------------
 
     private static Dictionary<string, string> Headers(string token) =>
-        new(StringComparer.OrdinalIgnoreCase) { [PlaidWebhookVerifier.HeaderName] = token };
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [PlaidWebhookVerifier.HeaderName] = token
+        };
 
     /// <summary>A genuine ES256 token over this body, issued now.</summary>
     private string Token(string body)

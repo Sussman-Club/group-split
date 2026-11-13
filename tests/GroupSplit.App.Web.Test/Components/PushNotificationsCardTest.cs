@@ -87,11 +87,30 @@ public sealed class PushNotificationsCardTest : ComponentTest
         public Task SetEnabledAsync(bool value) => SetEnabledAsync(PushNotificationKind.ExpenseCreated, value);
         public async Task SetEnabledAsync(PushNotificationKind kind, bool value)
         {
-            if (Pending is not null) await Pending;
-            if (Fail) throw new HttpRequestException("Offline");
-            if (value) enabled.Add(kind); else enabled.Remove(kind);
+            if (Pending is not null)
+            {
+                await Pending;
+            }
+
+            if (Fail)
+            {
+                throw new HttpRequestException("Offline");
+            }
+
+            if (value)
+            {
+                enabled.Add(kind);
+            }
+            else
+            {
+                enabled.Remove(kind);
+            }
         }
         public Task RefreshAsync(Guid? userId = null) => Task.CompletedTask;
-        public Task UnregisterAsync(bool accountDeleted = false) { enabled.Clear(); return Task.CompletedTask; }
+        public Task UnregisterAsync(bool accountDeleted = false)
+        {
+            enabled.Clear();
+            return Task.CompletedTask;
+        }
     }
 }

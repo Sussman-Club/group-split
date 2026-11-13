@@ -23,7 +23,9 @@ public class PatchDocumentTests
         var patch = new JsonPatchDocument<UpdateTransactionRequest>();
 
         foreach (var operation in operations)
+        {
             patch.Operations.Add(operation);
+        }
 
         return patch;
     }

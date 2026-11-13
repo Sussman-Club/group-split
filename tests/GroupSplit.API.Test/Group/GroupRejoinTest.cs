@@ -115,7 +115,9 @@ public class GroupRejoinTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (arriving, newcomer) = await AnotherPerson();
 
         using (arriving)
+        {
             await As<IJoinLinkService>(arriving).Accept(link.Token, Ct);
+        }
 
         Assert.True(await IsMember(group.Id, newcomer.Id));
     }

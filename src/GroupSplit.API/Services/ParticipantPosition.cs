@@ -52,7 +52,9 @@ public static class DepartedPositions
             .ToList();
 
         if (moved.Count > 0)
+        {
             throw Refusal(moved);
+        }
     }
 
     /// <summary>
@@ -72,7 +74,9 @@ public static class DepartedPositions
             .ToList();
 
         if (moved.Count > 0)
+        {
             throw Refusal(moved);
+        }
     }
 
     public static DomainException Refusal(IReadOnlyList<Guid> userIds) =>

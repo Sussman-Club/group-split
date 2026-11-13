@@ -25,7 +25,10 @@ public class ReceiptDraftDialogTest : ComponentTest
         [
             Line("Water", 10m, "WATER 40 PK"),
             Line("Pizza", 20m, "LARGE CHEESE")
-        ]) { CanEdit = true };
+        ])
+    {
+        CanEdit = true
+    };
 
     private static ReceiptItemResponse Line(string name, decimal price, string description) =>
         new(Guid.NewGuid(), name, price, 1m, price, 0m, null, null, null)
@@ -101,8 +104,16 @@ public class ReceiptDraftDialogTest : ComponentTest
     {
         var draft = new SaveReceiptRequest
         {
-            Subtotal = 28m, Tax = .96m, Total = 28.96m, Items = Draft().Items.Select(item => new ReceiptItemInput
-            { Name = item.Name, UnitPrice = item.UnitPrice, TotalPrice = item.TotalPrice, IsTaxable = item.TotalPrice > 0 ? true : null }).ToArray()
+            Subtotal = 28m,
+            Tax = .96m,
+            Total = 28.96m,
+            Items = Draft().Items.Select(item => new ReceiptItemInput
+            {
+                Name = item.Name,
+                UnitPrice = item.UnitPrice,
+                TotalPrice = item.TotalPrice,
+                IsTaxable = item.TotalPrice > 0 ? true : null
+            }).ToArray()
         };
         var provider = Render<MudDialogProvider>();
         IDialogReference reference = null!;
@@ -128,7 +139,9 @@ public class ReceiptDraftDialogTest : ComponentTest
         IDialogReference? reference = null;
         var receipt = new SaveReceiptRequest
         {
-            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Subtotal = 10m,
+            Tax = .75m,
+            Total = 10.75m,
             Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 4m, TotalPrice = 4m, TaxRate = 7.5m },
                 new ReceiptItemInput { Name = "Bread", UnitPrice = 3m, TotalPrice = 3m, TaxRate = 7.5m },
                 new ReceiptItemInput { Name = "Apples", UnitPrice = 3m, TotalPrice = 3m, TaxRate = 7.5m }]
@@ -208,7 +221,9 @@ public class ReceiptDraftDialogTest : ComponentTest
     {
         var receipt = new SaveReceiptRequest
         {
-            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Subtotal = 10m,
+            Tax = .75m,
+            Total = 10.75m,
             Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 10m, TotalPrice = 10m }]
         };
         var provider = Render<MudDialogProvider>();
@@ -233,7 +248,9 @@ public class ReceiptDraftDialogTest : ComponentTest
     {
         var receipt = new SaveReceiptRequest
         {
-            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Subtotal = 10m,
+            Tax = .75m,
+            Total = 10.75m,
             Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 10m, TotalPrice = 10m, IsTaxable = false }]
         };
         var provider = Render<MudDialogProvider>();
@@ -254,7 +271,9 @@ public class ReceiptDraftDialogTest : ComponentTest
         IDialogReference? reference = null;
         var receipt = new SaveReceiptRequest
         {
-            Subtotal = 10m, Tax = .75m, Total = 10.75m,
+            Subtotal = 10m,
+            Tax = .75m,
+            Total = 10.75m,
             Items = [new ReceiptItemInput { Name = "Milk", UnitPrice = 4m, TotalPrice = 4m },
                 new ReceiptItemInput { Name = "Bread", UnitPrice = 3m, TotalPrice = 3m },
                 new ReceiptItemInput { Name = "Apples", UnitPrice = 3m, TotalPrice = 3m }]
@@ -397,7 +416,12 @@ public class ReceiptDraftDialogTest : ComponentTest
     {
         var original = Bill();
         var coupon = Line("Old coupon", -2m, "SAVE2");
-        var bill = original with { Subtotal = 28m, Total = 28m, Items = [..original.Items, coupon] };
+        var bill = original with
+        {
+            Subtotal = 28m,
+            Total = 28m,
+            Items = [.. original.Items, coupon]
+        };
         _receipts.Setup(receipts => receipts.SaveAsync(_expense, It.IsAny<SaveReceiptRequest>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(bill);

@@ -55,7 +55,9 @@ public static class MerchantLogos
     public static bool IsAllowed(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))
+        {
             return false;
+        }
 
         var value = url.Trim();
 
@@ -67,7 +69,9 @@ public static class MerchantLogos
         }
 
         if (value.StartsWith(BundledPath, StringComparison.Ordinal))
+        {
             return IsBundledFile(value[BundledPath.Length..]);
+        }
 
         // Absolute, https, on the default port, with no credentials in it. Each of those is
         // a way for an address to look like the provider's and not be: "http" can be
@@ -96,12 +100,16 @@ public static class MerchantLogos
         const string extension = ".svg";
 
         if (!name.EndsWith(extension, StringComparison.Ordinal) || name.Length == extension.Length)
+        {
             return false;
+        }
 
         foreach (var c in name[..^extension.Length])
         {
             if (c is not ((>= 'a' and <= 'z') or (>= '0' and <= '9') or '-'))
+            {
                 return false;
+            }
         }
 
         return true;

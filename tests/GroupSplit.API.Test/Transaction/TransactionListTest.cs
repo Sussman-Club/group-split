@@ -16,7 +16,6 @@ public class TransactionListTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var transactionService = GetService<ITransactionService>();
         var userService = GetService<ICurrentUser>();
 
-        // Ensure user exists
 
         // Act
         var transactions = (await transactionService.List(TestContext.Current.CancellationToken)).ToList();

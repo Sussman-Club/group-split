@@ -1,5 +1,5 @@
 using GroupSplit.API.Services;
-﻿using GroupSplit.API.Extensions;
+using GroupSplit.API.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.DataSources;
 using GroupSplit.Seeder.Options;

@@ -39,7 +39,9 @@ public sealed class BankSyncLocks
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
+            {
                 semaphore.Release();
+            }
         }
     }
 }

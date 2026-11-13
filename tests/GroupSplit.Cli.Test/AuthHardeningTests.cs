@@ -63,7 +63,10 @@ public sealed class AuthHardeningTests : IDisposable
     public async Task An_expired_device_code_says_to_start_again()
     {
         Device();
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "expired_token" }, 400);
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            error = "expired_token"
+        }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -77,7 +80,11 @@ public sealed class AuthHardeningTests : IDisposable
     {
         Device();
         _idp.Returns($"{Realm}/protocol/openid-connect/token",
-            new { error = "invalid_scope", error_description = "Scope not permitted." }, 400);
+            new
+            {
+                error = "invalid_scope",
+                error_description = "Scope not permitted."
+            }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -93,10 +100,16 @@ public sealed class AuthHardeningTests : IDisposable
         // explicit zero stays distinguishable from an absent value, which takes a default.
         _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new
         {
-            device_code = "d", user_code = "ABCD-EFGH", verification_uri = "https://example.com/device",
-            expires_in = 0, interval = 0
+            device_code = "d",
+            user_code = "ABCD-EFGH",
+            verification_uri = "https://example.com/device",
+            expires_in = 0,
+            interval = 0
         });
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { error = "authorization_pending" }, 400);
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            error = "authorization_pending"
+        }, 400);
 
         var result = await Cli.RunAsync("auth", "login", "--no-browser");
 
@@ -176,7 +189,9 @@ public sealed class AuthHardeningTests : IDisposable
         var store = new TokenStore();
         store.Save(unreachable, "cli", new StoredCredential
         {
-            AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+            AccessToken = "a",
+            RefreshToken = "r",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
 
         var result = await Cli.RunAsync("auth", "logout");
@@ -198,12 +213,18 @@ public sealed class AuthHardeningTests : IDisposable
 
         store.Save(authority, "cli", new StoredCredential
         {
-            AccessToken = "stale", RefreshToken = "keep-me", ExpiresAt = DateTimeOffset.UtcNow.AddHours(-1)
+            AccessToken = "stale",
+            RefreshToken = "keep-me",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(-1)
         });
 
         // No refresh_token in the response: nulling the stored one would strand the user at
         // the next expiry with nothing to point at.
-        _idp.Returns($"{Realm}/protocol/openid-connect/token", new { access_token = "fresh", expires_in = 3600 });
+        _idp.Returns($"{Realm}/protocol/openid-connect/token", new
+        {
+            access_token = "fresh",
+            expires_in = 3600
+        });
         _idp.Returns("/api/groups", Array.Empty<object>());
 
         Assert.Equal(ExitCodes.Success, (await Cli.RunAsync("groups", "list")).ExitCode);
@@ -220,7 +241,10 @@ public sealed class AuthHardeningTests : IDisposable
 
     private void Device() => _idp.Returns($"{Realm}/protocol/openid-connect/auth/device", new
     {
-        device_code = "d", user_code = "ABCD-EFGH", verification_uri = "https://example.com/device",
-        expires_in = 600, interval = 0
+        device_code = "d",
+        user_code = "ABCD-EFGH",
+        verification_uri = "https://example.com/device",
+        expires_in = 600,
+        interval = 0
     });
 }

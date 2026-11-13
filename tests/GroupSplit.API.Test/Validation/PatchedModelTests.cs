@@ -34,20 +34,29 @@ public class PatchedModelTests
     [Fact]
     public void A_cleared_required_name_is_rejected()
     {
-        Assert.False(PatchedModel.IsValid(Valid() with { Name = null! }, out _));
+        Assert.False(PatchedModel.IsValid(Valid() with
+        {
+            Name = null!
+        }, out _));
     }
 
     [Fact]
     public void A_name_past_its_length_limit_is_rejected()
     {
-        Assert.False(PatchedModel.IsValid(Valid() with { Name = new string('x', 125) }, out _));
+        Assert.False(PatchedModel.IsValid(Valid() with
+        {
+            Name = new string('x', 125)
+        }, out _));
     }
 
     [Fact]
     public void A_description_past_its_length_limit_is_rejected()
     {
         Assert.False(
-            PatchedModel.IsValid(Valid() with { Description = new string('x', 257) }, out _));
+            PatchedModel.IsValid(Valid() with
+            {
+                Description = new string('x', 257)
+            }, out _));
     }
 
     /// <summary>
@@ -57,7 +66,10 @@ public class PatchedModelTests
     [Fact]
     public void An_amount_with_more_than_two_decimal_places_is_rejected()
     {
-        Assert.False(PatchedModel.IsValid(Valid() with { Amount = 10.005m }, out _));
+        Assert.False(PatchedModel.IsValid(Valid() with
+        {
+            Amount = 10.005m
+        }, out _));
     }
 
     /// <summary>
@@ -67,7 +79,10 @@ public class PatchedModelTests
     [Fact]
     public void An_amount_too_large_to_check_is_rejected_rather_than_throwing()
     {
-        Assert.False(PatchedModel.IsValid(Valid() with { Amount = decimal.MaxValue }, out _));
+        Assert.False(PatchedModel.IsValid(Valid() with
+        {
+            Amount = decimal.MaxValue
+        }, out _));
     }
 
     /// <summary>
@@ -77,7 +92,10 @@ public class PatchedModelTests
     [Fact]
     public void A_rejection_comes_back_as_a_validation_problem_naming_the_field()
     {
-        Assert.False(PatchedModel.IsValid(Valid() with { Amount = 10.005m }, out var problem));
+        Assert.False(PatchedModel.IsValid(Valid() with
+        {
+            Amount = 10.005m
+        }, out var problem));
 
         var validationProblem = Assert.IsType<ProblemHttpResult>(problem);
         Assert.Equal(StatusCodes.Status400BadRequest, validationProblem.StatusCode);
@@ -87,7 +105,11 @@ public class PatchedModelTests
     public void Every_broken_annotation_is_reported_not_just_the_first()
     {
         Assert.False(PatchedModel.IsValid(
-            Valid() with { Name = null!, Amount = 10.005m }, out var problem));
+            Valid() with
+            {
+                Name = null!,
+                Amount = 10.005m
+            }, out var problem));
 
         var validationProblem = Assert.IsType<ProblemHttpResult>(problem);
         var errors = Assert.IsAssignableFrom<HttpValidationProblemDetails>(validationProblem.ProblemDetails);

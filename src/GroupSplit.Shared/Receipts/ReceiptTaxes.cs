@@ -9,11 +9,23 @@ public static class ReceiptTaxes
     {
         if (totalTax <= 0 || decimal.Round(totalTax, 2) != totalTax ||
             !items.Any(item => item.IsTaxable != false && item.TaxRate is null &&
-                item.TaxAmount == 0m && item.TotalPrice > 0m)) return null;
-        if (Calculate(totalTax, items).Sum() >= totalTax) return null;
+                item.TaxAmount == 0m && item.TotalPrice > 0m))
+        {
+            return null;
+        }
+
+        if (Calculate(totalTax, items).Sum() >= totalTax)
+        {
+            return null;
+        }
+
         var result = Calculate(totalTax, items, allocateUnidentified: true);
         if (result.Sum() != totalTax || items.Select((item, index) => (item, index))
-                .Any(pair => pair.item.TaxAmount != 0m && result[pair.index] != pair.item.TaxAmount)) return null;
+                .Any(pair => pair.item.TaxAmount != 0m && result[pair.index] != pair.item.TaxAmount))
+        {
+            return null;
+        }
+
         return result;
     }
 
@@ -23,7 +35,9 @@ public static class ReceiptTaxes
         if (items.Any(item => item.TaxAmount != 0m)
             && items.All(item => item.IsTaxable != false || item.TaxAmount == 0m)
             && items.Sum(item => item.TaxAmount) == totalTax)
+        {
             return items.Select(item => item.TaxAmount).ToArray();
+        }
 
         var exact = items.Select(item => item.IsTaxable == false ? 0m
             : item.TaxAmount != 0m ? item.TaxAmount
@@ -31,7 +45,9 @@ public static class ReceiptTaxes
         var taxes = exact.Select(value => decimal.Round(value, 2, MidpointRounding.AwayFromZero)).ToArray();
         var remaining = totalTax - taxes.Sum();
         if (remaining == 0)
+        {
             return taxes;
+        }
 
         var rated = Enumerable.Range(0, items.Count)
             .Where(index => items[index].IsTaxable != false && items[index].TaxRate is > 0
@@ -52,12 +68,17 @@ public static class ReceiptTaxes
             foreach (var index in candidates
                 .OrderByDescending(index => direction * (exact[index] - taxes[index]))
                 .ThenBy(index => index).Take(cents))
+            {
                 taxes[index] += direction * .01m;
+            }
+
             return taxes;
         }
 
         if (!allocateUnidentified && items.All(item => item.TaxRate is null && item.IsTaxable is null))
+        {
             return taxes;
+        }
 
         // Identified taxable lines can carry tax not otherwise assigned by the reading.
         // A printed/manual line tax is evidence, not an unidentified amount. Only an
@@ -66,15 +87,24 @@ public static class ReceiptTaxes
             ? items[index].TotalPrice > 0 : items[index].TotalPrice < 0).ToArray() : [];
         var weight = fallback.Sum(index => Math.Abs(items[index].TotalPrice));
         if (weight == 0)
+        {
             return taxes;
+        }
+
         var raw = fallback.Select(index => Math.Abs(remaining) * 100m * Math.Abs(items[index].TotalPrice) / weight).ToArray();
         var shares = raw.Select(decimal.Floor).ToArray();
         var left = (int)(Math.Abs(remaining) * 100m - shares.Sum());
         foreach (var index in Enumerable.Range(0, fallback.Length)
             .OrderByDescending(index => raw[index] - shares[index]).ThenBy(index => index).Take(left))
+        {
             shares[index]++;
+        }
+
         for (var index = 0; index < fallback.Length; index++)
+        {
             taxes[fallback[index]] += Math.Sign(remaining) * shares[index] / 100m;
+        }
+
         return taxes;
     }
 }

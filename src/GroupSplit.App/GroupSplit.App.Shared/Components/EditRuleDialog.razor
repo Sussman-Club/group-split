@@ -11,7 +11,7 @@
     <DialogContent>
         @if (_model is null)
         {
-            <div class="gs-empty" style="padding: 32px">
+            <div class="gs-empty" style="padding: 32px" role="status" aria-live="polite" aria-label="@Loc["Loading…"]" aria-busy="true">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
             </div>
         }

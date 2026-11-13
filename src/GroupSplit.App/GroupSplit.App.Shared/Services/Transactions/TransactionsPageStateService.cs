@@ -107,7 +107,9 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         // being a second request for the same page -- and from what is on its way, so a
         // second render mid-flight does not ask again either.
         if (Page is not null && (query == Query || query == _asked))
+        {
             return;
+        }
 
         _asked = query;
 
@@ -120,7 +122,9 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         // A failure is not an answer, so the same question has to be askable again --
         // otherwise the retry would be taken for the one already in flight.
         if (!done && _asked == query)
+        {
             _asked = Query;
+        }
     }
 
     /// <summary>
@@ -172,7 +176,9 @@ public class TransactionsPageStateService : ITransactionsPageStateService
         // The three go down together, and only here: a page and the summary beside it that
         // came from two different questions are worse than either answer on its own.
         if (_asked is not null && _asked != query)
+        {
             return;
+        }
 
         Query = query;
         Page = page;

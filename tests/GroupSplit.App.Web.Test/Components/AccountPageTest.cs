@@ -137,8 +137,19 @@ public class AccountPageTest : ComponentTest
     {
         Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example/")));
         var (page, _) = Open();
-        Assert.Equal("https://groupsplit.example/account", page.Find("a[target='_blank']").GetAttribute("href"));
+        Assert.Contains(page.FindAll("a[target='_blank']"), link => link.GetAttribute("href") == "https://groupsplit.example/account");
         Assert.DoesNotContain("/api/users/me/export", page.Markup);
+    }
+
+    [Fact]
+    public void Native_manage_account_opens_the_public_site_in_a_browser()
+    {
+        Services.AddSingleton(new AppLinks(new Uri("https://groupsplit.example/")));
+        var (page, _) = Open();
+        var link = page.FindAll("a").Single(element => element.TextContent.Contains("Manage account"));
+        Assert.Equal("https://groupsplit.example/auth/account", link.GetAttribute("href"));
+        Assert.Equal("_blank", link.GetAttribute("target"));
+        Assert.Contains("You may need to sign in", page.Markup);
     }
 
     [Fact]

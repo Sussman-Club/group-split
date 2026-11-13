@@ -29,6 +29,10 @@ public static class NativeServiceExtensions
         services.AddHttpClient(NativeSession.IdentityClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false });
         services.AddTransient<AuthDelegatingHandler>();
+        services.AddHttpClient("native-receipt-preview", client => client.BaseAddress = options.ApiBaseAddress)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false })
+            .AddHttpMessageHandler<AuthDelegatingHandler>();
+        services.AddScoped<IReceiptPreviewLoader, NativeReceiptPreviewLoader>();
         services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
         // BlazorWebView owns the scope for its components, user state and navigation.

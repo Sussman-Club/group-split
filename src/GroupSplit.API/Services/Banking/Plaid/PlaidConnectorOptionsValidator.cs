@@ -46,32 +46,42 @@ internal sealed class PlaidConnectorOptionsValidator(IOptions<BankingOptions> ba
     public ValidateOptionsResult Validate(string? name, PlaidConnectorOptions options)
     {
         if (options.RedirectUri is not { } configured || string.IsNullOrWhiteSpace(configured))
+        {
             return ValidateOptionsResult.Success;
+        }
 
         if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri))
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} is not an absolute URL. Write the origin scheme first, "
                 + $"e.g. https://groupsplit.example.com{BankLinkAddresses.OAuthReturnPath}.");
+        }
 
         if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} is {uri.Scheme} rather than https. Plaid refuses to register a redirect "
                 + "address that is not HTTPS, so no OAuth bank could be linked at all.");
+        }
 
         // Plaid matches the registered address exactly and refuses either of these on it.
         if (uri.Query.Length > 0 || uri.Fragment.Length > 0)
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} carries a query or fragment. Plaid registers the address exactly as "
                 + "written and will not accept one.");
+        }
 
         // The one thing only this application knows. A deployment is free to serve the app
         // under a prefix, so the path has to end with ours rather than be it.
         if (!uri.AbsolutePath.TrimEnd('/').EndsWith(BankLinkAddresses.OAuthReturnPath, StringComparison.Ordinal))
+        {
             return ValidateOptionsResult.Fail(
                 $"{Setting} is {uri.AbsolutePath}, which this application does not serve. The page that "
                 + $"finishes an interrupted sign-in is at {BankLinkAddresses.OAuthReturnPath}, so the value "
                 + $"is the public origin followed by that -- and the same address has to be registered in "
                 + "the Plaid dashboard.");
+        }
 
         // And whose page it is, where this deployment has said. Compared as an origin --
         // scheme, host and port -- because that is what "somewhere this app serves" means

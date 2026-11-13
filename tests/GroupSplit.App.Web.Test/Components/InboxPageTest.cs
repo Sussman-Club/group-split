@@ -238,10 +238,12 @@ public class InboxPageTest : ComponentTest
         var page = Render<Inbox>();
 
         var match = _rows[0].PossibleDuplicates[0];
-        var label = $"Attach to {match.Name} · {match.Amount:N2} {match.Currency} · {Services.GetRequiredService<LocalClock>().Day(match.DateTime):d}";
-        var button = Assert.Single(page.FindAll(".gs-bank-inbox-actions button"), button => button.TextContent.Contains("Attach to"));
-        Assert.Equal(label, button.TextContent.Trim());
-        Assert.Equal(label, button.GetAttribute("title"));
+        var suggestion = Assert.Single(page.FindAll(".gs-inbox-suggestion"));
+        Assert.Contains("Possible match", suggestion.TextContent);
+        Assert.Equal(match.Name, suggestion.QuerySelector("strong")!.TextContent);
+        var button = suggestion.QuerySelector("button")!;
+        Assert.Equal("Review", button.TextContent.Trim());
+        Assert.Equal($"Review possible match: {match.Name}", button.GetAttribute("aria-label"));
         Assert.Empty(page.FindAll(".gs-bank-inbox-list .mud-alert"));
     }
 
@@ -272,8 +274,8 @@ public class InboxPageTest : ComponentTest
         Suggests(new(shared.Id, Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", .9),
             new(personal.Id, Guid.NewGuid(), "Personal", true, Guid.NewGuid(), "Dining", .9));
         var page = Render<Inbox>();
-        page.WaitForAssertion(() => Assert.Contains("Review: Personal · Dining", page.Markup));
-        Assert.Contains("Review: Home · Groceries", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("Personal · Dining", page.Markup));
+        Assert.Contains("Home · Groceries", page.Markup);
         Assert.DoesNotContain("Likely personal", page.Markup);
         Assert.DoesNotContain("Likely shared", page.Markup);
         Assert.All(page.FindAll(".gs-bank-inbox-actions"), row => Assert.Equal(2, row.QuerySelectorAll("button").Length));
@@ -308,12 +310,12 @@ public class InboxPageTest : ComponentTest
 
         var page = Render<Inbox>();
         var state = Services.GetRequiredService<IInboxStateService>();
-        page.WaitForAssertion(() => Assert.Contains("Review: Home · Groceries", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Home · Groceries", page.Markup));
 
         await page.InvokeAsync(() => state.RefreshAsync());
 
         _inbox.Verify(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        Assert.Contains("Review: Home · Groceries", page.Markup);
+        Assert.Contains("Home · Groceries", page.Markup);
     }
 }

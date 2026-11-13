@@ -62,7 +62,9 @@ public class SettleDialogTest : ComponentTest
     private static async Task PickAsync(IRenderedComponent<MudDialogProvider> provider, DateOnly? day)
     {
         if (!provider.FindAll("button").Any(button => button.TextContent.Contains("Settle only up to a day")))
+        {
             return;
+        }
 
         await provider.FindAll("button").Single(button => button.TextContent.Contains("Settle only up to a day"))
             .ClickAsync(new MouseEventArgs());

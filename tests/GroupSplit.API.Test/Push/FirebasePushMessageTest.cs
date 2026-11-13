@@ -70,7 +70,9 @@ public sealed class FirebasePushMessageTest
             Assert.Single(category.Select(d => PushNotificationKinds.Preference(d.Kind)).Distinct());
             Assert.Single(category.Select(d => PushNotificationKinds.Channel(d.Kind)).Distinct());
             foreach (var definition in category)
+            {
                 Assert.False(string.IsNullOrWhiteSpace(PushNotificationKinds.Body(definition.Kind, "Trip")));
+            }
         }
     }
 

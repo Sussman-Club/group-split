@@ -45,7 +45,9 @@ public static class FilingSuggestionExtensions
                 };
 
                 if (string.IsNullOrWhiteSpace(options.Deployment) && connection.TryGetValue("Model", out var model))
+                {
                     options.Deployment = model?.ToString();
+                }
 
                 // The endpoint is the OpenAI v1 base, ending in /openai/v1/; the decision
                 // route hangs off the resource itself.
@@ -57,7 +59,9 @@ public static class FilingSuggestionExtensions
                 }
 
                 if (string.IsNullOrWhiteSpace(options.Key) && connection.TryGetValue("Key", out var key))
+                {
                     options.Key = key?.ToString();
+                }
             });
 
         return services;

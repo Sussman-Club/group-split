@@ -105,11 +105,11 @@
     transform: translateY(-1px);
 }
 
-.mud-icon-button {
+.mud-icon-button:not(.mud-switch-base) {
     transition: transform var(--gs-base) var(--gs-ease-spring), background-color var(--gs-fast) !important;
 }
 
-.mud-icon-button:hover {
+.mud-icon-button:not(.mud-switch-base):hover {
     transform: scale(1.1);
 }
 

@@ -36,7 +36,6 @@ public class GroupMembersTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // Arrange
         var groupService = GetService<IGroupService>();
         var userService = GetService<ICurrentUser>();
-        // Create an additional group for the current user
         var createdGroup = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
             TestContext.Current.CancellationToken);
         // Act

@@ -120,10 +120,14 @@ public sealed class DuplicateMatcher(
         var (spent, recorded) = (Facts(row), Facts(expense));
 
         if (!string.Equals(spent.Currency, recorded.Currency, StringComparison.OrdinalIgnoreCase))
+        {
             return null;
+        }
 
         if (DaysBetween(spent, recorded) > WindowDays)
+        {
             return null;
+        }
 
         // Only identical amounts are suggested; the date window still accounts for posting delays.
         return spent.Amount == recorded.Amount ? MatchConfidence.Confident : null;
@@ -168,14 +172,18 @@ public sealed class DuplicateMatcher(
             .ToList();
 
         if (asking.Count == 0)
+        {
             return new Dictionary<Guid, IReadOnlyList<DuplicateMatch>>();
+        }
 
         var days = asking.Select(row => Facts(row).On).ToList();
 
         var candidates = await Candidates(days.Min(), days.Max(), ct);
 
         if (candidates.Count == 0)
+        {
             return new Dictionary<Guid, IReadOnlyList<DuplicateMatch>>();
+        }
 
         var dismissed = await Dismissed(asking.Select(row => row.Id).ToList(), ct);
 
@@ -187,7 +195,9 @@ public sealed class DuplicateMatcher(
                 !dismissed.Contains((row.Id, expense.Id))));
 
             if (found.Count > 0)
+            {
                 matches[row.Id] = found;
+            }
         }
 
         return matches;
@@ -232,14 +242,18 @@ public sealed class DuplicateMatcher(
         // An expense somebody else paid cannot be one of the caller's card charges, and the
         // caller only ever sees their own bank rows.
         if (expense.UserId != userContext.User.Id || await HeldByARow(expense, ct))
+        {
             return [];
+        }
 
         var facts = Facts(expense);
 
         var rows = await Waiting(facts.On, facts.On, ct);
 
         if (rows.Count == 0)
+        {
             return [];
+        }
 
         var dismissed = await Dismissed(rows.Select(row => row.Id).ToList(), ct);
 
@@ -264,7 +278,9 @@ public sealed class DuplicateMatcher(
                                    && dismissal.TransactionId == expense.Id, ct);
 
         if (already)
+        {
             return;
+        }
 
         var dismissal = new BankMatchDismissal
         {
@@ -363,7 +379,9 @@ public sealed class DuplicateMatcher(
     private static bool ReadsLike(BankTransaction row, Expense expense)
     {
         if (row.MerchantName is not { Length: > 0 } merchant || expense.Name.Length == 0)
+        {
             return false;
+        }
 
         return merchant.Contains(expense.Name, StringComparison.OrdinalIgnoreCase)
                || expense.Name.Contains(merchant, StringComparison.OrdinalIgnoreCase);

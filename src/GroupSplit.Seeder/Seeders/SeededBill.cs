@@ -21,9 +21,15 @@ internal static class SeededBill
     public static async Task<Receipt> ForExpense(ReceiptSeedDto dto, Expense expense,
         AppDbContext db, ISplitRuleFactory factory, CancellationToken ct)
     {
-        var receipt = new Receipt { Expense = expense, ExpenseId = expense.Id,
-            Subtotal = dto.Items.Sum(i => i.Price), Tax = dto.Tax, Tip = dto.Tip,
-            Total = dto.Items.Sum(i => i.Price) + dto.Tax + dto.Tip };
+        var receipt = new Receipt
+        {
+            Expense = expense,
+            ExpenseId = expense.Id,
+            Subtotal = dto.Items.Sum(i => i.Price),
+            Tax = dto.Tax,
+            Tip = dto.Tip,
+            Total = dto.Items.Sum(i => i.Price) + dto.Tax + dto.Tip
+        };
         foreach (var input in dto.Items)
         {
             SplitRuleVersion? version = null;
@@ -52,10 +58,18 @@ internal static class SeededBill
                 // it -- the line divides by what the group's rule says now.
                 version = rule.Current;
             }
-            receipt.Items.Add(new ReceiptItem { Name = input.Name, NormalizedName = input.Name.Trim().ToLowerInvariant(),
-                Position = receipt.Items.Count, UnitPrice = decimal.Round(input.Price / input.Quantity, 2),
-                Quantity = input.Quantity, TotalPrice = input.Price, TaxAmount = input.TaxAmount,
-                SplitRuleVersion = version, SplitRuleVersionId = version?.Id });
+            receipt.Items.Add(new ReceiptItem
+            {
+                Name = input.Name,
+                NormalizedName = input.Name.Trim().ToLowerInvariant(),
+                Position = receipt.Items.Count,
+                UnitPrice = decimal.Round(input.Price / input.Quantity, 2),
+                Quantity = input.Quantity,
+                TotalPrice = input.Price,
+                TaxAmount = input.TaxAmount,
+                SplitRuleVersion = version,
+                SplitRuleVersionId = version?.Id
+            });
         }
         return receipt;
     }

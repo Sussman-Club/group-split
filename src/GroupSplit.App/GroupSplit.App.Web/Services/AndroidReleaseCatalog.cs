@@ -17,7 +17,11 @@ public sealed class AndroidReleaseCatalog(IHttpClientFactory clients, TimeProvid
         await gate.WaitAsync(ct);
         try
         {
-            if (clock.GetUtcNow() < expires) return cached;
+            if (clock.GetUtcNow() < expires)
+            {
+                return cached;
+            }
+
             using var client = clients.CreateClient(nameof(AndroidReleaseCatalog));
             client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("GroupSplit-Android-Downloads/1.0");
@@ -48,7 +52,11 @@ public sealed class AndroidReleaseCatalog(IHttpClientFactory clients, TimeProvid
     private static AndroidReleaseInfo? Parse(Release? release)
     {
         const string tagPrefix = "android-v";
-        if (release is null || release.Draft || release.Prerelease || release.Tag?.StartsWith(tagPrefix, StringComparison.Ordinal) != true) return null;
+        if (release is null || release.Draft || release.Prerelease || release.Tag?.StartsWith(tagPrefix, StringComparison.Ordinal) != true)
+        {
+            return null;
+        }
+
         var prefix = Repository + Uri.EscapeDataString(release.Tag) + "/";
         var apk = release.Assets?.FirstOrDefault(asset => asset.Name == "GroupSplit.apk" && asset.Url == prefix + "GroupSplit.apk" && asset.Size > 0);
         var checksum = release.Assets?.FirstOrDefault(asset => asset.Name == "SHA256SUMS" && asset.Url == prefix + "SHA256SUMS");

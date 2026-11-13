@@ -77,9 +77,16 @@ public static class InboxApi
             {
                 var rows = await inbox.List(new InboxFilter(status), ct);
                 var row = await rows.Where(item => item.Id == id).SelectDto().FirstOrDefaultAsync(ct);
-                if (row is null) continue;
+                if (row is null)
+                {
+                    continue;
+                }
+
                 var matches = status is InboxStatus.New or InboxStatus.Ignored ? (await inbox.Matches(id, ct)).ToResponses() : [];
-                return Results.Ok(row with { PossibleDuplicates = matches });
+                return Results.Ok(row with
+                {
+                    PossibleDuplicates = matches
+                });
             }
             return Results.NotFound();
         }).WithName("GetBankTransaction").Produces<BankTransactionResponse>().ProducesProblem(StatusCodes.Status404NotFound);
@@ -92,9 +99,12 @@ public static class InboxApi
                 rows = rows.Where(row => !db.Set<Expense>().Any(expense => expense.BankTransactionId == row.Id));
                 var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
                 if (term is not null)
+                {
                     rows = rows.Where(row => row.Description.ToLower().Contains(term) ||
                         (row.MerchantName != null && row.MerchantName.ToLower().Contains(term)) ||
                         row.Account.Name.ToLower().Contains(term));
+                }
+
                 var found = await rows.ApplySort(new SortRequest(), Sort).SelectDto().ToPageAsync(page, ct);
                 return Results.Ok(await found.WithDuplicatesAsync(inbox, ct));
             })
@@ -176,10 +186,22 @@ public static class InboxApi
                             {
                                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                                 timeout.CancelAfter(settings.Timeout);
-                                var answer = await decisions.ChooseAsync(new { row.Title, row.Description, row.Amount, row.Currency, row.Date, row.AuthorizedDate, row.ProviderCategory, row.ProviderCategoryDetailed },
+                                var answer = await decisions.ChooseAsync(new
+                                {
+                                    row.Title,
+                                    row.Description,
+                                    row.Amount,
+                                    row.Currency,
+                                    row.Date,
+                                    row.AuthorizedDate,
+                                    row.ProviderCategory,
+                                    row.ProviderCategoryDetailed
+                                },
                                     "Choose the expense most likely to be the same purchase as this bank transaction. Amount alone is not enough. If multiple purchases are plausible, choose cannot tell. This is only a suggestion for a person to review.", choices, timeout.Token);
                                 if (answer is { Confidence: var confidence } && confidence >= settings.Threshold && Guid.TryParse(answer.Choice, out var selected))
+                                {
                                     result = result.Select(match => match with { IsSuggested = match.TransactionId == selected }).ToList();
+                                }
                             }
                             catch (Exception exception) when (!ct.IsCancellationRequested && exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
                         }
@@ -388,11 +410,16 @@ public static class InboxApi
             var matches = await inbox.Matches(waiting, ct);
 
             if (matches.Count == 0)
+            {
                 return page;
+            }
 
             var items = page.Items
                 .Select(row => matches.TryGetValue(row.Id, out var found)
-                    ? row with { PossibleDuplicates = found.ToResponses() }
+                    ? row with
+                    {
+                        PossibleDuplicates = found.ToResponses()
+                    }
                     : row)
                 .ToList();
 

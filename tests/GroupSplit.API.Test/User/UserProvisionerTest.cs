@@ -23,9 +23,20 @@ public class UserProvisionerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         List<Claim> claims = [new Claim(ClaimTypes.NameIdentifier, subject)];
 
-        if (firstName is not null) claims.Add(new Claim(ClaimTypes.GivenName, firstName));
-        if (lastName is not null) claims.Add(new Claim(ClaimTypes.Surname, lastName));
-        if (email is not null) claims.Add(new Claim(ClaimTypes.Email, email));
+        if (firstName is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.GivenName, firstName));
+        }
+
+        if (lastName is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Surname, lastName));
+        }
+
+        if (email is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Email, email));
+        }
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
     }

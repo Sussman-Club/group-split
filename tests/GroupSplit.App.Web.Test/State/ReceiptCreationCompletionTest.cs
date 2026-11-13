@@ -29,7 +29,12 @@ public sealed class ReceiptCreationCompletionTest
         snackbar.Setup(service => service.Add(It.IsAny<string>(), It.IsAny<Severity>(),
                 It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()))
             .Callback((string text, Severity severity, Action<SnackbarOptions> _, string _) =>
-            { if (severity == Severity.Success) successes.Add(text); });
+            {
+                if (severity == Severity.Success)
+                {
+                    successes.Add(text);
+                }
+            });
         var errors = new ApiErrorPresenter(Mock.Of<NavigationManager>(), snackbar.Object);
         var commands = new TransactionCommands(transactions.Object, errors, snackbar.Object,
             Mock.Of<IDialogService>(), attachments.Object, Mock.Of<IReceiptCommands>(), new DataChangeNotifier());

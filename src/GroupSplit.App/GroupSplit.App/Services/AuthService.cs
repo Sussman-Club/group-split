@@ -23,9 +23,18 @@ public sealed class AuthService(NativeSession session, IUserLogin user, Navigati
     {
         // Remove the server registration while the session is still authenticated.
         // If offline, deleting the Firebase token stops future delivery to this installation.
-        try { if (push is not null) await push.UnregisterAsync(deleted); }
+        try
+        {
+            if (push is not null)
+            {
+                await push.UnregisterAsync(deleted);
+            }
+        }
         catch (Exception) { snackbar.Add("Could not remove this device's alerts. Check notification settings before sharing this device.", Severity.Warning); }
-        try { await session.LogoutAsync(deleted, ct); }
+        try
+        {
+            await session.LogoutAsync(deleted, ct);
+        }
         catch (NativeCredentialCleanupException)
         {
             snackbar.Add("Signed out for now, but saved sign-in could not be cleared. Clear this app's storage before using it again.", Severity.Warning);

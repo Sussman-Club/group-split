@@ -9,7 +9,9 @@ namespace GroupSplit.App.Shared.Services.Settling;
 /// </summary>
 public class SettleTracker
 {
-    [PersistentState] public SettlementPlanResponse? Plan { get; set; }
+    [PersistentState]
+    public SettlementPlanResponse? Plan { get; set; }
 
-    [PersistentState] public PagedResponse<SettlementResponse>? History { get; set; }
+    [PersistentState]
+    public PagedResponse<SettlementResponse>? History { get; set; }
 }

@@ -10,8 +10,16 @@ public static class StaffAccess
 
     public static bool IsStaff(ClaimsPrincipal user)
     {
-        if (user.Identity?.IsAuthenticated != true) return false;
-        if (user.IsInRole(Role)) return true;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+
+        if (user.IsInRole(Role))
+        {
+            return true;
+        }
+
         foreach (var claim in user.FindAll("realm_access"))
         {
             try
@@ -21,7 +29,9 @@ public static class StaffAccess
                     && json.RootElement.TryGetProperty("roles", out var roles)
                     && roles.ValueKind == JsonValueKind.Array
                     && roles.EnumerateArray().Any(r => r.ValueKind == JsonValueKind.String && r.GetString() == Role))
+                {
                     return true;
+                }
             }
             catch (JsonException) { }
         }

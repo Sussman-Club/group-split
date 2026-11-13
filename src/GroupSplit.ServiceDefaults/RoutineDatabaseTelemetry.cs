@@ -7,9 +7,16 @@ public static class RoutineDatabaseTelemetry
 {
     public static bool IsProbe(IDbCommand command)
     {
-        if (command.CommandType != CommandType.Text) return false;
+        if (command.CommandType != CommandType.Text)
+        {
+            return false;
+        }
+
         var sql = command.CommandText.AsSpan().Trim();
-        if (sql.Equals("SELECT 1", StringComparison.OrdinalIgnoreCase)) return true;
+        if (sql.Equals("SELECT 1", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
 
         // Match the idle job claim SELECT, not job inserts, updates, or other reads.
         return sql.StartsWith("SELECT ", StringComparison.OrdinalIgnoreCase)

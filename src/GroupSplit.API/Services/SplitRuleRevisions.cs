@@ -75,7 +75,9 @@ public sealed class SplitRuleRevisions(
         CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
+        {
             return RuleRewrite.Nothing;
+        }
 
         // Only the versions that are current, and only the ones whose weights name this
         // person. The superseded ones named them too, and that is exactly what they are for.
@@ -99,7 +101,9 @@ public sealed class SplitRuleRevisions(
             var replacement = (WeightedSplitRuleVersion)factory.FromDto(handlers.ToDto(version));
 
             if (Rewrite(replacement, fromUserId, rules is RuleHandling.Transfer ? toUserId : null) == 0)
+            {
                 emptied++;
+            }
 
             replacement.SplitRuleId = version.SplitRuleId;
             replacement.StartedAt = now;
@@ -151,7 +155,9 @@ public sealed class SplitRuleRevisions(
         Guid groupId, Guid fromUserId, Guid? toUserId, CancellationToken ct)
     {
         if (toUserId is not { } receiverId)
+        {
             return 0;
+        }
 
         var naming = await context.Set<SoleSplitRuleVersion>()
             .Where(version => version.SplitRule.Group.Id == groupId &&
@@ -160,7 +166,9 @@ public sealed class SplitRuleRevisions(
             .ToListAsync(ct);
 
         foreach (var version in naming)
+        {
             version.UserId = receiverId;
+        }
 
         return naming.Select(version => version.SplitRuleId).Distinct().Count();
     }
@@ -179,24 +187,32 @@ public sealed class SplitRuleRevisions(
             .FirstOrDefault(participant => participant.UserId == fromUserId);
 
         if (leaving is null)
+        {
             return version.Participants.Count;
+        }
 
         version.Participants.Remove(leaving);
 
         if (toUserId is not { } receiverId)
+        {
             return version.Participants.Count;
+        }
 
         var held = version.Participants
             .FirstOrDefault(participant => participant.UserId == receiverId);
 
         if (held is null)
+        {
             version.Participants.Add(new SplitRuleParticipant
             {
                 UserId = receiverId,
                 Weight = leaving.Weight
             });
+        }
         else
+        {
             held.Weight += leaving.Weight;
+        }
 
         return version.Participants.Count;
     }

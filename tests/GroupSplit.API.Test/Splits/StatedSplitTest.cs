@@ -42,7 +42,11 @@ public class StatedSplitTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     private static SplitInput Share(Guid userId, decimal amount) =>
-        new() { UserId = userId, Amount = amount };
+        new()
+        {
+            UserId = userId,
+            Amount = amount
+        };
 
     private Task<List<TransactionSplit>> SplitsOf(Guid transactionId) =>
         DbContext.Set<TransactionSplit>()

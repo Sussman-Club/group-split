@@ -16,18 +16,30 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
     public async Task SeedAsync(CancellationToken ct = default)
     {
         var expense = await db.Set<Expense>().SingleOrDefaultAsync(e => e.Id == ExpenseId, ct);
-        if (expense is null) return;
+        if (expense is null)
+        {
+            return;
+        }
 
         if (!await db.Set<Receipt>().AnyAsync(r => r.Id == ReceiptId, ct))
         {
             var receipt = new Receipt
             {
-                Id = ReceiptId, OwnerUserId = expense.UserId, Currency = expense.Currency,
-                MerchantName = "Pharmacy 88", PurchaseDate = DateOnly.FromDateTime(expense.DateTime.UtcDateTime),
-                Subtotal = expense.Amount, Total = expense.Amount
+                Id = ReceiptId,
+                OwnerUserId = expense.UserId,
+                Currency = expense.Currency,
+                MerchantName = "Pharmacy 88",
+                PurchaseDate = DateOnly.FromDateTime(expense.DateTime.UtcDateTime),
+                Subtotal = expense.Amount,
+                Total = expense.Amount
             };
-            receipt.Items.Add(new ReceiptItem { Name = "Painkillers", NormalizedName = "painkillers",
-                UnitPrice = expense.Amount, TotalPrice = expense.Amount });
+            receipt.Items.Add(new ReceiptItem
+            {
+                Name = "Painkillers",
+                NormalizedName = "painkillers",
+                UnitPrice = expense.Amount,
+                TotalPrice = expense.Amount
+            });
             db.Add(receipt);
         }
 
@@ -44,9 +56,22 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
         foreach (var (id, merchant, item, total, daysAgo, ignored) in examples)
         {
             var receiptId = Guid.Parse(id);
-            if (existing.Contains(receiptId)) continue;
-            var receipt = new Receipt { Id = receiptId, OwnerUserId = expense.UserId, Currency = expense.Currency,
-                MerchantName = merchant, PurchaseDate = today.AddDays(-daysAgo), Subtotal = total, Total = total, IsIgnored = ignored };
+            if (existing.Contains(receiptId))
+            {
+                continue;
+            }
+
+            var receipt = new Receipt
+            {
+                Id = receiptId,
+                OwnerUserId = expense.UserId,
+                Currency = expense.Currency,
+                MerchantName = merchant,
+                PurchaseDate = today.AddDays(-daysAgo),
+                Subtotal = total,
+                Total = total,
+                IsIgnored = ignored
+            };
             receipt.Items.Add(new ReceiptItem { Name = item, NormalizedName = item.ToLowerInvariant(), UnitPrice = total, TotalPrice = total });
             db.Add(receipt);
         }
@@ -58,13 +83,28 @@ public sealed class ReceiptInboxSeeder(AppDbContext db) : ISeeder
                 ?? await db.Set<Receipt>().Include(r => r.Items).SingleAsync(r => r.Id == ReceiptId, ct);
             var duplicate = new Receipt
             {
-                Id = DuplicateReceiptId, OwnerUserId = original.OwnerUserId, Currency = original.Currency,
-                MerchantName = original.MerchantName, PurchaseDate = original.PurchaseDate,
-                Subtotal = original.Subtotal, Tax = original.Tax, Tip = original.Tip, Total = original.Total
+                Id = DuplicateReceiptId,
+                OwnerUserId = original.OwnerUserId,
+                Currency = original.Currency,
+                MerchantName = original.MerchantName,
+                PurchaseDate = original.PurchaseDate,
+                Subtotal = original.Subtotal,
+                Tax = original.Tax,
+                Tip = original.Tip,
+                Total = original.Total
             };
             foreach (var item in original.Items)
-                duplicate.Items.Add(new ReceiptItem { Name = item.Name, NormalizedName = item.NormalizedName,
-                    UnitPrice = item.UnitPrice, Quantity = item.Quantity, TotalPrice = item.TotalPrice });
+            {
+                duplicate.Items.Add(new ReceiptItem
+                {
+                    Name = item.Name,
+                    NormalizedName = item.NormalizedName,
+                    UnitPrice = item.UnitPrice,
+                    Quantity = item.Quantity,
+                    TotalPrice = item.TotalPrice
+                });
+            }
+
             db.Add(duplicate);
         }
         await db.SaveChangesAsync(ct);

@@ -27,7 +27,7 @@ public sealed class SecurityHeadersTest : IAsyncLifetime
     public void Only_valid_configured_extension_ids_are_allowed_to_frame()
     {
         const string edge = "aaclkbbjgicajpnjoigfjnlmpiocngmp";
-        const string chrome = "abcdefghijklmnopabcdefghijklmnop";
+        const string chrome = "ajofnofdakhcjkgjijkdenieilgndpeb";
         var policy = SecurityHeadersExtensions.ContentSecurityPolicy("nonce", new HostString("groupsplit.test"),
             $"{edge}, {chrome}, invalid; https://evil.example");
         var frames = Directive(policy, "frame-src");

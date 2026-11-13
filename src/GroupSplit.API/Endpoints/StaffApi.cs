@@ -53,15 +53,31 @@ public static class StaffApi
             string? assignee, string? sort, string? type, SupportTicketService tickets, ICurrentUser current, CancellationToken ct) =>
         {
             Guid? assignedId = null;
-            if (assignee == "me") assignedId = current.User.Id;
+            if (assignee == "me")
+            {
+                assignedId = current.User.Id;
+            }
             else if (!string.IsNullOrEmpty(assignee) && assignee != "unassigned")
             {
-                if (!Guid.TryParse(assignee, out var parsed)) throw new ValidationException(GroupSplit.Shared.Errors.ErrorCodes.BadRequest, "Choose a valid assignee.");
+                if (!Guid.TryParse(assignee, out var parsed))
+                {
+                    throw new ValidationException(GroupSplit.Shared.Errors.ErrorCodes.BadRequest, "Choose a valid assignee.");
+                }
+
                 assignedId = parsed;
             }
-            return tickets.ListAsync(new SupportTicketQuery { Search = search, Status = status, Priority = priority, Type = type,
-                NeedsReview = needsReview == true, Page = page ?? 0, AssignedUserId = assignedId,
-                UnassignedOnly = assignee == "unassigned", Sort = sort ?? "updated" }, ct);
+            return tickets.ListAsync(new SupportTicketQuery
+            {
+                Search = search,
+                Status = status,
+                Priority = priority,
+                Type = type,
+                NeedsReview = needsReview == true,
+                Page = page ?? 0,
+                AssignedUserId = assignedId,
+                UnassignedOnly = assignee == "unassigned",
+                Sort = sort ?? "updated"
+            }, ct);
         });
         group.MapPut("/tickets/{id:guid}", (Guid id, UpdateSupportTicketRequest request, SupportTicketService tickets, ICurrentUser current, CancellationToken ct) =>
             tickets.UpdateAsync(id, request, current.User.Id, ct));

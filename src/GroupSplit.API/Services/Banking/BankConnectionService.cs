@@ -191,7 +191,10 @@ public sealed class BankConnectionService(
                     + "repaired in update mode.", connection.Id);
 
                 if (connection.Status != BankConnectionStatus.LoginRequired)
+                {
                     await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+                }
+
                 connection.Status = BankConnectionStatus.LoginRequired;
                 await dbContext.SaveChangesAsync(ct);
 
@@ -311,7 +314,11 @@ public sealed class BankConnectionService(
     {
         var ownerId = await dbContext.Set<PendingBankLink>().Where(link => link.Id == pendingLinkId)
             .Select(link => (Guid?)link.UserId).FirstOrDefaultAsync(ct);
-        if (ownerId is null) return;
+        if (ownerId is null)
+        {
+            return;
+        }
+
         await using var lease = await accountData.Acquire(ownerId.Value, allowDeleted: true, ct: ct);
         var pending = await dbContext.Set<PendingBankLink>()
             .Include(link => link.User)
@@ -466,9 +473,11 @@ public sealed class BankConnectionService(
         if (item is null)
         {
             if (pending.ItemCiphertext is not null)
+            {
                 backgroundJobs.AwaitOperator("provider-item",
                     new ProviderItemReconciliation(pending.Provider, $"pending-link:{pending.Id}", pending.Id),
                     "Held item unreadable; reconcile provider inventory");
+            }
             // Never got as far as an item, or the item it got can no longer be read. Either
             // way there is no token here to hand anything back with.
             logger.LogWarning(
@@ -782,10 +791,17 @@ public sealed class BankConnectionService(
     public async Task UnlinkForAccount(Guid userId, CancellationToken ct = default)
     {
         var connections = await dbContext.Set<BankConnection>().Where(row => row.UserId == userId).ToListAsync(ct);
-        foreach (var connection in connections) await UnlinkConnection(connection, ct);
+        foreach (var connection in connections)
+        {
+            await UnlinkConnection(connection, ct);
+        }
+
         var pending = await dbContext.Set<PendingBankLink>().Where(row => row.UserId == userId)
             .Select(row => row.Id).ToListAsync(ct);
-        foreach (var id in pending) await AbandonPending(id, ct);
+        foreach (var id in pending)
+        {
+            await AbandonPending(id, ct);
+        }
     }
 
     private async Task UnlinkConnection(BankConnection connection, CancellationToken ct)
@@ -908,14 +924,17 @@ public sealed class BankConnectionService(
                 () => connector.AccountsAsync(token, ct));
         }
         catch (BadGatewayException e) when (e.InnerException is BankSyncException
-                                            { Kind: BankSyncFailure.LoginRequired })
+        { Kind: BankSyncFailure.LoginRequired })
         {
             // Not the provider having a bad minute, which is what a bad gateway says and
             // what the person would then be told: this item needs them, and the app already
             // has a way of saying so. Marking it is also what puts "Sign in again" on the
             // card, so refusing without marking would leave them nothing to press.
             if (connection.Status != BankConnectionStatus.LoginRequired)
+            {
                 await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+            }
+
             connection.Status = BankConnectionStatus.LoginRequired;
             await dbContext.SaveChangesAsync(ct);
 
@@ -972,7 +991,10 @@ public sealed class BankConnectionService(
             // front of update mode, and the flag is what does that.
             case NewAccountsAvailable:
                 if (!connection.AccountsNotShared)
+                {
                     await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+                }
+
                 connection.AccountsNotShared = true;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -988,7 +1010,10 @@ public sealed class BankConnectionService(
                     expiring.Reason);
 
                 if (!connection.SignInExpiring)
+                {
                     await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+                }
+
                 connection.SignInExpiring = true;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -999,7 +1024,10 @@ public sealed class BankConnectionService(
 
             case LoginRequired:
                 if (connection.Status != BankConnectionStatus.LoginRequired)
+                {
                     await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+                }
+
                 connection.Status = BankConnectionStatus.LoginRequired;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1019,7 +1047,10 @@ public sealed class BankConnectionService(
 
             case PermissionRevoked:
                 if (connection.Status != BankConnectionStatus.Revoked)
+                {
                     await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+                }
+
                 connection.Status = BankConnectionStatus.Revoked;
                 await dbContext.SaveChangesAsync(ct);
                 break;
@@ -1059,13 +1090,19 @@ public sealed class BankConnectionService(
                 connection.Id);
 
             if (!connection.AccountsNotShared)
+            {
                 await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+            }
+
             connection.AccountsNotShared = true;
         }
         else
         {
             if (!account.AccessRevoked)
+            {
                 await notifications.ForBankIssue(connection.UserId, connection.Id, ct);
+            }
+
             account.AccessRevoked = true;
         }
 
@@ -1395,7 +1432,9 @@ public sealed class BankConnectionService(
         //
         // Only where the match was on the provider's account id, though. See the parameter.
         if (!retireUnreported)
+        {
             return;
+        }
 
         foreach (var stored in before.Where(candidate => !claimed.Contains(candidate)))
         {

@@ -92,8 +92,16 @@ public sealed class AndroidUpdateNoticeTest : ComponentTest
         {
             Calls++;
             Request = request;
-            if (Failure == "offline") throw new HttpRequestException();
-            if (Failure == "timeout") throw new TaskCanceledException();
+            if (Failure == "offline")
+            {
+                throw new HttpRequestException();
+            }
+
+            if (Failure == "timeout")
+            {
+                throw new TaskCanceledException();
+            }
+
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = Failure == "json" ? new StringContent("invalid") : JsonContent.Create(

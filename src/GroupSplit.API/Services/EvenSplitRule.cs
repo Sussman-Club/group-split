@@ -29,7 +29,9 @@ public sealed class EvenSplitRule(AppDbContext context) : IEvenSplitRule
         var existing = await For(group.Id, ct);
 
         if (existing is not null)
+        {
             return existing;
+        }
 
         var rule = new SplitRule
         {
@@ -58,13 +60,17 @@ public sealed class EvenSplitRule(AppDbContext context) : IEvenSplitRule
             .ToListAsync(ct);
 
         if (!taken.Contains(Name, StringComparer.OrdinalIgnoreCase))
+        {
             return Name;
+        }
 
         for (var suffix = 2; ; suffix++)
         {
             var candidate = $"{Name} ({suffix})";
             if (!taken.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
                 return candidate;
+            }
         }
     }
 }

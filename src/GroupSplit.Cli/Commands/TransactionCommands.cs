@@ -24,7 +24,10 @@ public static class TransactionCommands
     /// what the schema published.
     /// </remarks>
     private static Option<Guid?> GroupOption(string description) =>
-        new("--group") { Description = description };
+        new("--group")
+        {
+            Description = description
+        };
 
     /// <summary>
     /// On the two commands that read a group's ledger: every expense in it, whoever paid,
@@ -745,41 +748,71 @@ public static class TransactionCommands
     {
         var patch = new JsonPatchDocument<UpdateTransactionRequest>();
 
-        if (current.Name != edited.Name) patch.Replace(request => request.Name, edited.Name);
-        if (current.Amount != edited.Amount) patch.Replace(request => request.Amount, edited.Amount);
-        if (current.DateTime != edited.DateTime) patch.Replace(request => request.DateTime, edited.DateTime);
+        if (current.Name != edited.Name)
+        {
+            patch.Replace(request => request.Name, edited.Name);
+        }
+
+        if (current.Amount != edited.Amount)
+        {
+            patch.Replace(request => request.Amount, edited.Amount);
+        }
+
+        if (current.DateTime != edited.DateTime)
+        {
+            patch.Replace(request => request.DateTime, edited.DateTime);
+        }
 
         if (current.Description != edited.Description)
+        {
             patch.Replace(request => request.Description, edited.Description);
+        }
 
-        if (current.GroupId != edited.GroupId) patch.Replace(request => request.GroupId, edited.GroupId);
+        if (current.GroupId != edited.GroupId)
+        {
+            patch.Replace(request => request.GroupId, edited.GroupId);
+        }
 
         if (current.CategoryId != edited.CategoryId)
+        {
             patch.Replace(request => request.CategoryId, edited.CategoryId);
+        }
 
         if (current.MerchantId != edited.MerchantId)
+        {
             patch.Replace(request => request.MerchantId, edited.MerchantId);
+        }
 
         if (current.PaidByUserId != edited.PaidByUserId)
+        {
             patch.Replace(request => request.PaidByUserId, edited.PaidByUserId);
+        }
 
         if (current.CoversThrough != edited.CoversThrough)
+        {
             patch.Replace(request => request.CoversThrough, edited.CoversThrough);
+        }
 
         // Sent only when somebody named one. Like the shares below it is read as an
         // instruction rather than compared against a stored value, because there is no
         // stored value: an expense records the division it was written under, not the rule
         // somebody picked to get it.
         if (edited.SplitRuleId is not null)
+        {
             patch.Replace(request => request.SplitRuleId, edited.SplitRuleId);
+        }
 
         // Three answers, not two. Shares stated means those amounts; --redivide means an
         // explicit null, which is the only way to ask the endpoint to work them out again;
         // and saying nothing means the expense keeps the shares it has.
         if (edited.Splits is not null)
+        {
             patch.Replace(request => request.Splits, edited.Splits);
+        }
         else if (redivide)
+        {
             patch.Replace(request => request.Splits, null);
+        }
 
         return patch;
     }
@@ -932,11 +965,15 @@ public static class TransactionCommands
             CliContext context, Guid? groupId, bool empty, CancellationToken ct)
         {
             if (groupId is not { } id)
+            {
                 return new Scope(YoursHeading, YoursEmpty);
+            }
 
             // Nothing to disambiguate: rows came back, so the caller is plainly a member.
             if (!empty)
+            {
                 return new Scope("[grey]This group's whole ledger, whoever paid.[/]", string.Empty);
+            }
 
             var name = Markup.Escape(await NameOrRefuseAsync(context, id, ct));
 
@@ -1297,7 +1334,12 @@ public static class TransactionCommands
             await context.Transactions.DeleteTransactionAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", transactionId = id, name = transaction?.Name },
+                new
+                {
+                    status = "deleted",
+                    transactionId = id,
+                    name = transaction?.Name
+                },
                 value => new Markup(
                     $"[green]Deleted[/] {Markup.Escape(value.name ?? value.transactionId.ToString())}.\n"));
 

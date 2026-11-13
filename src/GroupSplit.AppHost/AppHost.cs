@@ -137,7 +137,7 @@ var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web"
     .WithBrowserLogs();
 
 // Each browser store (and an unpacked development build) may use a different ID.
-var receiptImporterIds = builder.AddOptionalParameter("receipt-importer-extension-ids", "aaclkbbjgicajpnjoigfjnlmpiocngmp");
+var receiptImporterIds = builder.AddOptionalParameter("receipt-importer-extension-ids", "aaclkbbjgicajpnjoigfjnlmpiocngmp,ajofnofdakhcjkgjijkdenieilgndpeb");
 web.WithEnvironment("ReceiptImporter__ExtensionIds", receiptImporterIds);
 
 if (builder.ExecutionContext.IsRunMode)

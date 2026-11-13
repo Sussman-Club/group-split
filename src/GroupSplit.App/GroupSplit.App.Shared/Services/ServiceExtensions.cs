@@ -74,7 +74,7 @@ public static class ServiceExtensions
             // badge, so one service rather than three that would each fetch the plan.
             services.TryAdd<SettleTracker>(sessionLifetime);
             services.TryAddScoped<ISettleStateService, SettleStateService>();
-            
+
             services.TryAdd<UserTracker>(sessionLifetime);
             services.TryAdd<IUserLogin, UserLogin>(sessionLifetime);
 
@@ -95,7 +95,7 @@ public static class ServiceExtensions
             services.AddApiClient<IBankConnectionsClient, BankConnectionsClient>();
             services.AddApiClient<IInboxClient, InboxClient>()
                 .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromMinutes(3));
-            
+
             return services;
         }
 
@@ -110,13 +110,13 @@ public static class ServiceExtensions
         {
             return services.TryAdd<TService, TService>(lifetime);
         }
-        
+
         private IHttpClientBuilder AddApiClient<TClient, TImplementation>()
             where TClient : class
             where TImplementation : class, TClient
         {
             var builder = services.AddHttpClient<TClient, TImplementation>();
-            
+
             services.AddTransient<IConfigureOptions<HttpClientFactoryOptions>>(sp =>
             {
                 var optionsSetter = sp.GetService<IClientOptionsSetter>();
@@ -125,13 +125,13 @@ public static class ServiceExtensions
                 {
                     throw new Exception("No client options setter registered.");
                 }
-                
+
                 return new ConfigureNamedOptions<HttpClientFactoryOptions>(builder.Name, o =>
                 {
                     optionsSetter.ConfigureClient(o);
                 });
             });
-            
+
             return builder;
         }
     }

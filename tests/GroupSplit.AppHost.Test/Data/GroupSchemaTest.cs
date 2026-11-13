@@ -54,7 +54,9 @@ public class GroupSchemaTest(AppHostFixture appHost) : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
+        {
             await _services.DisposeAsync();
+        }
     }
 
     private async Task<Guid> Someone()

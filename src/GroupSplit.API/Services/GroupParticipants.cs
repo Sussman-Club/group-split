@@ -268,13 +268,19 @@ public sealed class GroupParticipants(
             .FirstOrDefaultAsync(ct);
 
         if (membership is { LeftAt: null })
+        {
             return ParticipantStanding.Member;
+        }
 
         if (await IsGuest(groupId, userId, ct))
+        {
             return ParticipantStanding.Guest;
+        }
 
         if (membership is not null)
+        {
             return ParticipantStanding.Departed;
+        }
 
         // A claimed guest's stand-in is nobody: the person is a member under their own
         // account, and an old rule version still naming the stand-in is not a departure.
@@ -283,10 +289,14 @@ public sealed class GroupParticipants(
         if (await context.Set<GroupMembershipEvent>().AnyAsync(change =>
                 change.GroupId == groupId && change.UserId == userId &&
                 change.Kind == MembershipEventKind.GuestClaimed, ct))
+        {
             return ParticipantStanding.Stranger;
+        }
 
         if (await HasTraceIn(groupId, userId, ct))
+        {
             return ParticipantStanding.Departed;
+        }
 
         return ParticipantStanding.Stranger;
     }
@@ -342,7 +352,9 @@ public sealed class GroupParticipants(
         CancellationToken ct = default)
     {
         if (fromUserId == toUserId)
+        {
             return ParticipantHandover.Nothing;
+        }
 
         // First, and found before anything moves: a repayment between the two of them is the
         // one row the hand-over cannot simply repoint, because it would end up naming the

@@ -274,9 +274,13 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await Sync(connection);
 
         if (status == BankTransactionStatus.Filed)
+        {
             await FileAsync((await Rows(connection)).Single());
+        }
         else
+        {
             await SetStatus(connection, "t1", status);
+        }
 
         _bank.Answer("cursor-2", removed: [Removed("t1")]);
         await Sync(connection);
@@ -592,7 +596,9 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         // A filed row is filed from something, and moving that link is half of what a
         // supersede does.
         if (status is BankTransactionStatus.Filed)
+        {
             await FileAsync(row);
+        }
     }
 
     /// <summary>A re-link, as <c>Adopt</c> leaves the row, committed from its own scope.</summary>

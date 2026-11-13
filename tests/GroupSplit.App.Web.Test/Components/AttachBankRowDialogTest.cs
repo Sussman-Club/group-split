@@ -43,7 +43,10 @@ public class AttachBankRowDialogTest : ComponentTest
         _inbox
             .Setup(client => client.LinkBankTransactionAsync(It.IsAny<Guid>(),
                 It.IsAny<LinkBankTransactionRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Dinner with { HasBankTransaction = true });
+            .ReturnsAsync(Dinner with
+            {
+                HasBankTransaction = true
+            });
 
         Services.AddSingleton(_inbox.Object);
         Services.AddSingleton(Mock.Of<IBankConnectionsClient>());

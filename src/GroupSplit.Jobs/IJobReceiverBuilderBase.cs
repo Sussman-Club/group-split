@@ -7,7 +7,10 @@ public interface IJobReceiverBuilderBase<out TJobsBuilder, out TDispatcherBuilde
     where TReceiverBuilder : IJobReceiverBuilderBase<TJobsBuilder, TDispatcherBuilder, THandlersBuilder, TReceiverBuilder, TSchedulerBuilder>
     where TSchedulerBuilder : IJobSchedulerBuilderBase<TJobsBuilder, TDispatcherBuilder, THandlersBuilder, TReceiverBuilder, TSchedulerBuilder>
 {
-    TJobsBuilder Jobs { get; }
+    TJobsBuilder Jobs
+    {
+        get;
+    }
 
     TReceiverBuilder Use(IJobReceiver receiver);
 

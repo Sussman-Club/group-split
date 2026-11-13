@@ -24,7 +24,10 @@ public abstract class StaffPageBase : ComponentBase
         try
         {
             var result = await read();
-            if (request == _request) apply(result);
+            if (request == _request)
+            {
+                apply(result);
+            }
         }
         catch (HttpRequestException e) when (request == _request)
         {
@@ -41,6 +44,12 @@ public abstract class StaffPageBase : ComponentBase
         }
         catch (HttpRequestException) { }
         catch (TaskCanceledException) { }
-        finally { if (request == _request) Loading = false; }
+        finally
+        {
+            if (request == _request)
+            {
+                Loading = false;
+            }
+        }
     }
 }

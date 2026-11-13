@@ -84,7 +84,9 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         Assert.NotEmpty(transactions);
 
         foreach (var transaction in transactions)
+        {
             Assert.Equal(transaction.Amount, transaction.Splits.Sum(split => split.Amount));
+        }
     }
 
     // ---- Adding ------------------------------------------------------------------------
@@ -96,12 +98,20 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var guest = await AddGuest(group.Id, "Carlos");
         var token = await LinkFor(guest);
         var owner = GetService<ICurrentUser>().User;
-        DbContext.Add(new GroupSplit.Data.Entities.PushDevice { UserId = owner.Id, Token = "test-token",
-            UpdatedAt = DateTimeOffset.UtcNow, InvitationsEnabled = true });
+        DbContext.Add(new GroupSplit.Data.Entities.PushDevice
+        {
+            UserId = owner.Id,
+            Token = "test-token",
+            UpdatedAt = DateTimeOffset.UtcNow,
+            InvitationsEnabled = true
+        });
         await DbContext.SaveChangesAsync(Ct);
         var (scope, carlos) = await Signing();
         using (scope)
+        {
             await scope.ServiceProvider.GetRequiredService<IInvitationService>().Claim(token, Ct);
+        }
+
         var jobs = DbContext.Set<GroupSplit.Data.Entities.BackgroundJob>()
             .Where(j => j.Type == GroupSplit.API.Services.Push.SendPushNotification.Name).ToList();
         var stored = Assert.Single(jobs);
@@ -970,11 +980,15 @@ public class GuestTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             // Recorded both ways before anybody noticed they were the same person.
             await Settlements.RecordRepayment(group.Id, new RecordRepaymentRequest
             {
-                FromUserId = guest.UserId, ToUserId = carlos.Id, Amount = 10m
+                FromUserId = guest.UserId,
+                ToUserId = carlos.Id,
+                Amount = 10m
             }, Ct);
             await Settlements.RecordRepayment(group.Id, new RecordRepaymentRequest
             {
-                FromUserId = carlos.Id, ToUserId = guest.UserId, Amount = 4m
+                FromUserId = carlos.Id,
+                ToUserId = guest.UserId,
+                Amount = 4m
             }, Ct);
 
             var before = await Balances(group.Id);

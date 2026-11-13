@@ -48,7 +48,11 @@ public sealed class JobsRuntime : IJobDispatcher, IJobScheduler, IAsyncDisposabl
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         try
         {
@@ -57,9 +61,13 @@ public sealed class JobsRuntime : IJobDispatcher, IJobScheduler, IAsyncDisposabl
         finally
         {
             if (_host is IAsyncDisposable disposable)
+            {
                 await disposable.DisposeAsync().ConfigureAwait(false);
+            }
             else
+            {
                 _host.Dispose();
+            }
         }
     }
 }

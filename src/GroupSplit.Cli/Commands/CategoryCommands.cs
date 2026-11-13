@@ -69,7 +69,9 @@ public static class CategoryCommands
                     };
 
                     if (showArchived)
+                    {
                         cells.Add(category.IsArchive ? "yes" : "-");
+                    }
 
                     table.AddRow([.. cells]);
                 }
@@ -275,7 +277,12 @@ public static class CategoryCommands
             await client.DeleteCategoryAsync(id, ct);
 
             context.Output.Write(
-                new { status = "deleted", categoryId = id, name },
+                new
+                {
+                    status = "deleted",
+                    categoryId = id,
+                    name
+                },
                 value => new Markup($"[green]Deleted[/] {Markup.Escape(value.name)}.\n"));
 
             return ExitCodes.Success;

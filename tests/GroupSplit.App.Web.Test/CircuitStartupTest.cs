@@ -73,7 +73,9 @@ public class CircuitStartupTest
         builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 
         if (useDefaultLimit)
+        {
             builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+        }
         else
         {
             RenderModeConfig.Initialize(RenderModePreference.ServerFirst);
@@ -122,7 +124,9 @@ public class CircuitStartupTest
             while (protocol.TryParseMessage(ref input, new StartupBinder(), out var result))
             {
                 if (result is CompletionMessage { InvocationId: "1" } or CloseMessage)
+                {
                     return (message, result);
+                }
             }
             pending = input.ToArray();
         }

@@ -1,3 +1,4 @@
+@inject LocalClock Clock
 @inject AppLinks MerchantImageLinks
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Extensions
@@ -156,7 +157,7 @@
                     <MudDatePicker ShowToolbar="false" Date="@(UseSelectionSheets ? _sheetDate : Date)" DateChanged="@OnSheetDateChangedAsync" Label="@Loc["Date"]"
                                    Variant="Variant.Outlined"/>
                     <MudTimePicker Time="@(UseSelectionSheets ? _sheetTime : Time)" TimeChanged="@OnSheetTimeChangedAsync" Label="@Loc["Time"]"
-                                   Variant="Variant.Outlined" AmPm="@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('t')"/>
+                                   Variant="Variant.Outlined" AmPm="@Clock.UseAmPm"/>
                 </MudStack>
                 break;
 

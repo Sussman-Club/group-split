@@ -18,11 +18,21 @@ public sealed class BackgroundJobProcessor(
         await using var scope = scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IBackgroundJobStore>();
         var row = await store.Claim(ct);
-        if (row is null) return false;
-        if (row.Status != BackgroundJobStatus.Running) return true;
+        if (row is null)
+        {
+            return false;
+        }
+
+        if (row.Status != BackgroundJobStatus.Running)
+        {
+            return true;
+        }
 
         IJob job;
-        try { job = registry.Deserialize(row.Type, row.Version, row.Payload); }
+        try
+        {
+            job = registry.Deserialize(row.Type, row.Version, row.Payload);
+        }
         catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException
                                      or NotSupportedException)
         {

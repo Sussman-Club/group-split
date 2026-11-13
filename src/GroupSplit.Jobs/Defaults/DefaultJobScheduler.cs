@@ -24,7 +24,11 @@ internal sealed class DefaultJobScheduler(
             JobSchedule.CronSchedule calendar => ParseCron(calendar),
             _ => throw new ArgumentException("Unsupported schedule.", nameof(schedule))
         };
-        if (next is null) throw new ArgumentException("Schedule has no future occurrence.", nameof(schedule));
+        if (next is null)
+        {
+            throw new ArgumentException("Schedule has no future occurrence.", nameof(schedule));
+        }
+
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_stopped, this);
@@ -40,24 +44,37 @@ internal sealed class DefaultJobScheduler(
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
+        {
             return ValueTask.FromResult<IReadOnlyList<IScheduledJob>>(_jobs.Cast<IScheduledJob>().ToArray());
+        }
     }
 
     internal void Cancel(DefaultScheduledJob job)
     {
-        lock (_gate) _jobs.Remove(job);
+        lock (_gate)
+        {
+            _jobs.Remove(job);
+        }
     }
 
     internal async Task ProcessDueAsync(CancellationToken cancellationToken)
     {
         DefaultScheduledJob[] due;
-        lock (_gate) due = _jobs.Where(job => !job.Dispatching && job.Next <= clock.GetUtcNow()).ToArray();
+        lock (_gate)
+        {
+            due = _jobs.Where(job => !job.Dispatching && job.Next <= clock.GetUtcNow()).ToArray();
+        }
+
         foreach (var job in due)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                if (!_jobs.Contains(job) || job.Dispatching || job.Next > clock.GetUtcNow()) continue;
+                if (!_jobs.Contains(job) || job.Dispatching || job.Next > clock.GetUtcNow())
+                {
+                    continue;
+                }
+
                 job.Dispatching = true;
             }
             var succeeded = false;
@@ -79,8 +96,14 @@ internal sealed class DefaultJobScheduler(
                     if (_jobs.Contains(job))
                     {
                         var next = Next(job, succeeded);
-                        if (next is null) _jobs.Remove(job);
-                        else job.Next = next.Value;
+                        if (next is null)
+                        {
+                            _jobs.Remove(job);
+                        }
+                        else
+                        {
+                            job.Next = next.Value;
+                        }
                     }
                 }
             }
@@ -101,7 +124,11 @@ internal sealed class DefaultJobScheduler(
 
     private static DateTimeOffset? NextInterval(JobSchedule.EverySchedule every, DateTimeOffset now)
     {
-        if (now < every.FirstRun) return every.FirstRun;
+        if (now < every.FirstRun)
+        {
+            return every.FirstRun;
+        }
+
         var elapsed = now.UtcTicks - every.FirstRun.UtcTicks;
         var remainder = elapsed % every.Interval.Ticks;
         var advance = every.Interval.Ticks - remainder;

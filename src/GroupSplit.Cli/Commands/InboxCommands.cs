@@ -99,7 +99,9 @@ public static class InboxCommands
                 cancellationToken: ct);
 
             if (parse.GetValue(suggest))
+            {
                 rows = await WithSuggestionsAsync(context, rows, ct);
+            }
 
             context.Output.Write(rows, value =>
             {
@@ -382,7 +384,9 @@ public static class InboxCommands
             .ToList();
 
         if (wanted.Count == 0)
+        {
             return page;
+        }
 
         var client = new Api.InboxClient(context.ApiHttpClient);
         var found = new Dictionary<Guid, FilingSuggestionResponse>();
@@ -395,7 +399,9 @@ public static class InboxCommands
             }, ct);
 
             foreach (var answer in answers)
+            {
                 found[answer.BankTransactionId] = answer;
+            }
         }
 
         return page with
@@ -625,7 +631,12 @@ public static class InboxCommands
                 rowId, new DismissBankMatchRequest { TransactionId = transactionId }, ct);
 
             context.Output.Write(
-                new { status = "dismissed", rowId, transactionId },
+                new
+                {
+                    status = "dismissed",
+                    rowId,
+                    transactionId
+                },
                 _ => new Markup(
                     "[green]Dismissed.[/] [grey]That pair will not be suggested again.[/]\n"));
 
@@ -650,7 +661,11 @@ public static class InboxCommands
             await new Api.InboxClient(context.ApiHttpClient).IgnoreBankTransactionAsync(id, ct);
 
             context.Output.Write(
-                new { status = "ignored", rowId = id },
+                new
+                {
+                    status = "ignored",
+                    rowId = id
+                },
                 _ => new Markup("[green]Ignored.[/] [grey]Undo with: groupsplit inbox restore[/]\n"));
 
             return ExitCodes.Success;
@@ -670,7 +685,11 @@ public static class InboxCommands
             await new Api.InboxClient(context.ApiHttpClient).RestoreBankTransactionAsync(id, ct);
 
             context.Output.Write(
-                new { status = "restored", rowId = id },
+                new
+                {
+                    status = "restored",
+                    rowId = id
+                },
                 _ => new Markup("[green]Restored.[/]\n"));
 
             return ExitCodes.Success;

@@ -37,7 +37,11 @@ public class HomeStartTest : ComponentTest
     public void Existing_group_or_activity_stays_on_home(bool hasSharedGroup, bool hasActivity)
     {
         var groups = new List<GroupResponse> { new(_user.Id, "Personal", 1) { IsPersonal = true } };
-        if (hasSharedGroup) groups.Add(new GroupResponse(Guid.NewGuid(), "Trip", 2, IsArchive: true));
+        if (hasSharedGroup)
+        {
+            groups.Add(new GroupResponse(Guid.NewGuid(), "Trip", 2, IsArchive: true));
+        }
+
         Groups(groups);
         Activity(hasActivity ? 1 : 0);
         var page = Render<Home>(p => p.AddCascadingValue(_user));

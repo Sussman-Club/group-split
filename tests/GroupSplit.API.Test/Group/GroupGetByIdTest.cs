@@ -18,9 +18,7 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var groupService = GetService<IGroupService>();
         var userService = GetService<ICurrentUser>();
 
-        // Ensure user exists (creates personal group implicitly)
 
-        // Create an additional group for the current user
         var created = await groupService.CreateGroup(new CreateGroupRequest { Name = "My Extra Group" },
             TestContext.Current.CancellationToken);
 
@@ -40,7 +38,6 @@ public class GroupGetByIdTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var groupService = GetService<IGroupService>();
         var userService = GetService<ICurrentUser>();
 
-        // Ensure user exists
 
         // Act
         var result = await groupService.GetGroupById(Guid.NewGuid(), TestContext.Current.CancellationToken);

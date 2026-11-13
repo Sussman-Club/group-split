@@ -88,7 +88,9 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
         _scope?.Dispose();
 
         if (_services is not null)
+        {
             await _services.DisposeAsync();
+        }
     }
 
     private async Task<Guid> AGroupOfTheirs()

@@ -53,7 +53,10 @@ public sealed class LanguageResourcesTest
             var builtIn = new GroupSplit.Shared.SplitRuleResponse(Guid.NewGuid(), Guid.NewGuid(),
                 "Everyone evenly", BuiltIn: true, DividesEvenly: true);
             Assert.Equal("Todos por igual", builtIn.DisplayName(null));
-            Assert.Equal("Everyone evenly", (builtIn with { BuiltIn = false }).DisplayName(null));
+            Assert.Equal("Everyone evenly", (builtIn with
+            {
+                BuiltIn = false
+            }).DisplayName(null));
         }
         finally { CultureInfo.CurrentUICulture = previous; }
     }
@@ -101,7 +104,9 @@ public sealed class LanguageResourcesTest
             Assert.Equal(english.Keys.Order(), translated.Keys.Order());
             Assert.All(translated.Values, value => Assert.False(string.IsNullOrWhiteSpace(value)));
             foreach (var (key, value) in translated)
+            {
                 Assert.Equal(Placeholders(english[key]), Placeholders(value));
+            }
         }
         Dictionary<string, string> Read(CultureInfo culture) => manager.GetResourceSet(culture, true, false)!
             .Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => (string)e.Value!);

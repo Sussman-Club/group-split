@@ -21,7 +21,9 @@ public class SeededReceiptTest
             Assert.Equal(expense.Amount, bill.Items.Sum(i => i.Price) + bill.Tax + bill.Tip);
             Assert.Equal(bill.Tax, bill.Items.Sum(i => i.TaxAmount));
             if (categories.Single(c => c.Id == expense.CategoryId).SplitRule is ItemizedSplitRuleDto)
+            {
                 Assert.All(bill.Items, i => { Assert.NotNull(i.SplitRule); Assert.False(string.IsNullOrWhiteSpace(i.RuleName)); Assert.IsNotType<ItemizedSplitRuleDto>(i.SplitRule); });
+            }
         }
     }
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>

@@ -30,7 +30,11 @@ public static class PagedItemsProvider
             var available = page.Items.Skip(skip).Take(Math.Max(0, request.Count - items.Count));
             items.AddRange(available);
             skip = 0;
-            if (page.Items.Count == 0 || (long)pageNumber * pageSize >= total) break;
+            if (page.Items.Count == 0 || (long)pageNumber * pageSize >= total)
+            {
+                break;
+            }
+
             pageNumber++;
         } while (items.Count < request.Count);
 

@@ -15,7 +15,10 @@ public static class ReceiptFileTypes
             _ => null
         };
         if (expected is null)
+        {
             return null;
+        }
+
         var supplied = contentType?.Split(';', 2)[0].Trim();
         // Some document pickers provide no MIME type, or only a generic binary type.
         // Infer from the supported extension in that case; explicit conflicts stay invalid.

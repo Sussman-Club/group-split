@@ -83,7 +83,9 @@ public class DuplicateLinkTest : IAsyncLifetime
         while (DateTimeOffset.UtcNow < deadline)
         {
             if (await settled())
+            {
                 return;
+            }
 
             await Task.Delay(25, Ct);
         }

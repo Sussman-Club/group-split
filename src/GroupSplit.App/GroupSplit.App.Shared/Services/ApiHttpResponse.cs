@@ -17,9 +17,16 @@ internal static class ApiHttpResponse
 {
     public static async Task EnsureApiSuccessAsync(this HttpResponseMessage response)
     {
-        if (response.IsSuccessStatusCode) return;
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
         ProblemDetails? problem = null;
-        try { problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(); }
+        try
+        {
+            problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        }
         catch (JsonException) { }
         catch (NotSupportedException) { }
         throw new ApiProblemException(problem, response.StatusCode);

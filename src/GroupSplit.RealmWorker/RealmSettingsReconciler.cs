@@ -311,7 +311,10 @@ public sealed class RealmSettingsReconciler(
             changed.AddRange(Apply(config, desiredConfig, desiredConfig.Select(entry => entry.Key).ToList())
                 .Select(key => $"config.{key}"));
 
-            if (changed.Count == 0) continue;
+            if (changed.Count == 0)
+            {
+                continue;
+            }
 
             await keycloak.UpdateProtocolMapperAsync(clientId, existing, ct);
             logger.LogInformation(
@@ -519,7 +522,10 @@ public sealed class RealmSettingsReconciler(
 
         foreach (var (execution, step) in added.Zip(wanted))
         {
-            if (execution["requirement"]?.GetValue<string>() == step.Requirement) continue;
+            if (execution["requirement"]?.GetValue<string>() == step.Requirement)
+            {
+                continue;
+            }
 
             execution["requirement"] = step.Requirement;
             await keycloak.UpdateExecutionAsync(alias, execution, ct);
@@ -560,7 +566,10 @@ public sealed class RealmSettingsReconciler(
         {
             var value = desired[name];
 
-            if (Same(current[name], value, multiValued)) continue;
+            if (Same(current[name], value, multiValued))
+            {
+                continue;
+            }
 
             current[name] = value?.DeepClone();
             changed.Add(name);

@@ -22,9 +22,11 @@ internal static class PersonalGroupGuard
     public static void RefuseIfPersonal(Guid groupId, Guid callerId)
     {
         if (groupId == callerId)
+        {
             throw new ConflictException(ErrorCodes.PersonalGroupNotShared,
                 "This is your personal group. It is yours alone, so it has no members, guests, "
                 + "split rules or settlements, and it cannot be left or archived.");
+        }
     }
 
     extension(Group group)

@@ -95,7 +95,9 @@ public class GroupGuestSeeder(
         var id = dto.ParticipantUserId ?? dto.Id;
 
         if (await db.Set<User>().AnyAsync(user => user.Id == id, ct))
+        {
             return id;
+        }
 
         // A name and nothing else: no address, and no identity, so nobody can sign in as
         // it. What every listing shows for them is that name.

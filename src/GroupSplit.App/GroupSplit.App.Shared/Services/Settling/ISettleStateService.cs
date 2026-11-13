@@ -14,10 +14,16 @@ namespace GroupSplit.App.Shared.Services.Settling;
 public interface ISettleStateService
 {
     /// <summary>Who to pay, who owes you, and the three figures over the top of both.</summary>
-    SettlementPlanResponse? Plan { get; }
+    SettlementPlanResponse? Plan
+    {
+        get;
+    }
 
     /// <summary>Every repayment you were party to, newest first, one page at a time.</summary>
-    PagedResponse<SettlementResponse>? History { get; }
+    PagedResponse<SettlementResponse>? History
+    {
+        get;
+    }
 
     /// <summary>
     /// How many people are outstanding, in either direction. What the nav badge reads.
@@ -27,10 +33,16 @@ public interface ISettleStateService
     /// four debts across two groups can be two payments, and a badge saying four would be
     /// counting the bookkeeping rather than the work.
     /// </remarks>
-    int OutstandingCount { get; }
+    int OutstandingCount
+    {
+        get;
+    }
 
     /// <summary>Whether a read is in flight, for the page to dim itself with.</summary>
-    bool IsLoading { get; }
+    bool IsLoading
+    {
+        get;
+    }
 
     event Action? OnChanged;
 

@@ -107,7 +107,9 @@ public class AllForOneInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var names = new List<string>();
 
         foreach (var invitation in invited)
+        {
             names.Add((await BuiltInFor(group.Id, invitation.ParticipantUserId))!.Name);
+        }
 
         Assert.Equal(["All for Dani", "All for Dani (2)"], names.Order());
     }
@@ -139,7 +141,9 @@ public class AllForOneInviteeTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var (scope, luz) = await AnotherPerson();
 
         using (scope)
+        {
             await scope.ServiceProvider.GetRequiredService<IInvitationService>().Claim(invitation.Token, Ct);
+        }
 
         var hers = (await RulesOf(group.Id)).Where(rule => rule.BuiltIn && rule.AllFor == luz.Id).ToList();
 

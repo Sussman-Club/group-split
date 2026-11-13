@@ -84,7 +84,10 @@ public class RateLimitEndpointTest : IAsyncLifetime
         using var accept = await Client.PostAsync("/invitations/links/not-a-token/accept", null, Ct);
         using var claim = await Client.PostAsync("/invitations/claims/not-a-token", null, Ct);
         using var guests = await Client.PostAsJsonAsync(
-            $"/groups/{group}/guests", new { names = new[] { "Ana" } }, Json, Ct);
+            $"/groups/{group}/guests", new
+            {
+                names = new[] { "Ana" }
+            }, Json, Ct);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, accept.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, claim.StatusCode);
@@ -143,8 +146,12 @@ public class RateLimitEndpointTest : IAsyncLifetime
     [InlineData("/bank-connections/7b0f9c3e-0000-4000-8000-000000000001/sync")]
     public async Task Every_bank_provider_route_is_limited(string path)
     {
-        using var first = await Client.PostAsJsonAsync(path, new { }, Json, Ct);
-        using var second = await Client.PostAsJsonAsync(path, new { }, Json, Ct);
+        using var first = await Client.PostAsJsonAsync(path, new
+        {
+        }, Json, Ct);
+        using var second = await Client.PostAsJsonAsync(path, new
+        {
+        }, Json, Ct);
 
         Assert.NotEqual(HttpStatusCode.TooManyRequests, first.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);

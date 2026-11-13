@@ -1,5 +1,6 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Services;
 using GroupSplit.App.Shared.Services.Banking;
 using GroupSplit.App.Shared.Services.Settling;
 using GroupSplit.Shared;
@@ -30,6 +31,7 @@ public class WaitingOnYouTest : ComponentTest
     private readonly Mock<ISettleStateService> _settling = new();
     private readonly Mock<IInboxStateService> _inbox = new();
     private readonly Mock<IInvitationsClient> _invitations = new();
+    private readonly Mock<IReceiptsClient> _receipts = new();
 
     public WaitingOnYouTest()
     {
@@ -39,11 +41,14 @@ public class WaitingOnYouTest : ComponentTest
         _settling.SetupGet(s => s.Plan).Returns((SettlementPlanResponse?)null);
 
         _inbox.Setup(i => i.WantDuplicateCountAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _inbox.Setup(i => i.EnsureLoadedAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _inbox.SetupGet(i => i.NewCount).Returns(0);
 
         Services.AddSingleton(_settling.Object);
         Services.AddSingleton(_inbox.Object);
         Services.AddSingleton(_invitations.Object);
+        _receipts.Setup(r => r.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<ReceiptInboxResponse>());
+        Services.AddSingleton(_receipts.Object);
     }
 
     private void Opened(params GroupInvitationResponse[] invitations) =>
@@ -56,6 +61,35 @@ public class WaitingOnYouTest : ComponentTest
             DateTimeOffset.UtcNow.AddDays(30));
 
     private IRenderedComponent<WaitingOnYou> Render() => base.Render<WaitingOnYou>();
+
+    [Fact]
+    public async Task Waiting_receipts_are_loaded_and_refresh_after_changes()
+    {
+        Opened();
+        _receipts.SetupSequence(r => r.ListReceiptInboxAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest(), [])])
+            .ReturnsAsync(Array.Empty<ReceiptInboxResponse>());
+        var strip = Render();
+        strip.WaitForAssertion(() => Assert.Contains("1 receipt waiting", strip.Markup));
+        await strip.InvokeAsync(() => Changes.NotifyReceiptsChangedAsync());
+        strip.WaitForAssertion(() => Assert.DoesNotContain("Waiting on you", strip.Markup));
+    }
+
+    [Fact]
+    public void Bank_and_receipt_review_open_their_inboxes_and_count_as_separate_items()
+    {
+        Opened();
+        _inbox.SetupGet(i => i.NewCount).Returns(3);
+        var strip = Render();
+        strip.InvokeAsync(() => Services.GetRequiredService<InboxOverview>().SetReceiptCount(2)).GetAwaiter().GetResult();
+        Assert.Contains("3 bank transactions waiting", strip.Markup);
+        Assert.Contains("2 receipts waiting", strip.Markup);
+        Assert.Contains("2", strip.Find(".gs-card-title .gs-tag").TextContent);
+        Assert.NotNull(strip.Find("a[href='/inbox/bank']"));
+        Assert.NotNull(strip.Find("a[href='/inbox/receipts']"));
+        strip.InvokeAsync(() => Services.GetRequiredService<InboxOverview>().SetReceiptCount(0)).GetAwaiter().GetResult();
+        Assert.DoesNotContain("receipts waiting", strip.Markup);
+    }
 
     [Fact]
     public void An_invitation_somebody_has_opened_is_waiting_on_them()

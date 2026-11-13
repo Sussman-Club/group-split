@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GroupSplit receipt importer (preview)",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Import Amazon order summaries and Costco warehouse receipts into your GroupSplit inbox.",
   "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "permissions": ["activeTab", "scripting", "debugger"],

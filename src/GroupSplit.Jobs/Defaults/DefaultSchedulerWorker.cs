@@ -6,7 +6,11 @@ internal sealed class DefaultSchedulerWorker(IJobScheduler selectedScheduler, Ti
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (selectedScheduler is not DefaultJobScheduler scheduler) return;
+        if (selectedScheduler is not DefaultJobScheduler scheduler)
+        {
+            return;
+        }
+
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100), clock);
         try
         {

@@ -40,9 +40,17 @@ public sealed partial class StaffClient(HttpClient http) : IStaffClient
     public async Task SaveMerchantImageAsync(Guid? id, string name, byte[] png, Guid? expectedVersion)
     {
         using var form = new MultipartFormDataContent();
-        if (id is not null) form.Add(new StringContent(id.Value.ToString()), "merchantId");
+        if (id is not null)
+        {
+            form.Add(new StringContent(id.Value.ToString()), "merchantId");
+        }
+
         form.Add(new StringContent(name), "name");
-        if (expectedVersion is not null) form.Add(new StringContent(expectedVersion.Value.ToString()), "expectedVersion");
+        if (expectedVersion is not null)
+        {
+            form.Add(new StringContent(expectedVersion.Value.ToString()), "expectedVersion");
+        }
+
         var file = new ByteArrayContent(png);
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
         form.Add(file, "file", "merchant-logo.png");

@@ -13,7 +13,11 @@ internal sealed class NativeTokenStore(ISecureStorage storage, IPreferences pref
     {
         try
         {
-            if (preferences.Get(DisabledKey, false)) return null;
+            if (preferences.Get(DisabledKey, false))
+            {
+                return null;
+            }
+
             return await storage.GetAsync(Key);
         }
         catch (Exception)
@@ -47,12 +51,23 @@ internal sealed class NativeTokenStore(ISecureStorage storage, IPreferences pref
         // This non-secret marker survives a restart even if SecureStorage cannot delete
         // its ciphertext. Never rely on clearing only the in-memory token session.
         var disabled = false;
-        try { preferences.Set(DisabledKey, true); disabled = true; }
+        try
+        {
+            preferences.Set(DisabledKey, true);
+            disabled = true;
+        }
         catch (Exception) { logger.LogWarning("Saved native credentials could not be marked disabled."); }
-        try { storage.Remove(Key); }
+        try
+        {
+            storage.Remove(Key);
+        }
         catch (Exception)
         {
-            if (!disabled) throw new NativeCredentialCleanupException();
+            if (!disabled)
+            {
+                throw new NativeCredentialCleanupException();
+            }
+
             logger.LogWarning("Secure storage could not remove the saved native session.");
         }
     }

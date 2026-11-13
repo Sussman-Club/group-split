@@ -26,8 +26,14 @@ public sealed class JwtClaimsTests
     [Fact]
     public void Falls_back_to_email_then_name_when_there_is_no_preferred_username()
     {
-        Assert.Equal("a@example.com", JwtClaims.Read(Token(new { email = "a@example.com" })).Username);
-        Assert.Equal("Anabel", JwtClaims.Read(Token(new { name = "Anabel" })).Username);
+        Assert.Equal("a@example.com", JwtClaims.Read(Token(new
+        {
+            email = "a@example.com"
+        })).Username);
+        Assert.Equal("Anabel", JwtClaims.Read(Token(new
+        {
+            name = "Anabel"
+        })).Username);
     }
 
     [Theory]
@@ -51,7 +57,10 @@ public sealed class JwtClaimsTests
     {
         // Real Keycloak tokens are unpadded base64url; a decoder that assumes padding
         // works on some tokens and not others depending on payload length.
-        var payload = JwtClaims.Read(Token(new { preferred_username = "abc" }));
+        var payload = JwtClaims.Read(Token(new
+        {
+            preferred_username = "abc"
+        }));
 
         Assert.Equal("abc", payload.Username);
     }

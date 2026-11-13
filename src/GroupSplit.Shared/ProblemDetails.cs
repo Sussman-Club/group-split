@@ -55,7 +55,8 @@ public record ProblemDetails
 
     public string? Instance { get; init; }
 
-    [JsonExtensionData] public IDictionary<string, JsonElement>? Extensions { get; init; }
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? Extensions { get; init; }
 }
 
 public static class ProblemDetailsExtensions

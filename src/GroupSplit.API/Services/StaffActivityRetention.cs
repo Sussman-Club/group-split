@@ -19,9 +19,15 @@ public sealed class StaffActivityRetention(AppDbContext db, TimeProvider clock)
         {
             var ids = await db.Set<StaffActivity>().Where(a => a.At < cutoff)
                 .OrderBy(a => a.At).ThenBy(a => a.Id).Select(a => a.Id).Take(BatchSize).ToListAsync(ct);
-            if (ids.Count == 0) break;
+            if (ids.Count == 0)
+            {
+                break;
+            }
+
             if (db.Database.IsRelational())
+            {
                 deleted += await db.Set<StaffActivity>().Where(a => ids.Contains(a.Id) && a.At < cutoff).ExecuteDeleteAsync(ct);
+            }
             else
             {
                 var rows = await db.Set<StaffActivity>().Where(a => ids.Contains(a.Id) && a.At < cutoff).ToListAsync(ct);
@@ -29,7 +35,10 @@ public sealed class StaffActivityRetention(AppDbContext db, TimeProvider clock)
                 await db.SaveChangesAsync(ct);
                 deleted += rows.Count;
             }
-            if (ids.Count < BatchSize) break;
+            if (ids.Count < BatchSize)
+            {
+                break;
+            }
         }
         return deleted;
     }
@@ -41,6 +50,9 @@ internal sealed class SweepStaffActivityHandler(StaffActivityRetention retention
     public async ValueTask HandleAsync(SweepStaffActivity job, CancellationToken cancellationToken)
     {
         var removed = await retention.PruneAsync(cancellationToken);
-        if (removed > 0) logger.LogInformation("Removed {Count} expired staff activity entries.", removed);
+        if (removed > 0)
+        {
+            logger.LogInformation("Removed {Count} expired staff activity entries.", removed);
+        }
     }
 }

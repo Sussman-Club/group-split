@@ -2,6 +2,7 @@
 @using GroupSplit.App.Shared.Extensions
 @namespace GroupSplit.App.Shared.Components
 @inject IDialogService ChoiceDialogs
+@inject LocalClock Clock
 
 @*
     How one expense is divided, for the two dialogs that write one.
@@ -228,7 +229,7 @@
                belongs to the rule its category names, so re-picking the same category
                reaches the same version it already has. *@
             <MudAlert Severity="Severity.Info" Dense="true">
-                @Loc["The rule has changed since this was recorded. It stays divided the way it was on {0:d MMM yyyy}, and Automatically divides it again by that same version rather than by the rule as it stands now — nobody correcting an expense is re-billed under a division agreed afterwards. To set the shares yourself, choose By hand.", changed.ToLocalTime()]
+                @Loc["The rule has changed since this was recorded. It stays divided the way it was on {0:d MMM yyyy}, and Automatically divides it again by that same version rather than by the rule as it stands now — nobody correcting an expense is re-billed under a division agreed afterwards. To set the shares yourself, choose By hand.", Clock.Local(changed)]
             </MudAlert>
         }
 

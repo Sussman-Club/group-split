@@ -78,6 +78,9 @@
   <data name="Manage account" xml:space="preserve">
     <value>Gerir conta</value>
   </data>
+  <data name="Account management opens in your browser. You may need to sign in there." xml:space="preserve">
+    <value>A gestão da conta abre no navegador. Poderá ter de iniciar sessão no navegador.</value>
+  </data>
   <data name="Make Group Split feel right on this device." xml:space="preserve">
     <value>Adapte o Group Split a este dispositivo.</value>
   </data>
@@ -5804,4 +5807,128 @@
   <data name="Review receipts and bank payments in one place." xml:space="preserve"><value>Reveja recibos e pagamentos bancários num só lugar.</value></data>
   <data name="Inbox views" xml:space="preserve"><value>Vistas da caixa de entrada</value></data>
   <data name="{0} waiting in inbox" xml:space="preserve"><value>{0} por rever na caixa de entrada</value></data>
+  <data name="Ignored items can be restored later." xml:space="preserve">
+    <value>Itens ignorados podem ser restaurados depois.</value>
+  </data>
+  <data name="Suggested destination: {0} — Review" xml:space="preserve">
+    <value>Destino sugerido: {0} — Rever</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Attach" xml:space="preserve">
+    <value>Possível correspondência: {0} · {1} {2} · {3} — Anexar</value>
+  </data>
+  <data name="Possible match: {0} · {1} {2} · {3} — Review" xml:space="preserve">
+    <value>Possível correspondência: {0} · {1} {2} · {3} — Rever</value>
+  </data>
+  <data name="Added to: {0}" xml:space="preserve">
+    <value>Adicionado a: {0}</value>
+  </data>
+  <data name="Review possible matches" xml:space="preserve">
+    <value>Rever possíveis correspondências</value>
+  </data>
+  <data name="Review purchases and decide where they belong." xml:space="preserve">
+    <value>Reveja as compras e decida onde guardá-las.</value>
+  </data>
+  <data name="{0} waiting" xml:space="preserve">
+    <value>{0} pendentes</value>
+  </data>
+  <data name="Add receipts to expenses or create a new expense." xml:space="preserve">
+    <value>Adicione recibos a despesas ou crie uma nova despesa.</value>
+  </data>
+  <data name="Review receipts" xml:space="preserve">
+    <value>Rever recibos</value>
+  </data>
+  <data name="Add transactions to a group or match an expense." xml:space="preserve">
+    <value>Adicione transações a um grupo ou associe-as a uma despesa.</value>
+  </data>
+  <data name="Review transactions" xml:space="preserve">
+    <value>Rever transações</value>
+  </data>
+  <data name="Possible match" xml:space="preserve">
+    <value>Possível correspondência</value>
+  </data>
+  <data name="Review possible match: {0}" xml:space="preserve">
+    <value>Rever possível correspondência: {0}</value>
+  </data>
+  <data name="Review suggested destination: {0}" xml:space="preserve">
+    <value>Rever destino sugerido: {0}</value>
+  </data>
+  <data name="Choose an existing expense to avoid recording this payment twice." xml:space="preserve">
+    <value>Escolha uma despesa existente para não registar este pagamento duas vezes.</value>
+  </data>
+  <data name="Choose an expense to attach this receipt." xml:space="preserve">
+    <value>Escolha uma despesa para anexar este recibo.</value>
+  </data>
+  <data name="Inbox status" xml:space="preserve">
+    <value>Estado na caixa de entrada</value>
+  </data>
+  <data name="Ignore receipt" xml:space="preserve">
+    <value>Ignorar recibo</value>
+  </data>
+  <data name="Restore receipt" xml:space="preserve">
+    <value>Restaurar recibo</value>
+  </data>
+  <data name="Added to expense" xml:space="preserve">
+    <value>Adicionado à despesa</value>
+  </data>
+  <data name="No itemized details" xml:space="preserve">
+    <value>Sem detalhes dos artigos</value>
+  </data>
+  <data name="For Microsoft Edge · Opens Edge Add-ons in a new tab" xml:space="preserve">
+    <value>Para Microsoft Edge · Abre o Edge Add-ons em uma nova guia</value>
+  </data>
+  <data name="Install the extension from Microsoft Edge Add-ons." xml:space="preserve">
+    <value>Instale a extensão pelo Microsoft Edge Add-ons.</value>
+  </data>
+  <data name="Install the extension in Microsoft Edge, then return to your receipts." xml:space="preserve">
+    <value>Instale a extensão no Microsoft Edge e volte aos seus recibos.</value>
+  </data>
+  <data name="Open Edge Add-ons" xml:space="preserve">
+    <value>Abra o Edge Add-ons</value>
+  </data>
+  <data name="Open the receipt importer listing in Microsoft Edge." xml:space="preserve">
+    <value>Abra a página do importador de recibos no Microsoft Edge.</value>
+  </data>
+  <data name="Add the extension" xml:space="preserve">
+    <value>Adicione a extensão</value>
+  </data>
+  <data name="Select Get and confirm the installation in Edge." xml:space="preserve">
+    <value>Selecione Obter e confirme a instalação no Edge.</value>
+  </data>
+  <data name="Microsoft Edge updates extensions automatically. Refresh GroupSplit after an update." xml:space="preserve">
+    <value>O Microsoft Edge atualiza as extensões automaticamente. Recarregue o GroupSplit após uma atualização.</value>
+  </data>
+  <data name="Using another browser? Open this page in Microsoft Edge to install the extension. Copy the address from your browser, then paste it into Edge." xml:space="preserve">
+    <value>Está usando outro navegador? Abra esta página no Microsoft Edge para instalar a extensão. Copie o endereço do navegador e cole no Edge.</value>
+  </data>
+  <data name="Prefer to stay in this browser? You can still upload a photo or PDF from your receipts inbox." xml:space="preserve">
+    <value>Prefere continuar neste navegador? Você ainda pode enviar uma foto ou PDF pela caixa de entrada de recibos.</value>
+  </data>
+  <data name="It may need to be installed, updated, enabled, or reloaded. Follow the installation steps, then try again." xml:space="preserve">
+    <value>Talvez seja necessário instalar, atualizar, ativar ou recarregar. Siga as instruções de instalação e tente novamente.</value>
+  </data>
+  <data name="Time zone" xml:space="preserve"><value>Fuso horário</value></data>
+  <data name="Dates and times use this device's time zone unless you choose another." xml:space="preserve"><value>As datas e horas usam o fuso horário deste dispositivo, a menos que escolhas outro.</value></data>
+  <data name="Follow device" xml:space="preserve"><value>Usar o do dispositivo</value></data>
+  <data name="Time format" xml:space="preserve"><value>Formato da hora</value></data>
+  <data name="Choose how times are displayed on this device." xml:space="preserve"><value>Escolhe como as horas são apresentadas neste dispositivo.</value></data>
+  <data name="Follow language" xml:space="preserve"><value>Seguir o idioma</value></data>
+  <data name="12-hour" xml:space="preserve"><value>12 horas</value></data>
+  <data name="24-hour" xml:space="preserve"><value>24 horas</value></data>
+  <data name="Search time zones" xml:space="preserve"><value>Pesquisar fusos horários</value></data>
+  <data name="No matching time zones" xml:space="preserve"><value>Nenhum fuso horário encontrado</value></data>
+  <data name="{0} receipt waiting" xml:space="preserve"><value>{0} recibo pendente</value></data>
+  <data name="{0} receipts waiting" xml:space="preserve"><value>{0} recibos pendentes</value></data>
+  <data name="Get it for Chrome" xml:space="preserve"><value>Obter para Chrome</value></data>
+  <data name="Get it for Edge" xml:space="preserve"><value>Obter para Edge</value></data>
+  <data name="Choose the store for your browser. The listing opens in a new tab." xml:space="preserve"><value>Escolha a loja do seu navegador. A página abre em uma nova aba.</value></data>
+  <data name="Install the extension in Chrome or Microsoft Edge, then return to your receipts." xml:space="preserve"><value>Instale a extensão no Chrome ou Microsoft Edge e volte aos seus recibos.</value></data>
+  <data name="Open the extension store" xml:space="preserve"><value>Abra a loja de extensões do seu navegador</value></data>
+  <data name="Open the receipt importer listing for your browser." xml:space="preserve"><value>Abra a página do importador de recibos para seu navegador.</value></data>
+  <data name="Select Add to Chrome or Get, then confirm the installation." xml:space="preserve"><value>Selecione Usar no Chrome ou Obter e confirme a instalação.</value></data>
+  <data name="Chrome and Microsoft Edge update extensions automatically. Refresh GroupSplit after an update." xml:space="preserve"><value>Chrome e Microsoft Edge atualizam as extensões automaticamente. Atualize o GroupSplit após uma atualização.</value></data>
+  <data name="Import store receipts on a computer" xml:space="preserve"><value>Importe recibos de lojas em um computador</value></data>
+  <data name="Import from Amazon or Costco using the GroupSplit browser extension on a computer. Then open this inbox in the Android app using the same account." xml:space="preserve"><value>Importe recibos da Amazon ou Costco usando a extensão do GroupSplit em um computador. Depois, abra esta caixa de entrada no app Android com a mesma conta.</value></data>
+  <data name="On this device, add a receipt using a photo or PDF." xml:space="preserve"><value>Neste dispositivo, adicione um recibo usando uma foto ou PDF.</value></data>
+  <data name="The browser extension did not respond. Install or enable it, then refresh this page and try again." xml:space="preserve"><value>A extensão do navegador não respondeu. Instale-a ou ative-a, atualize esta página e tente novamente.</value></data>
+  <data name="If the importer opens but a store needs sign-in or an import fails, follow the message in the importer." xml:space="preserve"><value>Se o importador abrir, mas a loja exigir login ou uma importação falhar, siga as instruções do importador.</value></data>
 </root>

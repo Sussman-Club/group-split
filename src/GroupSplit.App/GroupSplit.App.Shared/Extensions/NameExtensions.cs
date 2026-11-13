@@ -57,10 +57,16 @@ public static class NameExtensions
     /// </summary>
     public static string AvatarTone(this string? name)
     {
-        if (string.IsNullOrEmpty(name)) return "";
+        if (string.IsNullOrEmpty(name))
+        {
+            return "";
+        }
 
         var hash = 0;
-        foreach (var c in name) hash = (hash * 31 + c) & 0x7fffffff;
+        foreach (var c in name)
+        {
+            hash = (hash * 31 + c) & 0x7fffffff;
+        }
 
         return (hash % 3) switch
         {

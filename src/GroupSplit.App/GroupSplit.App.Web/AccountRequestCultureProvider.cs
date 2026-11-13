@@ -11,14 +11,18 @@ public sealed class AccountRequestCultureProvider : RequestCultureProvider
     {
         if (context.User.Identity?.IsAuthenticated is not true
             || context.Request.GetTypedHeaders().Accept?.Any(h => h.MediaType.Value == "text/html") is not true)
+        {
             return null;
+        }
 
         try
         {
             var user = await context.RequestServices.GetRequiredService<IUsersClient>()
                 .GetCurrentUserAsync(context.RequestAborted);
             if (AppLanguages.IsSupported(user.PreferredLanguage))
+            {
                 return new ProviderCultureResult(user.PreferredLanguage!);
+            }
         }
         catch (Exception ex) when (ApiErrors.IsApiFailure(ex))
         {

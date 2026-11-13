@@ -10,13 +10,17 @@ internal class DefaultReceiver(DefaultJobQueue jobQueue) : IJobReceiver
         try
         {
             await foreach (var envelope in jobQueue.JobsChannel.Reader.ReadAllAsync(cancellationToken))
+            {
                 yield return envelope;
+            }
         }
         finally
         {
             jobQueue.JobsChannel.Writer.TryComplete();
             while (jobQueue.JobsChannel.Reader.TryRead(out var pending))
+            {
                 await pending.CancelAsync();
+            }
         }
     }
 }

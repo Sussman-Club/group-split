@@ -40,7 +40,11 @@ public sealed class LanguageRequestTest
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("Accept", "text/html");
         client.DefaultRequestHeaders.Add("Accept-Language", browser);
-        if (cookie is not null) client.DefaultRequestHeaders.Add("Cookie", ".AspNetCore.Culture=c=" + cookie + "|uic=" + cookie);
+        if (cookie is not null)
+        {
+            client.DefaultRequestHeaders.Add("Cookie", ".AspNetCore.Culture=c=" + cookie + "|uic=" + cookie);
+        }
+
         Assert.Equal(expected + ":" + expected, await client.GetStringAsync("/", TestContext.Current.CancellationToken));
     }
 }

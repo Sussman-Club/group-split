@@ -1,5 +1,7 @@
 using Bunit;
 using GroupSplit.App.Shared.Components;
+using GroupSplit.App.Shared.Services;
+using GroupSplit.App.Shared.Models;
 using GroupSplit.Shared;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,6 +74,20 @@ public class SettleWithPersonDialogTest : ComponentTest
     private static Task ConfirmAsync(IRenderedComponent<MudDialogProvider> provider) =>
         provider.FindAll("button").Single(button => button.TextContent.Trim() == "They paid me")
             .ClickAsync(new MouseEventArgs());
+
+    [Fact]
+    public async Task Settlement_defaults_to_the_viewers_today()
+    {
+        var (provider, dialog) = await Open();
+        var today = Services.GetRequiredService<LocalClock>().Today;
+        var picker = provider.FindComponents<MudDatePicker>().Single(field => field.Instance.Label == "When");
+
+        Assert.Equal(today, picker.Instance.Date);
+        await ConfirmAsync(provider);
+
+        var request = await dialog.GetReturnValueAsync<SettleWithPersonRequest>();
+        Assert.Equal(TransactionDay.Stored(today), request!.Date);
+    }
 
     [Fact]
     public async Task Picking_a_day_settles_that_periods_figure_and_sends_the_day_with_its_offset()

@@ -62,7 +62,9 @@ public class StaffEndpointTest : IAsyncLifetime
             { new StringContent("Shop"), "name" },
             { new ByteArrayContent([1]), "file", "logo.png" }
         }
-        : JsonContent.Create(new { });
+        : JsonContent.Create(new
+        {
+        });
 
     [Theory]
     [InlineData("{\"roles\":[\"admin\"]}")]
@@ -131,13 +133,19 @@ public class StaffEndpointTest : IAsyncLifetime
     {
         using var scope = _host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        for (var i = 0; i < 31; i++) db.Add(new Merchant { Name = $"Shop {i:00}", NormalizedName = $"shop {i:00}", FirstSeenAt = DateTimeOffset.UtcNow });
+        for (var i = 0; i < 31; i++)
+        {
+            db.Add(new Merchant { Name = $"Shop {i:00}", NormalizedName = $"shop {i:00}", FirstSeenAt = DateTimeOffset.UtcNow });
+        }
+
         await db.SaveChangesAsync(Ct);
         using var staff = Staff();
         var first = (await staff.GetFromJsonAsync<DirectoryPage<MerchantResponse>>("/staff/merchants", Ct))!;
         var last = (await staff.GetFromJsonAsync<DirectoryPage<MerchantResponse>>("/staff/merchants?page=1", Ct))!;
-        Assert.Equal(30, first.Items.Count); Assert.True(first.HasMore);
-        Assert.Single(last.Items); Assert.False(last.HasMore);
+        Assert.Equal(30, first.Items.Count);
+        Assert.True(first.HasMore);
+        Assert.Single(last.Items);
+        Assert.False(last.HasMore);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.GetAsync("/staff/tickets?status=wrong", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.GetAsync("/staff/tickets?priority=wrong", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.GetAsync("/staff/tickets?type=wrong", Ct)).StatusCode);

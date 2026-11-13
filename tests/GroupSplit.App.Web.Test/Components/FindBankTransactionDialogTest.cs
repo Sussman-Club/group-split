@@ -16,7 +16,10 @@ public class FindBankTransactionDialogTest : ComponentTest
         var inbox = new Mock<IInboxClient>();
         var first = Row("Coffee", "USD");
         var next = Row("Groceries", "USD");
-        var linked = Row("Already recorded", "USD") with { TransactionId = Guid.NewGuid() };
+        var linked = Row("Already recorded", "USD") with
+        {
+            TransactionId = Guid.NewGuid()
+        };
         inbox.Setup(x => x.SearchReceiptBankTransactionsAsync(null, 1, 20, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResponseOfBankTransactionResponse([first, linked], 1, 20, 21));
         inbox.Setup(x => x.SearchReceiptBankTransactionsAsync(null, 2, 20, It.IsAny<CancellationToken>()))

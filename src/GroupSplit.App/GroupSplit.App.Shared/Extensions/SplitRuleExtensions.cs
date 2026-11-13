@@ -143,31 +143,31 @@ public static class SplitRuleExtensions
                     ];
 
                 case SharesSplitRuleDto shares when shares.Shares.Count > 0:
-                {
-                    var total = shares.Shares.Values.Sum();
+                    {
+                        var total = shares.Shares.Values.Sum();
 
-                    return
-                    [
-                        .. Ordered(shares.Shares).Select(held => new SplitRuleWeight(
+                        return
+                        [
+                            .. Ordered(shares.Shares).Select(held => new SplitRuleWeight(
                             held.Key,
                             Named(names, held.Key),
                             held.Value == 1 ? UiText.Format($"{held.Value} share") : UiText.Format($"{held.Value} shares"),
                             // A rule whose shares are all zero divides nothing and the API
                             // refuses to save one, but a half-typed form can hold it.
                             total == 0 ? null : Math.Round(held.Value * 100m / total, 1)))
-                    ];
-                }
+                        ];
+                    }
 
                 case EvenSplitRuleDto even when even.Among.Count > 0:
-                {
-                    var each = Math.Round(100m / even.Among.Count, 1);
+                    {
+                        var each = Math.Round(100m / even.Among.Count, 1);
 
-                    return
-                    [
-                        .. even.Among.Select(id =>
+                        return
+                        [
+                            .. even.Among.Select(id =>
                             new SplitRuleWeight(id, Named(names, id), UiText.Get("1 share"), each))
-                    ];
-                }
+                        ];
+                    }
 
                 // One row, and the whole of it. A weight would be a proportion of
                 // something being shared out, and nothing here is: 100% is what it comes

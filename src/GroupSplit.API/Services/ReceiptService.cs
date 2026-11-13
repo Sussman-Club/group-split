@@ -87,9 +87,9 @@ public class ReceiptService(
 
         return receipt.ToResponse(handlers, canDivide, await splitter.DividesByItsBill(expense, ct), expense.GroupId)
             with
-            {
-                CanEdit = canEdit
-            };
+        {
+            CanEdit = canEdit
+        };
     }
 
     public async Task<Receipt> PrepareDraft(Expense expense, SaveReceiptRequest request, CancellationToken ct = default)
@@ -109,14 +109,19 @@ public class ReceiptService(
         // over one.
         var ids = request.Items.Where(i => i.Id is not null).Select(i => i.Id!.Value).ToList();
         if (ids.Count != ids.Distinct().Count() || ids.Any(id => existing?.Items.All(i => i.Id != id) != false))
+        {
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
                 "An item id is repeated or does not belong to this bill.");
+        }
         // Validate a detached draft first: a refused request never mutates the tracked bill.
         var draft = new Receipt
         {
-            ExpenseId = expense.Id, Subtotal = request.Subtotal,
-            MerchantName = Clean(request.MerchantName, 128), PurchaseDate = request.PurchaseDate,
-            Tax = request.Tax, Tip = request.Tip,
+            ExpenseId = expense.Id,
+            Subtotal = request.Subtotal,
+            MerchantName = Clean(request.MerchantName, 128),
+            PurchaseDate = request.PurchaseDate,
+            Tax = request.Tax,
+            Tip = request.Tip,
             Total = request.Total
         };
         // Worked out once, and only if some line needs it.
@@ -132,7 +137,10 @@ public class ReceiptService(
                   ?? throw new ValidationException(ErrorCodes.ReceiptInvalid,
                       "The item's split rule version was not found.")
                 : null;
-            if (version is not null) ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
+            if (version is not null)
+            {
+                ReceiptSplitCalculator.ValidateRule(version, expense.GroupId, members, handlers);
+            }
             // A line new to the bill and sent without a rule starts on the rule the expense's
             // kind of spending usually divides by. A stored line keeps what it has -- even
             // none, which somebody may have chosen by clearing it.
@@ -148,26 +156,34 @@ public class ReceiptService(
             }
             draft.Items.Add(new ReceiptItem
             {
-                Id = input.Id ?? Guid.NewGuid(), Position = position,
+                Id = input.Id ?? Guid.NewGuid(),
+                Position = position,
                 Name = input.Name?.Trim() ?? "",
                 NormalizedName = input.NormalizedName?.Trim().ToLowerInvariant()
                                  ?? input.Name?.Trim().ToLowerInvariant() ?? "",
                 Description = input.Description is null ? savedDescription :
                     string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim(),
-                UnitPrice = input.UnitPrice, Quantity = input.Quantity, TotalPrice = input.TotalPrice,
-                TaxAmount = input.TaxAmount, TaxRate = input.TaxRate, IsTaxable = input.IsTaxable,
-                SplitRuleVersionId = version?.Id, SplitRuleVersion = version
+                UnitPrice = input.UnitPrice,
+                Quantity = input.Quantity,
+                TotalPrice = input.TotalPrice,
+                TaxAmount = input.TaxAmount,
+                TaxRate = input.TaxRate,
+                IsTaxable = input.IsTaxable,
+                SplitRuleVersionId = version?.Id,
+                SplitRuleVersion = version
             });
         }
 
         ReceiptSplitCalculator.CalculateLineTaxes(draft);
         ReceiptSplitCalculator.RefuseIfFiguresDisagree(draft);
         if (draft.Total != expense.Amount)
+        {
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
                     "The bill total must equal the expense amount.")
                 .WithExtension("total", draft.Total)
                 .WithExtension("amount", expense.Amount)
                 .WithExtension("difference", expense.Amount - draft.Total);
+        }
 
         return draft;
     }
@@ -380,11 +396,14 @@ public class ReceiptService(
     private async Task<ReceiptDivisionResponse> Calculate(Expense expense, Receipt receipt, CancellationToken ct)
     {
         if (expense.Amount != receipt.Total)
+        {
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
                     "The bill total must equal the expense amount.")
                 .WithExtension("total", receipt.Total)
                 .WithExtension("amount", expense.Amount)
                 .WithExtension("difference", expense.Amount - receipt.Total);
+        }
+
         var members = await Members(expense, ct);
         var shares = ReceiptSplitCalculator.Divide(receipt, expense.Payer, expense.GroupId, members, handlers);
 
@@ -419,10 +438,15 @@ public class ReceiptService(
         var preview = await Calculate(expense, receipt, ct);
         expense.Receipt = receipt;
         if (await splitter.DividesByItsBill(expense, ct))
+        {
             await splitter.WriteSplitsAsync(expense, ct);
+        }
         else
+        {
             await splitter.WriteSplitsAsync(expense,
                 preview.Shares.Select(s => new SplitInput { UserId = s.UserId, Amount = s.Amount }).ToList(), ct);
+        }
+
         await dbContext.SaveChangesAsync(ct);
         return expense;
     }
@@ -462,10 +486,14 @@ public class ReceiptService(
     private async Task<bool> ReceiptCurrentlyDrivesLedger(Expense expense, CancellationToken ct)
     {
         if (!await splitter.DividesByItsBill(expense, ct))
+        {
             return false;
+        }
 
         if (await splitter.DivisionCameFromItsRule(expense, ct))
+        {
             return true;
+        }
 
         return expense.SplitRuleVersionId is { } held
                && await dbContext.Set<SplitRuleVersion>().OfType<ItemizedSplitRuleVersion>()
@@ -526,7 +554,9 @@ public class ReceiptService(
     {
         // A personal expense has no group to divide with, so its lines have no rules at all.
         if (expense.IsPersonal)
+        {
             return null;
+        }
 
         var groupId = expense.GroupId;
         var category = expense.CategoryId is { } categoryId
@@ -541,7 +571,9 @@ public class ReceiptService(
         {
             var version = await Versions().FirstOrDefaultAsync(v => v.SplitRuleId == ruleId && v.SupersededAt == null, ct);
             if (version is not null && LineCanUse(version, groupId, members))
+            {
                 return version;
+            }
         }
 
         return null;
@@ -617,8 +649,10 @@ public class ReceiptService(
         var expense = await VisibleExpense(expenseId, ct);
 
         if (!await StillInTheGroup(expense, ct))
+        {
             throw new ConflictException(ErrorCodes.TransactionGroupLeft,
                 "You are no longer in this expense's group, so its bill cannot be changed.");
+        }
 
         return expense;
     }

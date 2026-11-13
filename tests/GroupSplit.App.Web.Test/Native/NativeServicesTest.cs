@@ -125,7 +125,11 @@ public sealed class NativeServicesTest
         Assert.Null(client.DefaultRequestHeaders.Authorization);
 
         var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(NativeSession.IdentityClientName);
-        while (handler is DelegatingHandler { InnerHandler: not null } delegating) handler = delegating.InnerHandler;
+        while (handler is DelegatingHandler { InnerHandler: not null } delegating)
+        {
+            handler = delegating.InnerHandler;
+        }
+
         var primary = Assert.IsType<HttpClientHandler>(handler);
         Assert.False(primary.UseCookies);
         Assert.False(primary.AllowAutoRedirect);

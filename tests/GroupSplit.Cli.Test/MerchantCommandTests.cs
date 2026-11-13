@@ -212,7 +212,12 @@ public sealed class MerchantCommandTests : IDisposable
     public async Task Recording_an_expense_can_say_where_it_was_spent()
     {
         var merchant = Guid.NewGuid();
-        _api.Returns("/api/transactions", new { id = Guid.NewGuid(), name = "Weekly shop", amount = 40m },
+        _api.Returns("/api/transactions", new
+        {
+            id = Guid.NewGuid(),
+            name = "Weekly shop",
+            amount = 40m
+        },
             method: "POST");
 
         var result = await Cli.RunAsync(
@@ -229,7 +234,12 @@ public sealed class MerchantCommandTests : IDisposable
     {
         var id = Guid.NewGuid();
         var merchant = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Weekly shop", amount = 40m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Weekly shop",
+            amount = 40m
+        });
 
         var result = await Cli.RunAsync(
             "transactions", "update", id.ToString(), "--merchant-id", merchant.ToString());
@@ -254,7 +264,13 @@ public sealed class MerchantCommandTests : IDisposable
         // with no merchant on it would be asking to clear something already clear -- the
         // case below.
         _api.Returns($"/api/transactions/{id}",
-            new { id, name = "Weekly shop", amount = 40m, merchantId = Guid.NewGuid() });
+            new
+            {
+                id,
+                name = "Weekly shop",
+                amount = 40m,
+                merchantId = Guid.NewGuid()
+            });
 
         var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--no-merchant");
 
@@ -280,7 +296,12 @@ public sealed class MerchantCommandTests : IDisposable
     public async Task Forgetting_a_place_it_never_had_changes_nothing_and_says_so_kindly()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/transactions/{id}", new { id, name = "Weekly shop", amount = 40m });
+        _api.Returns($"/api/transactions/{id}", new
+        {
+            id,
+            name = "Weekly shop",
+            amount = 40m
+        });
 
         var result = await Cli.RunAsync("transactions", "update", id.ToString(), "--no-merchant");
 

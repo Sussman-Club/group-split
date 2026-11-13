@@ -114,7 +114,10 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             PaidByUserId = other
         }, Ct);
 
-        var request = Moving(theirs, toGroup: null) with { PaidByUserId = other };
+        var request = Moving(theirs, toGroup: null) with
+        {
+            PaidByUserId = other
+        };
 
         var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
             Transactions.Update(theirs.Id, request, Ct).AsTask());
@@ -313,7 +316,10 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var expense = await APersonalExpenseIn("EUR");
 
-        var edited = await Transactions.Update(expense.Id, Moving(expense, toGroup: null) with { Name = "Dinner" }, Ct);
+        var edited = await Transactions.Update(expense.Id, Moving(expense, toGroup: null) with
+        {
+            Name = "Dinner"
+        }, Ct);
 
         Assert.Equal("Dinner", ((Expense)edited).Name);
         Assert.Equal("EUR", edited.Currency);

@@ -59,7 +59,9 @@ public class InboxLoadMoreTest
                 var request = new PageRequest(page ?? 1, pageSize ?? PageRequest.DefaultPageSize).Normalized();
 
                 lock (_asked)
+                {
                     _asked.Add((request.Page, request.PageSize));
+                }
 
                 var items = _rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
 
@@ -111,7 +113,9 @@ public class InboxLoadMoreTest
         await _state.LoadRowsAsync(Ct);
 
         while (_state.HasMore)
+        {
             await _state.LoadMoreAsync(Ct);
+        }
 
         Assert.Equal(_rows.Select(row => row.Id), _state.Rows.Select(row => row.Id));
         Assert.Equal(11, _state.Pages);

@@ -206,12 +206,16 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
         // Revoked before it lapsed. One closed at its own expiry -- see RevokeStanding -- is
         // an expired link, and says so below.
         if (link.RevokedAt is { } revokedAt && revokedAt < link.ExpiresAt)
+        {
             throw new ConflictException(ErrorCodes.GroupJoinLinkRevoked,
                 "That join link has been withdrawn by the group.");
+        }
 
         if (link.ExpiresAt <= clock.GetUtcNow())
+        {
             throw new ConflictException(ErrorCodes.GroupJoinLinkExpired,
                 "That join link has expired.");
+        }
 
         return link;
     }
@@ -242,7 +246,9 @@ public sealed class JoinLinkService(ICurrentUser userContext, AppDbContext conte
             .ToListAsync(ct);
 
         foreach (var link in standing)
+        {
             link.RevokedAt = link.ExpiresAt < now ? link.ExpiresAt : now;
+        }
     }
 
     /// <summary>

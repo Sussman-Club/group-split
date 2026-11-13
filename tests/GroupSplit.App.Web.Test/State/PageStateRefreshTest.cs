@@ -176,7 +176,10 @@ public class PageStateRefreshTest
                 var index = _transactions.FindIndex(t => t.Id == id);
                 var edited = new UpdateTransactionRequest { Amount = _transactions[index].Amount };
                 patch.ApplyTo(edited);
-                _transactions[index] = _transactions[index] with { Amount = edited.Amount };
+                _transactions[index] = _transactions[index] with
+                {
+                    Amount = edited.Amount
+                };
                 var current = _transactions[index];
                 return new TransactionDetailsResponse
                 {
@@ -261,11 +264,21 @@ public class PageStateRefreshTest
                 var index = _groups.FindIndex(g => g.Id == id);
                 var edited = new CreateGroupRequest { Name = _groups[index].Name };
                 patch.ApplyTo(edited);
-                _groups[index] = _groups[index] with { Name = edited.Name };
+                _groups[index] = _groups[index] with
+                {
+                    Name = edited.Name
+                };
 
                 for (var i = 0; i < _transactions.Count; i++)
+                {
                     if (_transactions[i].GroupId == id)
-                        _transactions[i] = _transactions[i] with { GroupName = edited.Name };
+                    {
+                        _transactions[i] = _transactions[i] with
+                        {
+                            GroupName = edited.Name
+                        };
+                    }
+                }
 
                 return _groups[index];
             });
@@ -294,7 +307,10 @@ public class PageStateRefreshTest
     private GroupResponse SetArchived(Guid id, bool archived)
     {
         var index = _groups.FindIndex(g => g.Id == id);
-        _groups[index] = _groups[index] with { IsArchive = archived };
+        _groups[index] = _groups[index] with
+        {
+            IsArchive = archived
+        };
         return _groups[index];
     }
 
@@ -352,7 +368,9 @@ public class PageStateRefreshTest
 
         var done = await _groupsPage.CreateTransactionAsync(new CreateTransactionRequest
         {
-            GroupId = Trip, Name = "Museum", Amount = 30m
+            GroupId = Trip,
+            Name = "Museum",
+            Amount = 30m
         });
 
         Assert.True(done);
@@ -384,7 +402,10 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
         var index = _transactions.FindIndex(t => t.Name == "Dinner");
-        _transactions[index] = _transactions[index] with { Amount = 200m };
+        _transactions[index] = _transactions[index] with
+        {
+            Amount = 200m
+        };
 
         await _changes.NotifyTransactionsChangedAsync();
 
@@ -525,7 +546,10 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Search = "din" });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Search = "din"
+        });
 
         Assert.Equal("Dinner", Assert.Single(_expensesPage.Page!.Items).Name);
         Assert.Equal(1, _expensesPage.MatchesSummary!.Count);
@@ -552,7 +576,10 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 1 });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            PageSize = 1
+        });
 
         Assert.Single(_expensesPage.Page!.Items);
         Assert.Equal(3, _expensesPage.Summary!.Count);
@@ -563,11 +590,16 @@ public class PageStateRefreshTest
     public async Task A_write_re_reads_the_page_in_hand_and_the_figures_with_it()
     {
         await ReadyAsync();
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { PageSize = 2 });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            PageSize = 2
+        });
 
         var done = await _expensesPage.CreateAsync(new CreateTransactionRequest
         {
-            GroupId = Trip, Name = "Museum", Amount = 30m
+            GroupId = Trip,
+            Name = "Museum",
+            Amount = 30m
         });
 
         Assert.True(done);
@@ -611,7 +643,9 @@ public class PageStateRefreshTest
         await ReadyAsync();
 
         for (var i = 0; i < 10; i++)
+        {
             _transactions.Add(Expense(Trip, "Weekend in Lisbon", $"Extra {i}", 5m));
+        }
 
         await _changes.NotifyTransactionsChangedAsync();
 
@@ -639,7 +673,10 @@ public class PageStateRefreshTest
 
         var range = new DateFilter(DateFilterPreset.ThisMonth);
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = range });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = range
+        });
 
         // Resolved against the same clock the state was built with: no JS behind it, so the
         // runtime's own offset and day, which is what the state used too.
@@ -716,7 +753,10 @@ public class PageStateRefreshTest
     {
         await ReadyAsync();
 
-        await _expensesPage.LoadAsync(TransactionQuery.Default with { Range = DateFilter.AllTime });
+        await _expensesPage.LoadAsync(TransactionQuery.Default with
+        {
+            Range = DateFilter.AllTime
+        });
 
         Assert.Null(_expensesPage.MatchesSummary);
     }

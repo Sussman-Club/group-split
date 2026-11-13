@@ -46,7 +46,11 @@ public sealed class BankingCommandTests : IDisposable
     [Fact]
     public async Task Bank_list_says_bank_sync_is_off_rather_than_showing_an_empty_list()
     {
-        _api.Returns("/api/bank-connections", new { enabled = false, connections = Array.Empty<object>() });
+        _api.Returns("/api/bank-connections", new
+        {
+            enabled = false,
+            connections = Array.Empty<object>()
+        });
 
         var result = await Cli.RunAsync("bank", "list", "--output", "text");
 
@@ -75,7 +79,8 @@ public sealed class BankingCommandTests : IDisposable
         var id = Guid.NewGuid();
         _api.Returns("/api/bank-connections/link-token", new
         {
-            token = "link-sandbox-1", expiresAt = DateTimeOffset.UtcNow.AddMinutes(30)
+            token = "link-sandbox-1",
+            expiresAt = DateTimeOffset.UtcNow.AddMinutes(30)
         });
 
         var result = await Cli.RunAsync("bank", "link-token", "--connection", id.ToString());
@@ -106,7 +111,9 @@ public sealed class BankingCommandTests : IDisposable
     public async Task Bank_sync_reports_the_queue_rather_than_claiming_it_is_done()
     {
         var id = Guid.NewGuid();
-        _api.Returns($"/api/bank-connections/{id}/sync", new { }, status: 202);
+        _api.Returns($"/api/bank-connections/{id}/sync", new
+        {
+        }, status: 202);
 
         var result = await Cli.RunAsync("bank", "sync", id.ToString());
 
@@ -245,7 +252,10 @@ public sealed class BankingCommandTests : IDisposable
     [Fact]
     public async Task Inbox_summary_counts_what_is_waiting()
     {
-        _api.Returns("/api/inbox/summary", new { newCount = 7 });
+        _api.Returns("/api/inbox/summary", new
+        {
+            newCount = 7
+        });
 
         var result = await Cli.RunAsync("inbox", "summary", "--output", "text");
 
@@ -574,7 +584,10 @@ public sealed class BankingCommandTests : IDisposable
 
         _api.Problem($"/api/inbox/{id}/file", 409, "POSSIBLE_DUPLICATE_EXPENSE",
             "This looks like an expense you have already recorded.",
-            new { Matches = new[] { Match("Dinner", 40m, transactionId) } });
+            new
+            {
+                Matches = new[] { Match("Dinner", 40m, transactionId) }
+            });
 
         var result = await Cli.RunAsync("inbox", "file", id.ToString());
 
@@ -716,7 +729,8 @@ public sealed class BankingCommandTests : IDisposable
 
     private static object Connections(params object[] connections) => new
     {
-        enabled = true, connections
+        enabled = true,
+        connections
     };
 
     private static object Connection(string institution, Guid? id = null, string status = "Active") => new
@@ -749,19 +763,19 @@ public sealed class BankingCommandTests : IDisposable
     /// </summary>
     private static object Match(string name, decimal amount, Guid? transactionId = null,
         string confidence = "Possible", decimal apart = 6.00m, int daysApart = 2) => new
-    {
-        transactionId = transactionId ?? Guid.NewGuid(),
-        name,
-        amount,
-        currency = "GBP",
-        dateTime = DateTimeOffset.UtcNow.AddDays(-2),
-        groupId = Guid.NewGuid(),
-        groupName = "The flat",
-        paidByUserName = "Anabel",
-        amountDifference = apart,
-        daysApart,
-        confidence
-    };
+        {
+            transactionId = transactionId ?? Guid.NewGuid(),
+            name,
+            amount,
+            currency = "GBP",
+            dateTime = DateTimeOffset.UtcNow.AddDays(-2),
+            groupId = Guid.NewGuid(),
+            groupName = "The flat",
+            paidByUserName = "Anabel",
+            amountDifference = apart,
+            daysApart,
+            confidence
+        };
 
     private static object Row(
         string merchant,
@@ -771,27 +785,27 @@ public sealed class BankingCommandTests : IDisposable
         string status = "New",
         object[]? matches = null,
         Guid? id = null) => new
-    {
-        id = id ?? Guid.NewGuid(),
-        date = date ?? new DateOnly(2026, 3, 9),
-        amount,
-        currency = "GBP",
-        description = "CARD PAYMENT",
-        merchantName = merchant,
-        providerCategory = "FOOD_AND_DRINK",
-        providerCategoryDetailed = (string?)null,
-        authorizedDate = authorized,
-        paymentChannel = "in store",
-        city = (string?)null,
-        logoUrl = (string?)null,
-        pending = false,
-        status,
-        transactionId = (Guid?)null,
-        removedAt = (DateTimeOffset?)null,
-        accountName = "Current account",
-        institutionName = "Monzo",
-        possibleDuplicates = matches ?? []
-    };
+        {
+            id = id ?? Guid.NewGuid(),
+            date = date ?? new DateOnly(2026, 3, 9),
+            amount,
+            currency = "GBP",
+            description = "CARD PAYMENT",
+            merchantName = merchant,
+            providerCategory = "FOOD_AND_DRINK",
+            providerCategoryDetailed = (string?)null,
+            authorizedDate = authorized,
+            paymentChannel = "in store",
+            city = (string?)null,
+            logoUrl = (string?)null,
+            pending = false,
+            status,
+            transactionId = (Guid?)null,
+            removedAt = (DateTimeOffset?)null,
+            accountName = "Current account",
+            institutionName = "Monzo",
+            possibleDuplicates = matches ?? []
+        };
 
     private static object Suggestion(Guid rowId, Guid groupId, Guid categoryId, bool personal = false) => new
     {
@@ -806,15 +820,24 @@ public sealed class BankingCommandTests : IDisposable
 
     private static object Page(params object[] items) => new
     {
-        items, page = 1, pageSize = 20, totalCount = items.Length
+        items,
+        page = 1,
+        pageSize = 20,
+        totalCount = items.Length
     };
 
     private static object Transaction(string name, decimal amount, Guid? groupId) => new
     {
-        id = Guid.NewGuid(), name, description = (string?)null, amount,
-        dateTime = DateTimeOffset.UtcNow, groupId,
+        id = Guid.NewGuid(),
+        name,
+        description = (string?)null,
+        amount,
+        dateTime = DateTimeOffset.UtcNow,
+        groupId,
         groupName = groupId is null ? null : "The flat",
-        paidByUserId = Guid.NewGuid(), paidByUserName = "Anabel",
-        categoryId = (Guid?)null, category = (string?)null
+        paidByUserId = Guid.NewGuid(),
+        paidByUserName = "Anabel",
+        categoryId = (Guid?)null,
+        category = (string?)null
     };
 }

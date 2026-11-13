@@ -36,10 +36,14 @@ public static class ErrorMessages
     public static string RateLimited(int? retryAfterSeconds)
     {
         if (retryAfterSeconds is not ({ } seconds and > 0))
+        {
             return For(ErrorCodes.RateLimited);
+        }
 
         if (seconds < 60)
+        {
             return UiText.Format($"You have done that a lot in a short time. Please try again in {seconds} seconds.");
+        }
 
         var minutes = (seconds + 59) / 60;
 

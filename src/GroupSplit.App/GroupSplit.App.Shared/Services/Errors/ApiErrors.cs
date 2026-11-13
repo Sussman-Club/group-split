@@ -53,8 +53,10 @@ public static class ApiErrors
         var traceId = problem?.TraceId;
 
         if (status == 401)
+        {
             return new ApiError(ApiErrorKind.Unauthenticated, ErrorMessages.SessionExpired,
                 code ?? ErrorCodes.Unauthenticated, status, traceId, problem);
+        }
 
         if (status >= 500)
         {
@@ -86,8 +88,10 @@ public static class ApiErrors
         }
 
         if (code is not null)
+        {
             return new ApiError(ApiErrorKind.Refused, RefusalMessage(code, status, problem),
                 code, status, traceId, problem);
+        }
 
         return new ApiError(ApiErrorKind.Unknown, ErrorMessages.ForStatus(status),
             null, status, traceId, problem);
@@ -112,7 +116,10 @@ public static class ApiErrors
     /// <summary>Problem details out of a raw body, or null when the body is not that.</summary>
     private static ProblemDetails? Parse(string? body)
     {
-        if (string.IsNullOrWhiteSpace(body)) return null;
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
 
         try
         {

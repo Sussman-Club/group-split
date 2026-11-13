@@ -145,7 +145,13 @@ public sealed class JoinLinkCommandTests : IDisposable
     public async Task Turning_a_link_off_asks_first()
     {
         _api.Returns($"/api/groups/{Trip}",
-            new { id = Trip, name = "Weekend in Lisbon", memberCount = 3, isArchive = false });
+            new
+            {
+                id = Trip,
+                name = "Weekend in Lisbon",
+                memberCount = 3,
+                isArchive = false
+            });
 
         var result = await Cli.RunAsync("groups", "link", "revoke", Trip.ToString());
 
@@ -185,7 +191,13 @@ public sealed class JoinLinkCommandTests : IDisposable
     public async Task Following_a_link_to_a_group_you_are_in_succeeds()
     {
         _api.Returns($"/api/invitations/links/{Token}/accept",
-            new { groupId = Trip, groupName = "Weekend in Lisbon", memberCount = 3, alreadyAMember = true });
+            new
+            {
+                groupId = Trip,
+                groupName = "Weekend in Lisbon",
+                memberCount = 3,
+                alreadyAMember = true
+            });
 
         var result = await Cli.RunAsync("invitations", "join", Token);
 

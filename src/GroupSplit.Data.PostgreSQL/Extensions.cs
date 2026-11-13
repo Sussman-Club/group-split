@@ -17,7 +17,7 @@ public static class Extensions
         {
             appBuilder.AddNpgsqlDbContext<PostgreSqlAppDbContext>(connectionName, configureSettings,
                 configureDbContextOptions);
-            
+
             appBuilder.Services.TryAddScoped<AppDbContext, PostgreSqlAppDbContext>();
 
             return appBuilder;

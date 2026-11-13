@@ -151,7 +151,10 @@ public class JobProcessingTests
     {
         var host = Host.CreateApplicationBuilder();
         if (logs is not null)
+        {
             host.Logging.AddProvider(logs);
+        }
+
         host.Services.AddScoped<ScopeIdentity>();
         var jobs = host.Services.AddJobs();
         Assert.Same(jobs, host.Services.AddJobs());
@@ -175,7 +178,10 @@ public class JobProcessingTests
     }
 
     public sealed record VoidJob(List<Guid> Ids) : IJob;
-    public sealed class ScopeIdentity { public Guid Id { get; } = Guid.NewGuid(); }
+    public sealed class ScopeIdentity
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+    }
     public sealed class VoidHandler(ScopeIdentity identity) : IJobHandler<VoidJob>
     {
         public ValueTask HandleAsync(VoidJob job, CancellationToken cancellationToken)
@@ -212,7 +218,10 @@ public class JobProcessingTests
             while (DateTime.UtcNow < deadline)
             {
                 if (_entries.FirstOrDefault(match) is { } entry)
+                {
                     return entry;
+                }
+
                 await Task.Delay(10, TestContext.Current.CancellationToken);
             }
 

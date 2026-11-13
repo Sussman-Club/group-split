@@ -11,7 +11,8 @@ internal static class ExportJson
 {
     internal static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = true, TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+        WriteIndented = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
         Converters = { new DecimalStringConverter(), new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 

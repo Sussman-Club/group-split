@@ -17,6 +17,8 @@ public static class ExpensePushQueue
                     && u.Groups.Any(g => g.Id == groupId)))
             .Select(d => new { d.Id, d.UserId }).ToListAsync(ct);
         foreach (var device in devices)
+        {
             jobs.Enqueue(new SendExpensePush(device.Id, device.UserId, groupId, Guid.NewGuid(), now.AddHours(1)));
+        }
     }
 }

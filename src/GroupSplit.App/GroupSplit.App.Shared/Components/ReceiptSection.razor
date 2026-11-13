@@ -88,17 +88,8 @@
                 @if (_previewingAttachmentId == attachment.Id)
                 {
                     <div id="@($"receipt-preview-{attachment.Id}")" class="gs-receipt-preview">
-                        @if (IsPdf(attachment))
-                        {
-                            <PdfReceiptPreview @key="attachment.Id" Url="@InlineUrl(attachment)"
-                                               DownloadUrl="@DownloadUrl(attachment)" FileName="@attachment.FileName" />
-                        }
-                        else
-                        {
-                            <img src="@InlineUrl(attachment)"
-                                 alt="Preview of @attachment.FileName"
-                                 loading="lazy" />
-                        }
+                        <ReceiptPreview @key="attachment.Id" Url="@InlineUrl(attachment)"
+                                        DownloadUrl="@DownloadUrl(attachment)" ContentType="@attachment.ContentType" FileName="@attachment.FileName" />
                     </div>
                 }
             }

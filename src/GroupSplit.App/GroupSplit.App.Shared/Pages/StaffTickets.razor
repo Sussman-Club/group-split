@@ -2,6 +2,7 @@
 @layout StaffLayout
 @using GroupSplit.Shared
 @using GroupSplit.App.Shared.Components
+@inject LocalClock Clock
 @inherits StaffPageBase
 
 <PageTitle>@Loc["Tickets - Staff - Group Split"]</PageTitle>
@@ -59,7 +60,7 @@
                             <td><span class="staff-priority @ticket.Priority.ToLowerInvariant()"><span aria-hidden="true"></span>@Label(ticket.Priority)</span></td>
                             <td><span class="staff-status @ticket.Status.ToLowerInvariant()">@Label(ticket.Status)</span></td>
                             <td class="staff-secondary">@(ticket.AssignedUserId is null ? Loc["Unassigned"] : ticket.AssignedUserName ?? Loc["Unavailable staff member"].Value)</td>
-                            <td class="staff-date">@ticket.UpdatedAt.ToLocalTime().ToString("g")</td>
+                            <td class="staff-date">@Clock.DisplayInstant(ticket.UpdatedAt)</td>
                         </tr>
                     }
                     </tbody>

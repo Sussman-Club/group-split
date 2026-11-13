@@ -1,0 +1,77 @@
+@inject LocalClock Clock
+@inject IJSRuntime JS
+
+<div class="gs-card gs-card-pad gs-settings-appearance">
+    <div><h3>@Loc["Time zone"]</h3><p class="gs-muted">@Loc["Dates and times use this device's time zone unless you choose another."]</p></div>
+    <div class="gs-time-zone-controls">
+        <MudAutocomplete T="string" Value="@_selected" ValueChanged="ChooseAsync"
+                         SearchFunc="SearchZonesAsync" ToStringFunc="@(zone => zone?.Replace('_', ' ') ?? string.Empty)"
+                         aria-label="@Loc["Time zone"]" Placeholder="@Loc["Follow device"]"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                         ResetValueOnEmptyText="true" CoerceText="true" MaxItems="50" DebounceInterval="100">
+            <NoItemsTemplate><MudText Typo="Typo.caption" Class="pa-2">@Loc["No matching time zones"]</MudText></NoItemsTemplate>
+        </MudAutocomplete>
+    </div>
+</div>
+<div class="gs-card gs-card-pad gs-settings-appearance">
+    <div><h3>@Loc["Time format"]</h3><p class="gs-muted">@Loc["Choose how times are displayed on this device."]</p></div>
+    <div class="gs-seg" role="radiogroup" aria-label="@Loc["Time format"]" style="--gs-seg-i: @Array.IndexOf(Formats, _format)">
+        <span class="gs-seg-thumb" aria-hidden="true"></span>
+        @foreach (var format in Formats)
+        {
+            <button type="button" class="gs-seg-btn @(format == _format ? "active" : "")" title="@FormatLabel(format)" aria-label="@FormatLabel(format)"
+                    role="radio" aria-checked="@(format == _format ? "true" : "false")"
+                    @onclick="@(() => ChooseFormatAsync(format))">@if (format == "system") { <MudIcon Icon="@Icons.Material.Rounded.Devices" /> } else { <span>@format</span> }</button>
+        }
+    </div>
+</div>
+
+@code {
+    private string? _selected;
+    private static readonly string[] Formats = ["system", "12", "24"];
+    private string _format = "system";
+    private string[] _zones = [];
+    private Task<IEnumerable<string>> SearchZonesAsync(string? text, CancellationToken cancellationToken)
+    {
+        var search = text?.Trim().Replace('_', ' ') ?? "";
+        return Task.FromResult(_zones.Where(zone => zone.Replace('_', ' ').Contains(search, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _zones = await JS.InvokeAsync<string[]>("gs.timeZones") ?? [];
+            var storedFormat = await JS.InvokeAsync<string?>("gs.timeFormat");
+            _format = Formats.Contains(storedFormat) ? storedFormat! : "system";
+            try { _selected = await JS.InvokeAsync<string?>("localStorage.getItem", "groupsplit.timeZone"); }
+            catch (JSException) { /* Storage can be disabled; the device zone still works. */ }
+            if (!string.IsNullOrEmpty(_selected) && !_zones.Contains(_selected)) _zones = [.. _zones, _selected];
+            StateHasChanged();
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private async Task ChooseAsync(string? zone)
+    {
+        _selected = zone;
+        try { Clock.ApplyZone(await JS.InvokeAsync<string?>("gs.setTimeZone", _selected ?? "")); }
+        catch (Exception e) when (e is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private string FormatLabel(string format) => format switch
+    {
+        "12" => Loc["12-hour"].Value,
+        "24" => Loc["24-hour"].Value,
+        _ => Loc["Follow language"].Value
+    };
+
+    private async Task ChooseFormatAsync(string format)
+    {
+        _format = format;
+        Clock.ApplyTimeFormat(_format);
+        try { await JS.InvokeVoidAsync("gs.setTimeFormat", _format); }
+        catch (Exception e) when (e is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+}

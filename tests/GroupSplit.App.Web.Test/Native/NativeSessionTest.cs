@@ -259,7 +259,11 @@ public sealed class NativeSessionTest
     {
         public string? Value { get; set; }
         public Task<string?> ReadAsync() => Task.FromResult(Value);
-        public Task WriteAsync(string value) { Value = value; return Task.CompletedTask; }
+        public Task WriteAsync(string value)
+        {
+            Value = value;
+            return Task.CompletedTask;
+        }
         public void Clear() => Value = null;
     }
     private sealed class Browser : INativeBrowser
@@ -270,9 +274,16 @@ public sealed class NativeSessionTest
         public Task<IReadOnlyDictionary<string, string>> AuthenticateAsync(Uri url, Uri callback, CancellationToken ct)
         {
             Url = url;
-            if (Cancel) throw new OperationCanceledException();
+            if (Cancel)
+            {
+                throw new OperationCanceledException();
+            }
+
             return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>
-            { ["state"] = WrongState ? "wrong" : Fields(url.Query.TrimStart('?'))["state"], ["code"] = "returned-code" });
+            {
+                ["state"] = WrongState ? "wrong" : Fields(url.Query.TrimStart('?'))["state"],
+                ["code"] = "returned-code"
+            });
         }
     }
     private sealed class Transport : HttpMessageHandler
@@ -286,9 +297,16 @@ public sealed class NativeSessionTest
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Bodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
-            if (NetworkFailure) throw new HttpRequestException("Device is offline");
+            if (NetworkFailure)
+            {
+                throw new HttpRequestException("Device is offline");
+            }
+
             Authorization = request.Headers.Authorization?.ToString();
-            return new(Status) { Content = new StringContent(Body, Encoding.UTF8, "application/json") };
+            return new(Status)
+            {
+                Content = new StringContent(Body, Encoding.UTF8, "application/json")
+            };
         }
     }
 }

@@ -31,6 +31,8 @@
 .gs-settings-appearance { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .gs-settings-appearance h3 { font-size: 1rem; margin: 0; }
 .gs-settings-appearance p { margin: 6px 0 0; font-size: .875rem; }
+.gs-settings-appearance select { max-width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--gs-line); border-radius: 12px; background: var(--gs-surface); color: var(--gs-ink); font: inherit; }
+.gs-time-zone-controls { display: grid; gap: 8px; width: min(100%, 280px); }
 .gs-settings-data-details { margin: 16px 0; font-size: .875rem; }
 .gs-settings-data-details summary { width: fit-content; padding: 8px 0; color: var(--gs-ink-2); font-weight: 600; cursor: pointer; }
 .gs-settings-data-details summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; border-radius: 2px; }

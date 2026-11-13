@@ -48,7 +48,9 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
     public async Task<Merchant?> ResolveAsync(string? name, string? logoUrl, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             return null;
+        }
 
         var display = Clip(name.Trim(), 128);
         var normalized = display.ToLowerInvariant();
@@ -59,7 +61,9 @@ public sealed class MerchantDirectory(AppDbContext dbContext, TimeProvider clock
         logoUrl = MerchantLogos.Usable(Clip(logoUrl, 512));
 
         if (_seen.TryGetValue(normalized, out var cached))
+        {
             return Freshen(cached, logoUrl);
+        }
 
         var stored = await dbContext.Set<MerchantAlias>().Where(a => a.NormalizedName == normalized)
             .Select(a => a.Merchant).FirstOrDefaultAsync(ct)

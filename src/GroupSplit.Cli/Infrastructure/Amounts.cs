@@ -20,15 +20,27 @@ public static class Amounts
 {
     /// <summary>A required amount argument, such as the total of <c>transactions create</c>.</summary>
     public static Argument<decimal> Argument(string name, string description) =>
-        new(name) { Description = description, CustomParser = result => Read(result) ?? 0m };
+        new(name)
+        {
+            Description = description,
+            CustomParser = result => Read(result) ?? 0m
+        };
 
     /// <summary>An amount option whose absence means "not given".</summary>
     public static Option<decimal?> Option(string name, string description) =>
-        new(name) { Description = description, CustomParser = Read };
+        new(name)
+        {
+            Description = description,
+            CustomParser = Read
+        };
 
     /// <summary>An amount option whose absence means zero, such as a bill's tip.</summary>
     public static Option<decimal> OptionOrZero(string name, string description) =>
-        new(name) { Description = description, CustomParser = result => Read(result) ?? 0m };
+        new(name)
+        {
+            Description = description,
+            CustomParser = result => Read(result) ?? 0m
+        };
 
     /// <summary>
     /// Reads one amount typed somewhere other than its own argument -- inside an
@@ -50,10 +62,14 @@ public static class Amounts
     {
         // Arity has already refused a missing value; this only ever sees the one token.
         if (result.Tokens is not [var token])
+        {
             return null;
+        }
 
         if (TryRead(token.Value, DecimalText.MoneyPlaces, out var value, out var problem))
+        {
             return value;
+        }
 
         var name = result.Parent is OptionResult option ? option.Option.Name : result.Argument.Name;
 

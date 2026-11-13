@@ -420,7 +420,9 @@ public class AppHostFixture : IAsyncLifetime
                 foreach (var line in batch)
                 {
                     if (tail.Count == lineBudget)
+                    {
                         tail.Dequeue();
+                    }
 
                     tail.Enqueue($"    {line.Content}");
                 }

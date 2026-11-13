@@ -55,11 +55,18 @@ public class RealmBindingsAndCliClientTest(AppHostFixture appHost)
         var copy = $"browser copy {Guid.NewGuid():N}";
 
         await Admin.SendAsync(HttpMethod.Post, $"admin/realms/{Realm}/authentication/flows/browser/copy",
-            new { newName = copy }, Ct);
+            new
+            {
+                newName = copy
+            }, Ct);
 
         try
         {
-            await Admin.SendAsync(HttpMethod.Put, $"admin/realms/{Realm}", new { realm = Realm, browserFlow = copy }, Ct);
+            await Admin.SendAsync(HttpMethod.Put, $"admin/realms/{Realm}", new
+            {
+                realm = Realm,
+                browserFlow = copy
+            }, Ct);
             Assert.Equal(copy, (await Admin.GetAsync($"admin/realms/{Realm}", Ct)).GetProperty("browserFlow").GetString());
 
             await appHost.RunRealmWorkerAsync();
@@ -69,7 +76,11 @@ public class RealmBindingsAndCliClientTest(AppHostFixture appHost)
         }
         finally
         {
-            await Admin.SendAsync(HttpMethod.Put, $"admin/realms/{Realm}", new { realm = Realm, browserFlow = "browser" },
+            await Admin.SendAsync(HttpMethod.Put, $"admin/realms/{Realm}", new
+            {
+                realm = Realm,
+                browserFlow = "browser"
+            },
                 CancellationToken.None);
 
             var flows = await Admin.GetAsync($"admin/realms/{Realm}/authentication/flows", CancellationToken.None);

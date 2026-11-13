@@ -27,8 +27,15 @@ public sealed class BackgroundJobStore(AppDbContext db, TimeProvider time) : IBa
                     || (job.Status == BackgroundJobStatus.Running && job.LeaseExpiresAt <= now))
                 .OrderBy(job => job.AvailableAt).ThenBy(job => job.CreatedAt).ThenBy(job => job.Id)
                 .FirstOrDefaultAsync(ct);
-            if (candidate is null) return null;
-            if (await TryClaim(candidate, now, ct)) return candidate;
+            if (candidate is null)
+            {
+                return null;
+            }
+
+            if (await TryClaim(candidate, now, ct))
+            {
+                return candidate;
+            }
         }
         return null;
     }
@@ -56,7 +63,10 @@ public sealed class BackgroundJobStore(AppDbContext db, TimeProvider time) : IBa
                 .SetProperty(job => job.LeaseExpiresAt, expires)
                 .SetProperty(job => job.FinishedAt, finished)
                 .SetProperty(job => job.Reason, reason), ct);
-        if (affected == 0) return false;
+        if (affected == 0)
+        {
+            return false;
+        }
 
         candidate.Status = status;
         candidate.Attempts = attempts;
@@ -71,7 +81,10 @@ public sealed class BackgroundJobStore(AppDbContext db, TimeProvider time) : IBa
     {
         var now = time.GetUtcNow();
         if (status == BackgroundJobStatus.Pending && job.Attempts >= MaxAttempts)
+        {
             status = BackgroundJobStatus.Failed;
+        }
+
         var terminal = status is BackgroundJobStatus.Completed or BackgroundJobStatus.Failed;
         var next = now + TimeSpan.FromSeconds(Math.Min(3600, 5 * Math.Pow(2, job.Attempts - 1)));
         // Fencing prevents a late handler from acknowledging another worker's lease.

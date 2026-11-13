@@ -18,8 +18,17 @@ public class InboxBundleTest
     public void Each_charge_keeps_its_own_destination_even_at_the_same_merchant()
     {
         var first = Charge();
-        var second = Charge() with { Amount = 42.18m };
-        var personal = Charge() with { Suggestion = Charge().Suggestion! with { IsPersonal = true } };
+        var second = Charge() with
+        {
+            Amount = 42.18m
+        };
+        var personal = Charge() with
+        {
+            Suggestion = Charge().Suggestion! with
+            {
+                IsPersonal = true
+            }
+        };
         var bundle = Assert.Single(InboxBundle.Create([first, second, personal]));
         Assert.Equal(new[] { first.Id, second.Id }, bundle.Rows.Select(row => row.Id));
     }
@@ -43,6 +52,8 @@ public class InboxBundleTest
                 "USD", DateTimeOffset.UtcNow, null, null, "Ana", 0, 0, MatchConfidence.Confident)] }
         };
         foreach (var candidate in candidates)
+        {
             Assert.Empty(InboxBundle.Create([first, candidate]));
+        }
     }
 }

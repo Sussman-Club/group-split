@@ -62,8 +62,10 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // back as is the only way to tell a provider misreading from a mapping mistake.
             var payload = await response.Content.ReadAsStringAsync(ct);
             if (settings.LogRawResponses)
+            {
                 logger.LogDebug("Veryfi returned {Payload} for receipt attachment {AttachmentId}.",
                     payload, document.AttachmentId);
+            }
 
             var parsed = JsonSerializer.Deserialize<VeryfiDocument>(payload, Json)
                 ?? throw new JsonException("Veryfi returned an empty document response.");
@@ -100,13 +102,20 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
     private sealed class VeryfiDocument
     {
-        [JsonPropertyName("tax")] public decimal? Tax { get; init; }
-        [JsonPropertyName("tip")] public decimal? Tip { get; init; }
-        [JsonPropertyName("total")] public decimal? Total { get; init; }
-        [JsonPropertyName("vendor")] public JsonElement Vendor { get; init; }
-        [JsonPropertyName("raw_vendor_name")] public string? RawVendorName { get; init; }
-        [JsonPropertyName("date")] public string? Date { get; init; }
-        [JsonPropertyName("line_items")] public IReadOnlyList<VeryfiLineItem?>? LineItems { get; init; }
+        [JsonPropertyName("tax")]
+        public decimal? Tax { get; init; }
+        [JsonPropertyName("tip")]
+        public decimal? Tip { get; init; }
+        [JsonPropertyName("total")]
+        public decimal? Total { get; init; }
+        [JsonPropertyName("vendor")]
+        public JsonElement Vendor { get; init; }
+        [JsonPropertyName("raw_vendor_name")]
+        public string? RawVendorName { get; init; }
+        [JsonPropertyName("date")]
+        public string? Date { get; init; }
+        [JsonPropertyName("line_items")]
+        public IReadOnlyList<VeryfiLineItem?>? LineItems { get; init; }
 
         public TranscribedReceipt ToReceipt()
         {
@@ -128,7 +137,9 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 .ToArray();
             var shares = Allocate(Math.Abs(remainingTax), unknown.Select(index => Math.Abs(candidates[index].TotalPrice)).ToArray());
             foreach (var (index, share) in unknown.Zip(shares))
+            {
                 itemTaxes[index] += Math.Sign(remainingTax) * share;
+            }
 
             var mappedItems = candidates.Select((item, index) => new TranscribedReceiptItem(
                 item.Name,
@@ -145,9 +156,15 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
             // Allocated tax is inferred, so it must not decide the provider's rate units.
             var normalized = ReceiptTaxRates.Normalize(tax, mappedItems.Select((item, index) =>
-                item with { TaxAmount = candidates[index].TaxAmount }).ToArray());
+                item with
+                {
+                    TaxAmount = candidates[index].TaxAmount
+                }).ToArray());
             mappedItems = mappedItems.Select((item, index) =>
-                item with { TaxRate = normalized[index].TaxRate }).ToArray();
+                item with
+                {
+                    TaxRate = normalized[index].TaxRate
+                }).ToArray();
 
             string? vendor = Vendor.ValueKind switch
             {
@@ -191,25 +208,40 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         private static readonly HashSet<string> NonItemTypes =
             new(StringComparer.OrdinalIgnoreCase) { "tax", "payment" };
 
-        [JsonPropertyName("description")] public string? Description { get; init; }
-        [JsonPropertyName("full_description")] public string? FullDescription { get; init; }
-        [JsonPropertyName("normalized_description")] public string? NormalizedDescription { get; init; }
-        [JsonPropertyName("product_info")] public VeryfiProductInfo? ProductInfo { get; init; }
-        [JsonPropertyName("text")] public string? Text { get; init; }
-        [JsonPropertyName("type")] public string? Type { get; init; }
-        [JsonPropertyName("sku")] public string? Sku { get; init; }
-        [JsonPropertyName("price")] public decimal? Price { get; init; }
-        [JsonPropertyName("quantity")] public decimal? Quantity { get; init; }
-        [JsonPropertyName("total")] public decimal? Total { get; init; }
-        [JsonPropertyName("discount")] public decimal? Discount { get; init; }
-        [JsonPropertyName("tax")] public decimal? Tax { get; init; }
-        [JsonPropertyName("tax_rate")] public decimal? TaxRate { get; init; }
+        [JsonPropertyName("description")]
+        public string? Description { get; init; }
+        [JsonPropertyName("full_description")]
+        public string? FullDescription { get; init; }
+        [JsonPropertyName("normalized_description")]
+        public string? NormalizedDescription { get; init; }
+        [JsonPropertyName("product_info")]
+        public VeryfiProductInfo? ProductInfo { get; init; }
+        [JsonPropertyName("text")]
+        public string? Text { get; init; }
+        [JsonPropertyName("type")]
+        public string? Type { get; init; }
+        [JsonPropertyName("sku")]
+        public string? Sku { get; init; }
+        [JsonPropertyName("price")]
+        public decimal? Price { get; init; }
+        [JsonPropertyName("quantity")]
+        public decimal? Quantity { get; init; }
+        [JsonPropertyName("total")]
+        public decimal? Total { get; init; }
+        [JsonPropertyName("discount")]
+        public decimal? Discount { get; init; }
+        [JsonPropertyName("tax")]
+        public decimal? Tax { get; init; }
+        [JsonPropertyName("tax_rate")]
+        public decimal? TaxRate { get; init; }
 
         public ReceiptItemDraft? ToRow()
         {
             var type = Type?.Trim();
             if (!string.IsNullOrEmpty(type) && NonItemTypes.Contains(type))
+            {
                 return null;
+            }
 
             var quantity = Quantity is > 0m ? Math.Round(Quantity.Value, 3, MidpointRounding.AwayFromZero) : 0m;
             var total = RoundMoney(Total ?? (Price ?? 0m) * (quantity > 0m ? quantity : 1m));
@@ -229,10 +261,17 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 var amount = reduced > 0m ? reduced : Math.Abs(total);
                 // A reduction row that takes nothing off is not a line anybody can split.
                 if (amount == 0m)
+                {
                     return null;
+                }
+
                 var label = CleanLabel(Description, FullDescription, Text)
                     ?? (string.IsNullOrWhiteSpace(Sku) ? "Discount" : $"Coupon {Sku.Trim()}");
-                if (label.Length > 128) label = label[..128].TrimEnd();
+                if (label.Length > 128)
+                {
+                    label = label[..128].TrimEnd();
+                }
+
                 return new ReceiptItemDraft(label, label.ToLowerInvariant(), Text?.Trim(),
                     1m, -amount, -amount, RoundMoney(Tax ?? 0m), Tax.HasValue, TaxRate,
                     TaxRate is { } couponRate ? couponRate > 0m : null);
@@ -242,11 +281,15 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim()
                 ?? NameFromText(Text, Sku);
             if (string.IsNullOrWhiteSpace(name))
+            {
                 return null;
+            }
             // A bill refuses a name longer than this, and a row whose name came off its raw
             // text can run long. Better a clipped name than a draft that will not save.
             if (name.Length > 128)
+            {
                 name = name[..128].TrimEnd();
+            }
 
             var (count, unitPrice) = ReadQuantity(Price, quantity, total);
             var tax = RoundMoney(Math.Max(0m, Tax ?? 0m));
@@ -272,10 +315,14 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         {
             var unit = price is > 0m ? RoundMoney(price.Value) : (decimal?)null;
             if (unit is null)
+            {
                 return (quantity > 0m ? quantity : 1m, null);
+            }
 
             if (quantity > 0m && RoundMoney(unit.Value * quantity) == total)
+            {
                 return (quantity, unit);
+            }
 
             // A whole number of them at that price is a reading that makes sense of all three.
             // A fraction is not: dividing one misread figure by another always lands somewhere,
@@ -283,7 +330,9 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // arithmetic result rather than a shopping one.
             var implied = Math.Round(total / unit.Value, 3, MidpointRounding.AwayFromZero);
             if (implied > 0m && implied == Math.Truncate(implied) && RoundMoney(unit.Value * implied) == total)
+            {
                 return (implied, unit);
+            }
 
             // Nothing reconciles. The total is what the bill adds itself up from, so it stands
             // alone: one of whatever this is, at what it cost.
@@ -306,7 +355,9 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 var stripped = TrailingAmount().Replace(LeadingItemNumber().Replace(line, string.Empty), string.Empty);
                 var tidied = Whitespace().Replace(stripped, " ").Trim();
                 if (tidied.Any(char.IsLetter))
+                {
                     return tidied;
+                }
             }
 
             return Tokens(sku, text).FirstOrDefault() is { } number ? $"Item {number}" : null;
@@ -342,7 +393,8 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
     private sealed class VeryfiProductInfo
     {
-        [JsonPropertyName("expanded_description")] public string? ExpandedDescription { get; init; }
+        [JsonPropertyName("expanded_description")]
+        public string? ExpandedDescription { get; init; }
     }
 
     /// <summary>
@@ -366,12 +418,16 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
     private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights)
     {
         if (weights.Count == 0)
+        {
             return [];
+        }
 
         amount = RoundMoney(Math.Max(0m, amount));
         var totalWeight = weights.Sum(weight => Math.Max(0m, weight));
         if (totalWeight <= 0m)
+        {
             return new decimal[weights.Count];
+        }
 
         var targetCents = amount * 100m;
         var exactCents = weights.Select(weight => targetCents * Math.Max(0m, weight) / totalWeight).ToArray();

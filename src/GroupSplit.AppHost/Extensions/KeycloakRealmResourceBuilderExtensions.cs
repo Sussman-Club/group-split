@@ -114,7 +114,10 @@ public static class KeycloakRealmResourceBuilderExtensions
 
                     var reset = await commands.ExecuteCommandAsync(
                         resetWorker.Resource, "resource-start", context.CancellationToken);
-                    if (!reset.Success) return reset;
+                    if (!reset.Success)
+                    {
+                        return reset;
+                    }
 
                     var ended = await notifications.WaitForResourceAsync(
                         resetWorker.Resource.Name,
@@ -134,7 +137,10 @@ public static class KeycloakRealmResourceBuilderExtensions
 
                     var stop = await commands.ExecuteCommandAsync(
                         keycloak.Resource, "resource-stop", context.CancellationToken);
-                    if (!stop.Success) return stop;
+                    if (!stop.Success)
+                    {
+                        return stop;
+                    }
 
                     return await commands.ExecuteCommandAsync(
                         keycloak.Resource, "resource-start", context.CancellationToken);

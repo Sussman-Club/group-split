@@ -82,7 +82,9 @@ public sealed class DecisionClient(HttpClient http, IOptions<FilingSuggestionOpt
         activity?.SetTag("groupsplit.decision.options", choices.Count);
 
         if (settings.CaptureMessageContent && activity is { IsAllDataRequested: true })
+        {
             RecordInput(activity, state, instructions, choices);
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 
@@ -127,7 +129,9 @@ public sealed class DecisionClient(HttpClient http, IOptions<FilingSuggestionOpt
             activity?.SetTag("groupsplit.decision.confidence", answer?.Confidence);
 
             if (settings.CaptureMessageContent && answer is not null && activity is { IsAllDataRequested: true })
+            {
                 RecordOutput(activity, answer);
+            }
 
             return answer;
         }

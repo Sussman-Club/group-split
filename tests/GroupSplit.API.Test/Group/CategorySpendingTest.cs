@@ -40,7 +40,8 @@ public class CategorySpendingTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     {
         var category = await GetService<ICategoryService>().Create(new CreateCategoryRequest
         {
-            GroupId = Me.Id, Name = "Travel"
+            GroupId = Me.Id,
+            Name = "Travel"
         }, Ct);
         await Expense(Me.Id, 10, "USD", category.Id);
         await Expense(Me.Id, 20, "EUR", category.Id, "EUR");
@@ -60,7 +61,12 @@ public class CategorySpendingTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     private Task Expense(Guid groupId, decimal amount, string name, Guid? categoryId, string currency = "USD") =>
         GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = groupId, PaidByUserId = Me.Id, CategoryId = categoryId, Name = name,
-            Amount = amount, Currency = currency, DateTime = DateTimeOffset.UtcNow
+            GroupId = groupId,
+            PaidByUserId = Me.Id,
+            CategoryId = categoryId,
+            Name = name,
+            Amount = amount,
+            Currency = currency,
+            DateTime = DateTimeOffset.UtcNow
         }, Ct).AsTask();
 }

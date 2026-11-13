@@ -69,17 +69,17 @@ public class SettlePageTest : ComponentTest
 
     private static SettlementResponse Paid(string from, string to, bool byYou, string group,
         string? note = null, DateOnly? through = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        GroupName = group,
-        FromUserName = from,
-        ToUserName = to,
-        Amount = 10m,
-        DateTime = ThirdOfSeptember,
-        Description = note,
-        PaidByYou = byYou,
-        CoversThrough = through
-    };
+        {
+            Id = Guid.NewGuid(),
+            GroupName = group,
+            FromUserName = from,
+            ToUserName = to,
+            Amount = 10m,
+            DateTime = ThirdOfSeptember,
+            Description = note,
+            PaidByYou = byYou,
+            CoversThrough = through
+        };
 
     /// <summary>The page, and the provider its dialog renders into.</summary>
     private async Task<(IRenderedComponent<Settle> Page, IRenderedComponent<MudDialogProvider> Dialogs)> Open()
@@ -127,7 +127,10 @@ public class SettlePageTest : ComponentTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((SettleWithPersonRequest request, CancellationToken _) =>
             {
-                _plan = Square with { LastSettled = ThirdOfSeptember };
+                _plan = Square with
+                {
+                    LastSettled = ThirdOfSeptember
+                };
                 _history = [Paid("You", "Omar", byYou: true, "Home")];
 
                 return new SettleWithPersonResponse(Omar, "Omar", request.Amount, request.Direction,
@@ -379,7 +382,10 @@ public class SettlePageTest : ComponentTest
     [Fact]
     public async Task Nothing_owed_either_way_is_all_settled_since_the_last_payment()
     {
-        _plan = Square with { LastSettled = ThirdOfSeptember };
+        _plan = Square with
+        {
+            LastSettled = ThirdOfSeptember
+        };
 
         var (page, _) = await Open();
 

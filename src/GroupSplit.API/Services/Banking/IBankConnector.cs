@@ -20,7 +20,10 @@ public interface IBankConnector
     /// <summary>
     /// The key this connector is registered under: lower-case, short, stable. <c>"plaid"</c>.
     /// </summary>
-    string Provider { get; }
+    string Provider
+    {
+        get;
+    }
 
     /// <summary>
     /// A short-lived token the client hands to the provider's own UI so a person can pick

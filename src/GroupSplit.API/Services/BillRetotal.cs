@@ -41,6 +41,7 @@ public static class BillRetotal
         var tip = bill.Tip + amount - bill.Total;
 
         if (tip < 0)
+        {
             throw new UnprocessableException(ErrorCodes.ReceiptDoesNotAddUp,
                     $"The bill's tip is {bill.Tip}, so the amount cannot come down by " +
                     $"{bill.Total - amount} without changing what is on the bill. Correct the " +
@@ -49,6 +50,7 @@ public static class BillRetotal
                 .WithExtension("amount", amount)
                 .WithExtension("tip", bill.Tip)
                 .WithExtension("difference", amount - bill.Total);
+        }
 
         bill.Tip = tip;
         bill.Total = amount;
@@ -68,8 +70,13 @@ public static class BillRetotal
 
         var copy = new Receipt
         {
-            Id = bill.Id, ExpenseId = bill.ExpenseId, Subtotal = bill.Subtotal, Tax = bill.Tax,
-            Tip = bill.Tip, Total = bill.Total, MerchantName = bill.MerchantName,
+            Id = bill.Id,
+            ExpenseId = bill.ExpenseId,
+            Subtotal = bill.Subtotal,
+            Tax = bill.Tax,
+            Tip = bill.Tip,
+            Total = bill.Total,
+            MerchantName = bill.MerchantName,
             PurchaseDate = bill.PurchaseDate
         };
 
@@ -77,10 +84,18 @@ public static class BillRetotal
         {
             copy.Items.Add(new ReceiptItem
             {
-                Id = item.Id, ReceiptId = item.ReceiptId, Position = item.Position, Name = item.Name,
-                NormalizedName = item.NormalizedName, Description = item.Description,
-                UnitPrice = item.UnitPrice, Quantity = item.Quantity, TotalPrice = item.TotalPrice,
-                TaxAmount = item.TaxAmount, TaxRate = item.TaxRate, IsTaxable = item.IsTaxable,
+                Id = item.Id,
+                ReceiptId = item.ReceiptId,
+                Position = item.Position,
+                Name = item.Name,
+                NormalizedName = item.NormalizedName,
+                Description = item.Description,
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.TotalPrice,
+                TaxAmount = item.TaxAmount,
+                TaxRate = item.TaxRate,
+                IsTaxable = item.IsTaxable,
                 SplitRuleVersionId = withoutRules ? null : item.SplitRuleVersionId,
                 SplitRuleVersion = withoutRules ? null : item.SplitRuleVersion
             });

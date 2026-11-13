@@ -12,7 +12,9 @@ public sealed class NativeReceiptCamera : IReceiptCamera
     {
         var photo = await MainThread.InvokeOnMainThreadAsync(() => MediaPicker.Default.CapturePhotoAsync());
         if (photo is null)
+        {
             return null;
+        }
 
         const int maximumLength = 10 * 1024 * 1024;
         await using var source = await photo.OpenReadAsync();
@@ -22,7 +24,10 @@ public sealed class NativeReceiptCamera : IReceiptCamera
         while ((count = await source.ReadAsync(chunk)) != 0)
         {
             if (buffer.Length + count > maximumLength)
+            {
                 throw new IOException("Choose a receipt photo no larger than 10 MB.");
+            }
+
             await buffer.WriteAsync(chunk.AsMemory(0, count));
         }
 

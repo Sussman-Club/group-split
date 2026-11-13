@@ -85,7 +85,9 @@ public sealed class AndroidReleaseTest
     private static string Release(bool draft = false, bool prerelease = false, string tag = "android-v1.2.3-42", string apkName = "GroupSplit.apk", bool checksum = true) =>
         JsonSerializer.Serialize(new
         {
-            tag_name = tag, draft, prerelease,
+            tag_name = tag,
+            draft,
+            prerelease,
             assets = new[]
             {
                 new { name = apkName, size = 42000000, browser_download_url = $"https://github.com/Sussman-Club/group-split/releases/download/{tag}/{apkName}" },

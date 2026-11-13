@@ -51,7 +51,9 @@ public class InboxLateAnswerTest
                 CancellationToken _) =>
             {
                 if (_waitingIsSlow && status == InboxStatus.New)
+                {
                     await _waitingAnswers.Task;
+                }
 
                 var row = Row(status == InboxStatus.Filed ? "Filed row" : "Waiting row", status ?? InboxStatus.New);
 
