@@ -156,7 +156,7 @@
     Mud draws it on its own paper with its own radius and shadow, which on a cream page is
     a white card with a different corner from every other card around it, and on a dark one
     is a lighter grey than the surface behind it. The toolbar is off (see the note in
-    DateRangeFilter), so what is left is the two months and the days.
+    DateRangeFilter), so what is left is the month and the days.
 */
 
 .mud-picker-paper,
@@ -170,6 +170,20 @@
     border: 1px solid var(--gs-line);
     box-shadow: var(--gs-shadow-lg);
     overflow: hidden;
+}
+
+/* Center calendar popovers on small screens, independent of the input's position.
+   Short viewports can scroll the calendar instead of clipping its controls. */
+@media (max-width: 600px) {
+    .mud-popover:has(.mud-picker-container) {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        overflow: auto !important;
+    }
 }
 
 .mud-picker-calendar-header-day {

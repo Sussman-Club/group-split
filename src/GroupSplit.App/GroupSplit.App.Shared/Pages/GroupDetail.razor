@@ -105,8 +105,7 @@
         <div class="gs-settings-content @(GroupsService.IsLoading ? "gs-loading" : "")" @key="@($"body-{group.Id}-{Tab}")">
             @if (Current == "settings" && SettingsSection == "overview")
             {
-                <section class="gs-group-settings-overview" aria-labelledby="group-settings-title">
-                    <div class="gs-settings-heading"><h2 id="group-settings-title">@Loc["Group settings"]</h2></div>
+                <section class="gs-group-settings-overview" aria-label="@Loc["Group settings"]">
                     <nav class="gs-group-settings-choices" aria-label="@Loc["Settings sections"]">
                         <a href="@Href("details")"><MudIcon Icon="@Icons.Material.Rounded.Home" /><span><strong>@Loc["Group details"]</strong><small>@Loc["Name, description and defaults"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
                         @if (!group.IsPersonal)

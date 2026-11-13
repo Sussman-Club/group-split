@@ -350,13 +350,11 @@
 .gs-balances-heading {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 }
-
-.gs-balances-heading h2 { margin: 0; }
 
 .gs-balances-date {
     display: flex;

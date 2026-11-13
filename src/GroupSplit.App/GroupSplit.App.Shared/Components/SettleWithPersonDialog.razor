@@ -95,8 +95,7 @@
                 <MudDatePicker ShowToolbar="false" Date="_date" DateChanged="@DateChanged"
                                Label="@Loc["When"]"
                                Variant="Variant.Outlined"
-                               Clearable="true"
-                               HelperText="@Loc["Defaults to now."]" />
+                               Clearable="true" />
 
                 <MudTextField @bind-Value="_model.Description"
                               For="@(() => _model.Description)"
@@ -166,6 +165,7 @@
             Amount = Person.Amount,
             Direction = Direction
         };
+        DateChanged(Clock.Today);
     }
 
     /// <summary>

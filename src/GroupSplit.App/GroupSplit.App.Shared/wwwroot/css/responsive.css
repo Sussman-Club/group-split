@@ -7,10 +7,15 @@
 
     .gs-landing {
         grid-template-columns: 1fr;
+        min-height: 0;
     }
 
     .gs-landing-art {
         display: none;
+    }
+
+    .gs-features {
+        margin-top: 28px;
     }
 }
 
