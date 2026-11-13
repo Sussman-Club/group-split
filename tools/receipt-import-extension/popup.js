@@ -31,8 +31,8 @@ function localDate(date) {
 }
 
 const today = new Date();
-const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
-$('from').value = localDate(threeMonthsAgo);
+const defaultStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+$('from').value = localDate(defaultStart);
 $('to').value = localDate(today);
 
 function scanPage() {
@@ -381,6 +381,54 @@ async function uploadToInbox(base64, fileName, expectedOrigin, receipt = null) {
   return { ok: true, alreadyImported, detailsSaved: false };
 }
 
+// Read only the signed-in user's inbox; use the filenames created by the importer.
+async function readImportedReceiptDates(expectedOrigin) {
+  if (location.origin !== expectedOrigin || location.pathname !== '/inbox/receipts')
+    throw new Error('The GroupSplit tab navigated away.');
+  const paths = ['/api/receipts/inbox', '/api/receipts/inbox/added', '/api/receipts/inbox/ignored'];
+  const responses = await Promise.all(paths.map(path => fetch(path, { credentials: 'same-origin', redirect: 'error' })));
+  if (responses.some(response => !response.ok)) throw new Error('Could not read imported receipts.');
+  const lists = await Promise.all(responses.map(response => response.json()));
+  if (lists.some(list => !Array.isArray(list))) throw new Error('Unexpected inbox response.');
+  return lists.flatMap(list => list.flatMap(row => (row.attachments || []).map(file => file.fileName)));
+}
+
+function latestImportedDate(filenames, retailer, todayValue) {
+  const patterns = {
+    amazon: /^Amazon-(\d{4}-\d{2}-\d{2})-\d+\.pdf$/i,
+    costco: /^Costco-(\d{4}-\d{2}-\d{2})-\d+-\d+-\d+\.pdf$/i,
+    'costco-online': /^Costco-(\d{4}-\d{2}-\d{2})-\d+\.pdf$/i
+  };
+  const pattern = patterns[retailer];
+  if (!pattern) return null;
+  return filenames.map(name => typeof name === 'string' ? pattern.exec(name)?.[1] : null)
+    .filter(date => {
+      if (!date || date > todayValue) return false;
+      const parsed = new Date(`${date}T00:00:00Z`);
+      return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === date;
+    }).sort().at(-1) || null;
+}
+
+let dateSuggestionRequest = 0;
+let startDateEdited = false;
+async function suggestStartDate() {
+  const request = ++dateSuggestionRequest;
+  const retailer = $('retailer').value;
+  if (!inbox || startDateEdited || !retailer) return;
+  try {
+    const filenames = await execute(inbox.tabId, readImportedReceiptDates, [inbox.origin]);
+    if (request !== dateSuggestionRequest || startDateEdited || $('retailer').value !== retailer) return;
+    const date = latestImportedDate(filenames, retailer, localDate(today));
+    $('from').value = date || localDate(defaultStart);
+    $('date-suggestion').textContent = date
+      ? 'Suggested from your latest imported receipt for this store. You can change the dates.'
+      : 'No previous import found for this store. You can change the dates.';
+  } catch {
+    if (request === dateSuggestionRequest && !startDateEdited)
+      $('date-suggestion').textContent = 'Could not check previous imports. Choose the dates you want.';
+  }
+}
+
 async function connectInbox() {
   try {
     if (!Number.isSafeInteger(inboxTabId) || inboxTabId <= 0) return;
@@ -393,6 +441,7 @@ async function connectInbox() {
     inbox = { origin, tabId: inboxTabId };
     $('connection').textContent = 'Inbox connected. Keep the GroupSplit tab open and signed in.';
     $('back-to-inbox').hidden = embedded;
+    void suggestStartDate();
   } catch (error) { $('connection').textContent = error.message; }
 }
 if (embedded) {
@@ -416,6 +465,10 @@ $('back-to-inbox').addEventListener('click', async () => {
 });
 
 $('retailer').addEventListener('change', () => {
+  startDateEdited = false;
+  $('from').value = localDate(defaultStart);
+  $('date-suggestion').textContent = '';
+  void suggestStartDate();
   sourceTabId = 0;
   $('store-state').hidden = true;
   selection = null;
@@ -440,6 +493,7 @@ $('buyer').addEventListener('change', () => {
 });
 
 for (const id of ['from', 'to']) for (const event of ['input', 'change']) $(id).addEventListener(event, () => {
+  if (id === 'from') { startDateEdited = true; dateSuggestionRequest++; $('date-suggestion').textContent = ''; }
   selection = null;
   $('receipts').replaceChildren();
   $('download').hidden = true;
@@ -1016,6 +1070,8 @@ async function prepareAmazonInvoice(row, workspace) {
 }
 
 $('find').addEventListener('click', async () => {
+  dateSuggestionRequest++;
+  startDateEdited = true;
   setImportBusy(true);
   selection = null;
   $('download').hidden = true;

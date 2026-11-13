@@ -16,6 +16,11 @@ you find receipts.
 Review the list before importing receipts as PDFs to the
 inbox. Keep the GroupSplit tab open and signed in.
 
+For each store, the suggested start date is the purchase date of the newest
+matching previously imported receipt, including that date. If no matching
+imported file remains in the inbox, the default is the last 30 days. Dates
+remain editable; the suggestion does not mean every earlier receipt was imported.
+
 The inbox shortcut requires this extension to be reloaded after updates and
 the receipts page to be refreshed. If it cannot detect the extension, it
 shows installation guidance and leaves the normal file upload available.

@@ -5915,4 +5915,17 @@
   <data name="No matching time zones" xml:space="preserve"><value>No matching time zones</value></data>
   <data name="{0} receipt waiting" xml:space="preserve"><value>{0} receipt waiting</value></data>
   <data name="{0} receipts waiting" xml:space="preserve"><value>{0} receipts waiting</value></data>
+  <data name="Get it for Chrome" xml:space="preserve"><value>Get it for Chrome</value></data>
+  <data name="Get it for Edge" xml:space="preserve"><value>Get it for Edge</value></data>
+  <data name="Choose the store for your browser. The listing opens in a new tab." xml:space="preserve"><value>Choose the store for your browser. The listing opens in a new tab.</value></data>
+  <data name="Install the extension in Chrome or Microsoft Edge, then return to your receipts." xml:space="preserve"><value>Install the extension in Chrome or Microsoft Edge, then return to your receipts.</value></data>
+  <data name="Open the extension store" xml:space="preserve"><value>Open the extension store</value></data>
+  <data name="Open the receipt importer listing for your browser." xml:space="preserve"><value>Open the receipt importer listing for your browser.</value></data>
+  <data name="Select Add to Chrome or Get, then confirm the installation." xml:space="preserve"><value>Select Add to Chrome or Get, then confirm the installation.</value></data>
+  <data name="Chrome and Microsoft Edge update extensions automatically. Refresh GroupSplit after an update." xml:space="preserve"><value>Chrome and Microsoft Edge update extensions automatically. Refresh GroupSplit after an update.</value></data>
+  <data name="Import store receipts on a computer" xml:space="preserve"><value>Import store receipts on a computer</value></data>
+  <data name="Import from Amazon or Costco using the GroupSplit browser extension on a computer. Then open this inbox in the Android app using the same account." xml:space="preserve"><value>Import from Amazon or Costco using the GroupSplit browser extension on a computer. Then open this inbox in the Android app using the same account.</value></data>
+  <data name="On this device, add a receipt using a photo or PDF." xml:space="preserve"><value>On this device, add a receipt using a photo or PDF.</value></data>
+  <data name="The browser extension did not respond. Install or enable it, then refresh this page and try again." xml:space="preserve"><value>The browser extension did not respond. Install or enable it, then refresh this page and try again.</value></data>
+  <data name="If the importer opens but a store needs sign-in or an import fails, follow the message in the importer." xml:space="preserve"><value>If the importer opens but a store needs sign-in or an import fails, follow the message in the importer.</value></data>
 </root>

@@ -58,6 +58,7 @@ html:not([data-gs-android]) .gs-android-only { display: none !important; }
 .gs-android-download h2 { font-size: 1.25rem; margin: 0 0 8px; }
 .gs-android-download > p { line-height: 1.65; }
 .gs-android-download .gs-android-cta { min-height: 52px; padding-inline: 24px; }
+.gs-receipt-importer-store-links { display: flex; flex-wrap: wrap; gap: 12px; }
 .gs-android-compatibility { color: var(--gs-muted); font-size: .8125rem; margin: 10px 0 22px; }
 .gs-android-release { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0 0 16px; }
 .gs-android-release dt { font-size: .75rem; color: var(--gs-muted); margin-bottom: 4px; }

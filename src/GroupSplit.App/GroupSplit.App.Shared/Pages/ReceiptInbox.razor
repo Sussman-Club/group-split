@@ -13,23 +13,39 @@
 @inject GroupSplit.App.Shared.Services.ReceiptSuggestionCache SuggestionCache
 @inject GroupSplit.App.Shared.Services.DataChangeNotifier Changes
 @inject GroupSplit.App.Shared.Services.LocalClock Clock
+@inject GroupSplit.App.Shared.Services.AppLinks AppLinks
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
 <div class="gs-inbox-context gs-receipt-context">
     <h2>@Loc["Receipts"]</h2>
+    @if (!AppLinks.IsAndroidNative)
+    {
     <MudButton Class="gs-receipt-import-action" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.ShoppingBag" OnClick="OpenRetailerImport" Disabled="_busy">@Loc["Import from a store"]</MudButton>
+    }
     <span class="gs-muted">@Loc["Your receipts are private until you add them to an expense."]</span>
 </div>
+@if (AppLinks.IsAndroidNative)
+{
+    <div class="gs-receipt-import-help" role="note">
+        <MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" />
+        <div>
+            <strong>@Loc["Import store receipts on a computer"]</strong>
+            <p>@Loc["Import from Amazon or Costco using the GroupSplit browser extension on a computer. Then open this inbox in the Android app using the same account."]</p>
+            <p>@Loc["On this device, add a receipt using a photo or PDF."]</p>
+        </div>
+    </div>
+}
 @if (_importHelp)
 {
     <div class="gs-receipt-import-help" role="status">
         <MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" />
         <div>
-            <strong>@Loc["We couldn’t open the receipt importer"]</strong>
-            <p>@Loc["It may need to be installed, updated, enabled, or reloaded. Follow the installation steps, then try again."]</p>
+            <strong>@Loc["Receipt importer unavailable"]</strong>
+            <p>@Loc["The browser extension did not respond. Install or enable it, then refresh this page and try again."]</p>
             <MudButton Href="/receipt-importer/install" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Class="gs-receipt-import-help-action" StartIcon="@Icons.Material.Rounded.Extension">@Loc["Install or update the receipt importer"]</MudButton>
+            <p>@Loc["If the importer opens but a store needs sign-in or an import fails, follow the message in the importer."]</p>
             <p>@Loc["You can still upload a photo or PDF using Add receipt."]</p>
         </div>
     </div>
@@ -64,7 +80,10 @@
         {
             <div class="gs-receipt-empty-actions">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="OpenUpload">@Loc["Upload a receipt"]</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="OpenRetailerImport">@Loc["Import from a store"]</MudButton>
+                @if (!AppLinks.IsAndroidNative)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="OpenRetailerImport">@Loc["Import from a store"]</MudButton>
+                }
             </div>
         }
     </div>
