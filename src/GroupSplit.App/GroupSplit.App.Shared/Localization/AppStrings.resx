@@ -78,6 +78,9 @@
   <data name="Manage account" xml:space="preserve">
     <value>Manage account</value>
   </data>
+  <data name="Account management opens in your browser. You may need to sign in there." xml:space="preserve">
+    <value>Account management opens in your browser. You may need to sign in there.</value>
+  </data>
   <data name="Make Group Split feel right on this device." xml:space="preserve">
     <value>Make Group Split feel right on this device.</value>
   </data>

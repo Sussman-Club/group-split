@@ -77,12 +77,25 @@ else
                     <h2>@Loc["Security"]</h2>
                 </div>
                 <p class="gs-muted" style="margin: 0; font-size: .875rem">@Loc["Passwords, two-factor authentication and active sessions are managed by the identity provider."]</p>
+                @if (AppLinks.IsNative)
+                {
+                    <p class="gs-muted">@Loc["Account management opens in your browser. You may need to sign in there."]</p>
+                }
+                @if (AppLinks.IsNative)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gs-account-action"
+                               StartIcon="@Icons.Material.Rounded.ManageAccounts" EndIcon="@Icons.Material.Rounded.OpenInNew"
+                               Href="@AppLinks.PublicUrl(Nav.BaseUri, "auth/account")" Target="_blank" rel="noopener noreferrer">@Loc["Manage account"]</MudButton>
+                }
+                else
+                {
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            Class="gs-account-action"
                            StartIcon="@Icons.Material.Rounded.ManageAccounts"
                            EndIcon="@Icons.Material.Rounded.OpenInNew"
                            OnClick="OpenAccountConsole">@Loc["Manage account"]</MudButton>
+                }
             </div>
         </section>
 
