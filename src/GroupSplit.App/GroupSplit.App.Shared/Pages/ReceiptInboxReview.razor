@@ -14,6 +14,7 @@
 
 <PageTitle>@Loc["Review receipt - Group Split"]</PageTitle>
 <div class="gs-receipt-review-back"><MudButton Href="@($"/inbox/receipts{new Uri(Nav.Uri).Query}")">@Loc["Back to receipts"]</MudButton></div>
+<LoadView Loading="@(_loading && _row is null)" Failed="@(!_loading && _row is null)" Retry="Load">
 @if (_row is { } row)
 {
     <header class="gs-receipt-review-heading">
@@ -49,8 +50,7 @@
                     @foreach (var file in row.Attachments)
                     {
                         <MudButton Href="@Source(file.Id)" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton>
-                        @if (file.ContentType.StartsWith("image/")) { <img src="@Source(file.Id)" alt="@Loc["Original receipt"]" style="max-width:100%" /> }
-                        else { <PdfReceiptPreview @key="file.Id" Url="@Source(file.Id)" DownloadUrl="@Source(file.Id)" FileName="@file.FileName" /> }
+                        <ReceiptPreview @key="file.Id" Url="@Source(file.Id)" ContentType="@file.ContentType" FileName="@file.FileName" />
                     }
                     </div></details>
                 }
@@ -115,15 +115,15 @@
             {
                 <MudButton OnClick="@(() => Read(file.Id))" Disabled="_busy">@Loc["Read items from source"]</MudButton>
                 <MudButton Href="@Source(file.Id)" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton>
-                @if (file.ContentType.StartsWith("image/")) { <img src="@Source(file.Id)" alt="@Loc["Original receipt"]" style="max-width:100%" /> }
-                else { <PdfReceiptPreview @key="file.Id" Url="@Source(file.Id)" DownloadUrl="@Source(file.Id)" FileName="@file.FileName" /> }
+                <ReceiptPreview @key="file.Id" Url="@Source(file.Id)" ContentType="@file.ContentType" FileName="@file.FileName" />
             }
         </div></details>
         </div>
     </div>
     }
 }
-@if (_busy) { <MudProgressLinear Indeterminate="true" /> }
+</LoadView>
+@if (_busy) { <MudProgressLinear Indeterminate="true" aria-label="@Loc["Loading…"]" /> }
 @code {
     [Parameter] public Guid Id { get; set; }
     private ReceiptInboxResponse? _row;
@@ -132,23 +132,47 @@
     private IReadOnlyList<ReceiptExpenseCandidate> _matches = [];
     private string _currency = "USD";
     private bool _busy;
-    protected override Task OnParametersSetAsync() => Load();
+    private bool _loading = true;
+    private Guid? _loadedId;
+    private int _loadVersion;
+    protected override Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id) return Task.CompletedTask;
+        _loadedId = Id;
+        _row = null;
+        return Load();
+    }
     private async Task Load()
     {
+        var id = Id;
+        var version = ++_loadVersion;
+        _loading = true;
         _suggestion = null;
-        await Errors.TryAsync(async () => {
-            _row = await Client.GetReceiptInboxAsync(Id);
-            _bill = BillOf(_row);
-            _currency = _row.Currency;
-            _matches = _row.ExpenseId is null ? (await Client.MatchReceiptInboxAsync(Id)).ToList() : [];
-
-        }, Loc["Could not load receipt."].Value);
-        if (_row is { ExpenseId: null, Receipt.Items.Count: > 0 } receipt)
+        ReceiptInboxResponse? loaded = null;
+        IReadOnlyList<ReceiptExpenseCandidate> matches = [];
+        try
+        {
+            var ok = await Errors.TryAsync(async () => {
+                loaded = await Client.GetReceiptInboxAsync(id);
+                matches = loaded.ExpenseId is null ? (await Client.MatchReceiptInboxAsync(id)).ToList() : [];
+            }, Loc["Could not load receipt."].Value);
+            if (version != _loadVersion || !ok || loaded is null) return;
+            _row = loaded;
+            _bill = BillOf(loaded);
+            _currency = loaded.Currency;
+            _matches = matches;
+        }
+        finally
+        {
+            if (version == _loadVersion) _loading = false;
+        }
+        if (loaded is { ExpenseId: null, Receipt.Items.Count: > 0 } receipt)
         {
             _suggestion = SuggestionCache.Get(receipt);
+            StateHasChanged();
             var generation = SuggestionCache.Generation;
             var refreshed = await Receipts.SuggestFilingAsync(new SuggestReceiptFilingRequest { Receipt = receipt.Receipt, Currency = receipt.Currency });
-            if (refreshed is not null)
+            if (version == _loadVersion && refreshed is not null)
             {
                 SuggestionCache.Remember(receipt, refreshed, generation);
                 _suggestion = refreshed;

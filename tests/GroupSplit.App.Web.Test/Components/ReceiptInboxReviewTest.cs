@@ -13,6 +13,49 @@ public class ReceiptInboxReviewTest : ComponentTest
     public ReceiptInboxReviewTest() => Services.AddSingleton(Mock.Of<IMerchantCommands>());
 
     [Fact]
+    public void Pending_and_failed_receipt_loads_show_status_and_allow_retry()
+    {
+        var id = Guid.NewGuid();
+        var pending = new TaskCompletionSource<ReceiptInboxResponse>();
+        var client = new Mock<IReceiptsClient>();
+        client.SetupSequence(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>()))
+            .Returns(pending.Task)
+            .ReturnsAsync(new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest(), []));
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        Services.AddSingleton(client.Object);
+
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        Assert.Single(page.FindAll("[role='status'][aria-busy='true']"));
+        pending.SetException(new HttpRequestException());
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("[role='alert']")));
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Try again").Click();
+        page.WaitForAssertion(() => Assert.Contains("Receipt details", page.Markup));
+    }
+
+    [Fact]
+    public void A_previous_receipt_read_cannot_replace_the_current_route()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var pending = new TaskCompletionSource<ReceiptInboxResponse>();
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(first, It.IsAny<CancellationToken>())).Returns(pending.Task);
+        client.Setup(x => x.GetReceiptInboxAsync(second, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptInboxResponse(second, Guid.NewGuid(), "USD", new SaveReceiptRequest(), []) { ExpenseName = "Current expense" });
+        client.Setup(x => x.MatchReceiptInboxAsync(first, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        Services.AddSingleton(client.Object);
+
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, first));
+        page.Render(parameters => parameters.Add(p => p.Id, second));
+        page.WaitForAssertion(() => Assert.Contains("Current expense", page.Markup));
+        pending.SetResult(new ReceiptInboxResponse(first, null, "USD", new SaveReceiptRequest(), []));
+        page.WaitForAssertion(() => {
+            client.Verify(x => x.MatchReceiptInboxAsync(first, It.IsAny<CancellationToken>()), Times.Once);
+            Assert.Contains("Current expense", page.Markup);
+        });
+    }
+
+    [Fact]
     public void A_match_can_be_dismissed_without_removing_the_receipt()
     {
         var id = Guid.NewGuid();
