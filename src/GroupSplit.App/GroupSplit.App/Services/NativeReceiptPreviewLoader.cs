@@ -9,7 +9,9 @@ internal sealed class NativeReceiptPreviewLoader(IHttpClientFactory clients) : I
         var path = Uri.TryCreate(url, UriKind.Absolute, out var absolute) ? absolute.PathAndQuery : url;
         path = path.TrimStart('/');
         if (!path.StartsWith("api/", StringComparison.Ordinal))
+        {
             throw new HttpRequestException("Invalid receipt preview path.");
+        }
         using var client = clients.CreateClient("native-receipt-preview");
         var bytes = await client.GetByteArrayAsync(path[4..], cancellationToken);
         return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";

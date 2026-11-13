@@ -49,7 +49,8 @@ public class ReceiptInboxReviewTest : ComponentTest
         page.Render(parameters => parameters.Add(p => p.Id, second));
         page.WaitForAssertion(() => Assert.Contains("Current expense", page.Markup));
         pending.SetResult(new ReceiptInboxResponse(first, null, "USD", new SaveReceiptRequest(), []));
-        page.WaitForAssertion(() => {
+        page.WaitForAssertion(() =>
+        {
             client.Verify(x => x.MatchReceiptInboxAsync(first, It.IsAny<CancellationToken>()), Times.Once);
             Assert.Contains("Current expense", page.Markup);
         });
