@@ -27,8 +27,24 @@ public class ReceiptInboxTest : ComponentTest
         Assert.Equal("/receipt-importer/install", link.GetAttribute("href"));
         Assert.Contains("Install or update", link.TextContent);
         var instructions = Render<ReceiptImporterInstall>();
-        Assert.Equal("https://microsoftedge.microsoft.com/addons/detail/aaclkbbjgicajpnjoigfjnlmpiocngmp", instructions.Find("a[target='_blank']").GetAttribute("href"));
+        var links = instructions.FindAll("a[target='_blank']").Select(a => a.GetAttribute("href")).ToArray();
+        Assert.Contains("https://microsoftedge.microsoft.com/addons/detail/aaclkbbjgicajpnjoigfjnlmpiocngmp", links);
+        Assert.Contains("https://chromewebstore.google.com/detail/groupsplit-receipt-import/ajofnofdakhcjkgjijkdenieilgndpeb", links);
         Assert.Contains("Microsoft Edge", instructions.Markup);
+    }
+
+    [Fact]
+    public async Task Android_explains_computer_import_and_offers_receipt_capture()
+    {
+        Services.AddSingleton(new GroupSplit.App.Shared.Services.AppLinks(new Uri("https://groupsplit.example/")) { IsAndroidNative = true });
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInbox>();
+        page.WaitForAssertion(() => Assert.Contains("Import store receipts on a computer", page.Markup));
+        Assert.Contains("same account", page.Markup);
+        Assert.Empty(page.FindAll(".gs-receipt-import-action"));
+        Assert.DoesNotContain("Import from a store", page.Markup);
+        await page.FindAll("button").Single(button => button.TextContent.Contains("Upload a receipt")).ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Single(dialogs.FindComponents<ReceiptFilePicker>()));
     }
 
     [Fact]

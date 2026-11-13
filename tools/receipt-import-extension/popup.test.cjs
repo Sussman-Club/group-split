@@ -671,3 +671,48 @@ test('closes a separate importer after successful completion', () => {
   context.closeCompletedImporter();
   assert.equal(closed, true);
 });
+
+
+test('suggests the latest valid imported receipt date for each store', () => {
+  const context = page('');
+  const files = ['Amazon-2026-04-10-1.pdf', 'Amazon-2026-04-12-2.pdf',
+    'Costco-2026-05-03-1-1-2.pdf', 'Costco-2026-05-07-1.pdf',
+    'Amazon-2026-02-30-1.pdf', 'Amazon-2099-01-01-1.pdf', 'other.pdf'];
+  assert.equal(context.latestImportedDate(files, 'amazon', '2026-11-12'), '2026-04-12');
+  assert.equal(context.latestImportedDate(files, 'costco', '2026-11-12'), '2026-05-03');
+  assert.equal(context.latestImportedDate(files, 'costco-online', '2026-11-12'), '2026-05-07');
+  assert.equal(context.latestImportedDate([], 'amazon', '2026-11-12'), null);
+});
+
+test('does not overwrite a date edited while import history is loading', async () => {
+  const context = page('');
+  context.document.getElementById('retailer').value = 'costco';
+  vm.runInContext("inbox = { tabId: 7, origin: 'https://groupsplit.sussman.win' }", context);
+  let finish;
+  context.testExecute = () => new Promise(resolve => { finish = resolve; });
+  vm.runInContext('execute = testExecute', context);
+  context.document.getElementById('receipts').replaceChildren = () => {};
+  context.document.getElementById('buyer').options = [];
+  const pending = context.suggestStartDate();
+  const from = context.document.getElementById('from');
+  from.value = '2026-01-01';
+  from.input();
+  finish(['Amazon-2026-04-12-2.pdf']);
+  await pending;
+  assert.equal(from.value, '2026-01-01');
+});
+
+test('reads history only from the connected inbox and includes filed and ignored receipts', async () => {
+  const context = page('');
+  context.location.origin = 'https://groupsplit.sussman.win';
+  context.location.pathname = '/inbox/receipts';
+  const requests = [];
+  context.fetch = async path => {
+    requests.push(path);
+    return { ok: true, json: async () => [{ attachments: [{ fileName: path + '.pdf' }] }] };
+  };
+  const files = await context.readImportedReceiptDates('https://groupsplit.sussman.win');
+  assert.equal(files.length, 3);
+  assert.deepEqual(requests, ['/api/receipts/inbox', '/api/receipts/inbox/added', '/api/receipts/inbox/ignored']);
+  await assert.rejects(context.readImportedReceiptDates('https://other.example'), /navigated away/);
+});

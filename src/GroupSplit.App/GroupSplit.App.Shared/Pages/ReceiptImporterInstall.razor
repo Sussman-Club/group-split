@@ -10,10 +10,13 @@
         <h1 id="importer-title">@Loc["Your store receipts,"]<br />@Loc["together in one place."]</h1>
         <p class="gs-android-intro">@Loc["Bring receipts from supported stores into your GroupSplit inbox, ready to review and add to an expense."]</p>
         <div class="gs-android-download">
+            <div class="gs-receipt-importer-store-links">
+            <MudButton Href="https://chromewebstore.google.com/detail/groupsplit-receipt-import/ajofnofdakhcjkgjijkdenieilgndpeb" Target="_blank" rel="noopener noreferrer"
+                       Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill gs-android-cta" StartIcon="@Icons.Material.Rounded.Download">@Loc["Get it for Chrome"]</MudButton>
             <MudButton Href="https://microsoftedge.microsoft.com/addons/detail/aaclkbbjgicajpnjoigfjnlmpiocngmp" Target="_blank" rel="noopener noreferrer"
-                       Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill gs-android-cta" StartIcon="@Icons.Material.Rounded.Download">@Loc["Get the receipt importer"]</MudButton>
-            <p class="gs-android-compatibility">@Loc["For Microsoft Edge · Opens Edge Add-ons in a new tab"]</p>
-            <p>@Loc["Using another browser? Open this page in Microsoft Edge to install the extension. Copy the address from your browser, then paste it into Edge."]</p>
+                       Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="gs-btn-pill gs-android-cta" StartIcon="@Icons.Material.Rounded.Download">@Loc["Get it for Edge"]</MudButton>
+            </div>
+            <p class="gs-android-compatibility">@Loc["Choose the store for your browser. The listing opens in a new tab."]</p>
             <p>@Loc["Prefer to stay in this browser? You can still upload a photo or PDF from your receipts inbox."]</p>
         </div>
         <a class="gs-android-web-link" href="/inbox/receipts">@Loc["Back to receipts"]</a>
@@ -23,16 +26,16 @@
         <div class="gs-android-install-heading">
             <MudIcon Icon="@Icons.Material.Rounded.Extension" Size="Size.Large" />
             <h2 id="importer-install-title">@Loc["A few steps."]<br />@Loc["Then you’re ready."]</h2>
-            <p>@Loc["Install the extension in Microsoft Edge, then return to your receipts."]</p>
+            <p>@Loc["Install the extension in Chrome or Microsoft Edge, then return to your receipts."]</p>
         </div>
         <ol class="gs-android-steps">
-            <li><div><h3>@Loc["Open Edge Add-ons"]</h3><p>@Loc["Open the receipt importer listing in Microsoft Edge."]</p></div></li>
-            <li><div><h3>@Loc["Add the extension"]</h3><p>@Loc["Select Get and confirm the installation in Edge."]</p></div></li>
+            <li><div><h3>@Loc["Open the extension store"]</h3><p>@Loc["Open the receipt importer listing for your browser."]</p></div></li>
+            <li><div><h3>@Loc["Add the extension"]</h3><p>@Loc["Select Add to Chrome or Get, then confirm the installation."]</p></div></li>
             <li><div><h3>@Loc["Import your receipts"]</h3><p>@Loc["Return to your GroupSplit receipts, refresh the page, and choose Import from a store. You can also use Add receipt to upload a photo or PDF."]</p></div></li>
         </ol>
         <div class="gs-android-update-note">
             <MudIcon Icon="@Icons.Material.Rounded.SystemUpdate" Size="Size.Small" />
-            <div><h3>@Loc["When it’s time to update"]</h3><p>@Loc["Microsoft Edge updates extensions automatically. Refresh GroupSplit after an update."]</p></div>
+            <div><h3>@Loc["When it’s time to update"]</h3><p>@Loc["Chrome and Microsoft Edge update extensions automatically. Refresh GroupSplit after an update."]</p></div>
         </div>
     </section>
 </div>

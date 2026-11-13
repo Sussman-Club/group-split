@@ -5915,4 +5915,17 @@
   <data name="No matching time zones" xml:space="preserve"><value>Nenhum fuso horário encontrado</value></data>
   <data name="{0} receipt waiting" xml:space="preserve"><value>{0} recibo pendente</value></data>
   <data name="{0} receipts waiting" xml:space="preserve"><value>{0} recibos pendentes</value></data>
+  <data name="Get it for Chrome" xml:space="preserve"><value>Obter para Chrome</value></data>
+  <data name="Get it for Edge" xml:space="preserve"><value>Obter para Edge</value></data>
+  <data name="Choose the store for your browser. The listing opens in a new tab." xml:space="preserve"><value>Escolha a loja do seu navegador. A página abre em uma nova aba.</value></data>
+  <data name="Install the extension in Chrome or Microsoft Edge, then return to your receipts." xml:space="preserve"><value>Instale a extensão no Chrome ou Microsoft Edge e volte aos seus recibos.</value></data>
+  <data name="Open the extension store" xml:space="preserve"><value>Abra a loja de extensões do seu navegador</value></data>
+  <data name="Open the receipt importer listing for your browser." xml:space="preserve"><value>Abra a página do importador de recibos para seu navegador.</value></data>
+  <data name="Select Add to Chrome or Get, then confirm the installation." xml:space="preserve"><value>Selecione Usar no Chrome ou Obter e confirme a instalação.</value></data>
+  <data name="Chrome and Microsoft Edge update extensions automatically. Refresh GroupSplit after an update." xml:space="preserve"><value>Chrome e Microsoft Edge atualizam as extensões automaticamente. Atualize o GroupSplit após uma atualização.</value></data>
+  <data name="Import store receipts on a computer" xml:space="preserve"><value>Importe recibos de lojas em um computador</value></data>
+  <data name="Import from Amazon or Costco using the GroupSplit browser extension on a computer. Then open this inbox in the Android app using the same account." xml:space="preserve"><value>Importe recibos da Amazon ou Costco usando a extensão do GroupSplit em um computador. Depois, abra esta caixa de entrada no app Android com a mesma conta.</value></data>
+  <data name="On this device, add a receipt using a photo or PDF." xml:space="preserve"><value>Neste dispositivo, adicione um recibo usando uma foto ou PDF.</value></data>
+  <data name="The browser extension did not respond. Install or enable it, then refresh this page and try again." xml:space="preserve"><value>A extensão do navegador não respondeu. Instale-a ou ative-a, atualize esta página e tente novamente.</value></data>
+  <data name="If the importer opens but a store needs sign-in or an import fails, follow the message in the importer." xml:space="preserve"><value>Se o importador abrir, mas a loja exigir login ou uma importação falhar, siga as instruções do importador.</value></data>
 </root>
