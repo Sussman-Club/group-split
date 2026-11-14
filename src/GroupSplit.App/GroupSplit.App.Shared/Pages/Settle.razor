@@ -50,6 +50,14 @@
             <div class="gs-eyebrow">@Loc["Overall"]</div>
             <div class="gs-hero-amount">@(_planFailed ? Loc["Not loaded"].Value : "…")</div>
         }
+        else if (Plan.Currencies.Any(position => position.Currency != "USD"))
+        {
+            <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
+            @foreach (var position in Plan.Currencies)
+            {
+                <div><span>@position.Currency </span><Money Value="position.Net" Currency="position.Currency" Signed /></div>
+            }
+        }
         else if (Net > 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
@@ -65,7 +73,10 @@
             <div class="gs-eyebrow">@Loc["Overall"]</div>
             <div class="gs-hero-amount">@Loc["All settled"]</div>
         }
-        <div class="gs-hero-sub">@HeroSub</div>
+        @if (Plan is null || !Plan.Currencies.Any(position => position.Currency != "USD"))
+        {
+            <div class="gs-hero-sub">@HeroSub</div>
+        }
         @if (Plan is null && _planFailed)
         {
             <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryPlanAsync">@Loc["Try again"]</MudButton>
@@ -168,7 +179,7 @@
                             <div class="meta">@Detail(settlement)</div>
                         </div>
                         <div>
-                            <div><Money Value="settlement.Amount" /></div>
+                            <div><Money Value="settlement.Amount" Currency="settlement.Currency" /></div>
                             <span class="when">@Clock.Day(settlement.DateTime).ToString("d MMM")</span>
                         </div>
                     </div>

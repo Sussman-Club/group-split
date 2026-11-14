@@ -219,10 +219,10 @@
                         <span class="gs-muted gs-feed-date">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } desktopTime) { <text> · @Clock.FormatTime(desktopTime)</text> }</span>
                     </span>
                     <span class="gs-feed-money">
-                        <Money Value="entry.Amount" Class="gs-feed-amount" />
+                        <Money Value="entry.Amount" Currency="entry.Currency" Class="gs-feed-amount" />
                         @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } desktopShare)
                         {
-                            <span class="gs-muted gs-feed-desktop-share">@Loc["Your share {0}", desktopShare.ToMoney()].Value</span>
+                            <span class="gs-muted gs-feed-desktop-share">@Loc["Your share {0}", desktopShare.ToMoney(entry.Currency)].Value</span>
                         }
                     </span>
                 </button>
@@ -344,7 +344,7 @@
                 <PropertyColumn Property="x => x.Amount" Title="@Loc["Copy.Sentence.Amount"]" HeaderClass="gs-right" CellClass="gs-right"
                                 InitialDirection="@Initially("amount")">
                     <CellTemplate>
-                        <Money Value="context.Item.Amount" Class="gs-grid-amount" />
+                        <Money Value="context.Item.Amount" Currency="context.Item.Currency" Class="gs-grid-amount" />
                     </CellTemplate>
                 </PropertyColumn>
 
@@ -357,7 +357,7 @@
                     <CellTemplate>
                         @if (context.Item.Share is { } share)
                         {
-                            <Money Value="share" Class="gs-grid-share" />
+                            <Money Value="share" Currency="context.Item.Currency" Class="gs-grid-share" />
                         }
                         else
                         {
@@ -369,7 +369,7 @@
                 <TemplateColumn Title="@Loc["Balance"]" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
-                        <Money Value="context.Item.RunningBalance" Signed Class="gs-grid-balance" />
+                        <Money Value="context.Item.RunningBalance" Currency="context.Item.Currency" Signed Class="gs-grid-balance" />
                     </CellTemplate>
                 </TemplateColumn>
 

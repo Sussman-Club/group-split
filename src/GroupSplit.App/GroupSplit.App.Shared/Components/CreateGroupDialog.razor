@@ -27,6 +27,15 @@
                           Lines="2"
                           MaxLength="256"
                           Immediate="true" />
+            <details class="gs-expense-disclosure">
+            <summary>@Loc["Default currency"] <span>@model.Currency</span></summary>
+            <MudSelect T="string" @bind-Value="model.Currency" Label="@Loc["Default currency"]" Variant="Variant.Outlined">
+                @foreach (var currency in GroupSplit.App.Shared.Extensions.MoneyExtensions.OfferedCurrencies)
+                {
+                    <MudSelectItem Value="@currency">@currency</MudSelectItem>
+                }
+            </MudSelect>
+            </details>
         </MudForm>
     </DialogContent>
 

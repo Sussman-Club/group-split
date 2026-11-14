@@ -55,9 +55,19 @@ public interface IDebtCalculationService
 public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculationService
 {
     public Task<UserGroupBalanceResponse> GetUserBalance(IEnumerable<GroupNetBalance> netBalance) =>
-        Task.FromResult(Mine(MinimizeTransactions(netBalance)));
+        Task.FromResult(Combine(netBalance.GroupBy(balance => balance.Currency, StringComparer.OrdinalIgnoreCase)
+            .Select(group => Mine(MinimizeTransactions(group)))));
 
     public Task<UserGroupBalanceResponse> GetUserBalanceThrough(IEnumerable<GroupNetBalance> throughDay,
+        IEnumerable<SettlementPayment> later)
+    {
+        var payments = later.ToList();
+        return Task.FromResult(Combine(throughDay.GroupBy(balance => balance.Currency, StringComparer.OrdinalIgnoreCase)
+            .Select(group => BalanceThrough(group, payments.Where(payment =>
+                string.Equals(payment.Currency, group.Key, StringComparison.OrdinalIgnoreCase))))));
+    }
+
+    private UserGroupBalanceResponse BalanceThrough(IEnumerable<GroupNetBalance> throughDay,
         IEnumerable<SettlementPayment> later)
     {
         var balances = throughDay.Select(balance => balance with { }).ToDictionary(balance => balance.UserId);
@@ -128,7 +138,19 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             left -= part;
         }
 
-        return Task.FromResult(Mine(MinimizeTransactions(balances.Values)));
+        return Mine(MinimizeTransactions(balances.Values));
+    }
+
+    private static UserGroupBalanceResponse Combine(IEnumerable<UserGroupBalanceResponse> positions)
+    {
+        var parts = positions.ToList();
+        return new UserGroupBalanceResponse
+        {
+            NetBalances = parts.SelectMany(part => part.NetBalances).ToArray(),
+            OwedToYou = parts.SelectMany(part => part.OwedToYou).ToArray(),
+            YouOwed = parts.SelectMany(part => part.YouOwed).ToArray(),
+            Plan = parts.SelectMany(part => part.Plan).ToArray()
+        };
     }
 
     public UserGroupBalanceResponse CappedAt(UserGroupBalanceResponse period, UserGroupBalanceResponse settledLater) =>
@@ -140,7 +162,8 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             [
                 .. from payment in period.Plan
                    let cap = settledLater.Plan
-                       .Where(other => other.FromUserId == payment.FromUserId && other.ToUserId == payment.ToUserId)
+                       .Where(other => other.FromUserId == payment.FromUserId && other.ToUserId == payment.ToUserId &&
+                           string.Equals(other.Currency, payment.Currency, StringComparison.OrdinalIgnoreCase))
                        .Sum(other => other.Amount)
                    where cap > 0
                    select payment with { Amount = Math.Min(payment.Amount, cap) }
@@ -150,7 +173,8 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
     private static IEnumerable<DebtInfo> Capped(IEnumerable<DebtInfo> period, IEnumerable<DebtInfo> settledLater) =>
     [
         .. from debt in period
-           let cap = settledLater.Where(other => other.UserId == debt.UserId).Sum(other => other.Amount)
+           let cap = settledLater.Where(other => other.UserId == debt.UserId &&
+               string.Equals(other.Currency, debt.Currency, StringComparison.OrdinalIgnoreCase)).Sum(other => other.Amount)
            where cap > 0
            select debt with { Amount = Math.Min(debt.Amount, cap) }
     ];
@@ -238,6 +262,7 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
                 .Append(new DebtInfo
                 {
                     UserId = debtor.UserId,
+                    Currency = debtor.Currency,
                     UserName = debtor.UserName,
                     Amount = payment
                 });
@@ -247,6 +272,7 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
                 .Append(new DebtInfo
                 {
                     UserId = creditor.UserId,
+                    Currency = creditor.Currency,
                     UserName = creditor.UserName,
                     Amount = payment
                 });
@@ -254,6 +280,7 @@ public class DebtCalculationService(ICurrentUser currentUser) : IDebtCalculation
             plan.Add(new SettlementPayment
             {
                 FromUserId = debtor.UserId,
+                Currency = debtor.Currency,
                 FromUserName = debtor.UserName,
                 ToUserId = creditor.UserId,
                 ToUserName = creditor.UserName,

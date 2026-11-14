@@ -44,7 +44,15 @@
         opening every group in turn and adding up by hand.
     *@
     <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
-        @if (Net > 0)
+        @if (Position?.Currencies.Any(position => position.Currency != "USD") == true)
+        {
+            <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
+            @foreach (var position in Position.Currencies)
+            {
+                <div><span>@position.Currency </span><Money Value="position.Net" Currency="position.Currency" Signed /></div>
+            }
+        }
+        else if (Net > 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
             <Money Value="Net" Animate Class="gs-hero-amount" />
@@ -61,7 +69,11 @@
         }
 
         <div class="gs-hero-sub">
-            @if (OwedToYou > 0 && YouOwe > 0)
+            @if (Position?.Currencies.Any(position => position.Currency != "USD") == true)
+            {
+                @Loc["Amounts are shown separately for each currency."]
+            }
+            else if (OwedToYou > 0 && YouOwe > 0)
             {
                 @(Loc["{0} owed to you, {1} owed by you. They do not cancel out -- they are different people.", OwedToYou.ToMoney(), YouOwe.ToMoney()].Value)
             }
@@ -86,7 +98,7 @@
                         <div class="who">
                             @group.GroupName <small>@(group.Balance > 0 ? Loc["owes you"].Value : Loc["Copy.Lower.you_owe"].Value)</small>
                         </div>
-                        <Money Value="@Math.Abs(group.Balance)" Animate />
+                        <Money Value="@Math.Abs(group.Balance)" Currency="group.Currency" Animate />
                         <div class="gs-hero-actions">
                             <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                        OnClick="@(() => Open(group.GroupId))">@Loc["Open"]</MudButton>

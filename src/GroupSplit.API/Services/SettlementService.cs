@@ -191,7 +191,7 @@ public class SettlementService(
         foreach (var payment in payments)
         {
             context.Add(group.SettlementBetween(members[payment.FromUserId], members[payment.ToUserId],
-                payment.Amount, date, description, cutoff?.Through));
+                payment.Amount, date, description, cutoff?.Through, payment.Currency));
         }
 
         // One save. Half a settling-up would leave somebody looking at a balance that had
@@ -199,7 +199,7 @@ public class SettlementService(
         foreach (var payment in payments)
         {
             await SettlementRequestResolution.ResolveMatching(context, clock, payment.FromUserId, payment.ToUserId,
-                [new GroupDebt(groupId, group.Name, payment.Amount)], cancellationToken);
+                [new GroupDebt(groupId, group.Name, payment.Amount)], payment.Currency, cancellationToken);
         }
 
         await NotifySettlements(cancellationToken);
@@ -234,14 +234,14 @@ public class SettlementService(
             : (request.UserId, callerId);
 
         return Record(groupId, fromUserId, toUserId, request.Amount, request.Date,
-            request.Description, request.Through, cancellationToken);
+            request.Description, request.Through, request.Currency, cancellationToken);
     }
 
     public async Task<SettlementPayment> RecordRepayment(Guid groupId,
         RecordRepaymentRequest request, CancellationToken cancellationToken = default)
     {
-        var (from, to) = await Record(groupId, request.FromUserId, request.ToUserId, request.Amount,
-            request.Date, request.Description, request.Through, cancellationToken);
+        var (from, to, currency) = await Record(groupId, request.FromUserId, request.ToUserId, request.Amount,
+            request.Date, request.Description, request.Through, request.Currency, cancellationToken);
 
         return new SettlementPayment
         {
@@ -249,7 +249,8 @@ public class SettlementService(
             FromUserName = $"{from.FirstName} {from.LastName}".Trim(),
             ToUserId = to.Id,
             ToUserName = $"{to.FirstName} {to.LastName}".Trim(),
-            Amount = request.Amount
+            Amount = request.Amount,
+            Currency = currency
         };
     }
 
@@ -257,8 +258,8 @@ public class SettlementService(
     /// Writes one repayment between two participants of a group: what settling with one
     /// member and recording a repayment between any two both come down to.
     /// </summary>
-    private async Task<(User From, User To)> Record(Guid groupId, Guid fromUserId, Guid toUserId,
-        decimal amount, DateTimeOffset? date, string? description, DateOnly? coversThrough,
+    private async Task<(User From, User To, string Currency)> Record(Guid groupId, Guid fromUserId, Guid toUserId,
+        decimal amount, DateTimeOffset? date, string? description, DateOnly? coversThrough, string? currency,
         CancellationToken cancellationToken)
     {
         // Scoped to the caller's own groups, as everywhere else: a group they are not in is
@@ -292,16 +293,23 @@ public class SettlementService(
         //
         // The stated date, or now. A payment made on the 30th and typed in on the 3rd
         // belongs to the month it settled, not the one somebody got round to it in.
+        var paymentCurrency = string.IsNullOrWhiteSpace(currency) ? group.Currency : currency.Trim().ToUpperInvariant();
+        if (paymentCurrency != group.Currency && !await context.Set<Transaction>().AnyAsync(
+                transaction => transaction.GroupId == groupId && transaction.Currency == paymentCurrency,
+                cancellationToken))
+        {
+            throw new ConflictException(ErrorCodes.CurrencyMismatch, "This group has no activity in that currency.");
+        }
         context.Add(group.SettlementBetween(from, to, amount,
             (date ?? clock.GetUtcNow()).ToUniversalTime(),
-            description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
+            description?.Trim() is { Length: > 0 } note ? note : null, coversThrough, paymentCurrency));
 
         await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id,
-            [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
+            [new GroupDebt(groupId, group.Name, amount)], paymentCurrency, cancellationToken);
         await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
-        return (from, to);
+        return (from, to, paymentCurrency);
     }
 
     public Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default) =>
@@ -311,8 +319,14 @@ public class SettlementService(
     {
         var (youPay, owedToYou) = await PlanSides(cutoff, cancellationToken);
 
-        var youOwe = youPay.Sum(person => person.Amount);
-        var owed = owedToYou.Sum(person => person.Amount);
+        var currencies = youPay.Select(person => person.Currency).Concat(owedToYou.Select(person => person.Currency))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Select(currency =>
+            {
+                var youOwe = youPay.Where(person => person.Currency == currency).Sum(person => person.Amount);
+                var owed = owedToYou.Where(person => person.Currency == currency).Sum(person => person.Amount);
+                return new CurrencyPosition(currency, owed - youOwe, owed, youOwe);
+            }).ToArray();
+        var primary = currencies.FirstOrDefault(position => position.Currency == "USD");
 
         var callerId = userContext.User.Id;
 
@@ -338,7 +352,8 @@ public class SettlementService(
 
         var lastSettled = paid.Concat(paidTo).Max();
 
-        return new SettlementPlanResponse(owed - youOwe, owed, youOwe, youPay, owedToYou, lastSettled);
+        return new SettlementPlanResponse(primary?.Net ?? 0, primary?.OwedToYou ?? 0,
+            primary?.YouOwe ?? 0, youPay, owedToYou, lastSettled) { Currencies = currencies };
     }
 
     public async Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
@@ -364,7 +379,12 @@ public class SettlementService(
         // is acting precisely while the balance still says they owe.
         var side = request.Direction is SettlementDirection.YouPaidThem ? youPay : owedToYou;
 
-        var person = side.FirstOrDefault(entry => entry.UserId == request.UserId)
+        var matches = side.Where(entry => entry.UserId == request.UserId).ToList();
+        var requestedCurrency = string.IsNullOrWhiteSpace(request.Currency)
+            ? matches.Count == 1 ? matches[0].Currency : "USD"
+            : request.Currency.Trim();
+        var person = matches.FirstOrDefault(entry =>
+            string.Equals(entry.Currency, requestedCurrency, StringComparison.OrdinalIgnoreCase))
                      ?? throw new ConflictException(ErrorCodes.SettlementNothingToSettle, cutoff is null
                          ? "There is nothing outstanding between the two of you in that direction."
                          : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
@@ -390,12 +410,12 @@ public class SettlementService(
         foreach (var allocation in allocations)
         {
             context.Add(groups[allocation.GroupId].SettlementBetween(from, to, allocation.Amount, date,
-                description, cutoff?.Through));
+                description, cutoff?.Through, person.Currency));
         }
 
         // One save for the whole payment. Two groups disagreeing about whether a single
         // transfer happened is the failure this screen exists to prevent, not to introduce.
-        await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id, allocations, cancellationToken);
+        await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id, allocations, person.Currency, cancellationToken);
         await NotifySettlements(cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
@@ -436,6 +456,7 @@ public class SettlementService(
                    ToUserName = split.User.FirstName +
                                 (split.User.LastName != null ? " " + split.User.LastName : ""),
                    Amount = transfer.Amount,
+                   Currency = transfer.Currency,
                    DateTime = transfer.DateTime,
                    Description = transfer.Description,
                    PaidByYou = transfer.UserId == callerId,
@@ -502,6 +523,25 @@ public class SettlementService(
             return null;
         }
 
+        var positions = new List<UserGroupBalanceResponse>();
+        foreach (var currency in rows.Select(row => row.Currency).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            positions.Add(await PositionForCurrency(groupId, currency, rows.Where(row =>
+                string.Equals(row.Currency, currency, StringComparison.OrdinalIgnoreCase)).ToArray(), cutoff, cancellationToken));
+        }
+
+        return new UserGroupBalanceResponse
+        {
+            NetBalances = positions.SelectMany(position => position.NetBalances).ToArray(),
+            OwedToYou = positions.SelectMany(position => position.OwedToYou).ToArray(),
+            YouOwed = positions.SelectMany(position => position.YouOwed).ToArray(),
+            Plan = positions.SelectMany(position => position.Plan).ToArray()
+        };
+    }
+
+    private async Task<UserGroupBalanceResponse> PositionForCurrency(Guid groupId, string currency,
+        GroupNetBalance[] rows, Cutoff? cutoff, CancellationToken cancellationToken)
+    {
         if (cutoff is null)
         {
             return await debtCalculator.GetUserBalance(rows);
@@ -509,14 +549,15 @@ public class SettlementService(
 
         var later = await LaterPayments([groupId], cutoff, cancellationToken);
 
-        var period = await debtCalculator.GetUserBalanceThrough(rows, later[groupId]);
+        var period = await debtCalculator.GetUserBalanceThrough(rows, later[groupId].Where(payment =>
+            string.Equals(payment.Currency, currency, StringComparison.OrdinalIgnoreCase)));
 
         // The latest later period anybody has since settled. Its plan may have routed this
         // one's debts through a third member, so what it leaves is the most this period can
         // still ask for; see IDebtCalculationService.CappedAt. Ends, since nothing is settled
         // through a day later than the latest one.
         var settledLater = await context.Set<Transfer>()
-            .Where(transfer => transfer.GroupId == groupId && transfer.CoversThrough > cutoff.Through)
+            .Where(transfer => transfer.GroupId == groupId && transfer.Currency == currency && transfer.CoversThrough > cutoff.Through)
             .MaxAsync(transfer => transfer.CoversThrough, cancellationToken);
 
         if (settledLater is not { } day)
@@ -524,12 +565,11 @@ public class SettlementService(
             return period;
         }
 
-        var closed = await GetPosition(groupId, cutoff with
-        {
-            Through = day
-        }, cancellationToken);
-
-        return closed is null ? period : debtCalculator.CappedAt(period, closed);
+        var laterCutoff = cutoff with { Through = day };
+        var closedRows = await (await groups.GetGroupNetBalance(groupId, laterCutoff, cancellationToken))
+            .Where(row => row.Currency == currency).ToArrayAsync(cancellationToken);
+        var closed = await PositionForCurrency(groupId, currency, closedRows, laterCutoff, cancellationToken);
+        return debtCalculator.CappedAt(period, closed);
     }
 
     /// <summary>
@@ -558,6 +598,7 @@ public class SettlementService(
                 GroupId = transfer.GroupId,
                 transfer.UserId,
                 RecipientId = transfer.Splits.Select(split => split.UserId).FirstOrDefault(),
+                transfer.Currency,
                 transfer.Amount
             })
             .ToListAsync(cancellationToken);
@@ -565,6 +606,7 @@ public class SettlementService(
         return later.ToLookup(transfer => transfer.GroupId, transfer => new SettlementPayment
         {
             FromUserId = transfer.UserId,
+            Currency = transfer.Currency,
             ToUserId = transfer.RecipientId,
             Amount = transfer.Amount
         });
@@ -586,8 +628,8 @@ public class SettlementService(
         var rows = await (await groups.GetAllGroupNetBalances(cutoff, cancellationToken))
             .ToListAsync(cancellationToken);
 
-        var youPay = new Dictionary<Guid, PersonBuilder>();
-        var owedToYou = new Dictionary<Guid, PersonBuilder>();
+        var youPay = new Dictionary<(Guid UserId, string Currency), PersonBuilder>();
+        var owedToYou = new Dictionary<(Guid UserId, string Currency), PersonBuilder>();
 
         foreach (var inGroup in rows.GroupBy(row => new { row.GroupId, row.GroupName }))
         {
@@ -632,6 +674,7 @@ public class SettlementService(
         .. rows.Select(row => new GroupNetBalance
         {
             UserId = row.UserId,
+            Currency = row.Currency,
             UserName = row.UserName,
             AmountPaid = row.AmountPaid,
             AmountOwed = row.AmountOwed,
@@ -640,7 +683,7 @@ public class SettlementService(
         })
     ];
 
-    private static void Accumulate(Dictionary<Guid, PersonBuilder> side, DebtInfo debt,
+    private static void Accumulate(Dictionary<(Guid UserId, string Currency), PersonBuilder> side, DebtInfo debt,
         Guid groupId, string groupName, bool isGuest)
     {
         if (debt.Amount <= 0)
@@ -648,9 +691,10 @@ public class SettlementService(
             return;
         }
 
-        if (!side.TryGetValue(debt.UserId, out var person))
+        var key = (debt.UserId, debt.Currency.ToUpperInvariant());
+        if (!side.TryGetValue(key, out var person))
         {
-            side[debt.UserId] = person = new PersonBuilder(debt.UserName, isGuest);
+            side[key] = person = new PersonBuilder(debt.UserName, isGuest);
         }
 
         person.Groups.Add(new GroupDebt(groupId, groupName, debt.Amount));
@@ -661,17 +705,17 @@ public class SettlementService(
     /// somebody reads the list and the order <see cref="PersonSettlement.Allocate"/> spends a
     /// payment in.
     /// </summary>
-    private static IReadOnlyList<PersonSettlement> Finish(Dictionary<Guid, PersonBuilder> side) =>
+    private static IReadOnlyList<PersonSettlement> Finish(Dictionary<(Guid UserId, string Currency), PersonBuilder> side) =>
     [
         .. from entry in side
            let amount = entry.Value.Groups.Sum(@group => @group.Amount)
            orderby amount descending, entry.Value.Name
            select new PersonSettlement(
-               entry.Key,
+               entry.Key.UserId,
                entry.Value.Name,
                amount,
                [.. entry.Value.Groups.OrderByDescending(@group => @group.Amount).ThenBy(@group => @group.GroupName)],
-               entry.Value.IsGuest)
+               entry.Value.IsGuest) { Currency = entry.Key.Currency }
     ];
 
     /// <remarks>
@@ -721,6 +765,7 @@ file static class CallersPosition
                select new SettlementPayment
                {
                    FromUserId = callerId,
+                   Currency = debt.Currency,
                    ToUserId = debt.UserId,
                    ToUserName = debt.UserName,
                    Amount = debt.Amount
@@ -729,6 +774,7 @@ file static class CallersPosition
                select new SettlementPayment
                {
                    FromUserId = credit.UserId,
+                   Currency = credit.Currency,
                    FromUserName = credit.UserName,
                    ToUserId = callerId,
                    Amount = credit.Amount

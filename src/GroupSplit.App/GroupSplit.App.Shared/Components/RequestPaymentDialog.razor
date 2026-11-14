@@ -22,13 +22,13 @@
         else
         {
             <MudStack Spacing="2">
-                <MudText>@(_through is { } day ? Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, RecipientName, CurrentDebt.ToMoney()].Value : Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney()].Value)</MudText>
+                <MudText>@(_through is { } day ? Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, RecipientName, CurrentDebt.ToMoney(Currency)].Value : Loc["{0} currently owes you {1}.", RecipientName, CurrentDebt.ToMoney(Currency)].Value)</MudText>
                 <MudDatePicker ShowToolbar="false" Date="_through" DateChanged="ThroughChangedAsync" Label="@Loc["Up to a date"]"
                                Variant="Variant.Outlined" Clearable="true" MaxDate="@Clock.Today"
                                Disabled="@(_busy || _readingPeriod)"
                                HelperText="@Loc["Leave empty to request the full balance."]" />
                 <DecimalField @bind-Value="_amount" Label="@Loc["Amount to request"]" Variant="Variant.Outlined"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              Adornment="Adornment.Start" AdornmentText="@Currency"
                               HideSpinButtons="true" />
                 @if (_amount <= 0 || decimal.Round(_amount, 2) != _amount)
                 {
@@ -58,6 +58,7 @@
     [Parameter] public Guid RecipientUserId { get; set; }
     [Parameter] public string RecipientName { get; set; } = "";
     [Parameter] public decimal CurrentDebt { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
     [Parameter] public DateTime? InitialThrough { get; set; }
 
     private decimal _amount;
@@ -85,7 +86,7 @@
             var saved = await Errors.TryAsync(async () => created = await GroupsClient.CreateGroupSettlementRequestAsync(GroupId,
                 new CreateSettlementRequest
                 {
-                    RecipientUserId = RecipientUserId, Amount = _amount,
+                    RecipientUserId = RecipientUserId, Amount = _amount, Currency = Currency,
                     Through = _through is { } day ? DateOnly.FromDateTime(day) : null,
                     UtcOffset = _periodOffset
                 }),
@@ -118,7 +119,7 @@
             {
                 _through = day;
                 _periodOffset = offset;
-                _amount = balance.OwedToYou.FirstOrDefault(debt => debt.UserId == RecipientUserId)?.Amount ?? 0m;
+                _amount = balance.OwedToYou.FirstOrDefault(debt => debt.UserId == RecipientUserId && debt.Currency == Currency)?.Amount ?? 0m;
             }
         }
         finally { _readingPeriod = false; }

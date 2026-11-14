@@ -8,4 +8,4 @@ namespace GroupSplit.Shared;
 /// <param name="Balance">
 /// Negative when they owe the group, positive when the group owes them.
 /// </param>
-public record OutstandingBalance(Guid GroupId, string GroupName, decimal Balance);
+public record OutstandingBalance(Guid GroupId, string GroupName, decimal Balance, string Currency = "USD");

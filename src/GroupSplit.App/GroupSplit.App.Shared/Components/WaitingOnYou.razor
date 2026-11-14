@@ -144,6 +144,8 @@
 
     private string SettleDetail(SettlementPlanResponse plan)
     {
+        if (plan.Currencies.Any(position => position.Currency != "USD"))
+            return Loc["See amounts separately for each currency."].Value;
         var owing = plan.YouPay.Count == 0
             ? null
             : plan.YouPay.Count == 1

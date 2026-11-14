@@ -9,11 +9,11 @@ namespace GroupSplit.API.Services;
 internal static class SettlementRequestResolution
 {
     public static async Task ResolveMatching(AppDbContext context, TimeProvider clock, Guid fromUserId,
-        Guid toUserId, IReadOnlyList<GroupDebt> payments, CancellationToken cancellationToken = default)
+        Guid toUserId, IReadOnlyList<GroupDebt> payments, string currency, CancellationToken cancellationToken = default)
     {
         var candidates = await context.Set<SettlementRequest>().Include(request => request.Groups)
             .Where(request => request.RecipientUserId == fromUserId && request.RequesterUserId == toUserId &&
-                              request.CancelledAt == null && request.ResolvedAt == null && request.StaleAt == null)
+                              request.Currency == currency && request.CancelledAt == null && request.ResolvedAt == null && request.StaleAt == null)
             .ToListAsync(cancellationToken);
         var now = clock.GetUtcNow();
         foreach (var request in candidates.Where(request => request.Groups.Count == payments.Count &&

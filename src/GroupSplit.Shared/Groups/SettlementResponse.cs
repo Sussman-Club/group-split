@@ -29,6 +29,7 @@ public record SettlementResponse
     public string ToUserName { get; init; } = "";
 
     public decimal Amount { get; init; }
+    public string Currency { get; init; } = "USD";
 
     public DateTimeOffset DateTime { get; init; }
 

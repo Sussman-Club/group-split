@@ -432,8 +432,8 @@ public sealed class MutationCommandTests : IDisposable
             .Select(change => change.GetString() ?? "")
             .ToList();
 
-        Assert.Contains("You pay Daniel 40.00.", changes);
-        Assert.Contains("Omar pays you 25.00.", changes);
+        Assert.Contains("You pay Daniel 40.00 USD.", changes);
+        Assert.Contains("Omar pays you 25.00 USD.", changes);
     }
 
     [Fact]

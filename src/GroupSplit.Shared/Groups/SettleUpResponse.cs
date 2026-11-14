@@ -10,6 +10,7 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SettlementPayment
 {
+    public string Currency { get; init; } = "USD";
     public Guid FromUserId { get; init; }
 
     /// <summary>Empty when the payer is the caller, who does not need naming to themselves.</summary>
@@ -39,6 +40,13 @@ public record SettleUpResponse
     /// <summary>The day they were worked out through, when one was given.</summary>
     public DateOnly? CoversThrough { get; init; }
 
-    /// <summary>What changed hands in total, both directions added up.</summary>
-    public decimal Total => Payments.Sum(payment => payment.Amount);
+    /// <summary>USD total retained for older clients; use <see cref="Totals"/> for all currencies.</summary>
+    public decimal Total => Payments.Where(payment => payment.Currency == "USD").Sum(payment => payment.Amount);
+
+    public IReadOnlyList<SettlementCurrencyTotal> Totals => Payments
+        .GroupBy(payment => payment.Currency, StringComparer.OrdinalIgnoreCase)
+        .Select(group => new SettlementCurrencyTotal(group.Key, group.Sum(payment => payment.Amount)))
+        .ToArray();
 }
+
+public record SettlementCurrencyTotal(string Currency, decimal Amount);

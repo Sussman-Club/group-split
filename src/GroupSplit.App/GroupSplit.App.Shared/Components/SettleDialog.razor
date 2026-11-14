@@ -36,7 +36,7 @@
                     Label="@(YouPaid ? Loc["Amount you paid"].Value : Loc["Amount they paid"].Value)"
                     Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
-                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentText="@Currency"
                     AdornmentColor="Color.Primary"
                     HideSpinButtons="true"
                     Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))"/>
@@ -108,6 +108,7 @@
 
     /// <summary>What stands between the two of them, whichever way round it is.</summary>
     [Parameter] public decimal TotalDebt { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
 
     /// <summary>
     /// Which way the money went. The caller knows: this dialog opens from under "owed to
@@ -135,10 +136,10 @@
 
     private string Standing => (_through, YouPaid) switch
     {
-        ({ } day, true) => Loc["For activity up to {0:d MMM}, you owe {1} {2}", day, Username, Owed.ToMoney()].Value,
-        ({ } day, false) => Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, Username, Owed.ToMoney()].Value,
-        (null, true) => Loc["You owe {0} {1}", Username, TotalDebt.ToMoney()].Value,
-        (null, false) => Loc["{0} owes you {1}", Username, TotalDebt.ToMoney()].Value
+        ({ } day, true) => Loc["For activity up to {0:d MMM}, you owe {1} {2}", day, Username, Owed.ToMoney(Currency)].Value,
+        ({ } day, false) => Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, Username, Owed.ToMoney(Currency)].Value,
+        (null, true) => Loc["You owe {0} {1}", Username, TotalDebt.ToMoney(Currency)].Value,
+        (null, false) => Loc["{0} owes you {1}", Username, TotalDebt.ToMoney(Currency)].Value
     };
 
     private string PeriodHelp => _through is { } day && Owed <= 0
@@ -150,6 +151,7 @@
         _model = new SettleRequest
         {
             UserId = UserId,
+            Currency = Currency,
             Amount = TotalDebt,
             Direction = Direction,
             Through = InitialThrough is { } cutoff ? DateOnly.FromDateTime(cutoff) : null,
@@ -217,7 +219,7 @@
 
             var side = YouPaid ? balance.YouOwed : balance.OwedToYou;
 
-            _owedForPeriod = side.FirstOrDefault(debt => debt.UserId == UserId)?.Amount ?? 0m;
+            _owedForPeriod = side.FirstOrDefault(debt => debt.UserId == UserId && debt.Currency == Currency)?.Amount ?? 0m;
             _model.Through = cutoff;
             _model.Amount = _owedForPeriod.Value;
         }
@@ -238,11 +240,11 @@
     private string Remaining => (Owed - _model.Amount) switch
     {
         >= 0 and var left => _through is null
-            ? Loc["Remaining balance: {0}", left.ToMoney()]
-            : Loc["Remaining for that period: {0}", left.ToMoney()],
+            ? Loc["Remaining balance: {0}", left.ToMoney(Currency)]
+            : Loc["Remaining for that period: {0}", left.ToMoney(Currency)],
         var over => _through is null
-            ? Loc["{0} more than is owed. It stays in the balance between you.", (-over).ToMoney()]
-            : Loc["{0} more than that period left owing. It stays in the balance between you.", (-over).ToMoney()]
+            ? Loc["{0} more than is owed. It stays in the balance between you.", (-over).ToMoney(Currency)]
+            : Loc["{0} more than that period left owing. It stays in the balance between you.", (-over).ToMoney(Currency)]
     };
 
     IEnumerable<string> ValidateAmount(decimal amount)

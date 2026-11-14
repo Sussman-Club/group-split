@@ -39,10 +39,11 @@ public class SettlementRequestService(
 
         var position = await settlements.GetPosition(groupId, Cutoff.Of(request.Through, request.UtcOffset), cancellationToken)
             ?? throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
-        var debt = position.OwedToYou.SingleOrDefault(item => item.UserId == request.RecipientUserId)
+        var currency = string.IsNullOrWhiteSpace(request.Currency) ? group.Currency : request.Currency.Trim().ToUpperInvariant();
+        var debt = position.OwedToYou.SingleOrDefault(item => item.UserId == request.RecipientUserId && item.Currency == currency)
             ?? throw NothingToRequest();
 
-        return await Create(request, group, debt.Amount, cancellationToken);
+        return await Create(request, group, debt.Amount, currency, cancellationToken);
     }
 
     public async Task<SettlementRequestResponse> Get(string token, CancellationToken cancellationToken = default)
@@ -105,7 +106,7 @@ public class SettlementRequestService(
             }
 
             context.Add(group.SettlementBetween(recipient, requester, part.RequestedAmount, now,
-                "Settlement request", settlementRequest.Through));
+                "Settlement request", settlementRequest.Through, settlementRequest.Currency));
         }
 
         settlementRequest.ResolvedAt = now;
@@ -114,7 +115,7 @@ public class SettlementRequestService(
     }
 
     private async Task<SettlementRequestResponse> Create(CreateSettlementRequest request,
-        Group group, decimal debt, CancellationToken cancellationToken)
+        Group group, decimal debt, string currency, CancellationToken cancellationToken)
     {
         if (request.RecipientUserId == currentUser.User.Id)
         {
@@ -148,7 +149,7 @@ public class SettlementRequestService(
             Requester = currentUser.User,
             Recipient = recipient,
             Token = NewToken(),
-            Currency = group.Currency,
+            Currency = currency,
             Amount = request.Amount,
             CreatedAt = clock.GetUtcNow(),
             Through = request.Through,
@@ -185,7 +186,7 @@ public class SettlementRequestService(
             var position = await settlements.GetPosition(part.GroupId, Cutoff.Of(request.Through, request.UtcOffset),
                 cancellationToken);
             var current = position?.Plan.FirstOrDefault(payment => payment.FromUserId == request.RecipientUserId &&
-                payment.ToUserId == request.RequesterUserId)?.Amount ?? 0m;
+                payment.ToUserId == request.RequesterUserId && payment.Currency == request.Currency)?.Amount ?? 0m;
             if (current == part.DebtAtCreation)
             {
                 continue;

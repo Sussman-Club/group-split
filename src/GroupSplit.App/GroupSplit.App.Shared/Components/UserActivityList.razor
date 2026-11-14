@@ -61,7 +61,7 @@
                     <div class="meta">@Detail(item)</div>
                 </div>
                 <div>
-                    <div><Money Value="item.Amount" /></div>
+                    <div><Money Value="item.Amount" Currency="item.Currency" /></div>
                     <span class="when">@Clock.Relative(item.DateTime)</span>
                 </div>
             </a>
@@ -94,7 +94,7 @@
         };
 
         if (entry.Share is { } share)
-            parts.Add(Loc["Copy.Lower.your_share_{0}", share.ToMoney()].Value);
+            parts.Add(Loc["Copy.Lower.your_share_{0}", share.ToMoney(entry.Currency)].Value);
 
         return string.Join(" · ", parts);
     }

@@ -28,6 +28,7 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SettleWithPersonRequest
 {
+    public string? Currency { get; set; }
     /// <summary>The other end of the payment.</summary>
     public Guid UserId { get; set; }
 
