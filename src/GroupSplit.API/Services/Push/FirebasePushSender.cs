@@ -99,7 +99,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     {
         var route = PushNotificationKinds.Route(kind, groupId, requestToken);
         if (route is null || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var origin) || origin.Scheme != Uri.UriSchemeHttps)
+        {
             return null;
+        }
+
         return new WebpushConfig
         {
             FcmOptions = new WebpushFcmOptions { Link = new Uri(origin, route).AbsoluteUri },
@@ -111,7 +114,10 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     {
         var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString(), ["deliveryId"] = deliveryId.ToString() };
         if (PushNotificationKinds.Route(kind, groupId, requestToken) is { } route)
+        {
             data["route"] = route;
+        }
+
         if (groupId != Guid.Empty)
         {
             data["groupId"] = groupId.ToString();
