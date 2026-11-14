@@ -8,7 +8,7 @@ namespace GroupSplit.App.Web.Client.Services;
 /// <summary>
 /// A full page load is required: the OIDC challenge and cookie belong to the BFF.
 /// </summary>
-public class AuthService(NavigationManager nav, IJSRuntime js, AntiforgeryStateProvider antiforgery) : IAuthService
+public class AuthService(NavigationManager nav, IJSRuntime js, AntiforgeryStateProvider antiforgery, IPushNotifications? push = null) : IAuthService
 {
     public Task Login(string? returnUrl, CancellationToken ct)
     {
@@ -16,11 +16,23 @@ public class AuthService(NavigationManager nav, IJSRuntime js, AntiforgeryStateP
         return Task.CompletedTask;
     }
 
-    public Task Logout(CancellationToken ct) => SignOutForm.PostAsync(js, antiforgery, ct);
-
-    public Task SignOutDeletedAccount(CancellationToken ct)
+    public async Task Logout(CancellationToken ct)
     {
+        if (push is not null)
+        {
+            await push.UnregisterAsync();
+        }
+
+        await SignOutForm.PostAsync(js, antiforgery, ct);
+    }
+
+    public async Task SignOutDeletedAccount(CancellationToken ct)
+    {
+        if (push is not null)
+        {
+            await push.UnregisterAsync(accountDeleted: true);
+        }
+
         nav.NavigateTo(AuthRoutes.AccountDeleted, forceLoad: true);
-        return Task.CompletedTask;
     }
 }

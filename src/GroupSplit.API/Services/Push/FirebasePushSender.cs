@@ -32,7 +32,7 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
         try
         {
             await FirebaseMessaging.GetMessaging(app).SendAsync(
-                CreateMessage(token, groupId, groupName, deliveryId, clock.GetUtcNow(), kind, requestToken), ct);
+                CreateMessage(token, groupId, groupName, deliveryId, clock.GetUtcNow(), kind, requestToken, config["Push:WebBaseUrl"]), ct);
             return true;
         }
         catch (FirebaseMessagingException error) when (error.MessagingErrorCode == MessagingErrorCode.Unregistered)
@@ -65,11 +65,12 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
 
     internal static Message CreateMessage(string token, Guid groupId, string groupName,
         Guid deliveryId, DateTimeOffset sentAt,
-        PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null) => new()
+        PushNotificationKind kind = PushNotificationKind.ExpenseCreated, string? requestToken = null, string? webBaseUrl = null) => new()
         {
             Token = token,
             Notification = new Notification { Title = "Group Split", Body = PushNotificationKinds.Body(kind, groupName) },
-            Data = Data(kind, groupId, requestToken),
+            Data = Data(kind, groupId, requestToken, deliveryId),
+            Webpush = Webpush(kind, groupId, requestToken, webBaseUrl),
             Apns = new ApnsConfig
             {
                 Headers = new Dictionary<string, string>
@@ -94,9 +95,29 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
             }
         };
 
-    private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken)
+    private static WebpushConfig? Webpush(PushNotificationKind kind, Guid groupId, string? requestToken, string? baseUrl)
     {
-        var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString() };
+        var route = PushNotificationKinds.Route(kind, groupId, requestToken);
+        if (route is null || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var origin) || origin.Scheme != Uri.UriSchemeHttps)
+        {
+            return null;
+        }
+
+        return new WebpushConfig
+        {
+            FcmOptions = new WebpushFcmOptions { Link = new Uri(origin, route).AbsoluteUri },
+            Headers = new Dictionary<string, string> { ["TTL"] = "3600" }
+        };
+    }
+
+    private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken, Guid deliveryId)
+    {
+        var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString(), ["deliveryId"] = deliveryId.ToString() };
+        if (PushNotificationKinds.Route(kind, groupId, requestToken) is { } route)
+        {
+            data["route"] = route;
+        }
+
         if (groupId != Guid.Empty)
         {
             data["groupId"] = groupId.ToString();

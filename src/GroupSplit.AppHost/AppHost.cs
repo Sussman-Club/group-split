@@ -136,6 +136,8 @@ var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web"
     .WithHealthEndpoints()
     .WithBrowserLogs();
 
+web.WithFirebaseWebPush(api);
+
 // Each browser store (and an unpacked development build) may use a different ID.
 var receiptImporterIds = builder.AddOptionalParameter("receipt-importer-extension-ids", "aaclkbbjgicajpnjoigfjnlmpiocngmp,ajofnofdakhcjkgjijkdenieilgndpeb");
 web.WithEnvironment("ReceiptImporter__ExtensionIds", receiptImporterIds);
