@@ -2,6 +2,7 @@ const keys = ["push.expenses", "push.settlements", "push.invitations", "push.ban
 const storeKey = "groupsplit.webpush";
 let config, messaging, sdk, registration, reason;
 let pendingPermission, initialization;
+let dotnet;
 
 function read() {
     try { return JSON.parse(localStorage.getItem(storeKey)) || { preferences: [] }; }
@@ -18,7 +19,8 @@ document.addEventListener("click", event => {
     }
 }, true);
 
-export function initialize() {
+export function initialize(callback) {
+    if (callback) dotnet = callback;
     return initialization ||= initializeOnce().catch(error => { initialization = undefined; messaging = undefined; throw error; });
 }
 async function initializeOnce() {
@@ -54,25 +56,16 @@ function safeRoute(route) {
     if (typeof route !== "string" || !route.startsWith("/") || route.startsWith("//") || route.includes("\\")) return "/account";
     return route;
 }
-async function api(method, id, body) {
-    const response = await fetch(`/api/users/me/push-devices/${id}`, {
-        method, credentials: "same-origin", headers: { "Content-Type": "application/json" },
-        body: body && JSON.stringify(body), redirect: "error"
-    });
-    if (!response.ok) throw new Error("Push registration failed");
-}
 async function register(value) {
     const token = await sdk.getToken(messaging, { vapidKey: config.vapidKey, serviceWorkerRegistration: registration });
     if (!token) throw new Error("No push token");
     value.id ||= crypto.randomUUID();
     // Persist the id before the request so a retry can remove the same registration.
     save({ ...read(), id: value.id });
-    await api("PUT", value.id, { token, expensesEnabled: value.preferences.includes(keys[0]),
-        settlementsEnabled: value.preferences.includes(keys[1]), invitationsEnabled: value.preferences.includes(keys[2]),
-        bankSyncIssuesEnabled: value.preferences.includes(keys[3]), staffSupportEnabled: value.preferences.includes(keys[4]) });
+    await dotnet.invokeMethodAsync("RegisterAsync", value.id, token, value.preferences);
 }
-export async function setEnabled(key, enabled) {
-    await initialize();
+export async function setEnabled(key, enabled, callback) {
+    await initialize(callback);
     if (!messaging || !keys.includes(key)) throw new Error("Notifications unavailable");
     if (enabled) {
         const permission = pendingPermission ? await pendingPermission : Notification.permission;
@@ -84,14 +77,14 @@ export async function setEnabled(key, enabled) {
     if (enabled) value.preferences.push(key);
     if (value.preferences.length) await register(value);
     else {
-        if (value.id) await api("DELETE", value.id);
+        if (value.id) await dotnet.invokeMethodAsync("UnregisterDeviceAsync", value.id);
         await sdk.deleteToken(messaging);
     }
     save(value);
     return state();
 }
-export async function refresh(owner) {
-    await initialize();
+export async function refresh(owner, callback) {
+    await initialize(callback);
     if (!messaging || !owner) return state();
     const value = read();
     if (value.owner && value.owner !== owner) {
@@ -104,7 +97,7 @@ export async function refresh(owner) {
     save(value);
     if (value.preferences?.length && Notification.permission === "granted") await register(value);
     else if (value.preferences?.length && Notification.permission === "denied") {
-        if (value.id) await api("DELETE", value.id);
+        if (value.id) await dotnet.invokeMethodAsync("UnregisterDeviceAsync", value.id);
         await sdk.deleteToken(messaging);
         value.preferences = [];
         delete value.id;
@@ -112,9 +105,10 @@ export async function refresh(owner) {
     }
     return state();
 }
-export async function unregister(accountDeleted) {
+export async function unregister(accountDeleted, callback) {
+    if (callback) dotnet = callback;
     const value = read();
-    if (!accountDeleted && value.id) await api("DELETE", value.id);
+    if (!accountDeleted && value.id) await dotnet.invokeMethodAsync("UnregisterDeviceAsync", value.id);
     if (value.id && !messaging) await initialize();
     if (messaging && value.id) await sdk.deleteToken(messaging);
     localStorage.removeItem(storeKey);

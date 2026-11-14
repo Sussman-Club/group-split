@@ -28,19 +28,21 @@ test("browser push registers independent preferences, refreshes and unregisters"
     source = source.replace('await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js")', "globalThis.__appSdk")
         .replace('await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-messaging.js")', "globalThis.__messagingSdk");
     const push = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
-    await push.refresh("owner");
+    const callback = { invokeMethodAsync: async (...args) => requests.push(args) };
+    await push.refresh("owner", callback);
     click({ target: { closest: () => ({ checked: true }) } });
     let state = await push.setEnabled("push.expenses", true);
     assert.deepEqual(state.preferences, ["push.expenses"]);
     state = await push.setEnabled("push.settlements", true);
     assert.deepEqual(state.preferences, ["push.expenses", "push.settlements"]);
-    assert.equal(JSON.parse(requests.at(-1).body).settlementsEnabled, true);
+    assert.deepEqual(requests.at(-1).slice(0, 1), ["RegisterAsync"]);
+    assert.deepEqual(requests.at(-1)[3], ["push.expenses", "push.settlements"]);
     await push.setEnabled("push.expenses", false);
-    assert.equal(JSON.parse(requests.at(-1).body).expensesEnabled, false);
+    assert.deepEqual(requests.at(-1)[3], ["push.settlements"]);
     onMessage({ data: { route: "//evil.example", deliveryId: "one" }, notification: { title: "Alert", body: "Body" } });
     assert.equal(requests.at(-1)[1].data.route, "/account");
     await push.unregister(false);
-    assert.equal(requests.at(-1).method, "DELETE");
+    assert.equal(requests.at(-1)[0], "UnregisterDeviceAsync");
     assert.equal(values.size, 0);
     Notification.permission = "denied";
     const count = requests.length;
