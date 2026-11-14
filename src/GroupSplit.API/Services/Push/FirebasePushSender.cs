@@ -110,7 +110,8 @@ public sealed class FirebasePushSender(IConfiguration config, TimeProvider clock
     private static Dictionary<string, string> Data(PushNotificationKind kind, Guid groupId, string? requestToken, Guid deliveryId)
     {
         var data = new Dictionary<string, string> { ["notificationKind"] = kind.ToString(), ["deliveryId"] = deliveryId.ToString() };
-        if (PushNotificationKinds.Route(kind, groupId, requestToken) is { } route) data["route"] = route;
+        if (PushNotificationKinds.Route(kind, groupId, requestToken) is { } route)
+            data["route"] = route;
         if (groupId != Guid.Empty)
         {
             data["groupId"] = groupId.ToString();
