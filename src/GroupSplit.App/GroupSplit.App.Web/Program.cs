@@ -47,6 +47,7 @@ builder.Services.AddAuthorizationBuilder();
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
 builder.Services.AddSharedServices();
+builder.Services.AddScoped<IPushNotifications, BrowserPushNotifications>();
 builder.Services.AddWebLocalization();
 builder.Services.AddReceiptClientPolicies();
 builder.Services.ConfigureReceiptHttpClient();
@@ -134,5 +135,14 @@ app.MapRazorComponents<App>()
 
 app.MapIdentity();
 app.MapAndroidDownloads();
+
+app.MapGet("/push-config", (IConfiguration config) => Results.Json(new
+{
+    apiKey = config["WebPush:ApiKey"],
+    projectId = config["WebPush:ProjectId"],
+    messagingSenderId = config["WebPush:MessagingSenderId"],
+    appId = config["WebPush:AppId"],
+    vapidKey = config["WebPush:VapidKey"]
+})).AllowAnonymous();
 
 app.Run();

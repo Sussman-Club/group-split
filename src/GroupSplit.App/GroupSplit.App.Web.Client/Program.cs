@@ -10,6 +10,7 @@ builder.Services.AddMudServices();
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
 builder.Services.AddSharedServices(ServiceLifetime.Singleton);
+builder.Services.AddScoped<IPushNotifications, BrowserPushNotifications>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 

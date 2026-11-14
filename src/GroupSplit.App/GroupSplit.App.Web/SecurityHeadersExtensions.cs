@@ -135,11 +135,11 @@ public static class SecurityHeadersExtensions
 
         return string.Join("; ",
             "default-src 'self'",
-            $"script-src 'self' 'nonce-{nonce}' 'wasm-unsafe-eval' {PlaidLink}",
+            $"script-src 'self' 'nonce-{nonce}' 'wasm-unsafe-eval' {PlaidLink} https://www.gstatic.com",
             $"style-src 'self' 'unsafe-inline' {FontStylesheets}",
             $"font-src 'self' data: {FontFiles}",
             $"img-src 'self' data: blob: {logos}",
-            $"connect-src 'self'{sockets} {PlaidApi}",
+            $"connect-src 'self'{sockets} {PlaidApi} https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com",
             $"frame-src {PlaidLink} {extensionFrames}",
             "frame-ancestors 'none'",
             "object-src 'none'",

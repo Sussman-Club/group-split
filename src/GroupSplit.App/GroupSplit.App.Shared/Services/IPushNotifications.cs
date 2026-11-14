@@ -12,6 +12,9 @@ public interface IPushNotifications
     {
         get;
     }
+    string DeviceDescription => "Choose which alerts this Android device receives.";
+    string? UnavailableReason => null;
+    Task InitializeAsync() => Task.CompletedTask;
     Task SetEnabledAsync(bool enabled);
     bool IsEnabled(PushNotificationKind kind) => kind == PushNotificationKind.ExpenseCreated && Enabled;
     Task SetEnabledAsync(PushNotificationKind kind, bool enabled) => kind == PushNotificationKind.ExpenseCreated
