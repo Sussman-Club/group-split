@@ -31,6 +31,7 @@ public record UserGroupBalanceResponse
 
 public record GroupNetBalance
 {
+    public string Currency { get; set; } = "USD";
     public Guid UserId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public decimal AmountPaid { get; set; }
@@ -59,6 +60,7 @@ public record GroupNetBalance
 
 public record DebtInfo
 {
+    public string Currency { get; set; } = "USD";
     public Guid UserId { get; set; }
     public string UserName { get; set; } = "";
     public decimal Amount { get; set; }

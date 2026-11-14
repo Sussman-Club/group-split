@@ -40,6 +40,7 @@ public static class ActivityProjectionExtensions
                        Description = transaction.Description,
                        CoversThrough = transaction is Transfer ? ((Transfer)transaction).CoversThrough : null,
                        Amount = transaction.Amount,
+                       Currency = transaction.Currency,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
                        // People.Display, written out longhand because this is built in
@@ -163,6 +164,7 @@ public static class ActivityProjectionExtensions
                        Description = transaction.Description,
                        CoversThrough = transaction is Transfer ? ((Transfer)transaction).CoversThrough : null,
                        Amount = transaction.Amount,
+                       Currency = transaction.Currency,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
                        // People.Display, written out longhand because this is built in
@@ -235,10 +237,15 @@ public static class ActivityProjectionExtensions
             var latest = page.Max(entry => entry.DateTime);
 
             var before = activity.Where(prior => prior.DateTime < earliest);
-            var balance = await before.Where(prior => prior.UserId == readerId).SumAsync(prior => prior.Amount, ct)
-                          - await before.SelectMany(prior => prior.Splits)
-                              .Where(split => split.UserId == readerId)
-                              .SumAsync(split => split.Amount, ct);
+            var paid = await before.Where(prior => prior.UserId == readerId).GroupBy(prior => prior.Currency)
+                .Select(group => new { Currency = group.Key, Amount = group.Sum(prior => prior.Amount) })
+                .ToDictionaryAsync(row => row.Currency, row => row.Amount, ct);
+            var owed = await before.SelectMany(prior => prior.Splits).Where(split => split.UserId == readerId)
+                .GroupBy(split => split.Transaction.Currency)
+                .Select(group => new { Currency = group.Key, Amount = group.Sum(split => split.Amount) })
+                .ToDictionaryAsync(row => row.Currency, row => row.Amount, ct);
+            foreach (var (currency, amount) in owed)
+                paid[currency] = paid.GetValueOrDefault(currency) - amount;
 
             var window = await activity
                 .Where(entry => entry.DateTime >= earliest && entry.DateTime <= latest)
@@ -247,6 +254,7 @@ public static class ActivityProjectionExtensions
                 .Select(entry => new
                 {
                     entry.Id,
+                    entry.Currency,
                     Change = (entry.UserId == readerId ? entry.Amount : 0m)
                              - entry.Splits.Where(split => split.UserId == readerId).Sum(split => split.Amount)
                 })
@@ -256,7 +264,7 @@ public static class ActivityProjectionExtensions
 
             foreach (var entry in window)
             {
-                after[entry.Id] = balance += entry.Change;
+                after[entry.Id] = paid[entry.Currency] = paid.GetValueOrDefault(entry.Currency) + entry.Change;
             }
 
             return page.Select(entry => entry with { RunningBalance = after[entry.Id] }).ToList();
@@ -276,6 +284,7 @@ public static class ActivityProjectionExtensions
                        Description = transaction.Description,
                        CoversThrough = transaction is Transfer ? ((Transfer)transaction).CoversThrough : null,
                        Amount = transaction.Amount,
+                       Currency = transaction.Currency,
                        DateTime = transaction.DateTime,
                        PaidByUserId = transaction.UserId,
                        // People.Display, written out longhand because this is built in

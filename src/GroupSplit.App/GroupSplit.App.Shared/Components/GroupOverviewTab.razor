@@ -47,23 +47,25 @@ else
     <div class="gs-stack">
         @if (Balance is { } balance)
         {
+            @foreach (var position in MyBalances)
+            {
             <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
-                @if (UserBalance > 0)
+                @if (position.Balance > 0)
                 {
                     <div class="gs-eyebrow">@Loc["You are owed"]</div>
-                    <Money Value="UserBalance" Animate Class="gs-hero-amount" />
+                    <Money Value="position.Balance" Currency="position.Currency" Animate Class="gs-hero-amount" />
                     @* Guests count: they are people the group shares costs with, and what
                        they owe is owed to somebody like anybody else's. *@
-                    <div class="gs-hero-sub">@Loc["by {0} in {1}", People(balance.OwedToYou.Count()), GroupName].Value</div>
+                    <div class="gs-hero-sub">@Loc["by {0} in {1}", People(balance.OwedToYou.Count(debt => debt.Currency == position.Currency)), GroupName].Value</div>
                     <div class="gs-hero-list">
-                        @foreach (var debt in balance.OwedToYou)
+                        @foreach (var debt in balance.OwedToYou.Where(debt => debt.Currency == position.Currency))
                         {
                             var owed = debt;
                             var guest = IsGuest(owed.UserId);
                             <div class="gs-hero-row">
                                 <Avatar Name="@owed.UserName" Size="sm" />
                                 <div class="who">@Named(owed.UserId, owed.UserName) <small>@Loc["owes you"]</small></div>
-                                <Money Value="owed.Amount" Animate />
+                                <Money Value="owed.Amount" Currency="owed.Currency" Animate />
                                 @* Named for a guest. "They paid" reads as the other person
                                    telling the app, and a guest cannot: it is you saying it on
                                    their behalf, so the button says whose payment it is. *@
@@ -84,21 +86,21 @@ else
                         }
                     </div>
                 }
-                else if (UserBalance < 0)
+                else if (position.Balance < 0)
                 {
                     <div class="gs-eyebrow">@Loc["You owe"]</div>
-                    <Money Value="UserBalance" Absolute Animate Class="gs-hero-amount" />
-                    <div class="gs-hero-sub">@Loc["to {0} in {1}", People(balance.YouOwed.Count()), GroupName].Value</div>
+                    <Money Value="position.Balance" Currency="position.Currency" Absolute Animate Class="gs-hero-amount" />
+                    <div class="gs-hero-sub">@Loc["to {0} in {1}", People(balance.YouOwed.Count(debt => debt.Currency == position.Currency)), GroupName].Value</div>
                     <div class="gs-hero-list">
                         @* Both sides can record a repayment. The person who actually did the
                            paying had no way to say so, and had to ask the other one to. *@
-                        @foreach (var debt in balance.YouOwed)
+                        @foreach (var debt in balance.YouOwed.Where(debt => debt.Currency == position.Currency))
                         {
                             var owing = debt;
                             <div class="gs-hero-row">
                                 <Avatar Name="@owing.UserName" Size="sm" />
                                 <div class="who">@Named(owing.UserId, owing.UserName) <small>@Loc["is waiting on you"]</small></div>
-                                <Money Value="owing.Amount" Animate />
+                                <Money Value="owing.Amount" Currency="owing.Currency" Animate />
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem, _through)))">
@@ -116,6 +118,7 @@ else
                     <div class="gs-hero-sub">@Loc["Nothing owed either way in {0}. Nice.", GroupName].Value</div>
                 }
             </section>
+            }
         }
 
         @if (Plan.Count > 0)
@@ -136,7 +139,7 @@ else
                                 <div class="who">@(line.FromUserId == UserId ? Loc["You pay {0}", Who(line.ToUserId, line.ToUserName)] : Loc["{0} pays {1}", Payer(line), Who(line.ToUserId, line.ToUserName)])</div>
                                 <div class="meta">@Explain(line)</div>
                             </div>
-                            <Money Value="line.Amount" />
+                            <Money Value="line.Amount" Currency="line.Currency" />
                             @if (yours)
                             {
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
@@ -227,7 +230,7 @@ else
                                 </div>
                                 <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
                             </div>
-                            <Money Value="member.Balance" Signed Animate />
+                            <Money Value="member.Balance" Currency="member.Currency" Signed Animate />
                         </div>
                     }
                 </div>
@@ -320,6 +323,16 @@ else
     private decimal UserBalance =>
         Balance?.NetBalances.FirstOrDefault(member => member.UserId == UserId)?.Balance ?? 0m;
 
+    private IReadOnlyList<GroupNetBalance> MyBalances
+    {
+        get
+        {
+            var mine = Balance?.NetBalances.Where(member => member.UserId == UserId).ToList() ?? [];
+            var nonzero = mine.Where(member => member.Balance != 0).ToList();
+            return nonzero.Count > 0 ? nonzero : mine.Take(1).ToList();
+        }
+    }
+
     private string HeroClass => UserBalance switch
     {
         > 0 => "",
@@ -376,7 +389,7 @@ else
 
         var other = payment.FromUserId == UserId ? payment.ToUserName : payment.FromUserName;
         var theirBalance = Balance?.NetBalances
-            .FirstOrDefault(member => member.UserId ==
+            .FirstOrDefault(member => member.Currency == payment.Currency && member.UserId ==
                                       (payment.FromUserId == UserId ? payment.ToUserId : payment.FromUserId))
             ?.Balance ?? 0m;
 
@@ -390,7 +403,7 @@ else
         var theirs = payment.FromUserId == UserId ? payment.ToUserId : payment.FromUserId;
         var name = payment.FromUserId == UserId ? payment.ToUserName : payment.FromUserName;
 
-        var debt = new DebtInfo { UserId = theirs, UserName = name, Amount = payment.Amount };
+        var debt = new DebtInfo { UserId = theirs, UserName = name, Amount = payment.Amount, Currency = payment.Currency };
 
         return OnSettle.InvokeAsync((debt,
             payment.FromUserId == UserId
@@ -423,7 +436,7 @@ else
         {
             {
                 x => x.ContentText,
-                Loc["Record that {0} paid {1} {2}? ", payment.FromUserName, payment.ToUserName, payment.Amount.ToMoney()].Value +
+                Loc["Record that {0} paid {1} {2}? ", payment.FromUserName, payment.ToUserName, payment.Amount.ToMoney(payment.Currency)].Value +
                 Loc["Both of them are guests, so this goes in the group's ledger for them."].Value +
                 (through is { } paymentDay ? " " + Loc["Payment date: {0:d}.", paymentDay].Value : "")
             },
@@ -443,6 +456,7 @@ else
             FromUserId = payment.FromUserId,
             ToUserId = payment.ToUserId,
             Amount = payment.Amount,
+            Currency = payment.Currency,
             Date = through is { } day ? TransactionDay.Stored(day) : null,
             Through = through is { } cutoff ? DateOnly.FromDateTime(cutoff) : null
         }, payment.FromUserName, payment.ToUserName);

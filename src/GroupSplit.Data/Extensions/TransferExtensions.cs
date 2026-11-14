@@ -44,7 +44,7 @@ public static class TransferExtensions
         /// not a payment.
         /// </exception>
         public Transfer SettlementBetween(User from, User to, decimal amount, DateTimeOffset date,
-            string? description = null, DateOnly? coversThrough = null)
+            string? description = null, DateOnly? coversThrough = null, string? currency = null)
         {
             ArgumentNullException.ThrowIfNull(group);
             ArgumentNullException.ThrowIfNull(from);
@@ -59,7 +59,7 @@ public static class TransferExtensions
             {
                 Group = group,
                 Amount = amount,
-                Currency = group.Currency,
+                Currency = currency ?? group.Currency,
                 DateTime = date,
                 Name = "Settlement",
                 Description = description,

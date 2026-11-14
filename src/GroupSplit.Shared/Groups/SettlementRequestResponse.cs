@@ -17,6 +17,7 @@ public record SettlementRequestResponse(
 
 public record CreateSettlementRequest
 {
+    public string? Currency { get; set; }
     public Guid RecipientUserId { get; set; }
     public decimal Amount { get; set; }
     public DateOnly? Through { get; set; }

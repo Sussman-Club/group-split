@@ -51,7 +51,7 @@
                         {
                             <div class="gs-settle-breakdown-row">
                                 <span>@part.GroupName</span>
-                                <Money Value="part.Amount" />
+                                <Money Value="part.Amount" Currency="Person.Currency" />
                             </div>
                         }
                     </div>
@@ -63,7 +63,7 @@
                               Label="@(YouPaid ? Loc["Amount you paid"].Value : Loc["Amount they paid"].Value)"
                               Variant="Variant.Outlined"
                               Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                              AdornmentText="@Person.Currency"
                               AdornmentColor="Color.Primary"
                               HideSpinButtons="true"
                               Validation="@(new Func<decimal, IEnumerable<string>>(ValidateAmount))" />
@@ -147,10 +147,10 @@
 
     private string Standing => (_through, YouPaid) switch
     {
-        ({ } day, true) => Loc["For activity up to {0:d MMM}, you owe {1} {2}", day, Person.UserName, Shown.Amount.ToMoney()].Value,
-        ({ } day, false) => Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, Person.UserName, Shown.Amount.ToMoney()].Value,
-        (null, true) => Loc["You owe {0} {1}", Person.UserName, Person.Amount.ToMoney()].Value,
-        (null, false) => Loc["{0} owes you {1}", Person.UserName, Person.Amount.ToMoney()].Value
+        ({ } day, true) => Loc["For activity up to {0:d MMM}, you owe {1} {2}", day, Person.UserName, Shown.Amount.ToMoney(Person.Currency)].Value,
+        ({ } day, false) => Loc["For activity up to {0:d MMM}, {1} owes you {2}", day, Person.UserName, Shown.Amount.ToMoney(Person.Currency)].Value,
+        (null, true) => Loc["You owe {0} {1}", Person.UserName, Person.Amount.ToMoney(Person.Currency)].Value,
+        (null, false) => Loc["{0} owes you {1}", Person.UserName, Person.Amount.ToMoney(Person.Currency)].Value
     };
 
     private string PeriodHelp => _through is { } day && Shown.Amount <= 0
@@ -162,6 +162,7 @@
         _model = new SettleWithPersonRequest
         {
             UserId = Person.UserId,
+            Currency = Person.Currency,
             Amount = Person.Amount,
             Direction = Direction
         };
@@ -220,7 +221,7 @@
 
             var side = YouPaid ? plan.YouPay : plan.OwedToYou;
 
-            _forPeriod = side.FirstOrDefault(entry => entry.UserId == Person.UserId)
+            _forPeriod = side.FirstOrDefault(entry => entry.UserId == Person.UserId && entry.Currency == Person.Currency)
                          ?? Person with { Amount = 0m, Groups = [] };
             _model.Through = cutoff;
             _model.UtcOffset = offset;
@@ -238,10 +239,10 @@
     /// </summary>
     private string Remaining => (Shown.Amount - _model.Amount) switch
     {
-        >= 0 and var left => Loc["Remaining after this: {0}", left.ToMoney()].Value,
+        >= 0 and var left => Loc["Remaining after this: {0}", left.ToMoney(Person.Currency)].Value,
         var over => _through is null
-            ? Loc["{0} more than is outstanding. It stays in the balance between you.", (-over).ToMoney()]
-            : Loc["{0} more than that period left owing. It stays in the balance between you.", (-over).ToMoney()]
+            ? Loc["{0} more than is outstanding. It stays in the balance between you.", (-over).ToMoney(Person.Currency)]
+            : Loc["{0} more than that period left owing. It stays in the balance between you.", (-over).ToMoney(Person.Currency)]
     };
 
     private IEnumerable<string> ValidateAmount(decimal amount)

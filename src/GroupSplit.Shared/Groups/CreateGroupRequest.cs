@@ -4,6 +4,8 @@ namespace GroupSplit.Shared;
 
 public record CreateGroupRequest
 {
+    [Required, RegularExpression("^[A-Za-z]{3}$")]
+    public string Currency { get; set; } = "USD";
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameRequired))]
     [StringLength(64, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.NameLength64))]
     public string Name { get; set; } = null!;

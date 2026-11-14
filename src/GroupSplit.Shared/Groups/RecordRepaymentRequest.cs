@@ -31,6 +31,7 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record RecordRepaymentRequest
 {
+    public string? Currency { get; set; }
     /// <summary>Who handed the money over.</summary>
     public Guid FromUserId { get; set; }
 

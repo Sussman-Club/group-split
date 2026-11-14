@@ -21,6 +21,7 @@ public enum SettlementDirection
 
 public record SettleRequest
 {
+    public string? Currency { get; set; }
     public Guid UserId { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]

@@ -20,6 +20,20 @@ public class SplitCalculatorTest
     private static decimal AmountFor(IReadOnlyList<SplitAmount> splits, Guid userId) =>
         splits.Single(split => split.UserId == userId).Amount;
 
+    [Theory]
+    [InlineData(0, 100, 33, 34)]
+    [InlineData(3, 1, 0.333, 0.334)]
+    [InlineData(3, -1, -0.333, -0.334)]
+    public void Division_uses_the_requested_minor_unit(int places, decimal amount, decimal share, decimal remainder)
+    {
+        var splits = SplitCalculator.DivideEvenly(amount, Bob, [Alice, Bob, Carol], places);
+
+        Assert.Equal(share, AmountFor(splits, Alice));
+        Assert.Equal(remainder, AmountFor(splits, Bob));
+        Assert.Equal(share, AmountFor(splits, Carol));
+        Assert.Equal(amount, splits.Sum(split => split.Amount));
+    }
+
     [Fact]
     public void An_even_split_that_does_not_divide_gives_the_payer_the_remainder()
     {

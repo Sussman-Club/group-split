@@ -49,10 +49,9 @@ public static class SettleCommands
             var plan = await context.Users.GetSettlementPlanAsync(day, ThroughOption.OffsetFor(day), ct);
 
             context.Output.Write(plan, value => new Rows(
-                new Markup(
-                    $"Net [bold]{Tables.Money(value.Net)}[/]  "
-                    + $"owed to you [green]{value.OwedToYouTotal:N2}[/]  "
-                    + $"you owe [red]{value.YouOweTotal:N2}[/]\n"),
+                new Markup(string.Join("\n", value.Currencies.Select(position =>
+                    $"{Markup.Escape(position.Currency)}: net [bold]{position.Net:N2}[/]  "
+                    + $"owed to you [green]{position.OwedToYou:N2}[/]  you owe [red]{position.YouOwe:N2}[/]")) + "\n"),
                 Side("You pay", value.YouPay),
                 Side("Owed to you", value.OwedToYou)));
 
@@ -84,6 +83,7 @@ public static class SettleCommands
 
         var amount = Amounts.Option("--amount",
             "How much moved, e.g. 40.00. Defaults to the whole of what is outstanding between you.");
+        var currency = new Option<string?>("--currency") { Description = "Currency of this payment, e.g. EUR." };
 
         var direction = new Option<SettlementDirection>("--direction")
         {
@@ -111,7 +111,7 @@ public static class SettleCommands
 
         var command = new Command("pay", "Record one payment between you and one person.")
         {
-            user, amount, direction, date, note, dryRun, through
+            user, amount, currency, direction, date, note, dryRun, through
         };
 
         command.SetHandler(async (context, ct) =>
@@ -127,7 +127,12 @@ public static class SettleCommands
             var plan = await context.Users.GetSettlementPlanAsync(day, offset, ct);
 
             var side = chosen is SettlementDirection.YouPaidThem ? plan.YouPay : plan.OwedToYou;
-            var person = side.FirstOrDefault(entry => entry.UserId == userId);
+            var matching = side.Where(entry => entry.UserId == userId).ToList();
+            var requestedCurrency = parse.GetValue(currency);
+            if (matching.Count > 1 && string.IsNullOrWhiteSpace(requestedCurrency))
+                throw new CliException(new CliError("Choose a currency with --currency for this person.", "CURRENCY_REQUIRED"), ExitCodes.InvalidInput);
+            var person = matching.FirstOrDefault(entry => requestedCurrency is null ||
+                string.Equals(entry.Currency, requestedCurrency, StringComparison.OrdinalIgnoreCase));
 
             if (person is null)
             {
@@ -151,7 +156,7 @@ public static class SettleCommands
             // Where the API will spread it, by the API's own rule, so the confirmation is
             // something somebody can check before agreeing to it.
             var lines = person.Allocate(paying)
-                .Select(part => $"{part.GroupName}: {part.Amount:N2}")
+                .Select(part => $"{part.GroupName}: {part.Amount:N2} {person.Currency}")
                 .ToList();
 
             if (parse.GetValue(dryRun))
@@ -177,8 +182,8 @@ public static class SettleCommands
                 context,
                 action: "settle.pay",
                 summary: chosen is SettlementDirection.YouPaidThem
-                    ? $"Record {paying:N2} paid to {person.UserName}?"
-                    : $"Record {paying:N2} received from {person.UserName}?",
+                    ? $"Record {paying:N2} {person.Currency} paid to {person.UserName}?"
+                    : $"Record {paying:N2} {person.Currency} received from {person.UserName}?",
                 changes: lines,
                 // The figure the prompt named, not "whatever is outstanding": confirming
                 // after another repayment landed must not pay the new remainder instead.
@@ -187,13 +192,15 @@ public static class SettleCommands
                 // culture; ConfirmCommandTests checks under es-ES.
                 pinned: new Dictionary<Option, string>
                 {
-                    [amount] = paying.ToString("0.00", CultureInfo.InvariantCulture)
+                    [amount] = paying.ToString("0.00", CultureInfo.InvariantCulture),
+                    [currency] = person.Currency
                 });
 
             var recorded = await context.Users.SettleWithPersonAsync(
                 new SettleWithPersonRequest
                 {
                     UserId = userId,
+                    Currency = person.Currency,
                     Amount = paying,
                     Direction = chosen,
                     Date = parse.GetValue(date),
@@ -257,7 +264,7 @@ public static class SettleCommands
                                           ? $" (through {covers:yyyy-MM-dd})"
                                           : string.Empty)),
                         Markup.Escape(settlement.GroupName),
-                        $"{settlement.Amount:N2}");
+                        $"{settlement.Amount:N2} {settlement.Currency}");
                 }
 
                 return table;
@@ -290,7 +297,7 @@ public static class SettleCommands
                 Markup.Escape(person.UserName) + (person.IsGuest ? " [yellow](guest)[/]" : string.Empty),
                 Markup.Escape(string.Join(", ", person.Groups.Select(part =>
                     person.Groups.Count == 1 ? part.GroupName : $"{part.GroupName} {part.Amount:N2}"))),
-                $"{person.Amount:N2}");
+                $"{person.Amount:N2} {person.Currency}");
         }
 
         return table;

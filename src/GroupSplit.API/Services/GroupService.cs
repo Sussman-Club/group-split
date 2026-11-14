@@ -24,7 +24,8 @@ public record GroupMemberBalance(
     string UserName,
     decimal AmountPaid,
     decimal AmountOwed,
-    bool IsGuest = false)
+    bool IsGuest = false,
+    string Currency = "USD")
 {
     public decimal Balance => AmountPaid - AmountOwed;
 }
@@ -256,6 +257,7 @@ public class GroupService(
                 user
             },
             Name = request.Name,
+            Currency = request.Currency.Trim().ToUpperInvariant(),
             Description = request.Description,
             DefaultPeriod = request.DefaultPeriod
         };
@@ -383,6 +385,7 @@ public class GroupService(
                       select new CreateGroupRequest
                       {
                           Name = t.Name,
+                          Currency = t.Currency,
                           Description = t.Description,
                           DefaultSplitRuleId = t.DefaultSplitRuleId,
                           DefaultPeriod = t.DefaultPeriod
@@ -403,6 +406,7 @@ public class GroupService(
         }
 
         existingGroup.Name = request.Name;
+        existingGroup.Currency = request.Currency.Trim().ToUpperInvariant();
         existingGroup.Description = request.Description;
         existingGroup.DefaultPeriod = request.DefaultPeriod;
 
@@ -542,17 +546,17 @@ public class GroupService(
         // that with them, and the group's balances would no longer add up among the people
         // still in it. For a guest the members record the repayment that squares them.
         var groupBalances = await GetGroupNetBalance(groupId, cancellationToken);
-        var userBalance = await groupBalances.Where(gb => gb.UserId == userId)
-            .Select(x => x.Balance)
+        var userBalance = await groupBalances.Where(gb => gb.UserId == userId && gb.Balance != 0)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (userBalance is not 0)
+        if (userBalance is not null)
         {
             throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
                     standing is ParticipantStanding.Guest
                         ? "That guest has to be square with the group before they can be removed. Record what they paid or were paid back first."
                         : "The member has to settle up before leaving the group.")
-                .WithExtension("balance", userBalance);
+                .WithExtension("balance", userBalance.Balance)
+                .WithExtension("currency", userBalance.Currency);
         }
 
         if (standing is ParticipantStanding.Guest)
@@ -729,6 +733,11 @@ public class GroupService(
         // or be owed, and a balance from it could only ever be a row of noise.
         return from @group in groups
                where @group.Id != callerId
+               from currency in context.Set<Transaction>()
+                   .Where(transaction => transaction.GroupId == @group.Id)
+                   .Select(transaction => transaction.Currency)
+                   .Union(context.Set<Group>().Where(candidate => candidate.Id == @group.Id)
+                       .Select(candidate => candidate.Currency))
                from user in context.Set<User>()
                where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
                      context.Set<GroupGuest>().Any(guest =>
@@ -743,14 +752,15 @@ public class GroupService(
                        ? user.Email ?? ""
                        : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                    (from transaction in context.Set<Transaction>()
-                    where transaction.GroupId == @group.Id && transaction.UserId == user.Id &&
+                    where transaction.GroupId == @group.Id && transaction.UserId == user.Id && transaction.Currency == currency &&
                           (before == null || transaction is Transfer || transaction.DateTime < before)
                     select transaction.Amount).Sum(),
                    (from split in context.Set<TransactionSplit>()
-                    where split.Transaction.GroupId == @group.Id && split.UserId == user.Id &&
+                    where split.Transaction.GroupId == @group.Id && split.UserId == user.Id && split.Transaction.Currency == currency &&
                           (before == null || split.Transaction is Transfer || split.Transaction.DateTime < before)
                     select split.Amount).Sum(),
-                   !user.Groups.Any(candidate => candidate.Id == @group.Id));
+                   !user.Groups.Any(candidate => candidate.Id == @group.Id),
+                   currency);
     }
 
     /// <summary>
@@ -770,12 +780,18 @@ public class GroupService(
         // nobody on the page.
         var groupBalance =
                     from @group in groupQuery
+                    from currency in context.Set<Transaction>()
+                        .Where(transaction => transaction.GroupId == @group.Id)
+                        .Select(transaction => transaction.Currency)
+                        .Union(context.Set<Group>().Where(candidate => candidate.Id == @group.Id)
+                            .Select(candidate => candidate.Currency))
                     from user in context.Set<User>()
                     where user.Groups.Any(candidate => candidate.Id == @group.Id) ||
                           context.Set<GroupGuest>().Any(guest =>
                               guest.GroupId == @group.Id && guest.ParticipantUserId == user.Id)
                     select new GroupNetBalance
                     {
+                        Currency = currency,
                         UserId = user.Id,
                         // People.Display, in SQL. The surname is appended only when there is
                         // one, where this used to add a space unconditionally: somebody the
@@ -785,12 +801,12 @@ public class GroupService(
                             ? user.Email ?? ""
                             : user.FirstName + (user.LastName != null ? " " + user.LastName : ""),
                         AmountPaid = (from transaction in context.Set<Transaction>()
-                                      where transaction.GroupId == @group.Id && transaction.User == user &&
+                                      where transaction.GroupId == @group.Id && transaction.User == user && transaction.Currency == currency &&
                                             (before == null || transaction is Transfer ||
                                              transaction.DateTime < before)
                                       select transaction.Amount).Sum(),
                         AmountOwed = (from split in context.Set<TransactionSplit>()
-                                      where split.Transaction.GroupId == @group.Id && split.User == user &&
+                                      where split.Transaction.GroupId == @group.Id && split.User == user && split.Transaction.Currency == currency &&
                                             (before == null || split.Transaction is Transfer ||
                                              split.Transaction.DateTime < before)
                                       select split.Amount).Sum(),
@@ -798,6 +814,7 @@ public class GroupService(
                     } into balance
                     select new GroupNetBalance
                     {
+                        Currency = balance.Currency,
                         UserId = balance.UserId,
                         UserName = balance.UserName,
                         AmountPaid = balance.AmountPaid,
@@ -831,16 +848,16 @@ public class GroupService(
                 "You are the only member left, so leaving would leave the group with nobody in it. Archive it instead.");
         }
 
-        var balance = await (await GetGroupNetBalance(groupId, cancellationToken))
-            .Where(netBalance => netBalance.UserId == user.Id)
-            .Select(netBalance => netBalance.Balance)
+        var unsettled = await (await GetGroupNetBalance(groupId, cancellationToken))
+            .Where(netBalance => netBalance.UserId == user.Id && netBalance.Balance != 0)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (balance is not 0)
+        if (unsettled is not null)
         {
             throw new ConflictException(ErrorCodes.GroupMemberNotSettled,
                     "Settle up before leaving the group.")
-                .WithExtension("balance", balance);
+                .WithExtension("balance", unsettled.Balance)
+                .WithExtension("currency", unsettled.Currency);
         }
 
         await DetachMember(group, user, LeftReason.Left, user.Id, cancellationToken);
@@ -857,41 +874,24 @@ public class GroupService(
         // owed 15, which is true of nobody: they still have two people to square up with.
         //
         // Shared groups only: the personal one has nobody in it to square up with.
-        var groups = await (
-                from @group in GroupsOf(user.Id)
-                where @group.Id != user.Id
-                join membership in context.Set<GroupMembership>()
-                    on new
-                    {
-                        GroupId = @group.Id,
-                        UserId = user.Id
-                    }
-                    equals new
-                    {
-                        membership.GroupId,
-                        membership.UserId
-                    }
-                select new GroupPosition(
-                    @group.Id,
-                    @group.Name,
-                    (from transaction in context.Set<Transaction>()
-                     where transaction.GroupId == @group.Id && transaction.UserId == user.Id
-                     select transaction.Amount).Sum() -
-                    (from split in context.Set<TransactionSplit>()
-                     where split.Transaction.GroupId == @group.Id && split.UserId == user.Id
-                     select split.Amount).Sum(),
-                    membership.ArchivedAt != null))
-            .ToListAsync(cancellationToken);
+        var archived = await context.Set<GroupMembership>().Where(membership => membership.UserId == user.Id)
+            .ToDictionaryAsync(membership => membership.GroupId, membership => membership.ArchivedAt != null, cancellationToken);
+        var rows = await (await GetAllGroupNetBalances(cancellationToken))
+            .Where(balance => balance.UserId == user.Id).ToListAsync(cancellationToken);
+        var groups = rows.Select(row => new GroupPosition(row.GroupId, row.GroupName, row.Balance,
+            archived.GetValueOrDefault(row.GroupId)) { Currency = row.Currency }).ToList();
+        var currencies = groups.GroupBy(position => position.Currency, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var owed = group.Where(position => position.Balance > 0).Sum(position => position.Balance);
+                var owe = group.Where(position => position.Balance < 0).Sum(position => -position.Balance);
+                return new CurrencyPosition(group.Key, owed - owe, owed, owe);
+            }).ToArray();
+        var primary = currencies.FirstOrDefault(position => position.Currency == "USD");
 
-        var owedToYou = groups.Where(position => position.Balance > 0).Sum(position => position.Balance);
-        var youOwe = groups.Where(position => position.Balance < 0).Sum(position => -position.Balance);
-
-        return new UserPositionResponse(
-            owedToYou - youOwe,
-            owedToYou,
-            youOwe,
-            [.. groups.OrderByDescending(position => Math.Abs(position.Balance))
-                .ThenBy(position => position.GroupName)]);
+        return new UserPositionResponse(primary?.Net ?? 0m, primary?.OwedToYou ?? 0m, primary?.YouOwe ?? 0m,
+            [.. groups.OrderByDescending(position => Math.Abs(position.Balance)).ThenBy(position => position.GroupName)])
+        { Currencies = currencies };
     }
 
     public Task<IQueryable<Group>> Archive(Guid groupId, CancellationToken cancellationToken = default) =>

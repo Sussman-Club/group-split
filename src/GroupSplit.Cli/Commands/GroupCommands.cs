@@ -404,9 +404,9 @@ public static class GroupCommands
                     table.AddRow(
                         Markup.Escape(balance.UserName) +
                         (balance.IsGuest ? " [yellow](guest)[/]" : string.Empty),
-                        balance.AmountPaid.ToString("N2"),
-                        balance.AmountOwed.ToString("N2"),
-                        Tables.Money(balance.Balance));
+                        $"{balance.AmountPaid:N2} {balance.Currency}",
+                        $"{balance.AmountOwed:N2} {balance.Currency}",
+                        $"{balance.Balance:N2} {balance.Currency}");
                 }
 
                 // The minimised transfers, which are the part somebody acts on: a column of
@@ -436,7 +436,7 @@ public static class GroupCommands
 
         foreach (var debt in list)
         {
-            table.AddRow(Markup.Escape(debt.UserName), debt.Amount.ToString("N2"));
+            table.AddRow(Markup.Escape(debt.UserName), $"{debt.Amount:N2} {debt.Currency}");
         }
 
         return new Rows(new Markup($"\n[bold]{Markup.Escape(heading)}[/]\n"), table);
@@ -679,10 +679,10 @@ public static class GroupCommands
             var payments = new List<(string Line, decimal Amount)>();
 
             payments.AddRange(balance.YouOwed.Select(debt =>
-                ($"You pay {debt.UserName} {debt.Amount:N2}.", debt.Amount)));
+                ($"You pay {debt.UserName} {debt.Amount:N2} {debt.Currency}.", debt.Amount)));
 
             payments.AddRange(balance.OwedToYou.Select(credit =>
-                ($"{credit.UserName} pays you {credit.Amount:N2}.", credit.Amount)));
+                ($"{credit.UserName} pays you {credit.Amount:N2} {credit.Currency}.", credit.Amount)));
 
             if (payments.Count == 0)
             {
@@ -710,8 +710,7 @@ public static class GroupCommands
                         payments = payments.Select(payment => payment.Line)
                     },
                     _ => new Rows(
-                        new Markup($"[bold]{payments.Count}[/] repayments, "
-                                   + $"{payments.Sum(payment => payment.Amount):N2} in all.\n"),
+                        new Markup($"[bold]{payments.Count}[/] repayments.\n"),
                         Lines(payments)));
 
                 return ExitCodes.Success;
@@ -737,8 +736,7 @@ public static class GroupCommands
 
             context.Output.Write(settled, value => new Markup(
                 $"[green]Settled up[/] -- {value.Payments.Count} "
-                + $"{(value.Payments.Count == 1 ? "repayment" : "repayments")}, "
-                + $"{value.Total:N2} in all.\n"));
+                + $"{(value.Payments.Count == 1 ? "repayment" : "repayments")}.\n"));
 
             return ExitCodes.Success;
         });
@@ -851,11 +849,11 @@ public static class GroupCommands
                         entry.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
                         entry.Kind == ActivityKind.Transfer ? "transfer" : "expense",
                         Markup.Escape(Describe(entry)),
-                        entry.Amount.ToString("N2"),
+                        $"{entry.Amount:N2} {entry.Currency}",
                         // A dash rather than a zero: a transfer is not a cost anybody
                         // carries a part of.
-                        entry.Share is { } share ? share.ToString("N2") : "[grey]-[/]",
-                        Tables.Money(entry.RunningBalance));
+                        entry.Share is { } share ? $"{share:N2} {entry.Currency}" : "[grey]-[/]",
+                        $"{entry.RunningBalance:N2} {entry.Currency}");
                 }
 
                 return new Rows(table, Tables.PageFooter(value));

@@ -23,6 +23,51 @@ namespace GroupSplit.API.Test.Group;
 /// </remarks>
 public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    [Fact]
+    public async Task An_unspecified_payment_currency_uses_the_only_outstanding_currency()
+    {
+        var friend = await CreateNewUser();
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Euro group", Currency = "EUR" }, Ct);
+        var groupId = group.Id;
+        await JoinGroup(groupId, friend);
+        await Expense(groupId, 40, paidBy: friend);
+
+        var line = Assert.Single((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("EUR", line.Currency);
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id, Amount = 20, Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+        Assert.Equal("EUR", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+        Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
+    }
+    [Fact]
+    public async Task Plan_and_payment_keep_currencies_separate_for_the_same_person()
+    {
+        var friend = await CreateNewUser();
+        var group = await GroupWith("Trip", friend);
+        await Expense(group, 40, paidBy: friend);
+        await Expense(group, 60, paidBy: friend);
+        var euroExpense = await DbContext.Set<Expense>().SingleAsync(expense => expense.GroupId == group && expense.Amount == 60, Ct);
+        euroExpense.Currency = "EUR";
+        await DbContext.SaveChangesAsync(Ct);
+
+        var plan = await Settlements().GetPlan(Ct);
+        Assert.Equal(2, plan.YouPay.Count);
+        Assert.Contains(plan.YouPay, line => line.Currency == "USD" && line.Amount == 20);
+        Assert.Contains(plan.YouPay, line => line.Currency == "EUR" && line.Amount == 30);
+
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id, Amount = 30, Currency = "EUR", Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+
+        var after = await Settlements().GetPlan(Ct);
+        var remaining = Assert.Single(after.YouPay);
+        Assert.Equal("USD", remaining.Currency);
+        Assert.Equal(20, remaining.Amount);
+        Assert.Equal("EUR", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+    }
     /// <summary>
     /// The whole point in one test: two groups, one person, one line.
     /// </summary>
