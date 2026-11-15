@@ -78,11 +78,12 @@ def main():
         ],
     }
     with tempfile.TemporaryDirectory(prefix="mcp-keycloak-") as temp:
-        Path(temp, "realm.json").write_text(json.dumps(realm), encoding="utf-8")
+        realm_file = Path(temp, "mcp-test-realm.json")
+        realm_file.write_text(json.dumps(realm), encoding="utf-8")
         started = False
         try:
-            subprocess.run(["docker", "run", "-d", "--rm", "--name", NAME, "-p", "127.0.0.1::8080",
-                            "-v", f"{temp}:/opt/keycloak/data/import:ro", IMAGE, "start-dev", "--import-realm"],
+            subprocess.run(["docker", "run", "-d", "--name", NAME, "-p", "127.0.0.1::8080",
+                            "-v", f"{realm_file}:/opt/keycloak/data/import/mcp-test-realm.json:ro", IMAGE, "start-dev", "--import-realm"],
                            check=True, stdout=subprocess.DEVNULL)
             started = True
             port = subprocess.check_output(["docker", "port", NAME, "8080/tcp"], text=True).strip().rsplit(":", 1)[1]
@@ -94,7 +95,8 @@ def main():
                 except (OSError, urllib.error.URLError):
                     time.sleep(1)
             else:
-                raise RuntimeError("Isolated Keycloak did not become ready")
+                logs = subprocess.run(["docker", "logs", NAME], capture_output=True, text=True, check=False)
+                raise RuntimeError(f"Isolated Keycloak did not become ready. Container logs:\n{logs.stdout}\n{logs.stderr}")
             for username in ("member", "staff"):
                 status, initial = request(base + "/token", {"grant_type": "password", "client_id": "assistant",
                     "username": username, "password": "test-password", "scope": "openid mcp:read"})
@@ -126,7 +128,7 @@ def main():
             print("Keycloak token exchange passed: audience, identity, staff roles, invalid secret and wrong audience.")
         finally:
             if started:
-                subprocess.run(["docker", "stop", "--time", "5", NAME], stdout=subprocess.DEVNULL, check=False)
+                subprocess.run(["docker", "rm", "--force", NAME], stdout=subprocess.DEVNULL, check=False)
 
 
 if __name__ == "__main__":
