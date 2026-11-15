@@ -75,9 +75,12 @@
                         <span class="gs-group-setting-description">@Loc["Used for new expenses. Existing amounts keep their currency."]</span>
                     </div>
                 </div>
-                <MudTextField T="string" @bind-Value="_edit.Currency" Label="@Loc["Currency code"]"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" MaxLength="3"
-                              Validation="@(new Func<string, string?>(code => CurrencyPrecision.IsSupported(code) ? null : Loc["Enter a supported currency code."].Value))" />
+                <MudSelect T="string" @bind-Value="_edit.Currency" Label="@Loc["Default currency"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var currency in CurrencyPrecision.Codes)
+                    {
+                        <MudSelectItem Value="@currency">@currency</MudSelectItem>
+                    }
+                </MudSelect>
             </div>
 
             @* The group's and not the reader's: whether it is a trip or a household is true

@@ -112,6 +112,7 @@
                 }
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
+                <div class="gs-expense-amount-row">
                 <DecimalField @bind-Value="_model.Amount"
                               Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               @bind-Value:after="OnMoneyChangedAsync"
@@ -125,29 +126,18 @@
 
                 @* Start with the group default, while allowing an expense to keep its own currency. *@
                     <MudSelect T="string"
-                               Value="@(_showOtherCurrency ? "OTHER" : _currency)"
+                               Value="@_currency"
                                ValueChanged="@OnCurrencyPicked"
                                Label="@Loc["Currency"]"
                                Variant="Variant.Outlined"
                                Dense="true"
                                data-testid="expense-currency">
-                        @if (!MoneyExtensions.OfferedCurrencies.Contains(_currency))
-                        {
-                            <MudSelectItem Value="@_currency">@_currency</MudSelectItem>
-                        }
-                        @foreach (var offered in MoneyExtensions.OfferedCurrencies)
+                        @foreach (var offered in CurrencyPrecision.Codes)
                         {
                             <MudSelectItem Value="@offered">@offered</MudSelectItem>
                         }
-                        <MudSelectItem Value="@("OTHER")">@Loc["Other currency…"]</MudSelectItem>
                     </MudSelect>
-                    @if (_showOtherCurrency)
-                    {
-                        <MudTextField T="string" Value="@_currency" ValueChanged="@OnOtherCurrencyPicked"
-                                      Label="@Loc["Three-letter currency code"]" Variant="Variant.Outlined"
-                                      Immediate="true" MaxLength="3"
-                                      Validation="@(new Func<string, string?>(code => CurrencyPrecision.IsSupported(code) ? null : Loc["Enter a supported currency code."].Value))" />
-                    }
+                </div>
 
                 <MudTextField @bind-Value="_model.Name"
                               For="@(() => _model.Name)"
@@ -627,7 +617,6 @@
     /// </summary>
     private string _currency = "USD";
     private bool _currencyWasChosen;
-    private bool _showOtherCurrency;
 
     /// <summary>What the amount is in, as the field's symbol and the request say it.</summary>
     private string Currency => _currency;
@@ -640,23 +629,10 @@
 
     private async Task OnCurrencyPicked(string currency)
     {
-        if (currency == "OTHER")
-        {
-            _showOtherCurrency = true;
-            return;
-        }
-        _showOtherCurrency = false;
         _currency = currency;
         _currencyWasChosen = true;
         _filingSuggestion = null;
         await RefreshPreviewAsync();
-    }
-
-    private async Task OnOtherCurrencyPicked(string currency)
-    {
-        _currency = (currency ?? "").Trim().ToUpperInvariant();
-        _currencyWasChosen = true;
-        if (CurrencyPrecision.IsSupported(_currency)) await RefreshPreviewAsync();
     }
 
 

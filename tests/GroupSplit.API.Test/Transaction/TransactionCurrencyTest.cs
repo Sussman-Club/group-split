@@ -38,6 +38,53 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
         Assert.Equal(10.001m, expense.Amount);
         Assert.Equal("KWD", expense.Currency);
     }
+
+    [Fact]
+    public async Task Editing_currency_changes_the_expense_without_converting_the_amount()
+    {
+        var expense = await Personal(10m, "USD");
+        var update = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        update.Currency = "EUR";
+        await Transactions.Update(expense.Id, update, Ct);
+        var saved = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+        Assert.Equal("EUR", saved.Currency);
+        Assert.Equal(10m, saved.Amount);
+    }
+
+    [Theory]
+    [InlineData("ZZZ")]
+    [InlineData("JPY")]
+    public async Task Editing_rejects_unsupported_currency_or_incompatible_precision(string currency)
+    {
+        var expense = await Personal(10.25m, "USD");
+        var update = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        update.Currency = currency;
+        await Assert.ThrowsAsync<GroupSplit.API.Errors.ValidationException>(() => Transactions.Update(expense.Id, update, Ct).AsTask());
+    }
+
+    [Fact]
+    public async Task Changing_currency_updates_the_attached_receipt()
+    {
+        var expense = await Personal(10m, "USD");
+        var receipt = new Receipt { ExpenseId = expense.Id, Currency = "USD", Subtotal = 10m, Total = 10m };
+        DbContext.Set<Receipt>().Add(receipt);
+        await DbContext.SaveChangesAsync(Ct);
+        var update = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        update.Currency = "EUR";
+        await Transactions.Update(expense.Id, update, Ct);
+        Assert.Equal("EUR", (await DbContext.Set<Receipt>().AsNoTracking().SingleAsync(r => r.Id == receipt.Id, Ct)).Currency);
+    }
+
+    [Fact]
+    public async Task Currency_change_rejects_receipt_amounts_with_incompatible_precision()
+    {
+        var expense = await Personal(10m, "USD");
+        DbContext.Set<Receipt>().Add(new Receipt { ExpenseId = expense.Id, Currency = "USD", Subtotal = 9.5m, Tip = .5m, Total = 10m });
+        await DbContext.SaveChangesAsync(Ct);
+        var update = (await Transactions.GetUpdateModel(expense.Id, Ct))!;
+        update.Currency = "JPY";
+        await Assert.ThrowsAsync<GroupSplit.API.Errors.ValidationException>(() => Transactions.Update(expense.Id, update, Ct).AsTask());
+    }
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ITransactionService Transactions => GetService<ITransactionService>();

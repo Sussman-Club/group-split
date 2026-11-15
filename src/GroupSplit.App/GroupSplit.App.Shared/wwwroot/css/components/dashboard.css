@@ -96,6 +96,18 @@
     font-size: 0.9375rem;
 }
 
+.gs-currency-totals { display: grid; gap: 8px; margin: 14px 0; }
+.gs-currency-total { display: flex; justify-content: space-between; gap: 20px; padding: 12px 14px; border-radius: 10px; background: rgb(0 0 0 / 28%); color: #fff; font-size: 1.125rem; }
+.gs-currency-total .gs-money { color: #fff !important; }
+.gs-hero.is-zero .gs-currency-total { background: #154a46; color: #fff; }
+.gs-hero-group { padding: 8px 0; }
+.gs-hero-group + .gs-hero-group { border-top: 1px solid currentColor; }
+.gs-hero-group-name { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.gs-hero-group .gs-hero-row { grid-template-columns: minmax(0, 1fr) auto; }
+.gs-hero-group .gs-hero-actions { grid-column: 1 / -1; }
+.gs-hero.is-zero .gs-btn-glass { background: #154a46 !important; color: #fff !important; }
+.gs-hero-currency { font-size: .875rem; font-weight: 800; letter-spacing: .04em; margin-bottom: 8px; }
+
 .gs-hero-list {
     display: flex;
     flex-direction: column;

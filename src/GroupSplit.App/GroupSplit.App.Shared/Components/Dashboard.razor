@@ -44,23 +44,25 @@
         opening every group in turn and adding up by hand.
     *@
     <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
-        @if (Position?.Currencies.Any(position => position.Currency != "USD") == true)
+        @if (Position?.Currencies.Count > 1)
         {
-            <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
+            <div class="gs-eyebrow">@Loc["Overall balances by currency"]</div>
+            <div class="gs-currency-totals">
             @foreach (var position in Position.Currencies)
             {
-                <div><span>@position.Currency </span><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
+                <div class="gs-currency-total"><strong>@position.Currency</strong><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
             }
+            </div>
         }
         else if (Net > 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
-            <Money Value="Net" Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Animate Class="gs-hero-amount" />
         }
         else if (Net < 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you owe"]</div>
-            <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Absolute Animate Class="gs-hero-amount" />
         }
         else
         {
@@ -69,17 +71,17 @@
         }
 
         <div class="gs-hero-sub">
-            @if (Position?.Currencies.Any(position => position.Currency != "USD") == true)
+            @if (Position?.Currencies.Count > 1)
             {
                 @Loc["Amounts are shown separately for each currency."]
             }
             else if (OwedToYou > 0 && YouOwe > 0)
             {
-                @(Loc["{0} owed to you, {1} owed by you. They do not cancel out -- they are different people.", OwedToYou.ToMoney(), YouOwe.ToMoney()].Value)
+                @(Loc["{0} owed to you, {1} owed by you. They do not cancel out -- they are different people.", OwedToYou.ToMoney(OverallCurrency), YouOwe.ToMoney(OverallCurrency)].Value)
             }
             else if (OwedToYou > 0 || YouOwe > 0)
             {
-                @(Loc["Across {0} group{1}.", Owing.Count, (Owing.Count == 1 ? "" : "s")].Value)
+                @(Loc["Across {0} group{1}.", Owing.Select(position => position.GroupId).Distinct().Count(), (Owing.Select(position => position.GroupId).Distinct().Count() == 1 ? "" : "s")].Value)
             }
             else
             {
@@ -90,19 +92,19 @@
         @if (Owing.Count > 0)
         {
             <div class="gs-hero-list">
-                @foreach (var position in Owing.Take(4))
+                @foreach (var group in Owing.GroupBy(position => new { position.GroupId, position.GroupName }).Take(4))
                 {
-                    var group = position;
-                    <div class="gs-hero-row">
-                        <Avatar Name="@group.GroupName" Size="sm" />
-                        <div class="who">
-                            @group.GroupName <small>@(group.Balance > 0 ? Loc["owes you"].Value : Loc["Copy.Lower.you_owe"].Value)</small>
-                        </div>
-                        <Money Value="@Math.Abs(group.Balance)" Currency="@group.Currency" Animate />
-                        <div class="gs-hero-actions">
-                            <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                       OnClick="@(() => Open(group.GroupId))">@Loc["Open"]</MudButton>
-                        </div>
+                    <div class="gs-hero-group">
+                        <div class="gs-hero-group-name"><Avatar Name="@group.Key.GroupName" Size="sm" /><span>@group.Key.GroupName</span></div>
+                        @foreach (var position in group)
+                        {
+                            <div class="gs-hero-row">
+                                <div class="who">@position.Currency <small>@(position.Balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</small></div>
+                                <Money Value="@Math.Abs(position.Balance)" Currency="@position.Currency" Animate />
+                                <div class="gs-hero-actions"><MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
+                                    Href="@SettlementHref(position.GroupId, position.Currency)">@Loc["Settle {0}", position.Currency]</MudButton></div>
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -228,9 +230,11 @@
     }
 
     private UserPositionResponse? Position { get; set; }
-    private decimal Net => Position?.Net ?? 0m;
-    private decimal OwedToYou => Position?.OwedToYou ?? 0m;
-    private decimal YouOwe => Position?.YouOwe ?? 0m;
+    private CurrencyPosition? SingleCurrency => Position?.Currencies.Count == 1 ? Position.Currencies[0] : null;
+    private string OverallCurrency => SingleCurrency?.Currency ?? "USD";
+    private decimal Net => SingleCurrency?.Net ?? Position?.Net ?? 0m;
+    private decimal OwedToYou => SingleCurrency?.OwedToYou ?? Position?.OwedToYou ?? 0m;
+    private decimal YouOwe => SingleCurrency?.YouOwe ?? Position?.YouOwe ?? 0m;
 
     /// <summary>
     /// The groups where something is still outstanding, largest first. An archived group
@@ -253,6 +257,8 @@
     };
 
     private void Open(Guid groupId) => Nav.NavigateTo($"/groups/{groupId}");
+
+    private static string SettlementHref(Guid groupId, string currency) => $"/groups/{groupId}?currency={Uri.EscapeDataString(currency)}";
 
     // Greeting lives in Dashboard.razor.cs; see the note there.
 

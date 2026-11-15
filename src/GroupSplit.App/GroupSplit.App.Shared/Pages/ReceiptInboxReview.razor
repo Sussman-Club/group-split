@@ -64,7 +64,9 @@
             <section class="gs-card gs-card-pad gs-receipt-review-section">
             <h2>@Loc["Receipt details"]</h2>
             <MerchantPicker Label="@Loc["Merchant"].Value" Value="row.MerchantId" ValueChanged="SetMerchant" />
-            <div class="gs-receipt-currency-row"><MudTextField @bind-Value="_currency" Label="@Loc["Currency"]" MaxLength="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="gs-receipt-currency-row"><MudSelect T="string" @bind-Value="_currency" Label="@Loc["Currency"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var currency in CurrencyPrecision.Codes) { <MudSelectItem Value="@currency">@currency</MudSelectItem> }
+            </MudSelect>
             <MudButton OnClick="SaveCurrency" Disabled="_busy" Variant="Variant.Outlined">@Loc["Save currency"]</MudButton></div>
             <MudButton OnClick="Edit" Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary">@Loc["Edit receipt details and items"]</MudButton>
             @if (_bill is { Items.Count: > 0 } bill)

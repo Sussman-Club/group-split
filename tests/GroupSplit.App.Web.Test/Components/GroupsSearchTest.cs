@@ -11,6 +11,25 @@ namespace GroupSplit.App.Web.Test.Components;
 public class GroupsSearchTest : ComponentTest
 {
     [Fact]
+    public void A_group_has_a_separate_settlement_link_for_each_outstanding_currency()
+    {
+        var group = new GroupResponse(Guid.NewGuid(), "Trip", 2);
+        var groups = new Mock<IGroupsPageStateService>();
+        groups.SetupGet(x => x.IsReadyTask).Returns(Task.CompletedTask);
+        groups.SetupGet(x => x.Groups).Returns([group]);
+        groups.SetupGet(x => x.Position).Returns(new UserPositionResponse(0, 0, 0,
+        [
+            new GroupPosition(group.Id, group.Name, 10, false) { Currency = "USD" },
+            new GroupPosition(group.Id, group.Name, -5, false) { Currency = "EUR" }
+        ]));
+        Services.AddSingleton(groups.Object);
+        var card = Render<Groups>().Find(".gs-group-card");
+        Assert.Equal(2, card.QuerySelectorAll(".foot").Length);
+        Assert.Contains(card.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{group.Id}?currency=USD");
+        Assert.Contains(card.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{group.Id}?currency=EUR");
+    }
+
+    [Fact]
     public async Task First_shared_group_guidance_appears_only_when_not_searching()
     {
         var groups = new Mock<IGroupsPageStateService>();

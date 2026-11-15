@@ -1369,6 +1369,17 @@ public class UpdateTransactionDialogTest : ComponentTest
         provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
     }
 
+    [Fact]
+    public async Task Editing_currency_sends_a_currency_patch()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+        var currency = provider.FindComponents<MudSelect<string>>().Single(select => select.Instance.Label == "Currency");
+        await provider.InvokeAsync(() => currency.Instance.ValueChanged.InvokeAsync("USD"));
+        await ReviewAndConfirmAsync(provider);
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains(patch!.Operations, operation => Touches(operation, "currency") && (string?)operation.value == "USD");
+    }
+
     // ---- a bank row's date (#252) ---------------------------------------------------------
 
     /// <summary>How an expense filed from a bank row is stored: the posting date at midnight UTC.</summary>

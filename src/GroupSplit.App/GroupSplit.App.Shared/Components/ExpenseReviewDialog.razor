@@ -28,9 +28,9 @@
             @foreach (var share in ChangedShares)
             {
                 <section class="gs-review-share">
-                    <div class="gs-review-person"><strong>@share.Name</strong><span class="gs-review-delta">@Math.Abs(share.After - share.Before).ToMoney(Currency) @(share.After > share.Before ? Loc["more"] : Loc["less"])</span></div>
+                    <div class="gs-review-person"><strong>@share.Name</strong>@if (!CurrencyChanged) { <span class="gs-review-delta">@Math.Abs(share.After - share.Before).ToMoney(Currency) @(share.After > share.Before ? Loc["more"] : Loc["less"])</span> }</div>
                     <div class="gs-review-comparison">
-                        <div class="gs-review-before"><span class="gs-review-label">@Loc["Before"]</span><span>@share.Before.ToMoney(Currency)</span></div>
+                        <div class="gs-review-before"><span class="gs-review-label">@Loc["Before"]</span><span>@share.Before.ToMoney(OriginalCurrency ?? Currency)</span></div>
                         <span class="gs-review-arrow" aria-hidden="true">&rarr;</span>
                         <div class="gs-review-after"><span class="gs-review-label">@Loc["After"]</span><strong>@share.After.ToMoney(Currency)</strong></div>
                     </div>
@@ -65,9 +65,11 @@
     [Parameter] public IReadOnlyList<Change> Changes { get; set; } = [];
     [Parameter] public IReadOnlyList<Share> Shares { get; set; } = [];
     [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public string? OriginalCurrency { get; set; }
+    private bool CurrencyChanged => OriginalCurrency is not null && !string.Equals(OriginalCurrency, Currency, StringComparison.OrdinalIgnoreCase);
     private IReadOnlyList<Change> ChangedDetails => Changes.Where(x => x.IsChanged ?? x.Before != x.After).ToList();
-    private IReadOnlyList<Share> ChangedShares => Shares.Where(x => x.Before != x.After).ToList();
-    private IReadOnlyList<Share> UnchangedShares => Shares.Where(x => x.Before == x.After).ToList();
+    private IReadOnlyList<Share> ChangedShares => Shares.Where(x => CurrencyChanged || x.Before != x.After).ToList();
+    private IReadOnlyList<Share> UnchangedShares => Shares.Where(x => !CurrencyChanged && x.Before == x.After).ToList();
     private bool HasChanges => ChangedDetails.Count > 0 || ChangedShares.Count > 0;
     private string Display(string value) => string.IsNullOrWhiteSpace(value) ? Loc["Not set"].Value : value;
     private void Cancel() => MudDialog.Cancel();

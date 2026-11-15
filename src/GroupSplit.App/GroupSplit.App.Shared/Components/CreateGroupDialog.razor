@@ -29,19 +29,12 @@
                           Immediate="true" />
             <details class="gs-expense-disclosure">
             <summary>@Loc["Default currency"] <span>@model.Currency</span></summary>
-            <MudSelect T="string" Value="@(_showOtherCurrency ? "OTHER" : model.Currency)" ValueChanged="@PickCurrency" Label="@Loc["Default currency"]" Variant="Variant.Outlined">
-                @foreach (var currency in GroupSplit.App.Shared.Extensions.MoneyExtensions.OfferedCurrencies)
+            <MudSelect T="string" @bind-Value="model.Currency" Label="@Loc["Default currency"]" Variant="Variant.Outlined">
+                @foreach (var currency in CurrencyPrecision.Codes)
                 {
                     <MudSelectItem Value="@currency">@currency</MudSelectItem>
                 }
-                <MudSelectItem Value="@("OTHER")">@Loc["Other currency…"]</MudSelectItem>
             </MudSelect>
-            @if (_showOtherCurrency)
-            {
-                <MudTextField T="string" @bind-Value="model.Currency" Label="@Loc["Three-letter currency code"]"
-                              Variant="Variant.Outlined" Immediate="true" MaxLength="3"
-                              Validation="@(new Func<string, string?>(code => CurrencyPrecision.IsSupported(code) ? null : Loc["Enter a supported currency code."].Value))" />
-            }
             </details>
         </MudForm>
     </DialogContent>
@@ -61,14 +54,6 @@
     MudForm form;
 
     private bool loading = false;
-    private bool _showOtherCurrency;
-
-    private void PickCurrency(string currency)
-    {
-        _showOtherCurrency = currency == "OTHER";
-        if (!_showOtherCurrency) model.Currency = currency;
-    }
-
     private CreateGroupRequest model = new();
 
     protected override void OnInitialized()

@@ -474,6 +474,8 @@ public class TransactionService(
 
         var groupMoved = group.Id != existing.GroupId;
 
+        var currency = UpdatedCurrency(existing, request.Currency, departed, existing.Receipt);
+
 
         // And the payer asked about only when it changes, as the save asks it.
         var payerId = request.PaidByUserId == existing.UserId && !groupMoved
@@ -532,7 +534,7 @@ public class TransactionService(
         {
             Amount = request.Amount,
             // Moving an expense never changes the currency it was recorded in.
-            Currency = existing.Currency,
+            Currency = currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group.Id,
@@ -554,6 +556,12 @@ public class TransactionService(
                 ? BillRetotal.Copy(moving, withoutRules: true)
                 : existing.Receipt
         };
+
+        if (draft.Receipt is { } draftBill && currency != existing.Currency)
+        {
+            draft.Receipt = BillRetotal.Copy(draftBill, withoutRules: false);
+            draft.Receipt.Currency = currency;
+        }
 
         // And re-totalled to the new amount where the save would re-total it -- see Update --
         // on a copy, so the bill the context is tracking is never the one that moves.
@@ -719,6 +727,7 @@ public class TransactionService(
         return new UpdateTransactionRequest
         {
             Amount = transaction.Amount,
+            Currency = transaction.Currency,
             Description = transaction.Description,
             Name = transaction.Name,
             DateTime = transaction.DateTime,
@@ -756,6 +765,10 @@ public class TransactionService(
 
         if (transaction is Transfer transfer)
         {
+            if (request.Currency is not null && !string.Equals(request.Currency, transfer.Currency, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ValidationException(ErrorCodes.ValidationFailed, "A settlement's currency cannot be changed.");
+            }
             // Participants on both ends, as for an expense: the members record what a guest
             // pays and is paid.
             //
@@ -849,6 +862,10 @@ public class TransactionService(
 
         var expense = (Expense)transaction;
 
+        var newCurrency = UpdatedCurrency(expense, request.Currency, departed,
+            request.Currency is not null && !string.Equals(request.Currency, expense.Currency, StringComparison.OrdinalIgnoreCase)
+                ? await BillOf(expense, ct) : null);
+
         if (request.CoversThrough is not null)
         {
             throw new ValidationException(ErrorCodes.NotASettlement,
@@ -872,6 +889,7 @@ public class TransactionService(
         var previousAmount = expense.Amount;
         var groupMoved = expense.GroupId != request.GroupId;
         var payerMoved = expense.UserId != request.PaidByUserId;
+        var currencyMoved = newCurrency != expense.Currency;
 
         // What a departed payer paid *is* the amount, so no new amount can leave their part
         // as it was -- whatever the shares say. Refused here, by name, before the shares are
@@ -936,6 +954,11 @@ public class TransactionService(
         var category = await CategoryFor(group, request.CategoryId, ct);
 
         expense.Amount = request.Amount;
+        expense.Currency = newCurrency;
+        if (currencyMoved && expense.Receipt is { } currencyReceipt)
+        {
+            currencyReceipt.Currency = newCurrency;
+        }
         expense.DateTime = request.DateTime.ToUniversalTime();
         expense.Name = request.Name;
         expense.Description = request.Description;
@@ -982,7 +1005,7 @@ public class TransactionService(
         {
             await splitter.WriteSplitsAsync(expense, null, ct);
         }
-        else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved)
+        else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved && !currencyMoved)
         {
             // The shares the expense already holds, carried in by the endpoint, on an edit
             // that moved nothing they were worked out from: a rename, a note, a date, a
@@ -1055,12 +1078,41 @@ public class TransactionService(
     /// </remarks>
     private static bool InputsMoved(Expense expense, UpdateTransactionRequest request) =>
         expense.Amount != request.Amount ||
+        request.Currency is not null && !string.Equals(expense.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) ||
         expense.UserId != request.PaidByUserId ||
         expense.CategoryId != request.CategoryId ||
         expense.GroupId != request.GroupId ||
         // Naming a rule is an edit to the division itself, and the loudest of them: it is
         // somebody saying who the money was for.
         request.SplitRuleId is not null;
+
+    private static string UpdatedCurrency(Expense expense, string? requested, IReadOnlyList<ParticipantPosition> departed, Receipt? receipt)
+    {
+        var currency = requested?.Trim().ToUpperInvariant() ?? expense.Currency;
+        if (!CurrencyPrecision.IsSupported(currency))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Enter a supported currency code.");
+        }
+        if (currency == expense.Currency)
+        {
+            return currency;
+        }
+        if (expense.BankTransactionId is not null)
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "A bank-linked expense must keep the bank transaction's currency.");
+        }
+        if (departed.Count != 0)
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "The currency cannot be changed after a participant has left the group.");
+        }
+        if (receipt is not null &&
+            (new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }.Any(value => !CurrencyPrecision.IsValidAmount(value, currency)) ||
+             receipt.Items.Any(item => !CurrencyPrecision.IsValidAmount(item.TotalPrice, currency) || !CurrencyPrecision.IsValidAmount(item.TaxAmount, currency))))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "The receipt amounts do not fit the selected currency's precision.");
+        }
+        return currency;
+    }
 
     /// <summary>
     /// Whether the shares the request carries are the ones the expense already holds, and so

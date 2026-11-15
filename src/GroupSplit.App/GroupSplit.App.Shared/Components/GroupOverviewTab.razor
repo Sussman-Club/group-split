@@ -50,6 +50,7 @@ else
             @foreach (var position in MyBalances)
             {
             <section class="gs-hero @(position.Balance < 0 ? "is-neg" : position.Balance == 0 ? "is-zero" : "") gs-reveal" style="--i: 0" aria-live="polite">
+                <div class="gs-hero-currency">@position.Currency</div>
                 @if (position.Balance > 0)
                 {
                     <div class="gs-eyebrow">@Loc["You are owed"]</div>
@@ -265,6 +266,7 @@ else
     /// write. The tab knows which line was pressed and nothing else.
     /// </summary>
     [Parameter] public EventCallback<(DebtInfo Debt, SettlementDirection Direction, DateTime? Through)> OnSettle { get; set; }
+    [Parameter] public string? SelectedCurrency { get; set; }
     [Parameter] public EventCallback<(DebtInfo Debt, DateTime? Through)> OnRequestPayment { get; set; }
 
     private PagedResponse<GroupLedgerEntryResponse>? _recent;
@@ -326,7 +328,9 @@ else
         {
             var mine = Balance?.NetBalances.Where(member => member.UserId == UserId).ToList() ?? [];
             var nonzero = mine.Where(member => member.Balance != 0).ToList();
-            return nonzero.Count > 0 ? nonzero : mine.Take(1).ToList();
+            return nonzero.Count > 0
+                ? nonzero.OrderByDescending(position => string.Equals(position.Currency, SelectedCurrency, StringComparison.OrdinalIgnoreCase)).ToList()
+                : mine.Take(1).ToList();
         }
     }
 

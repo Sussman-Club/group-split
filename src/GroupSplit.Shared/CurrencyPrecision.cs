@@ -19,6 +19,11 @@ public static class CurrencyPrecision
 
     public static bool IsSupported(string? currency) => currency is not null && Supported.Contains(currency.Trim());
 
+    /// <summary>Supported currency codes, with common choices first.</summary>
+    public static IReadOnlyList<string> Codes { get; } =
+        [.. new[] { "USD", "EUR", "GBP", "CAD", "AUD", "JPY", "KWD" }
+            .Concat(Supported.Order(StringComparer.Ordinal).Except(["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "KWD"]))];
+
     public static int DecimalPlaces(string? currency) => currency?.Trim().ToUpperInvariant() switch
     {
         "BIF" or "CLP" or "DJF" or "GNF" or "ISK" or "JPY" or "KMF" or "KRW" or "PYG" or "RWF" or

@@ -39,17 +39,6 @@ public static class MoneyExtensions
     }
 
     /// <summary>
-    /// The currencies the expense dialog offers for a personal expense: the ones with a
-    /// symbol here, which covers what anybody using this has spent in so far.
-    /// </summary>
-    /// <remarks>
-    /// A short list rather than all of ISO 4217, because a select of 180 codes is a worse
-    /// way to find the euro. The API takes any three-letter code, and so does the CLI, so a
-    /// currency missing here is a line to add rather than something nobody can record.
-    /// </remarks>
-    public static IReadOnlyList<string> OfferedCurrencies { get; } = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "KWD"];
-
-    /// <summary>
     /// Formats an amount that knows which currency it is in.
     /// </summary>
     /// <remarks>
