@@ -5,8 +5,34 @@ stateless Streamable HTTP at `/mcp`. Tools that change data require both
 `mcp:read` and `mcp:write`. They currently include creating groups, categories,
 expenses, merchants, and split rules; archiving groups; and filing, linking,
 ignoring, or restoring bank rows. They also add guests, archive categories,
-and refresh or sync bank connections. Other tools inspect groups, expenses, receipts,
-accounts, invitations, and join links. Most CLI commands are not yet exposed.
+and refresh or sync bank connections. Group names, descriptions, default split rules,
+and activity periods can be changed; categories and split rules can be updated or
+deleted, and transactions can be deleted. Deletion tools are marked destructive and
+should only be called after the user confirms. Other tools inspect groups, expenses, receipts,
+accounts, invitations, and join links. Additional tools support transaction editing,
+group membership, settlements, bank connections, support reports and staff operations.
+Staff operations are subject to the API's staff role checks. CLI-only commands for
+local configuration, device login, shell completion and local file paths are not
+remote operations; MCP clients handle authentication and their own local files.
+Receipt tools can upload and download expense and inbox attachments as base64-encoded
+file bytes (JPEG, PNG, WebP, or PDF, up to 10 MiB), and transcribe existing files.
+The MCP server cannot read a path on the agent's device; the client must send the file
+contents. Client support for passing attachments to tools varies. Saving or dividing a
+receipt may change balances, so review and confirm those actions first.
+Invitation claim and decline, joining by link, creating group join links, and recording
+a settlement with a person are also available to callers with `mcp:write`. Inspect the
+invitation or settlement plan and confirm the consequences with the user before acting.
+Destructive annotations and tool descriptions request confirmation from compatible
+clients; they are not a server-side confirmation protocol. API authorization and
+validation still apply to every call.
+
+The server exposes the generated API's user-facing operations, including settlement
+requests, support reports, language preferences, receipt-item edits, and filtering of
+group and expense summaries. Account deletion and personal-data export are excluded.
+Browser-specific theme, identity-provider account management, bank-provider interfaces,
+and push-device registration remain in their respective clients. Receipt downloads use
+the authenticated API HTTP client directly because the generated download methods discard
+the response body. Not every frontend workflow has been tested end to end through MCP.
 Invitation and join-link tokens permit access and should be shared deliberately.
 Each call exchanges the authenticated user's access token for an API-audience
 token and calls the API using the shared generated client. The API resolves the

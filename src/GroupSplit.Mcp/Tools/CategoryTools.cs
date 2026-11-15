@@ -16,4 +16,14 @@ public sealed class CategoryTools
     [Authorize(Policy = "mcp:write")]
     [McpServerTool(Name = "create_category", ReadOnly = false, Destructive = false, Idempotent = false), Description("Create a category in a group you belong to.")]
     public static Task<CategoryResponse> CreateCategory(CategoriesClient client, Guid groupId, string name, string description = "", Guid? defaultSplitRuleId = null, CancellationToken ct = default) => client.CreateCategoryAsync(new CreateCategoryRequest { GroupId = groupId, Name = name, Description = description, DefaultSplitRuleId = defaultSplitRuleId }, ct);
+
+    [Authorize(Policy = "mcp:write")]
+    [McpServerTool(Name = "update_category", ReadOnly = false, Destructive = false, Idempotent = true), Description("Update a category. Supply its complete name, description, and default split rule; use null to clear the rule.")]
+    public static Task<CategoryResponse> UpdateCategory(CategoriesClient client, Guid categoryId, UpdateCategoryRequest category, CancellationToken ct = default) =>
+        client.UpdateCategoryAsync(categoryId, category, ct);
+
+    [Authorize(Policy = "mcp:write")]
+    [McpServerTool(Name = "delete_category", ReadOnly = false, Destructive = true, Idempotent = false), Description("Permanently delete a category after the user confirms. The API refuses deletion if expenses use it.")]
+    public static async Task DeleteCategory(CategoriesClient client, Guid categoryId, CancellationToken ct = default) =>
+        await client.DeleteCategoryAsync(categoryId, ct);
 }
