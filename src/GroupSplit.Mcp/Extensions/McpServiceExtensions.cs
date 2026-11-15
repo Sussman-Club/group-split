@@ -44,6 +44,7 @@ public static class McpServiceExtensions
             .WithTools<BankConnectionTools>()
             .WithTools<BankTransactionTools>()
             .WithTools<ReceiptTools>()
+            .WithTools<ReviewTools>()
             .WithTools<SettlementTools>()
             .WithTools<MerchantTools>()
             .WithTools<SupportTools>()

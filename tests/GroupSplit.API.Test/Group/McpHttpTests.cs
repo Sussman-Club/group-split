@@ -85,6 +85,24 @@ public class McpHttpTests
         Assert.StartsWith("/groups/" + group + "/activity?", transport.ApiPath);
         Assert.Contains("Page=2", transport.ApiPath);
         Assert.Contains("PageSize=100", transport.ApiPath);
+        transport.ApiCalls.Clear();
+        using var household = await Call(subjectToken, "household_summary", "{\"groupId\":\"" + group + "\",\"from\":\"2026-01-01T00:00:00Z\",\"to\":\"2026-01-31T23:59:59Z\"}");
+        Assert.DoesNotContain("\"isError\":true", await household.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(2, transport.ApiCalls.Count);
+        Assert.Contains("/groups/" + group + "/transactions/by-category", transport.ApiCalls[0]);
+        Assert.Contains("/transactions/monthly", transport.ApiCalls[1]);
+        Assert.All(transport.ApiCalls, path => Assert.Contains("2026-01", Uri.UnescapeDataString(path)));
+        transport.ApiCalls.Clear();
+        using var receiptReview = await Call(subjectToken, "review_receipt_inbox_item", "{\"receiptId\":\"" + group + "\"}");
+        Assert.DoesNotContain("\"isError\":true", await receiptReview.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(2, transport.ApiCalls.Count);
+        Assert.EndsWith("/" + group, transport.ApiCalls[0]);
+        Assert.EndsWith("/" + group + "/matches", transport.ApiCalls[1]);
+        Assert.Equal(HttpMethod.Get, transport.ApiMethod);
+        transport.RefuseApi = true;
+        using var refusedReview = await Call(subjectToken, "review_receipt_inbox_item", "{\"receiptId\":\"" + group + "\"}");
+        Assert.Contains("error", await refusedReview.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.OrdinalIgnoreCase);
+        transport.RefuseApi = false;
         using var invitation = await Call(subjectToken, "get_invitation", "{\"token\":\"https://example.test/invite/example-token\"}");
         Assert.DoesNotContain("\"isError\":true", await invitation.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Contains("example-token", transport.ApiPath);
@@ -209,6 +227,7 @@ public class McpHttpTests
         public string? SubjectToken { get; private set; }
         public string? ApiBearer { get; private set; }
         public string ApiPath { get; private set; } = "";
+        public List<string> ApiCalls { get; } = [];
         public HttpMethod? ApiMethod { get; private set; }
         public string ApiBody { get; private set; } = "";
         public bool RefuseApi { get; set; }
@@ -228,6 +247,7 @@ public class McpHttpTests
                 }
                 owner.ApiBearer = request.Headers.Authorization?.Parameter;
                 owner.ApiPath = request.RequestUri!.PathAndQuery;
+                owner.ApiCalls.Add(owner.ApiPath);
                 owner.ApiMethod = request.Method;
                 owner.ApiBody = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
                 var filing = owner.ApiPath.EndsWith("/file", StringComparison.Ordinal);
@@ -244,7 +264,7 @@ public class McpHttpTests
                     };
                 }
                 return new HttpResponseMessage(owner.RefuseApi ? HttpStatusCode.Forbidden : filing ? HttpStatusCode.Created : HttpStatusCode.OK)
-                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
+                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/transactions/by-category") ? "{\"categories\":[]}" : owner.ApiPath.Contains("/receipts/inbox/") && !owner.ApiPath.EndsWith("/matches") ? "{\"id\":\"00000000-0000-0000-0000-000000000001\",\"currency\":\"USD\",\"receipt\":{},\"attachments\":[]}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
             }
         }
     }

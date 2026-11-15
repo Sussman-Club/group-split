@@ -112,3 +112,35 @@ tool calls have also been tested with locally signed tokens and a simulated API.
 The real assistant OAuth flow, production Keycloak configuration, and proxy
 deployment have not yet been validated end to end. Do not
 expose the host publicly until those checks and authorization tests are complete.
+
+## Guided read-only reviews
+
+Starter prompts: “Summarize November for my household” and “Review my inbox”.
+These workflows use `mcp:read`; they do not require or invoke write tools.
+The API still checks the signed-in user's group membership and ownership on each
+request. Tool annotations guide clients but are not authorization controls.
+
+For a household summary, use `list_groups` to identify the group if needed, then
+call `household_summary` with that group and explicit inclusive `from` and `to`
+instants. State the period and time zone used. The result combines category
+spending (including separate other-currency breakdowns) with the caller's gross
+paid and share amounts. Settlements are excluded. Exposure is grouped by UTC
+month and contains only its headline currency; it is not a full multi-currency
+personal total. Do not add unlike currencies or describe missing currencies as
+zero. For a local calendar month, the inclusive end and UTC month grouping can
+produce partial UTC-month rows; explain this and report the rows separately.
+The API's upper bound is inclusive, so callers must select an appropriate final
+instant for the data precision. Do not silently guess a group or time zone.
+
+For inbox review, use `bank_inbox_summary`, `bank_inbox` (page through as needed)
+and `list_receipt_inbox`. Review selected items with `get_bank_row` or
+`review_receipt_inbox_item`; each returns the source item and expense candidates
+without filing, linking, dismissing or changing it. Show dates, amounts, currencies
+and candidate details, and treat matches as suggestions, not proof. A duplicate
+count is optional and a missing count is not zero. Use the existing suggestion
+and preview tools when useful; never assume an empty page covers the whole inbox.
+If a user later requests a change, present the intended action and obtain explicit
+confirmation before using a write tool. A preview does not reserve data or grant
+permission; recheck stale candidates and respect API duplicate refusals. Never set
+an override merely to bypass a refusal. The write scope and API authorization
+remain mandatory, and clients must not rely on prompt instructions as enforcement.
