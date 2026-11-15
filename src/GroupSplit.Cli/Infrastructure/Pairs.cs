@@ -16,7 +16,8 @@ namespace GroupSplit.Cli.Infrastructure;
 public static class Pairs
 {
     public static IReadOnlyList<SplitInput> Splits(string option, IEnumerable<string> values)
-        => Decimals(option, values)
+        => Parse<decimal>(option, values, "21.250", text =>
+            Amounts.TryRead(text, 3, out var parsed, out var problem) ? (parsed, null) : (null, problem))
             .Select(pair => new SplitInput { UserId = pair.Key, Amount = pair.Value })
             .ToList();
 

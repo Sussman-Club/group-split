@@ -294,6 +294,8 @@ public class SettlementService(
         // The stated date, or now. A payment made on the 30th and typed in on the 3rd
         // belongs to the month it settled, not the one somebody got round to it in.
         var paymentCurrency = string.IsNullOrWhiteSpace(currency) ? group.Currency : currency.Trim().ToUpperInvariant();
+        if (!CurrencyPrecision.IsValidAmount(amount, paymentCurrency))
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
         if (paymentCurrency != group.Currency && !await context.Set<Transaction>().AnyAsync(
                 transaction => transaction.GroupId == groupId && transaction.Currency == paymentCurrency,
                 cancellationToken))
@@ -390,6 +392,8 @@ public class SettlementService(
                          : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
 
         var allocations = person.Allocate(request.Amount);
+        if (!CurrencyPrecision.IsValidAmount(request.Amount, person.Currency))
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
 
         var groups = await context.Set<Group>()
             .Include(@group => @group.Users)
@@ -475,6 +479,7 @@ public class SettlementService(
             {
                 GroupId = candidate.GroupId,
                 candidate.CoversThrough,
+                candidate.Currency,
                 PayerId = candidate.UserId,
                 RecipientId = candidate.Splits.Select(split => split.UserId).FirstOrDefault()
             })
@@ -492,7 +497,7 @@ public class SettlementService(
         // with this recipient. Not the recipient's, because the recipient may settle with
         // somebody every month, which would hide a month the payer really did owe.
         var previous = await context.Set<Transfer>()
-            .Where(other => other.GroupId == transfer.GroupId &&
+            .Where(other => other.GroupId == transfer.GroupId && other.Currency == transfer.Currency &&
                             other.CoversThrough != null && other.CoversThrough < through &&
                             (other.UserId == transfer.PayerId ||
                              other.Splits.Any(split => split.UserId == transfer.PayerId)))
@@ -505,7 +510,7 @@ public class SettlementService(
         var position = await GetPosition(transfer.GroupId, new Cutoff(through, utcOffsetMinutes), cancellationToken);
 
         var stillOwed = position?.Plan
-            .Where(payment => payment.FromUserId == transfer.PayerId && payment.ToUserId == transfer.RecipientId)
+            .Where(payment => payment.FromUserId == transfer.PayerId && payment.ToUserId == transfer.RecipientId && payment.Currency == transfer.Currency)
             .Sum(payment => payment.Amount) ?? 0m;
 
         return new SettlementCoverage(through, previous?.AddDays(1), stillOwed);

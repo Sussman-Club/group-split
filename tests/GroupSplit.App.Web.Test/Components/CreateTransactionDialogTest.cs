@@ -1145,7 +1145,7 @@ public class CreateTransactionDialogTest : ComponentTest
     /// refusal for a currency the person never chose.
     /// </summary>
     [Fact]
-    public async Task A_group_expense_offers_no_currency_and_sends_none()
+    public async Task A_group_expense_defaults_to_the_group_currency_and_can_use_another()
     {
         _categories
             .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
@@ -1163,12 +1163,33 @@ public class CreateTransactionDialogTest : ComponentTest
                     { dialog => dialog.SelectedGroupCurrency, "USD" }
                 }));
 
-        Assert.DoesNotContain(provider.FindComponents<MudSelect<string>>(),
-            select => select.Instance.Label == "Currency");
+        var currency = provider.FindComponents<MudSelect<string>>()
+            .Single(select => select.Instance.Label == "Currency");
+        Assert.Equal("USD", currency.Instance.Value);
+        await provider.InvokeAsync(() => currency.Instance.ValueChanged.InvokeAsync("EUR"));
 
         var request = await SaveAsync(provider, reference!);
 
         Assert.Equal(GroupId, request!.GroupId);
-        Assert.Null(request.Currency);
+        Assert.Equal("EUR", request.Currency);
+    }
+
+    [Fact]
+    public async Task An_expense_opened_in_a_euro_group_defaults_to_euros()
+    {
+        _categories.Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            {
+                { dialog => dialog.SelectedGroupId, GroupId },
+                { dialog => dialog.SelectedGroupName, "Trip" },
+                { dialog => dialog.SelectedGroupCurrency, "EUR" }
+            }));
+        var currency = provider.FindComponents<MudSelect<string>>().Single(select => select.Instance.Label == "Currency");
+        provider.WaitForAssertion(() => Assert.Equal("EUR", currency.Instance.Value));
+        var request = await SaveAsync(provider, reference!);
+        Assert.Equal("EUR", request!.Currency);
     }
 }

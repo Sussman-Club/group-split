@@ -7042,5 +7042,80 @@
     "DaysAgo": 45,
     "Name": "Home furnishings",
     "Merchant": "IKEA"
+  },
+  {
+    "Id": "45510001-0000-4000-8000-000000000001",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
+    "Currency": "EUR",
+    "Amount": 42.50,
+    "DaysAgo": 4,
+    "Name": "Lisbon dinner",
+    "Description": "Shared meal paid in euros",
+    "Receipt": {
+      "Tax": 2.50,
+      "Tip": 0,
+      "Items": [
+        { "Name": "Dinner plates", "Price": 30.00, "TaxAmount": 1.90 },
+        { "Name": "Drinks", "Price": 10.00, "TaxAmount": 0.60 }
+      ]
+    }
+  },
+  {
+    "Id": "45510002-0000-4000-8000-000000000002",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "CA7E0005-0000-4000-8000-000000000005",
+    "Currency": "GBP",
+    "Amount": 28.80,
+    "DaysAgo": 3,
+    "Name": "Train tickets",
+    "Description": "Shared travel paid in pounds"
+  },
+  {
+    "Id": "45510003-0000-4000-8000-000000000003",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "45500002-0000-4000-8000-000000000002",
+    "Amount": 31.20,
+    "DaysAgo": 2,
+    "Name": "Lisbon lunch",
+    "Receipt": {
+      "Tax": 1.20,
+      "Tip": 0,
+      "Items": [
+        { "Name": "Lunch", "Price": 24.00, "TaxAmount": 0.96 },
+        { "Name": "Coffee", "Price": 6.00, "TaxAmount": 0.24 }
+      ]
+    }
+  },
+  {
+    "Id": "45510004-0000-4000-8000-000000000004",
+    "PayerId": "94F67FC0-F549-46ED-AD81-D6DF79225396",
+    "CategoryId": "45500002-0000-4000-8000-000000000002",
+    "Amount": 18.00,
+    "DaysAgo": 1,
+    "Name": "Pastries and coffee"
+  },
+  {
+    "Id": "45510005-0000-4000-8000-000000000005",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "Currency": "JPY",
+    "Amount": 900,
+    "DaysAgo": 5,
+    "Name": "Train station lunch",
+    "Receipt": {
+      "Tax": 0,
+      "Tip": 0,
+      "Items": [{ "Name": "Lunch", "Price": 900 }]
+    }
+  },
+  {
+    "Id": "45510006-0000-4000-8000-000000000006",
+    "PayerId": "B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64",
+    "CategoryId": "CA7E0006-0000-4000-8000-000000000006",
+    "Currency": "KWD",
+    "Amount": 3.125,
+    "DaysAgo": 6,
+    "Name": "Airport coffee",
+    "Description": "Shared expense in a three-decimal currency"
   }
 ]

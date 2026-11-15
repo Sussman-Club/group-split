@@ -24,6 +24,26 @@ namespace GroupSplit.API.Test.Group;
 public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     [Fact]
+    public async Task Three_decimal_expense_and_settlement_keep_their_minor_units()
+    {
+        var friend = await CreateNewUser();
+        var group = await GroupWith("Trip", friend);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group, PaidByUserId = friend.Id, Name = "Dinner", Amount = 1.001m,
+            Currency = "KWD", DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+        var line = Assert.Single((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("KWD", line.Currency);
+        Assert.Equal(.500m, line.Amount);
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id, Amount = .500m, Currency = "KWD", Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+        Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("KWD", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+    }
+    [Fact]
     public async Task An_unspecified_payment_currency_uses_the_only_outstanding_currency()
     {
         var friend = await CreateNewUser();
@@ -47,10 +67,11 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var friend = await CreateNewUser();
         var group = await GroupWith("Trip", friend);
         await Expense(group, 40, paidBy: friend);
-        await Expense(group, 60, paidBy: friend);
-        var euroExpense = await DbContext.Set<Expense>().SingleAsync(expense => expense.GroupId == group && expense.Amount == 60, Ct);
-        euroExpense.Currency = "EUR";
-        await DbContext.SaveChangesAsync(Ct);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group, PaidByUserId = friend.Id, Name = "Euro dinner", Amount = 60,
+            Currency = "EUR", DateTime = DateTimeOffset.UtcNow
+        }, Ct);
 
         var plan = await Settlements().GetPlan(Ct);
         Assert.Equal(2, plan.YouPay.Count);

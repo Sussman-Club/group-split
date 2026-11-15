@@ -70,6 +70,7 @@
                    beside the field, rather than after Save -- where it used to arrive as "the
                    shares have to add up", which sent people looking at the wrong thing. *@
                 <DecimalField @bind-Value="_model.Amount"
+                              Places="@CurrencyPrecision.DecimalPlaces(Original.Currency)"
                               @bind-Value:after="OnMoneyChangedAsync"
                               For="@(() => _model.Amount)"
                               Label="@Loc["How much?"]"
@@ -125,16 +126,7 @@
                     </div>
                 </details>
 
-                @if (CurrencyRefusal is { } refusal)
-                {
-                    @* The API's refusal, said where the choice was made and before Save
-                       rather than after it: the dialog closes on Save, and an edit refused
-                       once it has gone is every other change in it lost as well. *@
-                    <MudAlert Severity="Severity.Error" Dense="true" data-testid="currency-refusal">
-                        @refusal
-                    </MudAlert>
-                }
-                else if (_model.GroupId != OriginalGroupId)
+                @if (_model.GroupId != OriginalGroupId)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">
                         @(_model.GroupId is null
@@ -147,7 +139,7 @@
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">@Loc["A personal expense is not shared with anybody, so there is nothing to divide."]</MudAlert>
                 }
-                else if (CurrencyRefusal is null)
+                else
                 {
                     <details class="gs-expense-disclosure" open>
                         <summary>@Loc["People & shares"]<span>@Loc["Review how this expense is divided"]</span></summary>
@@ -162,6 +154,7 @@
                            expense divides by its receipt the same way it divides by any other
                            rule, and this is the one place the screen asks how it divides. *@
                         <SplitEditor Members="@_members"
+                                     Currency="@Original.Currency"
                                      Amount="@_model.Amount"
                                      PayerId="@_model.PaidByUserId"
                                      Stored="@_storedSplits"
@@ -211,7 +204,7 @@
         <MudButton Variant="Variant.Text" Disabled="@(_transcribingAttachmentId is not null)" OnClick="Cancel">@Loc["Cancel"]</MudButton>
 
         <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary"
-                   Disabled="@(_initializing || _failed || CurrencyRefusal is not null || _reviewing || _transcribingAttachmentId is not null)"
+                   Disabled="@(_initializing || _failed || _reviewing || _transcribingAttachmentId is not null)"
                    OnClick="Submit">@Loc["Review changes"]</MudButton>
     </DialogActions>
 </MudDialog>
@@ -293,32 +286,6 @@
 
     /// <summary>The group the expense was in when the dialog opened, null for personal.</summary>
     private Guid? OriginalGroupId => IsPersonalGroup(Original.GroupId) ? null : Original.GroupId;
-
-    /// <summary>
-    /// Why the group picked cannot take this expense, or null when it can.
-    /// </summary>
-    /// <remarks>
-    /// The one refusal a move meets that the dialog can see coming: an expense keeps the
-    /// currency it was recorded in, a group keeps its balances in one, and nothing converts
-    /// between them, so the API answers <c>CURRENCY_MISMATCH</c>. Asked here from the groups
-    /// list rather than learned from the save, because the save happens after the dialog
-    /// has closed -- a refusal then would take every other change in the edit with it.
-    /// </remarks>
-    private string? CurrencyRefusal
-    {
-        get
-        {
-            if (_model.GroupId is not { } groupId || groupId == OriginalGroupId)
-                return null;
-
-            var group = _groups.FirstOrDefault(candidate => candidate.Id == groupId);
-
-            if (group is null || string.Equals(group.Currency, Original.Currency, StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            return Loc["This expense is in {0} and {1} keeps its balances in {2}. Amounts are not converted, so it can stay personal or move to a group that uses {0}.", Original.Currency, group.Name, group.Currency];
-        }
-    }
 
     private UpdateTransactionRequest _model = new();
 
@@ -1102,7 +1069,7 @@
 
         _awaiting = Missing();
 
-        if (!IsShared || _awaiting is not null || CurrencyRefusal is not null)
+        if (!IsShared || _awaiting is not null)
         {
             _preview = null;
             _previewError = null;
@@ -1167,7 +1134,7 @@
         // Stays open on it, with the refusal on screen and the edit intact, rather than
         // closing onto a save the API will refuse. The button is off as well; this is for
         // a submit that arrives some other way.
-        if (_transcribingAttachmentId is not null || CurrencyRefusal is not null)
+        if (_transcribingAttachmentId is not null)
             return;
 
         await _form.ValidateAsync();

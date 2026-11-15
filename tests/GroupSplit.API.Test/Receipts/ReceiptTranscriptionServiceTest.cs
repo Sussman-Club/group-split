@@ -703,13 +703,13 @@ public class ReceiptTranscriptionServiceTest
             Guid.NewGuid(), "smudged.jpg", "image/jpeg", [1]), TestContext.Current.CancellationToken);
 
         // The row with nothing to call it by and nothing to find it by is not a line; the
-        // soup is, in cents -- and since 3 x 3.33 is not the 10.00 it came to, one of it.
+        // soup is retained to three decimal places, including its quantity and total.
         var soup = Assert.Single(receipt.Items);
         Assert.Equal("Soup", soup.Name);
-        Assert.Equal(1m, soup.Quantity);
-        Assert.Equal(10.00m, soup.UnitPrice);
-        Assert.Equal(10.00m, soup.TotalPrice);
-        Assert.Equal(10.00m, receipt.Total);
+        Assert.Equal(3m, soup.Quantity);
+        Assert.Equal(3.333m, soup.UnitPrice);
+        Assert.Equal(9.999m, soup.TotalPrice);
+        Assert.Equal(9.999m, receipt.Total);
         Assert.Null(receipt.MerchantName);
         Assert.Null(receipt.PurchaseDate);
     }

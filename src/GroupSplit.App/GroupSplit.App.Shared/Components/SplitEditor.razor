@@ -104,6 +104,7 @@
             @foreach (var member in Members)
             {
                 <DecimalField T="decimal"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               @key="member.Id"
                               Value="@ShareOf(member.Id)"
                               ValueChanged="@(share => SetShare(member.Id, share))"
@@ -122,6 +123,7 @@
             @foreach (var leaver in Leavers)
             {
                 <DecimalField T="decimal"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               @key="leaver.UserId"
                               Value="@leaver.Amount"
                               Label="@ParticipantCopy.Left(leaver.UserName)"
@@ -142,7 +144,7 @@
                   Class="gs-split-remaining">
             @if (Assigned)
             {
-                <text>@Loc["Every cent of {0} is assigned.", Amount.ToMoney()].Value</text>
+                <text>@Loc["Every cent of {0} is assigned.", Amount.ToMoney(Currency)].Value</text>
             }
             else
             {
@@ -150,7 +152,7 @@
                 {
                     @* The space as code: Razor drops a literal one that only sits between
                        two tags, and the sentences ran together. *@
-                    <strong>@Loc["Not saved: the shares have to add up to {0}.", Amount.ToMoney()].Value</strong>@(" ")
+                    <strong>@Loc["Not saved: the shares have to add up to {0}.", Amount.ToMoney(Currency)].Value</strong>@(" ")
                 }
 
                 <text>@ShareRounding.Unbalanced(Amount, _shares)</text>
@@ -279,10 +281,10 @@
                         <span class="gs-change">
                             @if (Was(share.UserId) is { } was && was != share.Amount)
                             {
-                                <span class="gs-was gs-num">@was.ToMoney()</span>
+                                <span class="gs-was gs-num">@was.ToMoney(Currency)</span>
                             }
 
-                            <Money Value="share.Amount"/>
+                            <Money Value="share.Amount" Currency="@Currency"/>
                         </span>
                     </div>
                 }
@@ -299,6 +301,7 @@
 
     /// <summary>What the shares have to add up to.</summary>
     [Parameter] public decimal Amount { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
 
     /// <summary>
     /// Who paid. Used only to decide who carries the odd cent in the starting point below,
@@ -718,7 +721,7 @@
             ? payer
             : Members[0].Id;
 
-        return SplitCalculator.DivideEvenly(Amount, carriesTheRemainder, Members.Select(member => member.Id))
+        return SplitCalculator.DivideEvenly(Amount, carriesTheRemainder, Members.Select(member => member.Id), CurrencyPrecision.DecimalPlaces(Currency))
             .Select(split => new SplitInput { UserId = split.UserId, Amount = split.Amount })
             .ToList();
     }

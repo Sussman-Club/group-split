@@ -51,14 +51,14 @@
                         {
                             <div class="gs-settle-breakdown-row">
                                 <span>@part.GroupName</span>
-                                <Money Value="part.Amount" Currency="Person.Currency" />
+                                <Money Value="part.Amount" Currency="@Person.Currency" />
                             </div>
                         }
                     </div>
                     <MudText Typo="Typo.caption">@Loc["One payment, {0} groups. Recording it writes a transfer in each, largest first — a balance belongs to a group and cannot be cleared from outside one.", Shown.Groups.Count].Value</MudText>
                 }
 
-                <DecimalField @bind-Value="_model.Amount"
+                <DecimalField @bind-Value="_model.Amount" Places="@CurrencyPrecision.DecimalPlaces(Person.Currency)"
                               For="@(() => _model.Amount)"
                               Label="@(YouPaid ? Loc["Amount you paid"].Value : Loc["Amount they paid"].Value)"
                               Variant="Variant.Outlined"

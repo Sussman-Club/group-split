@@ -34,6 +34,25 @@ public class SeededItemizedExpenseTest
     private static readonly Guid CategoryId = new("33333333-3333-3333-3333-333333333333");
 
     [Fact]
+    public async Task Seeded_foreign_currency_and_receipt_keep_their_amount_and_currency()
+    {
+        await using var services = Composed();
+        var db = services.GetRequiredService<AppDbContext>();
+        Populate(db);
+        var bill = Bill();
+        var foreign = new TransactionSeedDto
+        {
+            Id = bill.Id, PayerId = bill.PayerId, CategoryId = bill.CategoryId, Amount = bill.Amount,
+            Name = bill.Name, DateTime = bill.DateTime, Receipt = bill.Receipt, Currency = "EUR"
+        };
+        await Seeder(services, foreign).SeedAsync(Ct);
+        var expense = await db.Set<Expense>().Include(item => item.Receipt).SingleAsync(Ct);
+        Assert.Equal("EUR", expense.Currency);
+        Assert.Equal("EUR", expense.Receipt!.Currency);
+        Assert.Equal(30m, expense.Splits.Sum(split => split.Amount));
+    }
+
+    [Fact]
     public async Task A_seeded_bill_divides_by_the_rule_on_each_line()
     {
         await using var services = Composed();

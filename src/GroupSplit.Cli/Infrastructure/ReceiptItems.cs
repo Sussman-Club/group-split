@@ -171,7 +171,7 @@ public static class ReceiptItems
     /// was read as 1800 when a comma was taken for grouping. A quantity may hold three
     /// decimal places, as the bill stores it; everything else here is money.
     /// </summary>
-    private static decimal Number(string option, string value, string text, string what, int places = DecimalText.MoneyPlaces)
+    private static decimal Number(string option, string value, string text, string what, int places = 3)
         => Amounts.TryRead(text, places, out var parsed, out var problem)
             ? parsed
             : throw Invalid(option, value, $"'{text.Trim()}' is not {what}. {problem.TrimEnd('.')}");

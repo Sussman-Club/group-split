@@ -54,7 +54,7 @@
     <value>O valor é obrigatório.</value>
   </data>
   <data name="AmountPrecision" xml:space="preserve">
-    <value>O valor deve ser um número com no máximo 2 casas decimais.</value>
+    <value>O valor deve ser um número com no máximo 3 casas decimais.</value>
   </data>
   <data name="AmountPositive" xml:space="preserve">
     <value>O valor deve ser superior a 0.</value>
@@ -69,6 +69,6 @@
     <value>A moeda deve ser um código ISO 4217 de três letras, como EUR.</value>
   </data>
   <data name="SharePrecision" xml:space="preserve">
-    <value>Uma parte deve ser um número com no máximo 2 casas decimais.</value>
+    <value>Uma parte deve ser um número com no máximo 3 casas decimais.</value>
   </data>
 </root>

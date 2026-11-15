@@ -56,9 +56,9 @@ public sealed class AmountFormatTests : IDisposable
         { "es-ES", "1.234,56" },
         { "en-US", "1,234.56" },
         { "es-ES", "1,234.56" },
-        // A third decimal place is not a cent, and is not rounded into one.
-        { "en-US", "12.555" },
-        { "es-ES", "12.555" }
+        // No supported amount has four decimal places.
+        { "en-US", "12.5555" },
+        { "es-ES", "12.5555" }
     };
 
     [Theory]

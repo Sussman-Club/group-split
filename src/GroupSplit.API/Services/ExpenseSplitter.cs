@@ -91,6 +91,12 @@ public class ExpenseSplitter(
     {
         ArgumentNullException.ThrowIfNull(expense);
 
+        if (!CurrencyPrecision.IsValidAmount(expense.Amount, expense.Currency) ||
+            given is not null && given.Any(split => !CurrencyPrecision.IsValidAmount(split.Amount, expense.Currency)))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Amount and shares must use the currency's decimal precision.");
+        }
+
         var payerId = expense.Payer;
 
         // A personal expense has nobody to divide with, so there is nothing a stated
@@ -142,6 +148,8 @@ public class ExpenseSplitter(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expense);
+        if (!CurrencyPrecision.IsValidAmount(expense.Amount, expense.Currency))
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
 
         var members = await MembersOf(expense, ct);
         var version = await Versions().FirstAsync(candidate => candidate.Id == ruleVersionId, ct);
@@ -172,7 +180,7 @@ public class ExpenseSplitter(
         // the group had a rule it could name for one.
         if (version is null)
         {
-            return SplitCalculator.DivideEvenly(expense.Amount, payerId, members);
+            return SplitCalculator.DivideEvenly(expense.Amount, payerId, members, CurrencyPrecision.DecimalPlaces(expense.Currency));
         }
 
         var rule = version.SplitRule;
@@ -260,7 +268,7 @@ public class ExpenseSplitter(
             // naming no rule, was divided evenly -- which is a division the app made and
             // not one a person typed, and it has to follow the amount the same way.
             wouldBe = version is null
-                ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members)
+                ? SplitCalculator.DivideEvenly(expense.Amount, payerId, members, CurrencyPrecision.DecimalPlaces(expense.Currency))
                 : splitRules.Divide(version, expense, members);
         }
         // A version that cannot divide right now explains nothing, so the shares are the

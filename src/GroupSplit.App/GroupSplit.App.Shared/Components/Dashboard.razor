@@ -49,7 +49,7 @@
             <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
             @foreach (var position in Position.Currencies)
             {
-                <div><span>@position.Currency </span><Money Value="position.Net" Currency="position.Currency" Signed /></div>
+                <div><span>@position.Currency </span><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
             }
         }
         else if (Net > 0)
@@ -98,7 +98,7 @@
                         <div class="who">
                             @group.GroupName <small>@(group.Balance > 0 ? Loc["owes you"].Value : Loc["Copy.Lower.you_owe"].Value)</small>
                         </div>
-                        <Money Value="@Math.Abs(group.Balance)" Currency="group.Currency" Animate />
+                        <Money Value="@Math.Abs(group.Balance)" Currency="@group.Currency" Animate />
                         <div class="gs-hero-actions">
                             <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                        OnClick="@(() => Open(group.GroupId))">@Loc["Open"]</MudButton>
@@ -155,7 +155,6 @@
                         @foreach (var group in ActiveGroups)
                         {
                             var g = group;
-                            var balance = BalanceIn(g.Id);
                             <a class="gs-row" role="button" tabindex="0"
                                @onclick="@(() => Open(g.Id))"
                                @onkeydown="@(e => { if (e.Key is "Enter" or " ") Open(g.Id); })">
@@ -168,8 +167,11 @@
                                 @if (!g.IsPersonal)
                                 {
                                     <div>
-                                        <div><Money Value="balance" Signed /></div>
-                                        <span class="when">@(balance == 0 ? Loc["settled"].Value : balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</span>
+                                        @foreach (var position in PositionsFor(g))
+                                        {
+                                            <div><Money Value="position.Balance" Currency="@position.Currency" Signed /></div>
+                                            <span class="when">@(position.Balance == 0 ? Loc["settled"].Value : position.Balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</span>
+                                        }
                                     </div>
                                 }
                             </a>
@@ -237,8 +239,11 @@
     private List<GroupPosition> Owing =>
         [.. (Position?.Groups ?? []).Where(position => position.Balance != 0)];
 
-    private decimal BalanceIn(Guid groupId) =>
-        Position?.Groups.FirstOrDefault(position => position.GroupId == groupId)?.Balance ?? 0m;
+    private IReadOnlyList<GroupPosition> PositionsFor(GroupResponse group)
+    {
+        var positions = Position?.Groups.Where(position => position.GroupId == group.Id && position.Balance != 0).ToList() ?? [];
+        return positions.Count > 0 ? positions : [new GroupPosition(group.Id, group.Name, 0m, group.IsArchive) { Currency = group.Currency }];
+    }
 
     private string PositionClass => Net switch
     {

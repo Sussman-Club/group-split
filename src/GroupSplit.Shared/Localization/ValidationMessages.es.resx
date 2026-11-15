@@ -54,7 +54,7 @@
     <value>El importe es obligatorio.</value>
   </data>
   <data name="AmountPrecision" xml:space="preserve">
-    <value>El importe debe ser un número con un máximo de 2 decimales.</value>
+    <value>El importe debe ser un número con un máximo de 3 decimales.</value>
   </data>
   <data name="AmountPositive" xml:space="preserve">
     <value>El importe debe ser mayor que 0.</value>
@@ -69,6 +69,6 @@
     <value>La moneda debe ser un código ISO 4217 de tres letras, como EUR.</value>
   </data>
   <data name="SharePrecision" xml:space="preserve">
-    <value>Una parte debe ser un número con un máximo de 2 decimales.</value>
+    <value>Una parte debe ser un número con un máximo de 3 decimales.</value>
   </data>
 </root>

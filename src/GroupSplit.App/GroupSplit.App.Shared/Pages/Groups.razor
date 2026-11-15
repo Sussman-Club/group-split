@@ -109,10 +109,13 @@
             </div>
             @if (!group.IsPersonal)
             {
-                <div class="foot">
-                    <span class="gs-eyebrow">@Standing(group)</span>
-                    <Money Value="@(BalanceIn(group.Id))" Signed Animate />
-                </div>
+                @foreach (var position in PositionsFor(group))
+                {
+                    <div class="foot">
+                        <span class="gs-eyebrow">@Standing(position.Balance)</span>
+                        <Money Value="position.Balance" Currency="@position.Currency" Signed Animate />
+                    </div>
+                }
             }
         </button>;
 
@@ -149,10 +152,13 @@
     /// What this person is owed or owes in one group. Read from the position endpoint,
     /// which answers for every group at once -- one call rather than one per card.
     /// </summary>
-    private decimal BalanceIn(Guid groupId) =>
-        GroupsService.Position?.Groups.FirstOrDefault(position => position.GroupId == groupId)?.Balance ?? 0m;
+    private IReadOnlyList<GroupPosition> PositionsFor(GroupResponse group)
+    {
+        var positions = GroupsService.Position?.Groups.Where(position => position.GroupId == group.Id && position.Balance != 0).ToList() ?? [];
+        return positions.Count > 0 ? positions : [new GroupPosition(group.Id, group.Name, 0m, group.IsArchive) { Currency = group.Currency }];
+    }
 
-    private string Standing(GroupResponse group) => BalanceIn(group.Id) switch
+    private string Standing(decimal balance) => balance switch
     {
         > 0 => Loc["You are owed"].Value,
         < 0 => Loc["You owe"].Value,

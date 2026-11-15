@@ -59,13 +59,16 @@ public static class Tables
     /// </remarks>
     public static string Amount(decimal amount, string? currency)
     {
-        var text = amount.ToString("N2");
+        var text = amount.ToString($"N{CurrencyPrecision.DecimalPlaces(currency)}");
 
         return string.IsNullOrWhiteSpace(currency) ||
                string.Equals(currency, DefaultCurrency, StringComparison.OrdinalIgnoreCase)
             ? text
             : Markup.Escape($"{text} {currency.Trim().ToUpperInvariant()}");
     }
+
+    public static string AmountWithCode(decimal amount, string currency) =>
+        Markup.Escape($"{amount.ToString($"N{CurrencyPrecision.DecimalPlaces(currency)}")} {currency}");
 
     /// <summary>What an amount with no currency beside it is in. The API's own default.</summary>
     public const string DefaultCurrency = "USD";

@@ -119,15 +119,18 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
         public TranscribedReceipt ToReceipt()
         {
+            var numbers = new[] { Tax, Tip, Total }.Concat((LineItems ?? []).Where(line => line is not null)
+                .SelectMany(line => new[] { line!.Price, line.Total, line.Discount, line.Tax }));
+            var places = numbers.Any(value => value is { } amount && decimal.Round(amount, 2) != amount) ? 3 : 2;
             // A null in the list is a line Veryfi had nothing to say about.
-            var candidates = (LineItems ?? []).Select(line => line?.ToRow()).OfType<ReceiptItemDraft>().ToList();
+            var candidates = (LineItems ?? []).Select(line => line?.ToRow(places)).OfType<ReceiptItemDraft>().ToList();
             // Never change a printed line to force a match with a receipt-level value.
             // A mismatch remains visible during review; the raw provider response retains
             // the original subtotal for comparison.
             var subtotal = candidates.Sum(item => item.TotalPrice);
-            var tax = RoundMoney(Math.Max(0m, Tax ?? candidates.Sum(item => item.TaxAmount)));
-            var tip = RoundMoney(Math.Max(0m, Tip ?? 0m));
-            var total = RoundMoney(Math.Max(0m, Total ?? subtotal + tax + tip));
+            var tax = RoundMoney(Math.Max(0m, Tax ?? candidates.Sum(item => item.TaxAmount)), places);
+            var tip = RoundMoney(Math.Max(0m, Tip ?? 0m), places);
+            var total = RoundMoney(Math.Max(0m, Total ?? subtotal + tax + tip), places);
 
             var itemTaxes = candidates.Select(item => item.TaxAmount).ToArray();
             var remainingTax = tax - itemTaxes.Sum();
@@ -135,7 +138,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 .Where(index => !candidates[index].TaxKnown &&
                     (remainingTax > 0 ? candidates[index].TotalPrice > 0 : candidates[index].TotalPrice < 0))
                 .ToArray();
-            var shares = Allocate(Math.Abs(remainingTax), unknown.Select(index => Math.Abs(candidates[index].TotalPrice)).ToArray());
+            var shares = Allocate(Math.Abs(remainingTax), unknown.Select(index => Math.Abs(candidates[index].TotalPrice)).ToArray(), places);
             foreach (var (index, share) in unknown.Zip(shares))
             {
                 itemTaxes[index] += Math.Sign(remainingTax) * share;
@@ -143,7 +146,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
 
             var mappedItems = candidates.Select((item, index) => new TranscribedReceiptItem(
                 item.Name,
-                item.UnitPrice ?? RoundMoney(item.TotalPrice / item.Quantity),
+                item.UnitPrice ?? RoundMoney(item.TotalPrice / item.Quantity, places),
                 item.Quantity,
                 item.TotalPrice,
                 itemTaxes[index])
@@ -159,7 +162,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 item with
                 {
                     TaxAmount = candidates[index].TaxAmount
-                }).ToArray());
+                }).ToArray(), places);
             mappedItems = mappedItems.Select((item, index) =>
                 item with
                 {
@@ -235,7 +238,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         [JsonPropertyName("tax_rate")]
         public decimal? TaxRate { get; init; }
 
-        public ReceiptItemDraft? ToRow()
+        public ReceiptItemDraft? ToRow(int places)
         {
             var type = Type?.Trim();
             if (!string.IsNullOrEmpty(type) && NonItemTypes.Contains(type))
@@ -244,7 +247,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             }
 
             var quantity = Quantity is > 0m ? Math.Round(Quantity.Value, 3, MidpointRounding.AwayFromZero) : 0m;
-            var total = RoundMoney(Total ?? (Price ?? 0m) * (quantity > 0m ? quantity : 1m));
+            var total = RoundMoney(Total ?? (Price ?? 0m) * (quantity > 0m ? quantity : 1m), places);
             var named = new[] { ProductInfo?.ExpandedDescription, Description, FullDescription }
                 .Any(value => !string.IsNullOrWhiteSpace(value));
 
@@ -253,7 +256,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // amount to keep, not another thing the group bought.
             // Veryfi signs the discount either way round. Whichever it is, the explicit
             // saving outranks a total that may have borrowed a neighbouring purchase price.
-            var reduced = RoundMoney(Math.Abs(Discount ?? 0m));
+            var reduced = RoundMoney(Math.Abs(Discount ?? 0m), places);
             if ((!string.IsNullOrEmpty(type) && ReductionTypes.Contains(type))
                 || total < 0m
                 || (reduced > 0m && !named))
@@ -273,7 +276,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 }
 
                 return new ReceiptItemDraft(label, label.ToLowerInvariant(), Text?.Trim(),
-                    1m, -amount, -amount, RoundMoney(Tax ?? 0m), Tax.HasValue, TaxRate,
+                    1m, -amount, -amount, RoundMoney(Tax ?? 0m, places), Tax.HasValue, TaxRate,
                     TaxRate is { } couponRate ? couponRate > 0m : null);
             }
 
@@ -291,8 +294,8 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
                 name = name[..128].TrimEnd();
             }
 
-            var (count, unitPrice) = ReadQuantity(Price, quantity, total);
-            var tax = RoundMoney(Math.Max(0m, Tax ?? 0m));
+            var (count, unitPrice) = ReadQuantity(Price, quantity, total, places);
+            var tax = RoundMoney(Math.Max(0m, Tax ?? 0m), places);
             var normalizedName = string.IsNullOrWhiteSpace(NormalizedDescription)
                 ? null
                 : NormalizedDescription.Trim().ToLowerInvariant();
@@ -311,15 +314,15 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         /// total and the unit price are legible, the quantity is the one to work out again.
         /// </summary>
         private static (decimal Quantity, decimal? UnitPrice) ReadQuantity(
-            decimal? price, decimal quantity, decimal total)
+            decimal? price, decimal quantity, decimal total, int places)
         {
-            var unit = price is > 0m ? RoundMoney(price.Value) : (decimal?)null;
+            var unit = price is > 0m ? RoundMoney(price.Value, places) : (decimal?)null;
             if (unit is null)
             {
                 return (quantity > 0m ? quantity : 1m, null);
             }
 
-            if (quantity > 0m && RoundMoney(unit.Value * quantity) == total)
+            if (quantity > 0m && RoundMoney(unit.Value * quantity, places) == total)
             {
                 return (quantity, unit);
             }
@@ -329,7 +332,7 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             // and 7.79 against a price of 3.99 gives 1.952 packs of mozzarella, which is an
             // arithmetic result rather than a shopping one.
             var implied = Math.Round(total / unit.Value, 3, MidpointRounding.AwayFromZero);
-            if (implied > 0m && implied == Math.Truncate(implied) && RoundMoney(unit.Value * implied) == total)
+            if (implied > 0m && implied == Math.Truncate(implied) && RoundMoney(unit.Value * implied, places) == total)
             {
                 return (implied, unit);
             }
@@ -412,24 +415,25 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
         decimal? TaxRate,
         bool? IsTaxable);
 
-    private static decimal RoundMoney(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+    private static decimal RoundMoney(decimal amount, int places) => Math.Round(amount, places, MidpointRounding.AwayFromZero);
 
     /// <summary>Splits a receipt-level amount by weights, assigning leftover cents deterministically.</summary>
-    private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights)
+    private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights, int places)
     {
         if (weights.Count == 0)
         {
             return [];
         }
 
-        amount = RoundMoney(Math.Max(0m, amount));
+        amount = RoundMoney(Math.Max(0m, amount), places);
         var totalWeight = weights.Sum(weight => Math.Max(0m, weight));
         if (totalWeight <= 0m)
         {
             return new decimal[weights.Count];
         }
 
-        var targetCents = amount * 100m;
+        var scale = places == 3 ? 1000m : 100m;
+        var targetCents = amount * scale;
         var exactCents = weights.Select(weight => targetCents * Math.Max(0m, weight) / totalWeight).ToArray();
         var allocatedCents = exactCents.Select(decimal.Floor).ToArray();
         var remainingCents = (int)(targetCents - allocatedCents.Sum());
@@ -442,6 +446,6 @@ public sealed partial class VeryfiReceiptTranscriptionProvider(
             allocatedCents[index] += 1m;
         }
 
-        return allocatedCents.Select(cents => cents / 100m).ToArray();
+        return allocatedCents.Select(cents => cents / scale).ToArray();
     }
 }

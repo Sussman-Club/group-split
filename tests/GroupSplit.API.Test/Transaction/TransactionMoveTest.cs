@@ -220,27 +220,22 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         }, Ct).AsTask();
 
     [Fact]
-    public async Task A_personal_expense_in_another_currency_cannot_move_into_a_group()
+    public async Task A_personal_expense_in_another_currency_can_move_into_a_group()
     {
         var (groupId, _) = await AGroupOfTwo();
         var expense = await APersonalExpenseIn("EUR");
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Transactions.Update(expense.Id, Moving(expense, groupId), Ct).AsTask());
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
-        Assert.Equal("EUR", refusal.Extensions["transactionCurrency"]);
-        Assert.Equal(Currencies.Default, refusal.Extensions["groupCurrency"]);
+        await Transactions.Update(expense.Id, Moving(expense, groupId), Ct);
 
         // Nothing moved: still personal, still in euros, still the one share it had.
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
-        Assert.Equal(Me, stored.GroupId);
+        Assert.Equal(groupId, stored.GroupId);
         Assert.Equal("EUR", stored.Currency);
-        Assert.Equal(20m, Assert.Single(await SplitsOf(expense.Id)).Amount);
+        Assert.Equal(20m, (await SplitsOf(expense.Id)).Sum(split => split.Amount));
     }
 
     [Fact]
-    public async Task A_move_between_groups_in_different_currencies_is_refused()
+    public async Task A_move_between_groups_in_different_currencies_preserves_the_original()
     {
         var (from, _) = await AGroupOfTwo("Dollars");
         var (to, _) = await AGroupOfTwo("Euros");
@@ -254,14 +249,10 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
             GroupId = from
         }, Ct);
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Transactions.Update(expense.Id, Moving(expense, to), Ct).AsTask());
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
-        Assert.Equal("EUR", refusal.Extensions["groupCurrency"]);
+        await Transactions.Update(expense.Id, Moving(expense, to), Ct);
 
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
-        Assert.Equal(from, stored.GroupId);
+        Assert.Equal(to, stored.GroupId);
         Assert.Equal(Currencies.Default, stored.Currency);
     }
 
@@ -300,15 +291,13 @@ public class TransactionMoveTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task Previewing_a_move_into_a_group_in_another_currency_is_the_same_refusal()
+    public async Task Previewing_a_move_into_a_group_in_another_currency_succeeds()
     {
         var (groupId, _) = await AGroupOfTwo();
         var expense = await APersonalExpenseIn("EUR");
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() =>
-            Transactions.PreviewUpdate(expense.Id, Moving(expense, groupId), ct: Ct));
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
+        var preview = await Transactions.PreviewUpdate(expense.Id, Moving(expense, groupId), ct: Ct);
+        Assert.NotNull(preview);
     }
 
     [Fact]

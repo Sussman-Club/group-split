@@ -166,17 +166,14 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_row_in_another_currency_than_the_group_is_refused_rather_than_converted()
+    public async Task A_row_in_another_currency_than_the_group_keeps_its_currency()
     {
         var (group, category, _) = await GroupWithEvenCategory();
         var row = await Row(amount: 20m, currency: "EUR");
 
-        var e = await Assert.ThrowsAsync<ConflictException>(() =>
-            Inbox.File(row.Id, new FileBankTransactionRequest { GroupId = group.Id, CategoryId = category }, Ct));
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, e.Code);
-        Assert.Equal("EUR", e.Extensions["transactionCurrency"]);
-        Assert.Empty(await DbContext.Set<Expense>().ToListAsync(Ct));
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest { GroupId = group.Id, CategoryId = category }, Ct);
+        Assert.Equal("EUR", expense.Currency);
+        Assert.Equal(20m, expense.Amount);
     }
 
     /// <summary>
@@ -227,13 +224,13 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// refusal filing straight into the group does, instead of taking the group's currency.
     /// </summary>
     [Fact]
-    public async Task A_foreign_row_kept_personal_cannot_then_be_moved_into_the_group()
+    public async Task A_foreign_row_kept_personal_can_then_be_moved_into_the_group()
     {
         var (group, _, _) = await GroupWithEvenCategory();
         var row = await Row(amount: 20m, currency: "EUR");
         var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
 
-        var e = await Assert.ThrowsAsync<ConflictException>(() => GetService<ITransactionService>().Update(
+        await GetService<ITransactionService>().Update(
             expense.Id,
             new UpdateTransactionRequest
             {
@@ -242,12 +239,10 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
                 DateTime = expense.DateTime,
                 PaidByUserId = expense.UserId,
                 GroupId = group.Id
-            }, Ct).AsTask());
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, e.Code);
+            }, Ct);
 
         var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(candidate => candidate.Id == expense.Id, Ct);
-        Assert.Equal(stored.UserId, stored.GroupId);
+        Assert.Equal(group.Id, stored.GroupId);
         Assert.Equal("EUR", stored.Currency);
     }
 

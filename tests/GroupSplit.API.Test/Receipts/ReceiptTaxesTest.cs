@@ -5,6 +5,16 @@ namespace GroupSplit.API.Test.Receipts;
 public sealed class ReceiptTaxesTest
 {
     [Fact]
+    public void Tax_allocation_uses_the_currency_minor_unit()
+    {
+        var yen = ReceiptTaxes.Calculate(1m, [new(1m, 0m, null, true), new(1m, 0m, null, true)],
+            allocateUnidentified: true, decimalPlaces: 0);
+        Assert.Equal([1m, 0m], yen);
+        var dinar = ReceiptTaxes.Calculate(.001m, [new(1m, 0m, null, true), new(1m, 0m, null, true)],
+            allocateUnidentified: true, decimalPlaces: 3);
+        Assert.Equal([.001m, 0m], dinar);
+    }
+    [Fact]
     public void Automatic_distribution_preserves_known_tax_and_exempt_items()
     {
         var taxes = ReceiptTaxes.DistributeUnassigned(2m,

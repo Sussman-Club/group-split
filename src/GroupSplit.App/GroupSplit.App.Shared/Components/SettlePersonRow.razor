@@ -16,7 +16,7 @@
         <div class="who">@Person.UserName</div>
         <div class="meta">@Breakdown</div>
     </div>
-    <Money Value="Person.Amount" Currency="Person.Currency" Animate />
+    <Money Value="Person.Amount" Currency="@Person.Currency" Animate />
     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text" OnClick="@OnRecord">
         @(YouPaid ? Loc["I paid them"].Value : Loc["They paid me"].Value)
     </MudButton>

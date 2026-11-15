@@ -66,7 +66,7 @@ public static class Amounts
             return null;
         }
 
-        if (TryRead(token.Value, DecimalText.MoneyPlaces, out var value, out var problem))
+        if (TryRead(token.Value, 3, out var value, out var problem))
         {
             return value;
         }

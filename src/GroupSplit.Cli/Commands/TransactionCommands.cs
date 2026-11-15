@@ -227,7 +227,7 @@ public static class TransactionCommands
                 table.AddRow("Description", Markup.Escape(value.Description ?? "-"));
                 // The currency every time here, unlike the listings: this is the one view of
                 // the expense, and nothing beside it says what the figures are in.
-                table.AddRow("Amount", Markup.Escape($"{value.Amount:N2} {value.Currency}"));
+                table.AddRow("Amount", Tables.AmountWithCode(value.Amount, value.Currency));
                 table.AddRow("Date", value.DateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
                 table.AddRow("Paid by", Markup.Escape(value.PaidByUserName));
                 table.AddRow("Group", Markup.Escape(value.GroupName ?? "-"));

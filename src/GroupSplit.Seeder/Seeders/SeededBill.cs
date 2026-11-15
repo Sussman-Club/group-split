@@ -4,6 +4,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Data.Extensions;
 using GroupSplit.Seeder.Seeders.DTOs;
 using Microsoft.EntityFrameworkCore;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Seeder.Seeders;
 
@@ -25,6 +26,7 @@ internal static class SeededBill
         {
             Expense = expense,
             ExpenseId = expense.Id,
+            Currency = expense.Currency,
             Subtotal = dto.Items.Sum(i => i.Price),
             Tax = dto.Tax,
             Tip = dto.Tip,
@@ -63,7 +65,7 @@ internal static class SeededBill
                 Name = input.Name,
                 NormalizedName = input.Name.Trim().ToLowerInvariant(),
                 Position = receipt.Items.Count,
-                UnitPrice = decimal.Round(input.Price / input.Quantity, 2),
+                UnitPrice = decimal.Round(input.Price / input.Quantity, CurrencyPrecision.DecimalPlaces(expense.Currency)),
                 Quantity = input.Quantity,
                 TotalPrice = input.Price,
                 TaxAmount = input.TaxAmount,

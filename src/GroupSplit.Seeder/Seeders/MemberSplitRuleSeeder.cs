@@ -23,6 +23,7 @@ namespace GroupSplit.Seeder.Seeders;
 /// </remarks>
 [DependsOn(typeof(GroupSeeder))]
 [DependsOn(typeof(UserSeeder))]
+[DependsOn(typeof(CurrencyDemoMembershipSeeder))]
 [DependsOn(typeof(GroupGuestSeeder))]
 public class MemberSplitRuleSeeder(
     AppDbContext db,

@@ -49,7 +49,7 @@ public class DecimalField<T> : MudNumericField<T>
     /// would be text this field refuses the moment somebody edits it.
     /// </summary>
     protected override string GetFormat()
-        => "0.00" + new string('#', Math.Max(0, Places - 2));
+        => Places switch { 0 => "0", 1 => "0.0", _ => "0.00" + new string('#', Math.Max(0, Places - 2)) };
 
     protected override IConverter<T?, string?> GetDefaultConverter() => new TextConverter(this);
 

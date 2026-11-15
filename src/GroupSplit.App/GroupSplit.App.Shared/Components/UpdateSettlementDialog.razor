@@ -21,12 +21,13 @@
             <MudStack Spacing="3">
 
                 <DecimalField
+                    Places="@CurrencyPrecision.DecimalPlaces(Original.Currency)"
                     @bind-Value="_editModel.Amount"
                     For="@(() => _editModel.Amount)"
                     Label="@Loc["Copy.Sentence.Amount"]"
                     Variant="Variant.Outlined"
                     Adornment="Adornment.Start"
-                    AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                    AdornmentText="@Original.Currency"
                     AdornmentColor="Color.Primary"
                     Immediate="true"
                     HideSpinButtons="true"/>

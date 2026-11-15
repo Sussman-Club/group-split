@@ -49,11 +49,11 @@ else
         {
             @foreach (var position in MyBalances)
             {
-            <section class="gs-hero @HeroClass gs-reveal" style="--i: 0" aria-live="polite">
+            <section class="gs-hero @(position.Balance < 0 ? "is-neg" : position.Balance == 0 ? "is-zero" : "") gs-reveal" style="--i: 0" aria-live="polite">
                 @if (position.Balance > 0)
                 {
                     <div class="gs-eyebrow">@Loc["You are owed"]</div>
-                    <Money Value="position.Balance" Currency="position.Currency" Animate Class="gs-hero-amount" />
+                    <Money Value="position.Balance" Currency="@position.Currency" Animate Class="gs-hero-amount" />
                     @* Guests count: they are people the group shares costs with, and what
                        they owe is owed to somebody like anybody else's. *@
                     <div class="gs-hero-sub">@Loc["by {0} in {1}", People(balance.OwedToYou.Count(debt => debt.Currency == position.Currency)), GroupName].Value</div>
@@ -65,7 +65,7 @@ else
                             <div class="gs-hero-row">
                                 <Avatar Name="@owed.UserName" Size="sm" />
                                 <div class="who">@Named(owed.UserId, owed.UserName) <small>@Loc["owes you"]</small></div>
-                                <Money Value="owed.Amount" Currency="owed.Currency" Animate />
+                                <Money Value="owed.Amount" Currency="@owed.Currency" Animate />
                                 @* Named for a guest. "They paid" reads as the other person
                                    telling the app, and a guest cannot: it is you saying it on
                                    their behalf, so the button says whose payment it is. *@
@@ -89,7 +89,7 @@ else
                 else if (position.Balance < 0)
                 {
                     <div class="gs-eyebrow">@Loc["You owe"]</div>
-                    <Money Value="position.Balance" Currency="position.Currency" Absolute Animate Class="gs-hero-amount" />
+                    <Money Value="position.Balance" Currency="@position.Currency" Absolute Animate Class="gs-hero-amount" />
                     <div class="gs-hero-sub">@Loc["to {0} in {1}", People(balance.YouOwed.Count(debt => debt.Currency == position.Currency)), GroupName].Value</div>
                     <div class="gs-hero-list">
                         @* Both sides can record a repayment. The person who actually did the
@@ -100,7 +100,7 @@ else
                             <div class="gs-hero-row">
                                 <Avatar Name="@owing.UserName" Size="sm" />
                                 <div class="who">@Named(owing.UserId, owing.UserName) <small>@Loc["is waiting on you"]</small></div>
-                                <Money Value="owing.Amount" Currency="owing.Currency" Animate />
+                                <Money Value="owing.Amount" Currency="@owing.Currency" Animate />
                                 <div class="gs-hero-actions">
                                     <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
                                                OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem, _through)))">
@@ -139,7 +139,7 @@ else
                                 <div class="who">@(line.FromUserId == UserId ? Loc["You pay {0}", Who(line.ToUserId, line.ToUserName)] : Loc["{0} pays {1}", Payer(line), Who(line.ToUserId, line.ToUserName)])</div>
                                 <div class="meta">@Explain(line)</div>
                             </div>
-                            <Money Value="line.Amount" Currency="line.Currency" />
+                            <Money Value="line.Amount" Currency="@line.Currency" />
                             @if (yours)
                             {
                                 <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
@@ -203,11 +203,11 @@ else
             </div>
             @if (Balance is { } b && b.NetBalances.Any())
             {
-                var max = Math.Max(b.NetBalances.Max(m => Math.Abs(m.Balance)), 0.01m);
                 var i = 0;
                 <div class="gs-balances">
-                    @foreach (var member in b.NetBalances.OrderByDescending(m => m.Balance))
+                    @foreach (var member in b.NetBalances.OrderBy(m => m.Currency).ThenByDescending(m => m.Balance))
                     {
+                        var max = Math.Max(b.NetBalances.Where(m => m.Currency == member.Currency).Max(m => Math.Abs(m.Balance)), 0.001m);
                         var w = (double)(Math.Abs(member.Balance) / max);
                         <div class="gs-balance-row @(member.Balance < 0 ? "is-neg" : "")" style="--i: @(i++)">
                             <Avatar Name="@member.UserName" Size="sm" />
@@ -230,7 +230,7 @@ else
                                 </div>
                                 <div class="bar"><span style="--w: @w.ToString(System.Globalization.CultureInfo.InvariantCulture)"></span></div>
                             </div>
-                            <Money Value="member.Balance" Currency="member.Currency" Signed Animate />
+                            <Money Value="member.Balance" Currency="@member.Currency" Signed Animate />
                         </div>
                     }
                 </div>
@@ -320,9 +320,6 @@ else
 
     private IReadOnlyList<SettlementPayment> Plan => Balance?.Plan ?? [];
 
-    private decimal UserBalance =>
-        Balance?.NetBalances.FirstOrDefault(member => member.UserId == UserId)?.Balance ?? 0m;
-
     private IReadOnlyList<GroupNetBalance> MyBalances
     {
         get
@@ -332,13 +329,6 @@ else
             return nonzero.Count > 0 ? nonzero : mine.Take(1).ToList();
         }
     }
-
-    private string HeroClass => UserBalance switch
-    {
-        > 0 => "",
-        < 0 => "is-neg",
-        _ => "is-zero"
-    };
 
     private string People(int count) => count == 1 ? Loc["1 person"].Value : Loc["{0} people", count].Value;
 

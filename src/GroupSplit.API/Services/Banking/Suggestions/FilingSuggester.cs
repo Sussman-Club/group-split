@@ -157,11 +157,7 @@ public sealed class FilingSuggester(
         FilingSuggestionOptions settings,
         CancellationToken ct)
     {
-        // A group's balances are one currency, so a row in another one cannot be filed
-        // there; the personal group takes any.
         var fitting = destinations
-            .Where(destination => destination.IsPersonal
-                                  || string.Equals(destination.Currency, row.Currency, StringComparison.OrdinalIgnoreCase))
             // What this merchant went to before is likeliest, so it is never what gets cut
             // when somebody has more categories than one question can carry.
             .OrderByDescending(destination => earlier.Count(filed => filed.CategoryId == destination.CategoryId))

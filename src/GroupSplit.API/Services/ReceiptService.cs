@@ -117,6 +117,7 @@ public class ReceiptService(
         var draft = new Receipt
         {
             ExpenseId = expense.Id,
+            Currency = expense.Currency,
             Subtotal = request.Subtotal,
             MerchantName = Clean(request.MerchantName, 128),
             PurchaseDate = request.PurchaseDate,

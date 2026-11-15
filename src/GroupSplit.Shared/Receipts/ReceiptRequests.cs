@@ -9,13 +9,13 @@ namespace GroupSplit.Shared;
 /// </summary>
 public record SaveReceiptRequest
 {
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal Subtotal { get; init; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal Tax { get; init; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal Tip { get; init; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal Total { get; init; }
     [MinLength(1)] public IReadOnlyList<ReceiptItemInput> Items { get; init; } = [];
     [StringLength(128)]
@@ -41,12 +41,12 @@ public record ReceiptItemInput
     /// </summary>
     [StringLength(1000)]
     public string? Description { get; init; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal UnitPrice { get; init; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; init; } = 1;
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal TotalPrice { get; init; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal TaxAmount { get; init; }
     /// <summary>Percentage points: 7.5 means 7.5%, rather than a ratio of 0.075.</summary>
     [Range(0, 100), MaxDecimalPlaces(4)]
@@ -69,12 +69,12 @@ public sealed class ReceiptItemPatch
     [Required, StringLength(128)] public string Name { get; set; } = string.Empty;
     [StringLength(1000)]
     public string? Description { get; set; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal UnitPrice { get; set; }
     [MaxDecimalPlaces(3)] public decimal Quantity { get; set; } = 1;
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal TotalPrice { get; set; }
-    [MaxDecimalPlaces(2)]
+    [MaxDecimalPlaces(3)]
     public decimal TaxAmount { get; set; }
     [Range(0, 100), MaxDecimalPlaces(4)]
     public decimal? TaxRate { get; set; }

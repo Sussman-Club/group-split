@@ -1,4 +1,5 @@
 using System.Globalization;
+using GroupSplit.Shared;
 
 namespace GroupSplit.App.Shared.Extensions;
 
@@ -46,7 +47,7 @@ public static class MoneyExtensions
     /// way to find the euro. The API takes any three-letter code, and so does the CLI, so a
     /// currency missing here is a line to add rather than something nobody can record.
     /// </remarks>
-    public static IReadOnlyList<string> OfferedCurrencies { get; } = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY"];
+    public static IReadOnlyList<string> OfferedCurrencies { get; } = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "KWD"];
 
     /// <summary>
     /// Formats an amount that knows which currency it is in.
@@ -67,6 +68,7 @@ public static class MoneyExtensions
         var code = currency.Trim().ToUpperInvariant();
 
         format.CurrencySymbol = Symbols.TryGetValue(code, out var symbol) ? symbol : code + " ";
+        format.CurrencyDecimalDigits = CurrencyPrecision.DecimalPlaces(code);
 
         return amount.ToString("C", format);
     }

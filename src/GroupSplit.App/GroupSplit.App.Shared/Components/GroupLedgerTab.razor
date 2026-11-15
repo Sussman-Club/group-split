@@ -128,7 +128,7 @@
         <div class="gs-mobile-spending-head">
             <div class="gs-mobile-spending-figures">
                 <span class="gs-mobile-spending-label">@Loc["Total spent"] · @(_range.IsAllTime ? Loc["All time"].Value : _range.Label)</span>
-                <Money Value="Spent" Class="gs-mobile-spending-value" />
+                <Money Value="Spent" Currency="@_spending?.Currency" Class="gs-mobile-spending-value" />
             </div>
             <span class="gs-mobile-spending-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" /></span>
         </div>
@@ -137,9 +137,13 @@
             @if (!Personal)
             {
                 <span aria-hidden="true">·</span>
-                <span>@Loc["Your share"] <Money Value="YourShare" /></span>
+                <span>@Loc["Your share"] <Money Value="YourShare" Currency="@_byCategory?.Currency" /></span>
             }
         </div>
+        @foreach (var other in _spending?.OtherCurrencies ?? [])
+        {
+            <div>@other.Currency: <Money Value="other.Total" Currency="@other.Currency" /></div>
+        }
         <button type="button" class="gs-mobile-spending-details" @onclick="ShowCategoriesAsync">
             <span><MudIcon Icon="@Icons.Material.Rounded.PieChart" Size="Size.Small" />@Loc["Spending by category"]</span>
             <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Size="Size.Small" />
@@ -159,10 +163,14 @@
                safe: two figures on one screen, one counting a subset of the list beneath
                it, and the wording is all that tells them apart. *@
             <span class="gs-eyebrow">@Loc["Total spent"]</span>
-            <Money Value="Spent" Animate Class="gs-stat-value" />
+            <Money Value="Spent" Currency="@_spending?.Currency" Animate Class="gs-stat-value" />
             @if (!Personal)
             {
-                <span class="gs-muted" style="font-size: .8125rem">@Loc["Copy.Lower.your_share_{0}", YourShare.ToMoney()].Value</span>
+                <span class="gs-muted" style="font-size: .8125rem">@Loc["Copy.Lower.your_share_{0}", YourShare.ToMoney(_byCategory?.Currency)].Value</span>
+            }
+            @foreach (var other in _spending?.OtherCurrencies ?? [])
+            {
+                <span>@other.Currency: <Money Value="other.Total" Currency="@other.Currency" /></span>
             }
         </div>
     </div>
@@ -219,7 +227,7 @@
                         <span class="gs-muted gs-feed-date">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } desktopTime) { <text> · @Clock.FormatTime(desktopTime)</text> }</span>
                     </span>
                     <span class="gs-feed-money">
-                        <Money Value="entry.Amount" Currency="entry.Currency" Class="gs-feed-amount" />
+                        <Money Value="entry.Amount" Currency="@entry.Currency" Class="gs-feed-amount" />
                         @if (!Personal && entry.Kind is ActivityKind.Expense && entry.Share is { } desktopShare)
                         {
                             <span class="gs-muted gs-feed-desktop-share">@Loc["Your share {0}", desktopShare.ToMoney(entry.Currency)].Value</span>
@@ -344,7 +352,7 @@
                 <PropertyColumn Property="x => x.Amount" Title="@Loc["Copy.Sentence.Amount"]" HeaderClass="gs-right" CellClass="gs-right"
                                 InitialDirection="@Initially("amount")">
                     <CellTemplate>
-                        <Money Value="context.Item.Amount" Currency="context.Item.Currency" Class="gs-grid-amount" />
+                        <Money Value="context.Item.Amount" Currency="@context.Item.Currency" Class="gs-grid-amount" />
                     </CellTemplate>
                 </PropertyColumn>
 
@@ -357,7 +365,7 @@
                     <CellTemplate>
                         @if (context.Item.Share is { } share)
                         {
-                            <Money Value="share" Currency="context.Item.Currency" Class="gs-grid-share" />
+                            <Money Value="share" Currency="@context.Item.Currency" Class="gs-grid-share" />
                         }
                         else
                         {
@@ -369,7 +377,7 @@
                 <TemplateColumn Title="@Loc["Balance"]" Sortable="false" HideSmall="true" Hidden="@Personal"
                                 HeaderClass="gs-right" CellClass="gs-right">
                     <CellTemplate>
-                        <Money Value="context.Item.RunningBalance" Currency="context.Item.Currency" Signed Class="gs-grid-balance" />
+                        <Money Value="context.Item.RunningBalance" Currency="@context.Item.Currency" Signed Class="gs-grid-balance" />
                     </CellTemplate>
                 </TemplateColumn>
 

@@ -128,9 +128,9 @@ public class SettlementRequestService(
                 "A settlement request must be for more than zero.");
         }
 
-        if (decimal.Round(request.Amount, 2) != request.Amount)
+        if (!CurrencyPrecision.IsValidAmount(request.Amount, currency))
         {
-            throw new ValidationException(ErrorCodes.ValidationFailed, "Use no more than two decimal places.");
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
         }
 
         var recipient = await context.Set<User>().SingleOrDefaultAsync(user => user.Id == request.RecipientUserId,

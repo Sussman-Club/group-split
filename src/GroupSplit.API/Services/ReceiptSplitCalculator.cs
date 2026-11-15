@@ -51,7 +51,7 @@ public static class ReceiptSplitCalculator
             tipWeights = items.Select(_ => 1m).ToArray();
         }
 
-        var tipShares = Allocate(receipt.Tip, tipWeights);
+        var tipShares = Allocate(receipt.Tip, tipWeights, CurrencyPrecision.DecimalPlaces(receipt.Currency));
         var tips = items.Select((item, index) => (Id: item.Id, Tip: tipShares[index]))
             .ToDictionary(pair => pair.Id, pair => pair.Tip);
 
@@ -63,7 +63,7 @@ public static class ReceiptSplitCalculator
             // Subtotals only, for the reading that shows what somebody's items came to beside
             // what they owe: the same division of the same lines, with the extras left off.
             var amount = item.TotalPrice + (subtotalOnly ? 0 : taxes[item.Id] + tips[item.Id]);
-            var shares = handlers.Divide(version, new SplitRuleContext(amount, payer, groupId), members);
+            var shares = handlers.Divide(version, new SplitRuleContext(amount, payer, groupId, Currency: receipt.Currency), members);
             // A handler that lost a cent, or paid somebody who is not in the group, is a
             // defect rather than a bad bill -- but it is caught here all the same, because
             // the alternative is an expense whose shares do not come to what was paid and
@@ -152,15 +152,16 @@ public static class ReceiptSplitCalculator
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "A bill needs at least one item.");
         }
 
-        if (new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }.Any(InvalidMoney) ||
+        var places = CurrencyPrecision.DecimalPlaces(receipt.Currency);
+        if (new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }.Any(value => InvalidMoney(value, places)) ||
             receipt.Items.Any(i => string.IsNullOrWhiteSpace(i.Name) || i.Name.Length > 128 ||
-                InvalidSignedMoney(i.UnitPrice) || InvalidSignedMoney(i.TotalPrice) || InvalidSignedMoney(i.TaxAmount) ||
+                InvalidSignedMoney(i.UnitPrice, places) || InvalidSignedMoney(i.TotalPrice, places) || InvalidSignedMoney(i.TaxAmount, places) ||
                 i.TaxRate is < 0 or > 100 || i.TaxRate is { } rate && decimal.Round(rate, 4) != rate ||
                 i.IsTaxable == false && i.TaxRate is > 0 ||
                 i.Quantity <= 0 || decimal.Round(i.Quantity, 3) != i.Quantity))
         {
             throw new ValidationException(ErrorCodes.ReceiptInvalid,
-                "Use cent-precision line amounts and positive quantities with at most three decimal places.");
+                "Use amounts with the currency's precision and positive quantities with at most three decimal places.");
         }
 
         var itemTotal = receipt.Items.Sum(i => i.TotalPrice);
@@ -205,12 +206,13 @@ public static class ReceiptSplitCalculator
     private static IReadOnlyDictionary<Guid, decimal> CalculateTaxes(Receipt receipt, IReadOnlyList<ReceiptItem> items)
     {
         var taxes = ReceiptTaxes.Calculate(receipt.Tax, items.Select(item =>
-            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(),
+            decimalPlaces: CurrencyPrecision.DecimalPlaces(receipt.Currency));
         return items.Select((item, index) => (item.Id, Tax: taxes[index]))
             .ToDictionary(item => item.Id, item => item.Tax);
     }
 
-    private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights)
+    private static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> weights, int places)
     {
         if (weights.Count == 0)
         {
@@ -224,7 +226,8 @@ public static class ReceiptSplitCalculator
             return new decimal[weights.Count];
         }
 
-        var cents = RoundMoney(Math.Max(0m, amount)) * 100m;
+        var scale = places switch { 0 => 1m, 1 => 10m, 2 => 100m, _ => 1000m };
+        var cents = decimal.Round(Math.Max(0m, amount), places, MidpointRounding.AwayFromZero) * scale;
         var exact = safeWeights.Select(weight => cents * weight / total).ToArray();
         var result = exact.Select(decimal.Floor).ToArray();
         foreach (var index in Enumerable.Range(0, weights.Count)
@@ -234,12 +237,10 @@ public static class ReceiptSplitCalculator
             result[index]++;
         }
 
-        return result.Select(value => value / 100m).ToArray();
+        return result.Select(value => value / scale).ToArray();
     }
 
-    private static decimal RoundMoney(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+    private static bool InvalidMoney(decimal value, int places) => value < 0 || decimal.Round(value, places) != value;
 
-    private static bool InvalidMoney(decimal value) => value < 0 || decimal.Round(value, 2) != value;
-
-    private static bool InvalidSignedMoney(decimal value) => decimal.Round(value, 2) != value;
+    private static bool InvalidSignedMoney(decimal value, int places) => decimal.Round(value, places) != value;
 }

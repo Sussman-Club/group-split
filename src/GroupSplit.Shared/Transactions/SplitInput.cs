@@ -27,6 +27,6 @@ public record SplitInput
     /// refund. Somebody owed money back is a settlement, not a negative share of a cost --
     /// a share the other way sums correctly and moves money nobody recorded as a payment.
     /// </summary>
-    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.SharePrecision))]
+    [MaxDecimalPlaces(3, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.SharePrecision))]
     public decimal Amount { get; init; }
 }

@@ -21,6 +21,23 @@ namespace GroupSplit.API.Test.Transaction;
 /// </remarks>
 public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    [Theory]
+    [InlineData("JPY", "10.5")]
+    [InlineData("USD", "10.001")]
+    [InlineData("KWD", "10.0001")]
+    public async Task Amounts_must_use_their_currencies_minor_units(string currency, string text)
+    {
+        var amount = decimal.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+        await Assert.ThrowsAsync<GroupSplit.API.Errors.ValidationException>(() => Personal(amount, currency));
+    }
+
+    [Fact]
+    public async Task Three_decimal_currency_is_preserved()
+    {
+        var expense = await Personal(10.001m, "KWD");
+        Assert.Equal(10.001m, expense.Amount);
+        Assert.Equal("KWD", expense.Currency);
+    }
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ITransactionService Transactions => GetService<ITransactionService>();
@@ -33,6 +50,27 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
             Currency = currency,
             DateTime = when ?? DateTimeOffset.UtcNow
         }, Ct).AsTask();
+
+    [Fact]
+    public async Task Changing_the_group_default_never_relabels_existing_expenses()
+    {
+        var groupId = await AGroup();
+        var old = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "Before", Amount = 10m, DateTime = DateTimeOffset.UtcNow, GroupId = groupId
+        }, Ct);
+        var groups = GetService<IGroupService>();
+        var update = (await groups.GetUpdateModel(groupId, Ct))!;
+        update.Currency = "EUR";
+        await groups.UpdateGroup(groupId, update, Ct);
+        var newer = await Transactions.Create(new CreateTransactionRequest
+        {
+            Name = "After", Amount = 10m, DateTime = DateTimeOffset.UtcNow, GroupId = groupId
+        }, Ct);
+        Assert.Equal("USD", old.Currency);
+        Assert.Equal("EUR", newer.Currency);
+        Assert.Equal("USD", (await DbContext.Set<Expense>().AsNoTracking().SingleAsync(expense => expense.Id == old.Id, Ct)).Currency);
+    }
 
     private async Task<Guid> AGroup(string currency = Currencies.Default)
     {
@@ -93,11 +131,11 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     }
 
     [Fact]
-    public async Task A_group_expense_in_another_currency_is_refused_rather_than_relabelled()
+    public async Task A_group_expense_in_another_currency_keeps_its_currency()
     {
         var group = await AGroup();
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() => Transactions.Create(
+        var expense = await Transactions.Create(
             new CreateTransactionRequest
             {
                 Name = "Rent",
@@ -105,12 +143,9 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
                 Currency = "EUR",
                 DateTime = DateTimeOffset.UtcNow,
                 GroupId = group
-            }, Ct).AsTask());
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
-        Assert.Equal("EUR", refusal.Extensions["transactionCurrency"]);
-        Assert.Equal(Currencies.Default, refusal.Extensions["groupCurrency"]);
-        Assert.Empty(await DbContext.Set<Expense>().ToListAsync(Ct));
+            }, Ct);
+        Assert.Equal("EUR", expense.Currency);
+        Assert.Equal(900m, expense.Amount);
     }
 
     [Fact]
@@ -131,11 +166,11 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
     }
 
     [Fact]
-    public async Task The_preview_refuses_a_currency_the_save_would_refuse()
+    public async Task The_preview_accepts_a_currency_other_than_the_groups_default()
     {
         var group = await AGroup();
 
-        var refusal = await Assert.ThrowsAsync<ConflictException>(() => Transactions.Preview(
+        var preview = await Transactions.Preview(
             new CreateTransactionRequest
             {
                 Name = "Rent",
@@ -143,9 +178,8 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
                 Currency = "EUR",
                 DateTime = DateTimeOffset.UtcNow,
                 GroupId = group
-            }, Ct));
-
-        Assert.Equal(ErrorCodes.CurrencyMismatch, refusal.Code);
+            }, Ct);
+        Assert.NotNull(preview);
     }
 
     [Fact]

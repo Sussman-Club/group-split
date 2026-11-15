@@ -50,8 +50,8 @@ public static class SettleCommands
 
             context.Output.Write(plan, value => new Rows(
                 new Markup(string.Join("\n", value.Currencies.Select(position =>
-                    $"{Markup.Escape(position.Currency)}: net [bold]{position.Net:N2}[/]  "
-                    + $"owed to you [green]{position.OwedToYou:N2}[/]  you owe [red]{position.YouOwe:N2}[/]")) + "\n"),
+                    $"{Markup.Escape(position.Currency)}: net [bold]{position.Net.ToString($"N{CurrencyPrecision.DecimalPlaces(position.Currency)}")}[/]  "
+                    + $"owed to you [green]{position.OwedToYou.ToString($"N{CurrencyPrecision.DecimalPlaces(position.Currency)}")}[/]  you owe [red]{position.YouOwe.ToString($"N{CurrencyPrecision.DecimalPlaces(position.Currency)}")}[/]")) + "\n"),
                 Side("You pay", value.YouPay),
                 Side("Owed to you", value.OwedToYou)));
 
@@ -152,11 +152,12 @@ public static class SettleCommands
             }
 
             var paying = parse.GetValue(amount) ?? person.Amount;
+            var paymentText = paying.ToString($"N{CurrencyPrecision.DecimalPlaces(person.Currency)}") + " " + person.Currency;
 
             // Where the API will spread it, by the API's own rule, so the confirmation is
             // something somebody can check before agreeing to it.
             var lines = person.Allocate(paying)
-                .Select(part => $"{part.GroupName}: {part.Amount:N2} {person.Currency}")
+                .Select(part => $"{part.GroupName}: {part.Amount.ToString($"N{CurrencyPrecision.DecimalPlaces(person.Currency)}")} {person.Currency}")
                 .ToList();
 
             if (parse.GetValue(dryRun))
@@ -171,7 +172,7 @@ public static class SettleCommands
                         through = day
                     },
                     _ => new Rows(
-                        new Markup($"[bold]{paying:N2}[/] to {Markup.Escape(person.UserName)}, "
+                        new Markup($"[bold]{Markup.Escape(paymentText)}[/] to {Markup.Escape(person.UserName)}, "
                                    + $"across {lines.Count} {(lines.Count == 1 ? "group" : "groups")}.\n"),
                         Table("Group", lines)));
 
@@ -182,8 +183,8 @@ public static class SettleCommands
                 context,
                 action: "settle.pay",
                 summary: chosen is SettlementDirection.YouPaidThem
-                    ? $"Record {paying:N2} {person.Currency} paid to {person.UserName}?"
-                    : $"Record {paying:N2} {person.Currency} received from {person.UserName}?",
+                    ? $"Record {paymentText} paid to {person.UserName}?"
+                    : $"Record {paymentText} received from {person.UserName}?",
                 changes: lines,
                 // The figure the prompt named, not "whatever is outstanding": confirming
                 // after another repayment landed must not pay the new remainder instead.
@@ -192,7 +193,7 @@ public static class SettleCommands
                 // culture; ConfirmCommandTests checks under es-ES.
                 pinned: new Dictionary<Option, string>
                 {
-                    [amount] = paying.ToString("0.00", CultureInfo.InvariantCulture),
+                    [amount] = paying.ToString($"F{CurrencyPrecision.DecimalPlaces(person.Currency)}", CultureInfo.InvariantCulture),
                     [currency] = person.Currency
                 });
 
@@ -211,7 +212,7 @@ public static class SettleCommands
                 ct);
 
             context.Output.Write(recorded, value => new Markup(
-                $"[green]Recorded[/] {value.Amount:N2} "
+                $"[green]Recorded[/] {Markup.Escape(paymentText)} "
                 + (value.Direction is SettlementDirection.YouPaidThem ? "to " : "from ")
                 + $"{Markup.Escape(value.UserName)} across "
                 + $"{value.Groups.Count} {(value.Groups.Count == 1 ? "group" : "groups")}.\n"));
@@ -264,7 +265,7 @@ public static class SettleCommands
                                           ? $" (through {covers:yyyy-MM-dd})"
                                           : string.Empty)),
                         Markup.Escape(settlement.GroupName),
-                        $"{settlement.Amount:N2} {settlement.Currency}");
+                        Tables.AmountWithCode(settlement.Amount, settlement.Currency));
                 }
 
                 return table;
@@ -296,8 +297,8 @@ public static class SettleCommands
             table.AddRow(
                 Markup.Escape(person.UserName) + (person.IsGuest ? " [yellow](guest)[/]" : string.Empty),
                 Markup.Escape(string.Join(", ", person.Groups.Select(part =>
-                    person.Groups.Count == 1 ? part.GroupName : $"{part.GroupName} {part.Amount:N2}"))),
-                $"{person.Amount:N2} {person.Currency}");
+                    person.Groups.Count == 1 ? part.GroupName : $"{part.GroupName} {part.Amount.ToString($"N{CurrencyPrecision.DecimalPlaces(person.Currency)}")} {person.Currency}"))),
+                Tables.AmountWithCode(person.Amount, person.Currency));
         }
 
         return table;

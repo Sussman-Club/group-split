@@ -64,11 +64,11 @@ public class PatchedModelTests
     /// an edit could set fractions of a cent that creating the same transaction refused.
     /// </summary>
     [Fact]
-    public void An_amount_with_more_than_two_decimal_places_is_rejected()
+    public void An_amount_with_more_than_three_decimal_places_is_rejected()
     {
         Assert.False(PatchedModel.IsValid(Valid() with
         {
-            Amount = 10.005m
+            Amount = 10.0005m
         }, out _));
     }
 
@@ -94,7 +94,7 @@ public class PatchedModelTests
     {
         Assert.False(PatchedModel.IsValid(Valid() with
         {
-            Amount = 10.005m
+            Amount = 10.0005m
         }, out var problem));
 
         var validationProblem = Assert.IsType<ProblemHttpResult>(problem);
@@ -108,7 +108,7 @@ public class PatchedModelTests
             Valid() with
             {
                 Name = null!,
-                Amount = 10.005m
+                Amount = 10.0005m
             }, out var problem));
 
         var validationProblem = Assert.IsType<ProblemHttpResult>(problem);

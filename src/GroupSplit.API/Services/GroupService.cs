@@ -248,6 +248,8 @@ public class GroupService(
 {
     public async ValueTask<Group> CreateGroup(CreateGroupRequest request, CancellationToken cancellationToken = default)
     {
+        if (!CurrencyPrecision.IsSupported(request.Currency))
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Choose a supported currency code.");
         var user = userContext.User;
 
         var group = new Group
@@ -405,6 +407,9 @@ public class GroupService(
             throw new NotFoundException(ErrorCodes.GroupNotFound, "Group was not found.");
         }
 
+        if (!string.Equals(existingGroup.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) &&
+            !CurrencyPrecision.IsSupported(request.Currency))
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Choose a supported currency code.");
         existingGroup.Name = request.Name;
         existingGroup.Currency = request.Currency.Trim().ToUpperInvariant();
         existingGroup.Description = request.Description;
@@ -876,9 +881,8 @@ public class GroupService(
         // Shared groups only: the personal one has nobody in it to square up with.
         var archived = await context.Set<GroupMembership>().Where(membership => membership.UserId == user.Id)
             .ToDictionaryAsync(membership => membership.GroupId, membership => membership.ArchivedAt != null, cancellationToken);
-        var rows = await (await GetAllGroupNetBalances(cancellationToken))
-            .Where(balance => balance.UserId == user.Id).ToListAsync(cancellationToken);
-        var groups = rows.Select(row => new GroupPosition(row.GroupId, row.GroupName, row.Balance,
+        var rows = await (await GetAllGroupNetBalances(cancellationToken)).ToListAsync(cancellationToken);
+        var groups = rows.Where(row => row.UserId == user.Id).Select(row => new GroupPosition(row.GroupId, row.GroupName, row.Balance,
             archived.GetValueOrDefault(row.GroupId)) { Currency = row.Currency }).ToList();
         var currencies = groups.GroupBy(position => position.Currency, StringComparer.OrdinalIgnoreCase)
             .Select(group =>

@@ -350,7 +350,7 @@ public class ProblemResponseTest : IAsyncLifetime
         var transactionId = await CreateTransaction();
 
         var patch = new StringContent(
-            """[{"op":"replace","path":"/amount","value":10.005}]""",
+            """[{"op":"replace","path":"/amount","value":10.0005}]""",
             Encoding.UTF8,
             "application/json-patch+json");
 

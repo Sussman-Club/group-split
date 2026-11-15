@@ -25,6 +25,7 @@ public static class GroupCommands
         groups.Subcommands.Add(Rename());
         groups.Subcommands.Add(SetDefaultSplit());
         groups.Subcommands.Add(SetDefaultPeriod());
+        groups.Subcommands.Add(SetDefaultCurrency());
         groups.Subcommands.Add(Members());
         groups.Subcommands.Add(RemoveMember());
         groups.Subcommands.Add(Balances());
@@ -105,7 +106,8 @@ public static class GroupCommands
         {
             Description = "Optional context for the group, such as which trip it is."
         };
-        var command = new Command("create", "Create a group.") { name, description };
+        var currency = new Option<string?>("--currency") { Description = "Default currency code; defaults to USD." };
+        var command = new Command("create", "Create a group.") { name, description, currency };
 
         command.SetHandler(async (context, ct) =>
         {
@@ -113,7 +115,8 @@ public static class GroupCommands
                 new CreateGroupRequest
                 {
                     Name = context.ParseResult.GetValue(name)!,
-                    Description = context.ParseResult.GetValue(description) ?? string.Empty
+                    Description = context.ParseResult.GetValue(description) ?? string.Empty,
+                    Currency = context.ParseResult.GetValue(currency) ?? "USD"
                 }, ct);
 
             context.Output.Write(group, Render);
@@ -253,6 +256,24 @@ public static class GroupCommands
             return ExitCodes.Success;
         });
 
+        return command;
+    }
+
+    private static Command SetDefaultCurrency()
+    {
+        var currency = new Argument<string>("currency") { Description = "The default ISO currency code, such as EUR." };
+        var command = new Command("set-default-currency", "Set the default for new expenses; existing amounts stay unchanged.")
+        {
+            GroupId, currency
+        };
+        command.SetHandler(async (context, ct) =>
+        {
+            var patch = new JsonPatchDocument<CreateGroupRequest>();
+            patch.Replace(request => request.Currency, context.ParseResult.GetValue(currency)!);
+            var group = await context.Groups.UpdateGroupAsync(context.ParseResult.GetValue(GroupId), patch, ct);
+            context.Output.Write(group, Render);
+            return ExitCodes.Success;
+        });
         return command;
     }
 
@@ -404,9 +425,9 @@ public static class GroupCommands
                     table.AddRow(
                         Markup.Escape(balance.UserName) +
                         (balance.IsGuest ? " [yellow](guest)[/]" : string.Empty),
-                        $"{balance.AmountPaid:N2} {balance.Currency}",
-                        $"{balance.AmountOwed:N2} {balance.Currency}",
-                        $"{balance.Balance:N2} {balance.Currency}");
+                        Tables.AmountWithCode(balance.AmountPaid, balance.Currency),
+                        Tables.AmountWithCode(balance.AmountOwed, balance.Currency),
+                        Tables.AmountWithCode(balance.Balance, balance.Currency));
                 }
 
                 // The minimised transfers, which are the part somebody acts on: a column of
@@ -436,7 +457,7 @@ public static class GroupCommands
 
         foreach (var debt in list)
         {
-            table.AddRow(Markup.Escape(debt.UserName), $"{debt.Amount:N2} {debt.Currency}");
+            table.AddRow(Markup.Escape(debt.UserName), Tables.AmountWithCode(debt.Amount, debt.Currency));
         }
 
         return new Rows(new Markup($"\n[bold]{Markup.Escape(heading)}[/]\n"), table);
@@ -451,6 +472,7 @@ public static class GroupCommands
     {
         var userId = new Argument<Guid>("user-id") { Description = "The other member, or a guest." };
         var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
+        var currency = new Option<string?>("--currency") { Description = "Currency of the payment; defaults to the group's currency." };
 
         var direction = new Option<SettlementDirection>("--direction")
         {
@@ -475,7 +497,7 @@ public static class GroupCommands
 
         var command = new Command("settle", "Record a repayment between you and another member or a guest.")
         {
-            GroupId, userId, amount, direction, date, note, through
+            GroupId, userId, amount, currency, direction, date, note, through
         };
 
         command.SetHandler(async (context, ct) =>
@@ -484,6 +506,8 @@ public static class GroupCommands
             var id = parse.GetValue(GroupId);
             var other = parse.GetValue(userId);
             var paid = parse.GetValue(amount);
+            var chosenCurrency = parse.GetValue(currency);
+            var displayAmount = $"{paid.ToString($"N{CurrencyPrecision.DecimalPlaces(chosenCurrency)}")} {(chosenCurrency ?? "in the group default currency")}";
             var side = parse.GetValue(direction);
             var when = parse.GetValue(date);
             var description = parse.GetValue(note);
@@ -497,9 +521,9 @@ public static class GroupCommands
                 context,
                 action: "groups.settle",
                 summary: side == SettlementDirection.TheyPaidYou
-                    ? $"Record that {name} paid you {paid:N2}?"
-                    : $"Record that you paid {name} {paid:N2}?",
-                changes: [$"A transfer of {paid:N2} is written, and both balances move by it."]);
+                    ? $"Record that {name} paid you {displayAmount}?"
+                    : $"Record that you paid {name} {displayAmount}?",
+                changes: [$"A transfer of {displayAmount} is written, and both balances move by it."]);
 
             await context.Groups.SettleGroupDebtsAsync(
                 id,
@@ -507,6 +531,7 @@ public static class GroupCommands
                 {
                     UserId = other,
                     Amount = paid,
+                    Currency = chosenCurrency,
                     Direction = side,
                     Date = when,
                     Description = description,
@@ -556,6 +581,7 @@ public static class GroupCommands
         var toUserId = new Argument<Guid>("to-user-id") { Description = "Who was paid: a member or a guest." };
 
         var amount = Amounts.Argument("amount", "How much changed hands, e.g. 40.00.");
+        var currency = new Option<string?>("--currency") { Description = "Currency of the payment; defaults to the group's currency." };
 
         var date = new Option<DateTimeOffset?>("--date")
         {
@@ -570,7 +596,7 @@ public static class GroupCommands
         var command = new Command("settle-between",
             "Record a repayment between two people in a group, whoever you are.")
         {
-            GroupId, fromUserId, toUserId, amount, date, note
+            GroupId, fromUserId, toUserId, amount, currency, date, note
         };
 
         command.SetHandler(async (context, ct) =>
@@ -580,6 +606,8 @@ public static class GroupCommands
             var payer = parse.GetValue(fromUserId);
             var payee = parse.GetValue(toUserId);
             var paid = parse.GetValue(amount);
+            var chosenCurrency = parse.GetValue(currency);
+            var displayAmount = $"{paid.ToString($"N{CurrencyPrecision.DecimalPlaces(chosenCurrency)}")} {(chosenCurrency ?? "in the group default currency")}";
 
             var members = await context.Groups.GetGroupMembersAsync(id, ct);
 
@@ -592,10 +620,10 @@ public static class GroupCommands
             Confirmation.Require(
                 context,
                 action: "groups.settle-between",
-                summary: $"Record that {payerName} paid {payeeName} {paid:N2}?",
+                summary: $"Record that {payerName} paid {payeeName} {displayAmount}?",
                 changes:
                 [
-                    $"A transfer of {paid:N2} is written from {payerName} to {payeeName}.",
+                    $"A transfer of {displayAmount} is written from {payerName} to {payeeName}.",
                     "Both of their balances move by it, and neither of them recorded it."
                 ]);
 
@@ -606,6 +634,7 @@ public static class GroupCommands
                     FromUserId = payer,
                     ToUserId = payee,
                     Amount = paid,
+                    Currency = chosenCurrency,
                     Date = parse.GetValue(date),
                     Description = parse.GetValue(note)
                 },
@@ -679,10 +708,10 @@ public static class GroupCommands
             var payments = new List<(string Line, decimal Amount)>();
 
             payments.AddRange(balance.YouOwed.Select(debt =>
-                ($"You pay {debt.UserName} {debt.Amount:N2} {debt.Currency}.", debt.Amount)));
+                ($"You pay {debt.UserName} {debt.Amount.ToString($"N{CurrencyPrecision.DecimalPlaces(debt.Currency)}")} {debt.Currency}.", debt.Amount)));
 
             payments.AddRange(balance.OwedToYou.Select(credit =>
-                ($"{credit.UserName} pays you {credit.Amount:N2} {credit.Currency}.", credit.Amount)));
+                ($"{credit.UserName} pays you {credit.Amount.ToString($"N{CurrencyPrecision.DecimalPlaces(credit.Currency)}")} {credit.Currency}.", credit.Amount)));
 
             if (payments.Count == 0)
             {
@@ -849,11 +878,11 @@ public static class GroupCommands
                         entry.DateTime.ToLocalTime().ToString("yyyy-MM-dd"),
                         entry.Kind == ActivityKind.Transfer ? "transfer" : "expense",
                         Markup.Escape(Describe(entry)),
-                        $"{entry.Amount:N2} {entry.Currency}",
+                        Tables.AmountWithCode(entry.Amount, entry.Currency),
                         // A dash rather than a zero: a transfer is not a cost anybody
                         // carries a part of.
-                        entry.Share is { } share ? $"{share:N2} {entry.Currency}" : "[grey]-[/]",
-                        $"{entry.RunningBalance:N2} {entry.Currency}");
+                        entry.Share is { } share ? Tables.AmountWithCode(share, entry.Currency) : "[grey]-[/]",
+                        Tables.AmountWithCode(entry.RunningBalance, entry.Currency));
                 }
 
                 return new Rows(table, Tables.PageFooter(value));
@@ -882,16 +911,19 @@ public static class GroupCommands
 
             context.Output.Write(spending, value =>
             {
-                if (value.Categories.Count == 0)
+                if (value.Categories.Count == 0 && value.OtherCurrencies.Count == 0)
                 {
                     return new Markup(Tables.Empty("spending") + "\n");
                 }
 
-                var table = Tables.Grid("Category", "Expenses", "Total", "Your share");
-                foreach (var category in value.Categories)
+                var table = Tables.Grid("Currency", "Category", "Expenses", "Total", "Your share");
+                foreach (var bucket in value.OtherCurrencies.Prepend(new CategoryCurrencySpendingResponse(value.Currency, value.Categories)))
                 {
-                    table.AddRow(Markup.Escape(category.Name), category.Count.ToString(),
-                        category.Total.ToString("N2"), category.Share.ToString("N2"));
+                    foreach (var category in bucket.Categories)
+                    {
+                    table.AddRow(Markup.Escape(bucket.Currency), Markup.Escape(category.Name), category.Count.ToString(),
+                        Tables.AmountWithCode(category.Total, bucket.Currency), Tables.AmountWithCode(category.Share, bucket.Currency));
+                    }
                 }
 
                 return new Rows(table);

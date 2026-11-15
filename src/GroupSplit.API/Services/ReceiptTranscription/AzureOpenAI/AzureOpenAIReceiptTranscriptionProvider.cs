@@ -154,24 +154,28 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     /// </remarks>
     internal static TranscribedReceipt ToReceipt(AzureReceipt receipt)
     {
+        var numbers = new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }
+            .Concat((receipt.Items ?? []).OfType<AzureReceiptItem>()
+                .SelectMany(item => new[] { item.UnitPrice, item.TotalPrice, item.TaxAmount ?? 0m }));
+        var places = numbers.Any(value => decimal.Round(value, 2) != value) ? 3 : 2;
         TranscribedReceiptItem[] items =
         [
-            .. (receipt.Items ?? []).OfType<AzureReceiptItem>().Select(ToItem).OfType<TranscribedReceiptItem>()
+            .. (receipt.Items ?? []).OfType<AzureReceiptItem>().Select(item => ToItem(item, places)).OfType<TranscribedReceiptItem>()
         ];
 
         return new TranscribedReceipt(
-            RoundMoney(receipt.Subtotal),
-            RoundMoney(receipt.Tax),
-            RoundMoney(receipt.Tip),
-            RoundMoney(receipt.Total),
-            ReceiptTaxRates.Normalize(RoundMoney(receipt.Tax), items))
+            RoundMoney(receipt.Subtotal, places),
+            RoundMoney(receipt.Tax, places),
+            RoundMoney(receipt.Tip, places),
+            RoundMoney(receipt.Total, places),
+            ReceiptTaxRates.Normalize(RoundMoney(receipt.Tax, places), items, places))
         {
             MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
             PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
         };
     }
 
-    private static TranscribedReceiptItem? ToItem(AzureReceiptItem item)
+    private static TranscribedReceiptItem? ToItem(AzureReceiptItem item, int places)
     {
         var quantity = Math.Round(item.Quantity, 3, MidpointRounding.AwayFromZero);
         if (quantity <= 0m)
@@ -179,8 +183,8 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             quantity = 1m;
         }
 
-        var unitPrice = RoundMoney(item.UnitPrice);
-        var totalPrice = RoundMoney(item.TotalPrice);
+        var unitPrice = RoundMoney(item.UnitPrice, places);
+        var totalPrice = RoundMoney(item.TotalPrice, places);
         var name = Clip(item.Name, ReceiptItemInput.NameLength);
 
         if (name is null)
@@ -195,7 +199,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
 
         // Zero represents an unprovided amount in the normalized draft. On save,
         // ReceiptSplitCalculator applies the extracted rate and reconciles rounding.
-        return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount ?? 0m))
+        return new TranscribedReceiptItem(name, unitPrice, quantity, totalPrice, RoundMoney(item.TaxAmount ?? 0m, places))
         {
             TaxRate = item.TaxRate,
             IsTaxable = item.IsTaxable
@@ -208,7 +212,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     /// <summary>What a bill keeps of a merchant's name.</summary>
     private const int MerchantNameLength = 128;
 
-    private static decimal RoundMoney(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+    private static decimal RoundMoney(decimal amount, int places) => Math.Round(amount, places, MidpointRounding.AwayFromZero);
 
     private static string? Clip(string? value, int length) =>
         value?.Trim() is { Length: > 0 } text

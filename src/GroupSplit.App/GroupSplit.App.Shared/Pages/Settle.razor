@@ -1,4 +1,4 @@
-﻿@page "/settle"
+@page "/settle"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Settling
@@ -55,7 +55,7 @@
             <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
             @foreach (var position in Plan.Currencies)
             {
-                <div><span>@position.Currency </span><Money Value="position.Net" Currency="position.Currency" Signed /></div>
+                <div><span>@position.Currency </span><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
             }
         }
         else if (Net > 0)
@@ -179,7 +179,7 @@
                             <div class="meta">@Detail(settlement)</div>
                         </div>
                         <div>
-                            <div><Money Value="settlement.Amount" Currency="settlement.Currency" /></div>
+                            <div><Money Value="settlement.Amount" Currency="@settlement.Currency" /></div>
                             <span class="when">@Clock.Day(settlement.DateTime).ToString("d MMM")</span>
                         </div>
                     </div>

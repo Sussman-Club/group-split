@@ -97,7 +97,7 @@
                                       MaxLength="ReceiptItemInput.NameLength"
                                       Validation="@(new Func<string, IEnumerable<string>>(ValidateItemName))"
                                       Error="@(itemNameError is not null)" ErrorText="@itemNameError" />
-                        <DecimalField @bind-Value="item.TotalPrice" @bind-Value:after="UpdateTotals" Label="@Loc["Line total"]" Variant="Variant.Outlined" HideSpinButtons="true" />
+                        <DecimalField @bind-Value="item.TotalPrice" @bind-Value:after="UpdateTotals" Label="@Loc["Line total"]" Places="@CurrencyPrecision.DecimalPlaces(Currency)" Variant="Variant.Outlined" HideSpinButtons="true" />
                     </div>
                     <div class="gs-editable-receipt-line-meta">
                         <span>@item.Quantity.ToString("0.###") × @item.UnitPrice.ToMoney(Currency)@if (item.TotalPrice == 0) { <text> · @Loc["Free item"]</text> }@if (item.TaxRate is { } rate) { <text> · @rate.ToString("0.####")%</text> }</span>
@@ -110,10 +110,12 @@
                         <DecimalField @bind-Value="item.Quantity" @bind-Value:after="@(() => UpdateLine(item))" Label="@Loc["Quantity"]" Variant="Variant.Outlined"
                                       Places="3" HideSpinButtons="true" />
                         <DecimalField @bind-Value="item.UnitPrice" @bind-Value:after="@(() => UpdateLine(item))" Label="@Loc["Unit price"]" Variant="Variant.Outlined"
+                                      Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                                       Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
 
                         <div class="gs-stack" style="gap: 4px">
                             <DecimalField @key="(item.Key, item.TaxRate is not null || item.IsTaxable == false ? CalculatedTaxes[_items.IndexOf(item)] : (decimal?)null)"
+                                          Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                                           Value="@CalculatedTaxes[_items.IndexOf(item)]"
                                           TextUpdateSuppression="false"
                                           ValueChanged="@((decimal value) => item.TaxAmount = value)"
@@ -140,12 +142,16 @@
             }
             <div class="gs-editable-receipt-totals gs-receipt-fields">
                 <DecimalField @bind-Value="_subtotal" Label="@Loc["Items subtotal"]" Variant="Variant.Outlined"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                 <DecimalField @bind-Value="_tax" Label="@Loc["Tax"]" Variant="Variant.Outlined"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                 <DecimalField @bind-Value="_tip" Label="@Loc["Tip"]" Variant="Variant.Outlined"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
                 <DecimalField @bind-Value="_total" Label="@Loc["Total paid"]" Variant="Variant.Outlined"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               Adornment="Adornment.Start" AdornmentText="@Currency" HideSpinButtons="true" />
             </div>
         </div>
@@ -201,15 +207,16 @@
         var eligible = _items.Where(item => item.IsTaxable == true && item.TotalPrice > 0m).ToList();
         var remaining = _tax - _items.Except(eligible).Sum(item => item.TaxAmount);
         var weight = eligible.Sum(item => item.TotalPrice);
-        var exact = eligible.Select(item => remaining * 100m * item.TotalPrice / weight).ToArray();
+        var scale = CurrencyPrecision.DecimalPlaces(Currency) switch { 0 => 1m, 1 => 10m, 2 => 100m, _ => 1000m };
+        var exact = eligible.Select(item => remaining * scale * item.TotalPrice / weight).ToArray();
         var cents = exact.Select(decimal.Floor).ToArray();
         foreach (var index in Enumerable.Range(0, eligible.Count)
             .OrderByDescending(index => exact[index] - cents[index]).ThenBy(index => index)
-            .Take((int)(decimal.Round(remaining * 100m) - cents.Sum())))
+            .Take((int)(decimal.Round(remaining * scale) - cents.Sum())))
             cents[index]++;
         for (var index = 0; index < eligible.Count; index++)
         {
-            eligible[index].TaxAmount = cents[index] / 100m;
+            eligible[index].TaxAmount = cents[index] / scale;
             eligible[index].TaxRate = null;
         }
         _validationError = null;
@@ -220,11 +227,13 @@
         new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(),
         allocateUnidentified: _items.Count == 1 && _items[0].IsTaxable is null
             && _items[0].TaxRate is null && _items[0].TaxAmount == 0m
-            && _items[0].TotalPrice > 0m && _tax > 0m && decimal.Round(_tax, 2) == _tax);
+            && _items[0].TotalPrice > 0m && _tax > 0m && CurrencyPrecision.IsValidAmount(_tax, Currency),
+        decimalPlaces: CurrencyPrecision.DecimalPlaces(Currency));
     private void DistributeTax()
     {
         var taxes = ReceiptTaxes.Calculate(_tax, _items.Select(item =>
-            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), allocateUnidentified: true);
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), allocateUnidentified: true,
+            decimalPlaces: CurrencyPrecision.DecimalPlaces(Currency));
         for (var index = 0; index < _items.Count; index++)
             _items[index].TaxAmount = taxes[index];
     }
@@ -232,16 +241,16 @@
     {
         get
         {
-            if (new[] { _subtotal, _tax, _tip, _total }.Any(value => value < 0 || decimal.Round(value, 2) != value))
-                return Loc["Receipt subtotal, tax, tip, and total must be non-negative amounts with at most two decimal places."].Value;
+            if (new[] { _subtotal, _tax, _tip, _total }.Any(value => value < 0 || !CurrencyPrecision.IsValidAmount(value, Currency)))
+                return Loc["Receipt amounts must be non-negative and use the currency's precision."].Value;
             if (_items.Any(item => item.Quantity <= 0 || decimal.Round(item.Quantity, 3) != item.Quantity))
                 return Loc["Quantities must be positive with at most three decimal places."].Value;
             if (_items.Any(item => item.TaxRate is < 0 or > 100
                 || item.TaxRate is { } rate && decimal.Round(rate, 4) != rate))
                 return Loc["Tax rates must be between 0 and 100 with at most four decimal places."].Value;
             if (_items.Any(item => new[] { item.UnitPrice, item.TotalPrice, item.TaxAmount }
-                    .Any(value => decimal.Round(value, 2) != value)))
-                return Loc["Line prices and taxes must have at most two decimal places."].Value;
+                    .Any(value => !CurrencyPrecision.IsValidAmount(value, Currency))))
+                return Loc["Line prices and taxes must use the currency's precision."].Value;
             if (_items.Any(item => item.IsTaxable == false && item.TaxRate is > 0))
                 return Loc["A tax-exempt item cannot have a positive tax rate."].Value;
             if (_subtotal + _tax + _tip != _total)
@@ -289,7 +298,7 @@
             _items.Sum(item => item.TotalPrice) == _subtotal)
         {
             var taxes = ReceiptTaxes.DistributeUnassigned(_tax, _items.Select(item =>
-                new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+                new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), CurrencyPrecision.DecimalPlaces(Currency));
             if (taxes is not null)
             {
                 for (var index = 0; index < _items.Count; index++) _items[index].TaxAmount = taxes[index];
@@ -304,7 +313,7 @@
     private readonly HashSet<Guid> _expandedItems = [];
     private void ToggleDetails(Guid key) { if (!_expandedItems.Add(key)) _expandedItems.Remove(key); }
     private void UpdateTotals() { _subtotal = _items.Sum(i => i.TotalPrice); _total = _subtotal + _tax + _tip; }
-    private void UpdateLine(EditableLine item) { item.TotalPrice = decimal.Round(item.Quantity * item.UnitPrice, 2, MidpointRounding.AwayFromZero); UpdateTotals(); }
+    private void UpdateLine(EditableLine item) { item.TotalPrice = decimal.Round(item.Quantity * item.UnitPrice, CurrencyPrecision.DecimalPlaces(Currency), MidpointRounding.AwayFromZero); UpdateTotals(); }
     private void AddItem() => _items.Add(new EditableLine());
 
     private void RemoveItem(EditableLine item) { _items.Remove(item); _expandedItems.Remove(item.Key); UpdateTotals(); }
