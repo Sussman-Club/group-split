@@ -104,21 +104,101 @@ public class McpHttpTests
         var deniedExpenseBody = await deniedExpense.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(deniedExpense.StatusCode == HttpStatusCode.Forbidden || deniedExpenseBody.Contains("error", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(exchangesBeforeWrite, transport.ExchangeCount);
+        using var deniedDelete = await Call(subjectToken, "delete_transaction", "{\"transactionId\":\"" + group + "\"}");
+        var deniedDeleteBody = await deniedDelete.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(deniedDelete.StatusCode == HttpStatusCode.Forbidden || deniedDeleteBody.Contains("error", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(exchangesBeforeWrite, transport.ExchangeCount);
+        var writeToken = Token(resource, "mcp:read mcp:write");
+        using var renamed = await Call(writeToken, "rename_group", "{\"groupId\":\"" + group + "\",\"name\":\"Trip\"}");
+        Assert.DoesNotContain("\"isError\":true", await renamed.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Patch, transport.ApiMethod);
+        Assert.Equal("/groups/" + group, transport.ApiPath);
+        Assert.Contains("Trip", transport.ApiBody);
+        using var deleted = await Call(writeToken, "delete_transaction", "{\"transactionId\":\"" + group + "\"}");
+        Assert.DoesNotContain("\"isError\":true", await deleted.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Delete, transport.ApiMethod);
+        Assert.Equal("/transactions/" + group, transport.ApiPath);
+        using var edit = await Call(writeToken, "update_transaction", "{\"transactionId\":\"" + group + "\",\"edit\":{\"name\":\"Coffee\"}}");
+        Assert.DoesNotContain("\"isError\":true", await edit.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Patch, transport.ApiMethod);
+        Assert.Contains("Coffee", transport.ApiBody);
+        Assert.DoesNotContain("splits", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        using var redivide = await Call(writeToken, "update_transaction", "{\"transactionId\":\"" + group + "\",\"edit\":{\"redivide\":true}}");
+        Assert.DoesNotContain("\"isError\":true", await redivide.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Contains("splits", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        var exchangesBeforeContradiction = transport.ExchangeCount;
+        using var contradiction = await Call(writeToken, "update_transaction", "{\"transactionId\":\"" + group + "\",\"edit\":{\"groupId\":\"" + group + "\",\"makePersonal\":true}}");
+        Assert.Contains("\"isError\":true", await contradiction.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(exchangesBeforeContradiction, transport.ExchangeCount);
         using var deniedSync = await Call(subjectToken, "sync_bank_connection", "{\"connectionId\":\"" + group + "\"}");
         var deniedSyncBody = await deniedSync.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(deniedSync.StatusCode == HttpStatusCode.Forbidden || deniedSyncBody.Contains("error", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(exchangesBeforeWrite, transport.ExchangeCount);
+        Assert.Equal(exchangesBeforeWrite + 4, transport.ExchangeCount);
         var bankArgs = "{\"bankRowId\":\"" + group + "\",\"request\":{}}";
         using var deniedBankFile = await Call(subjectToken, "file_bank_row", bankArgs);
         var deniedBankBody = await deniedBankFile.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(deniedBankFile.StatusCode == HttpStatusCode.Forbidden || deniedBankBody.Contains("error", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(exchangesBeforeWrite, transport.ExchangeCount);
+        Assert.Equal(exchangesBeforeWrite + 4, transport.ExchangeCount);
         using var filed = await Call(Token(resource, "mcp:read mcp:write"), "file_bank_row", bankArgs);
         Assert.DoesNotContain("\"isError\":true", await filed.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpMethod.Post, transport.ApiMethod);
         Assert.Equal("/inbox/" + group + "/file", transport.ApiPath);
         Assert.DoesNotContain("\"fileAnyway\":true", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        var uploadArgs = "{\"expenseId\":\"" + group + "\",\"fileName\":\"receipt.png\",\"contentBase64\":\"aGVsbG8=\"}";
+        var exchangesBeforeUpload = transport.ExchangeCount;
+        using var deniedUpload = await Call(subjectToken, "upload_expense_receipt", uploadArgs);
+        var deniedUploadBody = await deniedUpload.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(deniedUpload.StatusCode == HttpStatusCode.Forbidden || deniedUploadBody.Contains("error", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(exchangesBeforeUpload, transport.ExchangeCount);
+        using var uploaded = await Call(writeToken, "upload_expense_receipt", uploadArgs);
+        Assert.DoesNotContain("\"isError\":true", await uploaded.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Post, transport.ApiMethod);
+        Assert.Equal("/transactions/" + group + "/receipt-attachments", transport.ApiPath);
+        Assert.Contains("receipt.png", transport.ApiBody);
+        Assert.Contains("hello", transport.ApiBody);
+        using var downloaded = await Call(subjectToken, "download_expense_receipt", "{\"expenseId\":\"" + group + "\",\"attachmentId\":\"" + group + "\"}");
+        var downloadedBody = await downloaded.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("\"isError\":true", downloadedBody);
+        Assert.Contains("aGVsbG8=", downloadedBody);
+        Assert.Equal(HttpMethod.Get, transport.ApiMethod);
+        Assert.Equal("/transactions/" + group + "/receipt-attachments/" + group, transport.ApiPath);
+        var exchangesBeforeInvalidUpload = transport.ExchangeCount;
+        using var invalidUpload = await Call(writeToken, "upload_expense_receipt", "{\"expenseId\":\"" + group + "\",\"fileName\":\"receipt.exe\",\"contentBase64\":\"aGVsbG8=\"}");
+        Assert.Contains("\"isError\":true", await invalidUpload.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(exchangesBeforeInvalidUpload, transport.ExchangeCount);
+        var receiptEditArgs = "{\"expenseId\":\"" + group + "\",\"itemId\":\"" + group + "\",\"edit\":{\"name\":\"Coffee\"}}";
+        using var deniedReceiptEdit = await Call(subjectToken, "update_receipt_item", receiptEditArgs);
+        var deniedReceiptEditBody = await deniedReceiptEdit.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(deniedReceiptEdit.StatusCode == HttpStatusCode.Forbidden || deniedReceiptEditBody.Contains("error", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(exchangesBeforeInvalidUpload, transport.ExchangeCount);
+        using var receiptEdit = await Call(writeToken, "update_receipt_item", receiptEditArgs);
+        Assert.DoesNotContain("\"isError\":true", await receiptEdit.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Patch, transport.ApiMethod);
+        Assert.Contains("/items/" + group, transport.ApiPath);
+        Assert.Contains("Coffee", transport.ApiBody);
+        Assert.DoesNotContain("taxRate", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        var reportArgs = "{\"report\":{\"title\":\"Help\",\"description\":\"Issue\"}}";
+        var beforeReport = transport.ExchangeCount;
+        using var deniedReport = await Call(subjectToken, "create_support_report", reportArgs);
+        var deniedReportBody = await deniedReport.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(deniedReport.StatusCode == HttpStatusCode.Forbidden || deniedReportBody.Contains("error", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(beforeReport, transport.ExchangeCount);
+        using var createdReport = await Call(writeToken, "create_support_report", reportArgs);
+        Assert.DoesNotContain("\"isError\":true", await createdReport.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpMethod.Post, transport.ApiMethod);
+        Assert.StartsWith("/support-reports", transport.ApiPath);
+        Assert.Contains("Help", transport.ApiBody);
+        var beforeExcludedTool = transport.ExchangeCount;
+        using var excludedAccountDelete = await Call(writeToken, "delete_current_account");
+        Assert.Contains("error", await excludedAccountDelete.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(beforeExcludedTool, transport.ExchangeCount);
         transport.RefuseApi = true;
+        using var forbiddenStaff = await Call(subjectToken, "staff_team");
+        Assert.Contains("\"isError\":true", await forbiddenStaff.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("/staff/team", transport.ApiPath);
+        Assert.Equal("api-user-token", transport.ApiBearer);
+        using var forbiddenReceipt = await Call(subjectToken, "download_expense_receipt", "{\"expenseId\":\"" + group + "\",\"attachmentId\":\"" + group + "\"}");
+        Assert.Contains("\"isError\":true", await forbiddenReceipt.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         using var forbidden = await Call(subjectToken, "list_groups");
         Assert.Contains("\"isError\":true", await forbidden.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
@@ -151,8 +231,20 @@ public class McpHttpTests
                 owner.ApiMethod = request.Method;
                 owner.ApiBody = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
                 var filing = owner.ApiPath.EndsWith("/file", StringComparison.Ordinal);
+                if (!owner.RefuseApi && owner.ApiPath.StartsWith("/support-reports", StringComparison.Ordinal))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+                }
+                if (!owner.RefuseApi && owner.ApiPath.Contains("/receipt-attachments", StringComparison.Ordinal))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(request.Method == HttpMethod.Get ? "hello" : "{}", Encoding.UTF8,
+                            request.Method == HttpMethod.Get ? "image/png" : "application/json")
+                    };
+                }
                 return new HttpResponseMessage(owner.RefuseApi ? HttpStatusCode.Forbidden : filing ? HttpStatusCode.Created : HttpStatusCode.OK)
-                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing ? "{}" : "[]", Encoding.UTF8, "application/json") };
+                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
             }
         }
     }
