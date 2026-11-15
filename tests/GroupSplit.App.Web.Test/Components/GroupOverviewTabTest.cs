@@ -190,6 +190,20 @@ public class GroupOverviewTabTest : ComponentTest
     }
 
     [Fact]
+    public void Even_single_currency_balance_does_not_repeat_the_currency_code()
+    {
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Ana", Balance = 0m, Currency = "USD" }],
+            OwedToYou = [new DebtInfo { UserId = Omar, UserName = "Omar", Amount = 10m, Currency = "USD" }],
+            YouOwed = [new DebtInfo { UserId = Dani, UserName = "Dani", Amount = 10m, Currency = "USD" }]
+        };
+        var page = RenderFor(Me);
+        Assert.Equal("Even", page.Find(".gs-position strong").TextContent.Trim());
+        Assert.Empty(page.FindAll(".gs-currency-code"));
+    }
+
+    [Fact]
     public async Task Same_person_has_separate_currency_actions_even_when_net_is_zero()
     {
         _balance = new UserGroupBalanceResponse

@@ -56,7 +56,7 @@ else
                             <div class="gs-eyebrow">@(position.Balance > 0 ? Loc["You are owed"].Value : position.Balance < 0 ? Loc["You owe"].Value : Loc["Your balance"].Value)</div>
                             @if (position.Balance == 0)
                             {
-                                <strong>@(!balance.OwedToYou.Any() && !balance.YouOwed.Any() ? Loc["All settled"].Value : $"{Loc["Even"].Value} · {position.Currency}")</strong>
+                                <strong>@(!balance.OwedToYou.Any() && !balance.YouOwed.Any() ? Loc["All settled"].Value : HasMultipleCurrencies ? $"{Loc["Even"].Value} · {position.Currency}" : Loc["Even"].Value)</strong>
                             }
                             else
                             {
