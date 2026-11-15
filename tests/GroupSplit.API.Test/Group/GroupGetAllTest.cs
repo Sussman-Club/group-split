@@ -16,7 +16,10 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     public async Task Currency_balance_queries_execute_on_postgresql_when_test_database_is_configured()
     {
         var connection = Environment.GetEnvironmentVariable("GROUPSPLIT_CURRENCY_TEST_DATABASE");
-        if (string.IsNullOrWhiteSpace(connection)) return;
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            return;
+        }
 
         await using var context = new PostgreSqlAppDbContext(
             new DbContextOptionsBuilder<PostgreSqlAppDbContext>().UseNpgsql(connection).Options);
@@ -30,8 +33,12 @@ public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var group = new GroupSplit.Data.Entities.Group { Name = "Currency query test", Users = { me, friend } };
         var expense = new GroupSplit.Data.Entities.Expense
         {
-            Name = "Three decimal expense", Amount = 1.001m, Currency = "KWD",
-            DateTime = DateTimeOffset.UtcNow, User = me, Group = group
+            Name = "Three decimal expense",
+            Amount = 1.001m,
+            Currency = "KWD",
+            DateTime = DateTimeOffset.UtcNow,
+            User = me,
+            Group = group
         };
         expense.Splits.Add(new GroupSplit.Data.Entities.TransactionSplit { User = me, Amount = .501m });
         expense.Splits.Add(new GroupSplit.Data.Entities.TransactionSplit { User = friend, Amount = .500m });

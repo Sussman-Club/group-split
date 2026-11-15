@@ -149,7 +149,9 @@ public class ExpenseSplitter(
     {
         ArgumentNullException.ThrowIfNull(expense);
         if (!CurrencyPrecision.IsValidAmount(expense.Amount, expense.Currency))
+        {
             throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
+        }
 
         var members = await MembersOf(expense, ct);
         var version = await Versions().FirstAsync(candidate => candidate.Id == ruleVersionId, ct);

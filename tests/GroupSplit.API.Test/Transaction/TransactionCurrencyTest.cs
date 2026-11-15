@@ -57,7 +57,10 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
         var groupId = await AGroup();
         var old = await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "Before", Amount = 10m, DateTime = DateTimeOffset.UtcNow, GroupId = groupId
+            Name = "Before",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId
         }, Ct);
         var groups = GetService<IGroupService>();
         var update = (await groups.GetUpdateModel(groupId, Ct))!;
@@ -65,7 +68,10 @@ public class TransactionCurrencyTest(ApiTestFixture fixture) : ApiUnitTest(fixtu
         await groups.UpdateGroup(groupId, update, Ct);
         var newer = await Transactions.Create(new CreateTransactionRequest
         {
-            Name = "After", Amount = 10m, DateTime = DateTimeOffset.UtcNow, GroupId = groupId
+            Name = "After",
+            Amount = 10m,
+            DateTime = DateTimeOffset.UtcNow,
+            GroupId = groupId
         }, Ct);
         Assert.Equal("USD", old.Currency);
         Assert.Equal("EUR", newer.Currency);

@@ -130,7 +130,10 @@ public static class SettleCommands
             var matching = side.Where(entry => entry.UserId == userId).ToList();
             var requestedCurrency = parse.GetValue(currency);
             if (matching.Count > 1 && string.IsNullOrWhiteSpace(requestedCurrency))
+            {
                 throw new CliException(new CliError("Choose a currency with --currency for this person.", "CURRENCY_REQUIRED"), ExitCodes.InvalidInput);
+            }
+
             var person = matching.FirstOrDefault(entry => requestedCurrency is null ||
                 string.Equals(entry.Currency, requestedCurrency, StringComparison.OrdinalIgnoreCase));
 

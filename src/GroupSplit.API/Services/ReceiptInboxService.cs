@@ -163,7 +163,10 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         Unfiled(r);
         if (!string.Equals(r.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) &&
             !CurrencyPrecision.IsSupported(request.Currency))
+        {
             throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose a supported currency code.");
+        }
+
         r.Currency = request.Currency.ToUpperInvariant();
         if (request.UpdateMerchant)
         {

@@ -19,14 +19,21 @@ public sealed class CurrencyDemoMembershipSeeder(AppDbContext db, TimeProvider c
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
-        if (!await db.Set<Group>().AnyAsync(group => group.Id == GroupId, ct)) return;
+        if (!await db.Set<Group>().AnyAsync(group => group.Id == GroupId, ct))
+        {
+            return;
+        }
+
         var existing = await db.Set<GroupMembership>().IgnoreQueryFilters()
             .Where(membership => membership.GroupId == GroupId && Members.Contains(membership.UserId))
             .Select(membership => membership.UserId).ToListAsync(ct);
         var users = await db.Set<User>().Where(user => Members.Contains(user.Id))
             .Select(user => user.Id).ToListAsync(ct);
         foreach (var id in users.Except(existing))
+        {
             db.Add(new GroupMembership { GroupId = GroupId, UserId = id, JoinedAt = clock.GetUtcNow() });
+        }
+
         await db.SaveChangesAsync(ct);
     }
 }

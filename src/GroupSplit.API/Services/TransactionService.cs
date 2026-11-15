@@ -773,7 +773,9 @@ public class TransactionService(
                     "A settlement's amount must be greater than 0.");
             }
             if (!CurrencyPrecision.IsValidAmount(request.Amount, transfer.Currency))
+            {
                 throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
+            }
 
             if (request.Splits is { Count: > 1 })
             {
@@ -1259,7 +1261,10 @@ public class TransactionService(
     {
         var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
         if (currency is not null && !CurrencyPrecision.IsSupported(currency))
+        {
             throw new ValidationException(ErrorCodes.ValidationFailed, "Choose a supported currency code.");
+        }
+
         return currency ?? group.Currency;
     }
 

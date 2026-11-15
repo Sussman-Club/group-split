@@ -295,7 +295,10 @@ public class SettlementService(
         // belongs to the month it settled, not the one somebody got round to it in.
         var paymentCurrency = string.IsNullOrWhiteSpace(currency) ? group.Currency : currency.Trim().ToUpperInvariant();
         if (!CurrencyPrecision.IsValidAmount(amount, paymentCurrency))
+        {
             throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
+        }
+
         if (paymentCurrency != group.Currency && !await context.Set<Transaction>().AnyAsync(
                 transaction => transaction.GroupId == groupId && transaction.Currency == paymentCurrency,
                 cancellationToken))
@@ -355,7 +358,8 @@ public class SettlementService(
         var lastSettled = paid.Concat(paidTo).Max();
 
         return new SettlementPlanResponse(primary?.Net ?? 0, primary?.OwedToYou ?? 0,
-            primary?.YouOwe ?? 0, youPay, owedToYou, lastSettled) { Currencies = currencies };
+            primary?.YouOwe ?? 0, youPay, owedToYou, lastSettled)
+        { Currencies = currencies };
     }
 
     public async Task<SettleWithPersonResponse> SettleWithPerson(SettleWithPersonRequest request,
@@ -393,7 +397,9 @@ public class SettlementService(
 
         var allocations = person.Allocate(request.Amount);
         if (!CurrencyPrecision.IsValidAmount(request.Amount, person.Currency))
+        {
             throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
+        }
 
         var groups = await context.Set<Group>()
             .Include(@group => @group.Users)

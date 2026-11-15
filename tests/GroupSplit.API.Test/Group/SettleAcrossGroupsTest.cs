@@ -30,15 +30,22 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var group = await GroupWith("Trip", friend);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group, PaidByUserId = friend.Id, Name = "Dinner", Amount = 1.001m,
-            Currency = "KWD", DateTime = DateTimeOffset.UtcNow
+            GroupId = group,
+            PaidByUserId = friend.Id,
+            Name = "Dinner",
+            Amount = 1.001m,
+            Currency = "KWD",
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
         var line = Assert.Single((await Settlements().GetPlan(Ct)).YouPay);
         Assert.Equal("KWD", line.Currency);
         Assert.Equal(.500m, line.Amount);
         await Settlements().SettleWithPerson(new SettleWithPersonRequest
         {
-            UserId = friend.Id, Amount = .500m, Currency = "KWD", Direction = SettlementDirection.YouPaidThem
+            UserId = friend.Id,
+            Amount = .500m,
+            Currency = "KWD",
+            Direction = SettlementDirection.YouPaidThem
         }, Ct);
         Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
         Assert.Equal("KWD", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
@@ -56,7 +63,9 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.Equal("EUR", line.Currency);
         await Settlements().SettleWithPerson(new SettleWithPersonRequest
         {
-            UserId = friend.Id, Amount = 20, Direction = SettlementDirection.YouPaidThem
+            UserId = friend.Id,
+            Amount = 20,
+            Direction = SettlementDirection.YouPaidThem
         }, Ct);
         Assert.Equal("EUR", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
         Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
@@ -69,8 +78,12 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         await Expense(group, 40, paidBy: friend);
         await GetService<ITransactionService>().Create(new CreateTransactionRequest
         {
-            GroupId = group, PaidByUserId = friend.Id, Name = "Euro dinner", Amount = 60,
-            Currency = "EUR", DateTime = DateTimeOffset.UtcNow
+            GroupId = group,
+            PaidByUserId = friend.Id,
+            Name = "Euro dinner",
+            Amount = 60,
+            Currency = "EUR",
+            DateTime = DateTimeOffset.UtcNow
         }, Ct);
 
         var plan = await Settlements().GetPlan(Ct);
@@ -80,7 +93,10 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
 
         await Settlements().SettleWithPerson(new SettleWithPersonRequest
         {
-            UserId = friend.Id, Amount = 30, Currency = "EUR", Direction = SettlementDirection.YouPaidThem
+            UserId = friend.Id,
+            Amount = 30,
+            Currency = "EUR",
+            Direction = SettlementDirection.YouPaidThem
         }, Ct);
 
         var after = await Settlements().GetPlan(Ct);

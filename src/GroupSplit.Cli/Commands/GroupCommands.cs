@@ -921,8 +921,8 @@ public static class GroupCommands
                 {
                     foreach (var category in bucket.Categories)
                     {
-                    table.AddRow(Markup.Escape(bucket.Currency), Markup.Escape(category.Name), category.Count.ToString(),
-                        Tables.AmountWithCode(category.Total, bucket.Currency), Tables.AmountWithCode(category.Share, bucket.Currency));
+                        table.AddRow(Markup.Escape(bucket.Currency), Markup.Escape(category.Name), category.Count.ToString(),
+                            Tables.AmountWithCode(category.Total, bucket.Currency), Tables.AmountWithCode(category.Share, bucket.Currency));
                     }
                 }
 

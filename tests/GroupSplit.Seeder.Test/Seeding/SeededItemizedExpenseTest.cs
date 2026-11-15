@@ -42,8 +42,14 @@ public class SeededItemizedExpenseTest
         var bill = Bill();
         var foreign = new TransactionSeedDto
         {
-            Id = bill.Id, PayerId = bill.PayerId, CategoryId = bill.CategoryId, Amount = bill.Amount,
-            Name = bill.Name, DateTime = bill.DateTime, Receipt = bill.Receipt, Currency = "EUR"
+            Id = bill.Id,
+            PayerId = bill.PayerId,
+            CategoryId = bill.CategoryId,
+            Amount = bill.Amount,
+            Name = bill.Name,
+            DateTime = bill.DateTime,
+            Receipt = bill.Receipt,
+            Currency = "EUR"
         };
         await Seeder(services, foreign).SeedAsync(Ct);
         var expense = await db.Set<Expense>().Include(item => item.Receipt).SingleAsync(Ct);

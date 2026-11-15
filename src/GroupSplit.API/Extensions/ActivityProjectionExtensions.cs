@@ -245,7 +245,9 @@ public static class ActivityProjectionExtensions
                 .Select(group => new { Currency = group.Key, Amount = group.Sum(split => split.Amount) })
                 .ToDictionaryAsync(row => row.Currency, row => row.Amount, ct);
             foreach (var (currency, amount) in owed)
+            {
                 paid[currency] = paid.GetValueOrDefault(currency) - amount;
+            }
 
             var window = await activity
                 .Where(entry => entry.DateTime >= earliest && entry.DateTime <= latest)
