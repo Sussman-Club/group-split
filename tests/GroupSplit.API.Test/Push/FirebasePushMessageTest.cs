@@ -6,6 +6,25 @@ namespace GroupSplit.API.Test.Push;
 
 public sealed class FirebasePushMessageTest
 {
+    [Theory]
+    [InlineData(PushNotificationKind.BankSyncIssue, "/account")]
+    [InlineData(PushNotificationKind.PaymentRequest, "/settlement-requests/request-token")]
+    public void Web_delivery_uses_the_shared_route_and_an_https_link(PushNotificationKind kind, string route)
+    {
+        var message = FirebasePushSender.CreateMessage("token", Guid.NewGuid(), "Trip", Guid.NewGuid(),
+            DateTimeOffset.UtcNow, kind, "request-token", "https://groupsplit.example/");
+        Assert.Equal(route, message.Data["route"]);
+        Assert.Equal("https://groupsplit.example" + route, message.Webpush.FcmOptions.Link);
+        Assert.Equal("3600", message.Webpush.Headers["TTL"]);
+    }
+
+    [Fact]
+    public void Web_link_requires_a_valid_https_origin()
+    {
+        var message = FirebasePushSender.CreateMessage("token", Guid.NewGuid(), "Trip", Guid.NewGuid(),
+            DateTimeOffset.UtcNow, webBaseUrl: "http://example.test");
+        Assert.Null(message.Webpush);
+    }
     [Fact]
     public void Background_notification_serializes_its_actual_UTC_time_instead_of_year_one()
     {

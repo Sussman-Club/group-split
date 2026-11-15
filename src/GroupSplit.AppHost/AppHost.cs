@@ -127,14 +127,36 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     // includes the client above existing, with the secret just given to the API.
     .WaitForCompletion(realmSettings);
 
+// The resource identifier is deliberately an operator-supplied public URL: it must
+// match the token audience and may differ from Aspire's internal endpoint.
+var mcpIssuer = builder.AddParameter("mcp-issuer");
+var mcpResource = builder.AddParameter("mcp-resource");
+var mcpExchangeClientId = builder.AddParameter("mcp-exchange-client-id");
+var mcpExchangeClientSecret = builder.AddParameter("mcp-exchange-client-secret", secret: true);
+var mcp = builder.AddDotnetProject("mcp", "../GroupSplit.Mcp")
+    .WithHttpEndpoint(name: "http")
+    .WithReference(api)
+    .WithReference(keycloak)
+    .WithEnvironment("Mcp__Issuer", mcpIssuer)
+    .WithEnvironment("Mcp__Resource", mcpResource)
+    .WithEnvironment("Mcp__ExchangeClientId", mcpExchangeClientId)
+    .WithEnvironment("Mcp__ExchangeClientSecret", mcpExchangeClientSecret)
+    .WaitFor(api)
+    .WaitForCompletion(realmSettings)
+    .WaitFor(keycloak)
+    .WithHealthEndpoints();
+
 var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
     .WithReference(keycloak)
+    .WithReference(mcp)
     .WaitFor(api)
     .WithReference(api)
     .WithReference(cache)
     .WaitFor(cache)
     .WithHealthEndpoints()
     .WithBrowserLogs();
+
+web.WithFirebaseWebPush(api);
 
 // Each browser store (and an unpacked development build) may use a different ID.
 var receiptImporterIds = builder.AddOptionalParameter("receipt-importer-extension-ids", "aaclkbbjgicajpnjoigfjnlmpiocngmp,ajofnofdakhcjkgjijkdenieilgndpeb");
@@ -330,6 +352,9 @@ else
         .WithBankingOrigin(hostname)
         .WithFirebasePush()
         .WithManagementHealthcheck();
+
+    mcp.WithManagementHealthcheck()
+        .WithRemoteImageTag(deploymentVersion);
 
     dbServer.AsDeployedPostgres();
 

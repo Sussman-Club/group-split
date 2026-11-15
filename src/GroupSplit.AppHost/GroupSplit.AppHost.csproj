@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\GroupSplit.API\GroupSplit.API.csproj" />
+        <ProjectReference Include="..\GroupSplit.Mcp\GroupSplit.Mcp.csproj" />
         <ProjectReference Include="..\GroupSplit.App\GroupSplit.App.Web\GroupSplit.App.Web.csproj" />
         <ProjectReference Include="..\GroupSplit.Cli\GroupSplit.Cli.csproj" />
         <!-- Load-bearing for the migrations, and easy to mistake for dead weight: AddEFMigrations

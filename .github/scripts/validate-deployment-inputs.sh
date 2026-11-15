@@ -25,9 +25,26 @@ require_when() {
   require "$@"
 }
 
-require WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
+require WEB_HOSTNAME MCP_ISSUER MCP_RESOURCE MCP_EXCHANGE_CLIENT_ID MCP_EXCHANGE_CLIENT_SECRET DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD \
         KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET CACHE_PASSWORD \
         STORAGE_ACCESSKEY STORAGE_SECRETKEY
+
+# MCP is reached through the web host, and the deployed API uses this same Keycloak
+# issuer. A mismatched value can make a release healthy but unable to authenticate.
+if [ -n "$(value MCP_RESOURCE)" ] && [[ ! "$(value MCP_RESOURCE)" =~ ^https://[^/?#@]+/mcp$ ]]; then
+  echo "MCP_RESOURCE must be an HTTPS origin followed by /mcp." >&2
+  missing=1
+fi
+if [ -n "$(value WEB_HOSTNAME)" ] && [ -n "$(value MCP_RESOURCE)" ] \
+   && [ "$(value MCP_RESOURCE)" != "${WEB_HOSTNAME%/}/mcp" ]; then
+  echo "MCP_RESOURCE must be WEB_HOSTNAME followed by /mcp." >&2
+  missing=1
+fi
+if [ -n "$(value WEB_HOSTNAME)" ] && [ -n "$(value MCP_ISSUER)" ] \
+   && [ "$(value MCP_ISSUER)" != "${WEB_HOSTNAME%/}/idp/realms/group-split" ]; then
+  echo "MCP_ISSUER must be the group-split realm issuer on WEB_HOSTNAME." >&2
+  missing=1
+fi
 
 require_when SMTP_ENABLED SMTP_HOST SMTP_FROM SMTP_USER SMTP_PASSWORD \
   || echo "::notice::SMTP_ENABLED is not true. Keycloak sends no mail, and the sign-in page offers no password reset."

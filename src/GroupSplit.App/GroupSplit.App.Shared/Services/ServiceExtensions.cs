@@ -79,6 +79,7 @@ public static class ServiceExtensions
             services.TryAdd<IUserLogin, UserLogin>(sessionLifetime);
 
             services.AddApiClient<IUsersClient, UsersClient>();
+            services.AddApiClient<IPush_notificationsClient, Push_notificationsClient>();
             services.AddApiClient<ISupportReportsClient, SupportReportsClient>();
             services.AddApiClient<IStaffClient, StaffClient>();
             services.AddApiClient<ISettlement_requestsClient, Settlement_requestsClient>();

@@ -1,4 +1,4 @@
-using GroupSplit.Cli.Api;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;
 

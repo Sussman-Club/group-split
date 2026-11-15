@@ -1,7 +1,6 @@
 using System.CommandLine;
 using System.Net.Http.Json;
 using System.Text.Json;
-using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Shared;
 using Spectre.Console;

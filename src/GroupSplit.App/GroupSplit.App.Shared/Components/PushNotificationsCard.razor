@@ -9,7 +9,7 @@
 {
     <div class="gs-card gs-card-pad gs-notifications" aria-busy="@(busy ? "true" : "false")">
         <div class="gs-card-title"><h2>@Loc["Notifications"]</h2></div>
-        <p class="gs-muted gs-notifications-intro">@Loc["Choose which alerts this Android device receives."]</p>
+        <p class="gs-muted gs-notifications-intro">@Loc[push.DeviceDescription]</p>
         <div class="gs-notification-options">
         @foreach (var kind in PushNotificationKinds.Settings.Where(kind =>
             (PushNotificationKinds.Category(kind) == PushNotificationCategory.StaffSupport) == StaffOnly))
@@ -30,6 +30,10 @@
         }
     </div>
 }
+else if (push?.UnavailableReason is { } reason)
+{
+    <div class="gs-card gs-card-pad gs-notifications"><h2>@Loc["Notifications"]</h2><p>@Loc[reason]</p></div>
+}
 
 @code {
     [Microsoft.AspNetCore.Components.Parameter] public bool StaffOnly { get; set; }
@@ -46,6 +50,15 @@
         _ => ""
     };
     protected override void OnInitialized() => push = Services.GetService<IPushNotifications>();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && push is not null)
+        {
+            try { await push.InitializeAsync(); }
+            catch (Exception) { error = Loc["Could not update alerts. Check your connection and allow notifications in your device settings, then try again."].Value; }
+            StateHasChanged();
+        }
+    }
     private async Task SetEnabled(PushNotificationKind kind, bool value)
     {
         busy = true;

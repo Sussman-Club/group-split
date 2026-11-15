@@ -1,5 +1,5 @@
 using System.CommandLine;
-using GroupSplit.Cli.Api;
+using GroupSplit.Shared;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Output;
 

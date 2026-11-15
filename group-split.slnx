@@ -4,6 +4,8 @@
   <!-- The HTTP API and the DTOs and validation it shares with the clients. -->
   <Folder Name="/src/">
     <Project Path="src/GroupSplit.API/GroupSplit.API.csproj" />
+    <Project Path="src/GroupSplit.ApiClient/GroupSplit.ApiClient.csproj" />
+    <Project Path="src/GroupSplit.Mcp/GroupSplit.Mcp.csproj" />
     <Project Path="src/GroupSplit.Shared/GroupSplit.Shared.csproj" />
   </Folder>
   <!-- Aspire: the app model, the seeding and realm workers, their shared Keycloak

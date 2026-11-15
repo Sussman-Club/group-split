@@ -58,6 +58,9 @@
 /* Phone icon-button minimums must not enlarge the thumb's 38px positioning box.
    The surrounding label supplies the touch target for the whole settings row. */
 .gs-notifications .gs-notification-option .mud-switch-base {
+    /* MudBlazor's transient ripple rule sets position: relative; the thumb must
+       stay anchored to the switch track before, during and after interaction. */
+    position: absolute;
     width: 38px;
     height: 38px;
     min-width: 38px;

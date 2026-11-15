@@ -4,6 +4,8 @@
 @using GroupSplit.App.Shared.Services.Users
 @using GroupSplit.Shared
 @implements IDisposable
+@inject IServiceProvider Services
+@using Microsoft.Extensions.DependencyInjection
 
 @* A person the API refuses outright gets the reason instead of the app. Every page would
    otherwise ask the API for something, be refused the same way, and say so in a snackbar
@@ -40,6 +42,16 @@ else
     private UserInfo? User { get; set; }
     private SignInRefusal? _refusal;
     private bool _initialized;
+    private Guid? _pushUser;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (User is { } user && user.Id != _pushUser && Services.GetService<GroupSplit.App.Shared.Services.IPushNotifications>() is GroupSplit.App.Shared.Services.BrowserPushNotifications push)
+        {
+            try { await push.RefreshAsync(user.Id); _pushUser = user.Id; }
+            catch (Exception) { /* Retry on a subsequent render. */ }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

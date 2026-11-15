@@ -82,6 +82,10 @@ jobs:
         # metadata remain outside this map.
         env: &deployment_inputs
           WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME }}
+          MCP_ISSUER: ${{ vars.MCP_ISSUER }}
+          MCP_RESOURCE: ${{ vars.MCP_RESOURCE }}
+          MCP_EXCHANGE_CLIENT_ID: ${{ vars.MCP_EXCHANGE_CLIENT_ID }}
+          MCP_EXCHANGE_CLIENT_SECRET: ${{ secrets.MCP_EXCHANGE_CLIENT_SECRET }}
           DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
           DB_SERVER_PASSWORD: ${{ secrets.DB_SERVER_PASSWORD }}
           KEYCLOAK_PASSWORD: ${{ secrets.KEYCLOAK_PASSWORD }}
@@ -115,6 +119,12 @@ jobs:
           BANK_KEY_CERTIFICATE: ${{ secrets.BANK_KEY_CERTIFICATE }}
           PUSH_ENABLED: ${{ vars.PUSH_ENABLED || 'false' }}
           PUSH_PROJECT_ID: ${{ vars.PUSH_PROJECT_ID }}
+          WEBPUSH_APIKEY: ${{ vars.WEBPUSH__APIKEY }}
+          WEBPUSH_PROJECTID: ${{ vars.WEBPUSH__PROJECTID }}
+          WEBPUSH_MESSAGINGSENDERID: ${{ vars.WEBPUSH__MESSAGINGSENDERID }}
+          WEBPUSH_APPID: ${{ vars.WEBPUSH__APPID }}
+          WEBPUSH_VAPIDKEY: ${{ secrets.WEBPUSH__VAPIDKEY }}
+          PUSH_WEBBASEURL: ${{ vars.PUSH__WEBBASEURL }}
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           RECEIPT_TRANSCRIPTION_PROVIDER: ${{ secrets.RECEIPT_TRANSCRIPTION_PROVIDER }}
           VERYFI_ENABLED: ${{ vars.VERYFI_ENABLED }}

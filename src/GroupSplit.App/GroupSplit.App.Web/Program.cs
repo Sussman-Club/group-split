@@ -47,6 +47,7 @@ builder.Services.AddAuthorizationBuilder();
 builder.Services.AddSingleton<IClientOptionsSetter, ClientOptionsSetter>();
 
 builder.Services.AddSharedServices();
+builder.Services.AddScoped<IPushNotifications, BrowserPushNotifications>();
 builder.Services.AddWebLocalization();
 builder.Services.AddReceiptClientPolicies();
 builder.Services.ConfigureReceiptHttpClient();
@@ -82,6 +83,8 @@ app.MapApiForwarder();
 
 app.MapNativeApiForwarder();
 
+app.MapMcpForwarder();
+
 app.MapKeycloakForwarder();
 
 app.MapWebhookForwarder();
@@ -106,6 +109,8 @@ app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api")
                && !context.Request.Path.StartsWithSegments("/native")
                && !context.Request.Path.StartsWithSegments("/idp")
+               && !context.Request.Path.StartsWithSegments("/mcp")
+               && context.Request.Path != "/.well-known/oauth-protected-resource/mcp"
                // The activity fetch consumes 400/401/503 directly, without an HTML error route.
                && context.Request.Path != "/auth/session"
                // A provider reads the status code and retries on anything but a 2xx, so a
@@ -119,7 +124,7 @@ app.UseWhen(
 // today only because a deployed app is given no HTTPS port, so the redirection is inert;
 // give it one and every webhook becomes a 307 the provider records as a failure. This
 // makes that an intention rather than an accident.
-app.UseDefaultHttpsRedirection([WebAppExtensions.WebhookPrefix]);
+app.UseDefaultHttpsRedirection([WebAppExtensions.WebhookPrefix, "/mcp", "/.well-known/oauth-protected-resource/mcp"]);
 
 app.UseAuthentication();
 app.UseRequestLocalization();
@@ -134,5 +139,14 @@ app.MapRazorComponents<App>()
 
 app.MapIdentity();
 app.MapAndroidDownloads();
+
+app.MapGet("/push-config", (IConfiguration config) => Results.Json(new
+{
+    apiKey = config["WebPush:ApiKey"],
+    projectId = config["WebPush:ProjectId"],
+    messagingSenderId = config["WebPush:MessagingSenderId"],
+    appId = config["WebPush:AppId"],
+    vapidKey = config["WebPush:VapidKey"]
+})).AllowAnonymous();
 
 app.Run();
