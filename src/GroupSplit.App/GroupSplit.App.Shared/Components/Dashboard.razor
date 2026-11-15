@@ -89,27 +89,32 @@
             }
         </div>
 
-        @if (Owing.Count > 0)
-        {
-            <div class="gs-hero-list">
-                @foreach (var group in Owing.GroupBy(position => new { position.GroupId, position.GroupName }).Take(4))
+
+    </section>
+
+    @if (Owing.Count > 0)
+    {
+    <section class="gs-card gs-card-pad gs-reveal">
+        <div class="gs-card-title"><h2>@Loc["Group balances"]</h2><MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups">@Loc["View all"]</MudButton></div>
+            <div class="gs-dashboard-group-list">
+                @foreach (var group in Owing.GroupBy(position => new { position.GroupId, position.GroupName }))
                 {
-                    <div class="gs-hero-group">
-                        <div class="gs-hero-group-name"><Avatar Name="@group.Key.GroupName" Size="sm" /><span>@group.Key.GroupName</span></div>
+                    <div class="gs-dashboard-group">
+                        <div class="gs-dashboard-group-name"><Avatar Name="@group.Key.GroupName" Size="sm" /><span>@group.Key.GroupName</span></div>
                         @foreach (var position in group)
                         {
-                            <div class="gs-hero-row">
-                                <div class="who">@position.Currency <small>@(position.Balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</small></div>
+                            <div class="gs-dashboard-position">
+                                <div class="gs-dashboard-position-label">@(position.Balance > 0 ? Loc["You are owed"].Value : Loc["You owe"].Value) @if (group.Count() > 1) { <span>· @position.Currency</span> }</div>
                                 <Money Value="@Math.Abs(position.Balance)" Currency="@position.Currency" Animate />
-                                <div class="gs-hero-actions"><MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                    Href="@SettlementHref(position.GroupId, position.Currency)">@Loc["Settle {0}", position.Currency]</MudButton></div>
+                                <div class="gs-dashboard-position-action"><MudButton Color="Color.Primary" Size="Size.Small" Variant="Variant.Text"
+                                    Href="@SettlementHref(position.GroupId, position.Currency)">@(group.Count() > 1 ? Loc["Settle {0}", position.Currency].Value : Loc["Settle"].Value)</MudButton></div>
                             </div>
                         }
                     </div>
                 }
             </div>
-        }
     </section>
+    }
 
     <WaitingOnYou Reveal="1" />
 

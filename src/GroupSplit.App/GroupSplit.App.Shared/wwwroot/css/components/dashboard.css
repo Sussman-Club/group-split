@@ -96,8 +96,8 @@
     font-size: 0.9375rem;
 }
 
-.gs-currency-totals { display: grid; gap: 8px; margin: 14px 0; }
-.gs-currency-total { display: flex; justify-content: space-between; gap: 20px; padding: 12px 14px; border-radius: 10px; background: rgb(0 0 0 / 28%); color: #fff; font-size: 1.125rem; }
+.gs-currency-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; margin: 14px 0; }
+.gs-currency-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 12px 14px; border-radius: 10px; background: rgb(0 0 0 / 28%); color: #fff; font-size: 1.125rem; }
 .gs-currency-total .gs-money { color: #fff !important; }
 .gs-hero.is-zero .gs-currency-total { background: #154a46; color: #fff; }
 .gs-hero-group { padding: 8px 0; }
@@ -473,3 +473,14 @@
 .gs-plan-summary { cursor: pointer; list-style-position: inside; }
 .gs-plan-summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; }
 details[open] .gs-plan-chevron { transform: rotate(180deg); }
+
+/* Group balances sit below the overall total, with each currency kept on one line. */
+.gs-dashboard-group-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.gs-dashboard-group { min-width: 0; padding: 14px; border: 1px solid var(--gs-line); border-radius: var(--gs-radius); background: var(--gs-surface-2); }
+.gs-dashboard-group-name { display: flex; align-items: center; gap: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.gs-dashboard-position { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding-top: 10px; }
+.gs-dashboard-position-label { color: var(--gs-muted); font-size: .8125rem; }
+.gs-dashboard-position > .gs-money { font-weight: 700; white-space: nowrap; }
+.gs-dashboard-position-action { grid-column: 1 / -1; text-align: right; }
+.gs-member-amounts.is-single { padding-top: 0; }
+.gs-member-amounts.is-single > div { justify-content: flex-end; }

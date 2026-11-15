@@ -2,6 +2,7 @@
 
 .gs-page .gs-group-grid {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    align-items: start;
 }
 
 .gs-page .gs-group-card {
@@ -14,6 +15,7 @@
     column-gap: 14px;
     row-gap: 6px;
     align-items: start;
+    align-content: start;
     padding: 18px 18px 14px;
     overflow: hidden;
 }
@@ -54,9 +56,8 @@
 
 .gs-page .gs-group-card .name {
     font-size: 1.0625rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
 }
 
 .gs-page .gs-group-card .people {
@@ -101,14 +102,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-top: 8px;
-    padding-top: 12px;
+    gap: 12px;
+    margin-top: 10px;
+    padding-top: 10px;
     border-top: 1px solid var(--gs-line);
 }
-
 .gs-page .gs-group-card .gs-group-currency-list { grid-area: foot; min-width: 0; }
-.gs-page .gs-group-card .foot a { color: var(--gs-ink); font-weight: 700; white-space: nowrap; }
+.gs-page .gs-group-card .gs-group-position { display: grid; gap: 3px; min-width: 0; }
+.gs-page .gs-group-card .foot .gs-eyebrow { white-space: nowrap; }
+.gs-page .gs-group-card .foot .gs-money { white-space: nowrap; }
+.gs-page .gs-group-card .foot a { color: var(--gs-teal); font-weight: 700; white-space: nowrap; }
 .gs-page .gs-group-card .name { color: inherit; text-decoration: none; }
 
 .gs-page .gs-group-card .foot .gs-eyebrow {

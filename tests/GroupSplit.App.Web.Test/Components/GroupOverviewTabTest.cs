@@ -174,6 +174,22 @@ public class GroupOverviewTabTest : ComponentTest
     }
 
     [Fact]
+    public void Single_currency_balances_do_not_repeat_the_currency_code()
+    {
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Ana", Balance = 10m, Currency = "EUR" },
+                           new GroupNetBalance { UserId = Omar, UserName = "Omar", Balance = -10m, Currency = "EUR" }],
+            OwedToYou = [new DebtInfo { UserId = Omar, UserName = "Omar", Amount = 10m, Currency = "EUR" }]
+        };
+        var page = RenderFor(Me);
+        Assert.Contains("Your balance", page.Markup);
+        Assert.Empty(page.FindAll(".gs-currency-code"));
+        Assert.DoesNotContain("EUR", page.Find(".gs-member-balances").TextContent);
+        Assert.Contains("€", page.Find(".gs-person-debt").TextContent);
+    }
+
+    [Fact]
     public async Task Same_person_has_separate_currency_actions_even_when_net_is_zero()
     {
         _balance = new UserGroupBalanceResponse

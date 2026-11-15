@@ -48,7 +48,7 @@ else
         @if (Balance is { } balance)
         {
             <section class="gs-card gs-card-pad gs-reveal" aria-live="polite">
-                <div class="gs-card-title"><h2>@Loc["Your balances"]</h2></div>
+                <div class="gs-card-title"><h2>@(HasMultipleCurrencies ? Loc["Your balances"].Value : Loc["Your balance"].Value)</h2></div>
                 <div class="gs-position-grid">
                     @foreach (var position in MyBalances)
                     {
@@ -60,7 +60,7 @@ else
                             }
                             else
                             {
-                                <div><Money Value="position.Balance" Currency="@position.Currency" Absolute /> @if (MoneyExtensions.CurrencySymbol(position.Currency) != position.Currency) { <span class="gs-currency-code">@position.Currency</span> }</div>
+                                <div><Money Value="position.Balance" Currency="@position.Currency" Absolute /> @if (HasMultipleCurrencies && MoneyExtensions.CurrencySymbol(position.Currency) != position.Currency) { <span class="gs-currency-code">@position.Currency</span> }</div>
                             }
                         </div>
                     }
@@ -82,7 +82,7 @@ else
                                     {
                                         var owed = debt;
                                         <div class="gs-person-debt">
-                                            <span>@Loc["Owes you"]</span><strong><Money Value="owed.Amount" Currency="@owed.Currency" /> @if (MoneyExtensions.CurrencySymbol(owed.Currency) != owed.Currency) { <span class="gs-currency-code">@owed.Currency</span> }</strong>
+                                            <span>@Loc["Owes you"]</span><strong><Money Value="owed.Amount" Currency="@owed.Currency" /> @if (HasMultipleCurrencies && MoneyExtensions.CurrencySymbol(owed.Currency) != owed.Currency) { <span class="gs-currency-code">@owed.Currency</span> }</strong>
                                             <div class="gs-person-actions">
                                                 <MudButton Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnSettle.InvokeAsync((owed, SettlementDirection.TheyPaidYou, _through)))">@(guest ? Loc["{0} paid", owed.UserName].Value : Loc["They paid"].Value)</MudButton>
                                                 @if (!guest)
@@ -96,7 +96,7 @@ else
                                     {
                                         var owing = debt;
                                         <div class="gs-person-debt is-neg">
-                                            <span>@Loc["You owe"]</span><strong><Money Value="owing.Amount" Currency="@owing.Currency" /> @if (MoneyExtensions.CurrencySymbol(owing.Currency) != owing.Currency) { <span class="gs-currency-code">@owing.Currency</span> }</strong>
+                                            <span>@Loc["You owe"]</span><strong><Money Value="owing.Amount" Currency="@owing.Currency" /> @if (HasMultipleCurrencies && MoneyExtensions.CurrencySymbol(owing.Currency) != owing.Currency) { <span class="gs-currency-code">@owing.Currency</span> }</strong>
                                             <div class="gs-person-actions"><MudButton Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnSettle.InvokeAsync((owing, SettlementDirection.YouPaidThem, _through)))">@Loc["I paid"]</MudButton></div>
                                         </div>
                                     }
@@ -201,10 +201,10 @@ else
                                 <Avatar Name="@member.UserName" Size="sm" />
                                 <strong>@member.UserName@if (member.UserId == UserId) { <span class="gs-muted">@($" {Loc["(you)"].Value}")</span> }@if (member.IsGuest) { <span class="gs-muted">@($" {ParticipantCopy.GuestMark}")</span> }</strong>
                             </div>
-                            <div class="gs-member-amounts">
+                            <div class="gs-member-amounts @(HasMultipleCurrencies ? "" : "is-single")">
                                 @foreach (var position in person.OrderBy(position => position.Currency))
                                 {
-                                    <div><span>@position.Currency</span><Money Value="position.Balance" Currency="@position.Currency" Signed /></div>
+                                    <div>@if (HasMultipleCurrencies) { <span>@position.Currency</span> }<Money Value="position.Balance" Currency="@position.Currency" Signed /></div>
                                 }
                             </div>
                         </div>
@@ -296,6 +296,12 @@ else
     private IReadOnlyList<GroupLedgerEntryResponse> Recent => _recent?.Items ?? [];
 
     private IReadOnlyList<SettlementPayment> Plan => Balance?.Plan ?? [];
+
+    private bool HasMultipleCurrencies => Balance is { } balance &&
+        balance.NetBalances.Select(position => position.Currency)
+            .Concat(balance.OwedToYou.Select(debt => debt.Currency))
+            .Concat(balance.YouOwed.Select(debt => debt.Currency))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Skip(1).Any();
 
     private IReadOnlyList<GroupNetBalance> MyBalances
     {

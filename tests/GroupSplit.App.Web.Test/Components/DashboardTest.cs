@@ -109,7 +109,7 @@ public class DashboardTest : ComponentTest
         _groups.Verify(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()), Times.Once);
         _groups.Verify(client => client.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
         _groups.Verify(client => client.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
-        Assert.Single(page.FindAll("a[href='/groups']"));
+        Assert.NotEmpty(page.FindAll("a[href='/groups']"));
     }
 
     [Fact]
@@ -161,11 +161,12 @@ public class DashboardTest : ComponentTest
         ])
         { Currencies = [new("USD", 10, 10, 0), new("EUR", -5, 0, 5)] };
 
-        var hero = Open().Find(".gs-hero");
-        Assert.Single(hero.QuerySelectorAll(".gs-hero-group-name"));
+        var page = Open();
+        var hero = page.Find(".gs-hero");
+        Assert.Single(page.FindAll(".gs-dashboard-group-name"));
         Assert.Equal(2, hero.QuerySelectorAll(".gs-currency-total").Length);
-        Assert.Contains(hero.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=EUR");
-        Assert.Contains(hero.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=USD");
+        Assert.Contains(page.FindAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=EUR");
+        Assert.Contains(page.FindAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=USD");
     }
 
     [Fact]
@@ -206,7 +207,7 @@ public class DashboardTest : ComponentTest
         Assert.StartsWith("$40.00 owed to you, $25.00 owed by you.", Text(hero.QuerySelector(".gs-hero-sub")!),
             StringComparison.Ordinal);
 
-        var groups = hero.QuerySelectorAll(".gs-hero-group-name > span:last-child").Select(Text).ToList();
+        var groups = page.FindAll(".gs-dashboard-group-name > span:last-child").Select(Text).ToList();
         Assert.Equal(["Weekend in Lisbon", "The flat"], groups);
     }
 
@@ -273,7 +274,7 @@ public class DashboardTest : ComponentTest
 
         var page = Open();
 
-        Assert.Contains(page.FindAll(".gs-hero-group-name > span:last-child"), name => Text(name) == "Ski trip 2024");
+        Assert.Contains(page.FindAll(".gs-dashboard-group-name > span:last-child"), name => Text(name) == "Ski trip 2024");
         Assert.DoesNotContain(page.FindAll(".gs-list .gs-row .title"), title => Text(title) == "Ski trip 2024");
         Assert.Contains(page.FindAll(".gs-list .gs-row .title"), title => Text(title) == "Weekend in Lisbon");
     }
