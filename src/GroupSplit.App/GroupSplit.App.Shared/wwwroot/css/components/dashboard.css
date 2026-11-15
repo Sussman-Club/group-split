@@ -444,3 +444,32 @@
 .gs-balance-row .gs-money {
     font-size: 0.9375rem;
 }
+
+
+/* Person-first balances: the amount and action remain together on narrow screens. */
+.gs-position-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.gs-position { padding: 16px; border-radius: var(--gs-radius); background: var(--gs-teal-soft); color: var(--gs-teal-deep); }
+.gs-position.is-neg { background: var(--gs-clay-soft); color: var(--gs-clay-deep); }
+.gs-position .gs-money, .gs-position > strong { font-size: 1.4rem; font-weight: 800; }
+.gs-currency-code { font-size: .75rem; font-weight: 700; }
+.gs-person-balance { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 12px; padding: 16px 0; border-top: 1px solid var(--gs-line); }
+.gs-person-balance:first-child { border-top: 0; }
+.gs-person-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gs-person-debts { display: grid; gap: 10px; }
+.gs-person-debt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--gs-ink-2); }
+.gs-person-debt > strong { color: var(--gs-teal-deep); white-space: nowrap; }
+.gs-person-debt.is-neg > strong { color: var(--gs-clay-deep); }
+.gs-person-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+:root[data-theme="dark"] .gs-position, :root[data-theme="dark"] .gs-person-debt > strong { color: var(--gs-teal-bright); }
+:root[data-theme="dark"] .gs-position.is-neg, :root[data-theme="dark"] .gs-person-debt.is-neg > strong { color: var(--gs-clay); }
+@media (max-width: 600px) { .gs-person-balance { grid-template-columns: 1fr; } .gs-person-actions { margin-left: 0; } }
+
+.gs-member-balances { padding: 12px 0; border-top: 1px solid var(--gs-line); }
+.gs-member-balances:first-child { border-top: 0; }
+.gs-member-amounts { display: grid; gap: 4px; padding: 8px 0 0 42px; }
+.gs-member-amounts > div { display: flex; justify-content: space-between; gap: 12px; font-size: .8125rem; }
+.gs-member-amounts > div > span:first-child { color: var(--gs-muted); }
+
+.gs-plan-summary { cursor: pointer; list-style-position: inside; }
+.gs-plan-summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; }
+details[open] .gs-plan-chevron { transform: rotate(180deg); }

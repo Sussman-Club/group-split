@@ -164,17 +164,40 @@ public class GroupOverviewTabTest : ComponentTest
 
         var tab = RenderFor(Me);
 
-        tab.WaitForAssertion(() =>
-            Assert.Contains("by 2 people in Weekend in Lisbon", tab.Markup, StringComparison.Ordinal));
-
-        var rows = tab.FindAll(".gs-hero-row");
-
+        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll(".gs-person-balance").Count));
+        var rows = tab.FindAll(".gs-person-balance");
         var dani = rows.Single(row => row.TextContent.Contains("Dani", StringComparison.Ordinal));
-        Assert.Equal("Dani (guest) owes you", dani.QuerySelector(".who")!.TextContent.Trim());
+        Assert.Contains("Dani (guest)", dani.TextContent);
         Assert.Equal("Dani paid", dani.QuerySelector("button")!.TextContent.Trim());
-
         var omar = rows.Single(row => row.TextContent.Contains("Omar", StringComparison.Ordinal));
         Assert.Equal("They paid", omar.QuerySelector("button")!.TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Same_person_has_separate_currency_actions_even_when_net_is_zero()
+    {
+        _balance = new UserGroupBalanceResponse
+        {
+            NetBalances = [new GroupNetBalance { UserId = Me, UserName = "Ana", Balance = 0m, Currency = "USD" }],
+            OwedToYou = [new DebtInfo { UserId = Omar, UserName = "Omar", Amount = 10m, Currency = "USD" },
+                         new DebtInfo { UserId = Omar, UserName = "Omar", Amount = 15m, Currency = "EUR" }],
+            YouOwed = [new DebtInfo { UserId = Dani, UserName = "Dani", Amount = 10m, Currency = "USD" }]
+        };
+        (DebtInfo Debt, SettlementDirection Direction, DateTime? Through)? selected = null;
+        var view = Render<GroupOverviewTab>(parameters => parameters
+            .Add(component => component.GroupId, Group.Id)
+            .Add(component => component.GroupName, Group.Name)
+            .Add(component => component.UserId, Me)
+            .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) => selected = line));
+        var omar = view.FindAll(".gs-person-balance").Single(row => row.TextContent.Contains("Omar"));
+        var debts = omar.QuerySelectorAll(".gs-person-debt");
+        Assert.Equal(2, debts.Length);
+        Assert.Contains("USD", debts[0].TextContent);
+        Assert.Contains("EUR", debts[1].TextContent);
+        await debts[1].QuerySelector("button")!.ClickAsync(new());
+        Assert.Equal("EUR", selected!.Value.Debt.Currency);
+        Assert.Equal(SettlementDirection.TheyPaidYou, selected.Value.Direction);
+        Assert.Contains("Even", view.Markup);
     }
 
     /// <summary>
@@ -242,9 +265,9 @@ public class GroupOverviewTabTest : ComponentTest
 
         var tab = RenderFor(Me);
 
-        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll(".gs-balance-row").Count));
+        tab.WaitForAssertion(() => Assert.Equal(2, tab.FindAll(".gs-member-balances").Count));
 
-        var dani = tab.FindAll(".gs-balance-row .name")
+        var dani = tab.FindAll(".gs-member-balances .gs-person-heading strong")
             .Single(name => name.TextContent.Contains("Dani", StringComparison.Ordinal));
 
         Assert.Contains("Dani (guest)", System.Text.RegularExpressions.Regex.Replace(dani.TextContent, @"\s+", " "),

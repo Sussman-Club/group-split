@@ -50,7 +50,7 @@
             <div class="gs-currency-totals">
             @foreach (var position in Position.Currencies)
             {
-                <div class="gs-currency-total"><strong>@position.Currency</strong><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
+                <div class="gs-currency-total"><strong>@(position.Net > 0 ? Loc["You are owed"].Value : position.Net < 0 ? Loc["You owe"].Value : Loc["Even"].Value) · @position.Currency</strong><Money Value="position.Net" Currency="@position.Currency" Absolute /></div>
             }
             </div>
         }
