@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using GroupSplit.Cli.Api;
 using GroupSplit.Shared;
 
 namespace GroupSplit.Cli.Infrastructure;

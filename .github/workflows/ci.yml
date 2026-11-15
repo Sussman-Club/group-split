@@ -131,6 +131,7 @@ jobs:
       - name: Test the deploy scripts
         run: |
           bash .github/scripts/classify-komodo-failure.test.sh
+          bash .github/scripts/validate-mcp-inputs.test.sh
           bash -n .github/scripts/claim-release-version.sh
           bash -n .github/scripts/validate-deployment-inputs.sh
           bash -n .github/scripts/validate-komodo-credentials.sh
@@ -292,6 +293,9 @@ jobs:
             done
             echo "::warning::$image could not be pulled from mirror.gcr.io; the tests will fall back to Docker Hub for it."
           done
+
+      - name: Test MCP token exchange against Keycloak
+        run: python3 tests/mcp_keycloak_exchange.py
 
       - name: Read the Aspire CLI version from the AppHost
         id: aspire

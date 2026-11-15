@@ -10,7 +10,7 @@ env_file="$output_dir/.env.production"
 # Only these GitHub-facing values become Aspire parameters. A new repository secret stays
 # out until it is added here.
 parameters="
-  WEB_HOSTNAME DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
+  WEB_HOSTNAME MCP_ISSUER MCP_RESOURCE MCP_EXCHANGE_CLIENT_ID MCP_EXCHANGE_CLIENT_SECRET DASHBOARD_TOKEN DB_SERVER_PASSWORD KEYCLOAK_PASSWORD CACHE_PASSWORD
   KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_ACCOUNT_DELETION_SECRET
   STORAGE_ACCESSKEY STORAGE_SECRETKEY
   SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_FROM SMTP_USER SMTP_PASSWORD
@@ -38,7 +38,7 @@ done
 aspire do release-compose --environment production --non-interactive
 
 # Pin each image to the digest CI pushed before the files leave the runner.
-image_variables=(API_IMAGE WEB_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)
+image_variables=(API_IMAGE WEB_IMAGE MCP_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)
 declare -A tagged_images
 declare -A pinned_images
 

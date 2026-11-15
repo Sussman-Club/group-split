@@ -1,6 +1,6 @@
 using System.CommandLine;
 using System.Net.Http.Headers;
-using GroupSplit.Cli.Api;
+using GroupSplit.Shared;
 using GroupSplit.Cli.Auth;
 using GroupSplit.Cli.Configuration;
 using GroupSplit.Cli.Output;

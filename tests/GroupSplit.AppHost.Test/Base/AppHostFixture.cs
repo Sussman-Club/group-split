@@ -72,6 +72,10 @@ public class AppHostFixture : IAsyncLifetime
     public static IReadOnlyDictionary<string, string> Parameters { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["mcp-issuer"] = "https://identity.example/realms/group-split",
+            ["mcp-resource"] = "https://mcp.example/mcp",
+            ["mcp-exchange-client-id"] = "test-mcp-exchange",
+            ["mcp-exchange-client-secret"] = "test-mcp-secret",
             ["receipt-transcription-provider"] = "Veryfi",
             ["azure-openai-enabled"] = "false",
             ["azure-openai-endpoint"] = "https://azure-openai.test/openai/v1/",

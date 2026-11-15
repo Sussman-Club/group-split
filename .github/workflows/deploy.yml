@@ -82,6 +82,10 @@ jobs:
         # metadata remain outside this map.
         env: &deployment_inputs
           WEB_HOSTNAME: ${{ vars.WEB_HOSTNAME }}
+          MCP_ISSUER: ${{ vars.MCP_ISSUER }}
+          MCP_RESOURCE: ${{ vars.MCP_RESOURCE }}
+          MCP_EXCHANGE_CLIENT_ID: ${{ vars.MCP_EXCHANGE_CLIENT_ID }}
+          MCP_EXCHANGE_CLIENT_SECRET: ${{ secrets.MCP_EXCHANGE_CLIENT_SECRET }}
           DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
           DB_SERVER_PASSWORD: ${{ secrets.DB_SERVER_PASSWORD }}
           KEYCLOAK_PASSWORD: ${{ secrets.KEYCLOAK_PASSWORD }}

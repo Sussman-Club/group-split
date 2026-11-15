@@ -1,5 +1,4 @@
 using System.Text.Json;
-using GroupSplit.Cli.Api;
 using GroupSplit.Cli.Infrastructure;
 using GroupSplit.Shared;
 using SharedErrorCodes = GroupSplit.Shared.Errors.ErrorCodes;
