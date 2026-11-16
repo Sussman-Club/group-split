@@ -175,8 +175,11 @@ public class CurrencyEndpointTest : IAsyncLifetime
         var guest = Assert.Single((await response.Content.ReadFromJsonAsync<GroupGuestResponse[]>(Json, Ct))!);
         var expense = new CreateTransactionRequest
         {
-            Name = "Dinner", GroupId = group, Amount = 40m,
-            DateTime = DateTimeOffset.Parse("2026-03-15T12:00:00Z"), PaidByUserId = guest.UserId,
+            Name = "Dinner",
+            GroupId = group,
+            Amount = 40m,
+            DateTime = DateTimeOffset.Parse("2026-03-15T12:00:00Z"),
+            PaidByUserId = guest.UserId,
             Splits = [new SplitInput { UserId = me!.Id, Amount = 15m }, new SplitInput { UserId = guest.UserId, Amount = 25m }]
         };
         (await Client.PostAsJsonAsync("/transactions", expense, Json, Ct)).EnsureSuccessStatusCode();

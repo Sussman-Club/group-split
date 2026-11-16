@@ -16,9 +16,14 @@ public static class HouseholdMonthApi
                 return Results.BadRequest("Provide a valid year, month and time zone.");
 
             TimeZoneInfo zone;
-            try { zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone); }
+            try
+            {
+                zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+            }
             catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
-            { return Results.BadRequest("The time zone is not available."); }
+            {
+                return Results.BadRequest("The time zone is not available.");
+            }
 
             var localStart = new DateTime(year, month, 1);
             var localEnd = localStart.AddMonths(1);
