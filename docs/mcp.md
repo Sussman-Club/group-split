@@ -107,9 +107,9 @@ This is experimental. `python tests/mcp_keycloak_exchange.py` tests Keycloak
 26.6 with synthetic accounts in an isolated disposable container, including
 identity, API audience, staff role, and invalid-exchange rejection. Authenticated
 tool calls have also been tested with locally signed tokens and a simulated API.
-The real assistant OAuth flow, production Keycloak configuration, and proxy
-deployment have not yet been validated end to end. Do not
-expose the host publicly until those checks and authorization tests are complete.
+The production OAuth flow has also been validated for an existing deployment. Confirm
+the scopes, permissions and connection flow for each client and deployment; the new
+plugin and reconciliation workflows still need their own end-to-end validation.
 
 ## Guided read-only reviews
 
