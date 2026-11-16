@@ -30,16 +30,7 @@ public static class KeycloakRealmDefinition
     /// saying so -- and it is also the part that differs by environment, so it is the part a
     /// first-boot import gets wrong the moment the web app moves.
     /// </para>
-    /// <para>
-    /// For <c>cli</c>, which grants it accepts and the audience its tokens carry: the device
-    /// grant and nothing else, and <c>api</c>, without which the API refuses every token the
-    /// CLI brings. Unlike <c>web-app</c> it is created when missing. A realm imported before
-    /// the CLI existed has no <c>cli</c> client, and nothing in the client depends on the
-    /// environment, so the file's definition is all there is to it.
-    /// </para>
-    /// <para>
     /// Everything else about a client stays with the import.
-    /// </para>
     /// </remarks>
     public static readonly ManagedClient[] ManagedClients =
     [
@@ -52,21 +43,7 @@ public static class KeycloakRealmDefinition
             ProtocolMappers = ["audience-mapper"],
             CreateWhenMissing = true
         },
-        new("web-app", Properties: ["name", "baseUrl", "redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"]),
-        new("cli",
-            Properties:
-            [
-                "publicClient",
-                "standardFlowEnabled",
-                "implicitFlowEnabled",
-                "directAccessGrantsEnabled",
-                "serviceAccountsEnabled"
-            ],
-            Attributes: ["oauth2.device.authorization.grant.enabled", "oidc.ciba.grant.enabled"])
-        {
-            ProtocolMappers = ["audience-mapper"],
-            CreateWhenMissing = true
-        }
+        new("web-app", Properties: ["name", "baseUrl", "redirectUris", "webOrigins"], Attributes: ["post.logout.redirect.uris"])
     ];
 
     /// <summary>The confidential client the API deletes a deleted account's login through.</summary>

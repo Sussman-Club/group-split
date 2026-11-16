@@ -51,7 +51,7 @@ aspire start
 `aspire.config.json` points the CLI at the AppHost.
 `dotnet run --project src/GroupSplit.AppHost` does the same from an IDE and opens the
 dashboard in a browser. Either way the AppHost is in run mode, the only mode that adds the
-seeder, Mailpit, Scalar, the CLI and MAUI resources and the realm-reset command.
+seeder, Mailpit, Scalar, the MAUI resource and the realm-reset command.
 [docs/deployment.md](deployment.md) covers what publish mode does instead.
 
 The dashboard lists these resources:
@@ -70,7 +70,6 @@ The dashboard lists these resources:
 | `web` | The Blazor web app, where you sign in |
 | Scalar | The API reference, wired to `api` |
 | `seeder` | Fills the app database and the realm with demo data. Explicit start; see below |
-| `cli` | `groupsplit auth status` against this run's API and realm. Explicit start |
 | `app` | The MAUI client on a Windows device, built when started. Explicit start |
 | `veryfi`, `plaid`, `azure-openai` | External services, so their calls appear as named dependencies in traces. Nothing of theirs runs locally |
 | `webhook-tunnel` | Present only when `WebhookTunnel` is on; see [docs/bank-sync.md](bank-sync.md) |
@@ -213,20 +212,6 @@ Keycloak sends the password reset and email verification mail. Locally it all go
 [Mailpit](https://mailpit.axllent.org/) and nothing leaves the machine; there is nothing to
 configure. Open the inbox from the `mailpit` resource's URL in the dashboard. The app itself
 sends no mail.
-
-## The CLI against your local stack
-
-The `cli` resource is enough to check the wiring: it runs `groupsplit auth status` with this
-run's API and realm URLs and exits. To work with the CLI, run it from the checkout with
-`GROUPSPLIT_API_URL` and `GROUPSPLIT_AUTHORITY` pointing at the stack, then sign in as a demo
-account through the device flow:
-
-- [Running it against the local stack](cli.md#running-it-against-the-local-stack) reads both
-  URLs back from `aspire describe`, since the ports change per run.
-- [Without installing](cli.md#without-installing) and
-  [From the checkout instead](cli.md#from-the-checkout-instead) cover `dotnet run` and a
-  locally packed tool.
-- [Signing in](cli.md#signing-in) covers `groupsplit auth login`.
 
 ## Building in a sandbox with no SDK
 

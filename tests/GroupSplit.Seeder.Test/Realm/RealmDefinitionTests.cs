@@ -165,34 +165,6 @@ public sealed class RealmDefinitionTests
     }
 
     /// <summary>
-    /// The device grant and nothing else: a terminal has no redirect URI to give, and a
-    /// password grant would have the CLI handle the password itself.
-    /// </summary>
-    [Fact]
-    public void The_cli_client_accepts_only_the_device_grant_and_is_reconciled()
-    {
-        var cli = KeycloakRealmDefinition.Client(KeycloakRealmDefinition.Load(), "cli")!;
-
-        Assert.True(cli["publicClient"]!.GetValue<bool>());
-        Assert.False(cli["standardFlowEnabled"]!.GetValue<bool>());
-        Assert.False(cli["implicitFlowEnabled"]!.GetValue<bool>());
-        Assert.False(cli["directAccessGrantsEnabled"]!.GetValue<bool>());
-        Assert.False(cli["serviceAccountsEnabled"]!.GetValue<bool>());
-        Assert.Equal("true", cli["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
-        Assert.Equal("false", cli["attributes"]!["oidc.ciba.grant.enabled"]!.GetValue<string>());
-        Assert.Equal("api", KeycloakRealmDefinition.ProtocolMapper(cli, "audience-mapper")!
-            ["config"]!["included.client.audience"]!.GetValue<string>());
-
-        var managed = Assert.Single(KeycloakRealmDefinition.ManagedClients, client => client.ClientId == "cli");
-        Assert.True(managed.CreateWhenMissing);
-        Assert.Equal(["audience-mapper"], managed.ProtocolMappers);
-        Assert.Equal(
-            ["publicClient", "standardFlowEnabled", "implicitFlowEnabled", "directAccessGrantsEnabled", "serviceAccountsEnabled"],
-            managed.Properties);
-        Assert.Equal(["oauth2.device.authorization.grant.enabled", "oidc.ciba.grant.enabled"], managed.Attributes);
-    }
-
-    /// <summary>
     /// A client the worker may create is created from the file as it stands, placeholders and
     /// all; one that depended on the environment would be created wrong somewhere.
     /// </summary>

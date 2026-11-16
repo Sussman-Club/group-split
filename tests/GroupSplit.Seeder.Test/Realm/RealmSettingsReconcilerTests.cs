@@ -596,67 +596,6 @@ public sealed class RealmSettingsReconcilerTests
     }
 
     /// <summary>
-    /// The realm one developer's machine has: imported before the CLI existed, so
-    /// <c>groupsplit auth login</c> has no client to ask for a token.
-    /// </summary>
-    [Fact]
-    public async Task A_realm_imported_before_the_cli_existed_is_given_the_cli_client()
-    {
-        var current = Imported();
-        current["clients"]!.AsArray().Remove(KeycloakRealmDefinition.Client(current, "cli"));
-        var admin = new StubRealmAdmin(current);
-
-        await Reconcile(admin);
-
-        var cli = admin.Clients["cli"];
-        Assert.Equal(["create client cli"], admin.Writes);
-        Assert.True(cli["publicClient"]!.GetValue<bool>());
-        Assert.Equal("true", cli["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
-        AssertOnlyTheDeviceGrant(cli);
-        AssertAudienceIsApi(cli);
-    }
-
-    [Fact]
-    public async Task A_cli_client_given_other_grants_is_left_with_the_device_grant_alone()
-    {
-        var current = Imported();
-        var cli = KeycloakRealmDefinition.Client(current, "cli")!;
-        cli["standardFlowEnabled"] = true;
-        cli["implicitFlowEnabled"] = true;
-        cli["directAccessGrantsEnabled"] = true;
-        cli["serviceAccountsEnabled"] = true;
-        cli["publicClient"] = false;
-        cli["attributes"]!["oauth2.device.authorization.grant.enabled"] = "false";
-        cli["attributes"]!["oidc.ciba.grant.enabled"] = "true";
-        cli["description"] = "Edited by hand";
-        var admin = new StubRealmAdmin(current);
-
-        await Reconcile(admin);
-
-        var updated = admin.Clients["cli"];
-        Assert.Equal(1, admin.ClientUpdates);
-        Assert.True(updated["publicClient"]!.GetValue<bool>());
-        Assert.Equal("true", updated["attributes"]!["oauth2.device.authorization.grant.enabled"]!.GetValue<string>());
-        AssertOnlyTheDeviceGrant(updated);
-        Assert.Equal("Edited by hand", updated["description"]!.GetValue<string>());
-    }
-
-    /// <summary>Without the audience the API refuses every token the CLI brings.</summary>
-    [Fact]
-    public async Task A_cli_client_without_its_audience_mapper_is_given_it_back()
-    {
-        var current = Imported();
-        KeycloakRealmDefinition.Client(current, "cli")!["protocolMappers"] = new JsonArray();
-        var admin = new StubRealmAdmin(current);
-
-        await Reconcile(admin);
-        await Reconcile(admin);
-
-        Assert.Equal(["create mapper audience-mapper"], admin.Writes);
-        AssertAudienceIsApi(admin.Clients["cli"]);
-    }
-
-    /// <summary>
     /// The audience pointed at another client is put back; config Keycloak added on its own,
     /// such as the introspection claim a migration gave every mapper, is not a difference.
     /// </summary>
@@ -665,7 +604,7 @@ public sealed class RealmSettingsReconcilerTests
     {
         var current = Imported();
         var config = KeycloakRealmDefinition.ProtocolMapper(
-            KeycloakRealmDefinition.Client(current, "cli")!, "audience-mapper")!["config"]!;
+            KeycloakRealmDefinition.Client(current, "native")!, "audience-mapper")!["config"]!;
         config["included.client.audience"] = "web-app";
         config["introspection.token.claim"] = "true";
         var admin = new StubRealmAdmin(current);
@@ -674,26 +613,32 @@ public sealed class RealmSettingsReconcilerTests
         await Reconcile(admin);
 
         Assert.Equal(["update mapper audience-mapper"], admin.Writes);
-        AssertAudienceIsApi(admin.Clients["cli"]);
-        Assert.Equal("true", KeycloakRealmDefinition.ProtocolMapper(admin.Clients["cli"], "audience-mapper")!
+        AssertAudienceIsApi(admin.Clients["native"]);
+        Assert.Equal("true", KeycloakRealmDefinition.ProtocolMapper(admin.Clients["native"], "audience-mapper")!
             ["config"]!["introspection.token.claim"]!.GetValue<string>());
     }
 
-    private static void AssertOnlyTheDeviceGrant(JsonNode cli)
+    private static void AssertAudienceIsApi(JsonObject client)
     {
-        Assert.False(cli["standardFlowEnabled"]!.GetValue<bool>());
-        Assert.False(cli["implicitFlowEnabled"]!.GetValue<bool>());
-        Assert.False(cli["directAccessGrantsEnabled"]!.GetValue<bool>());
-        Assert.False(cli["serviceAccountsEnabled"]!.GetValue<bool>());
-        Assert.Equal("false", cli["attributes"]!["oidc.ciba.grant.enabled"]!.GetValue<string>());
-    }
-
-    private static void AssertAudienceIsApi(JsonObject cli)
-    {
-        var mapper = KeycloakRealmDefinition.ProtocolMapper(cli, "audience-mapper")!;
+        var mapper = KeycloakRealmDefinition.ProtocolMapper(client, "audience-mapper")!;
         Assert.Equal("oidc-audience-mapper", mapper["protocolMapper"]!.GetValue<string>());
         Assert.Equal("api", mapper["config"]!["included.client.audience"]!.GetValue<string>());
         Assert.Equal("true", mapper["config"]!["access.token.claim"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_retired_cli_client_is_not_recreated_or_deleted_by_reconciliation()
+    {
+        var current = Imported();
+        var legacy = (JsonObject)KeycloakRealmDefinition.Client(current, "native")!.DeepClone();
+        legacy["clientId"] = "cli";
+        current["clients"]!.AsArray().Add(legacy);
+        var admin = new StubRealmAdmin(current);
+
+        await Reconcile(admin);
+
+        Assert.Contains("cli", admin.Clients.Keys);
+        Assert.DoesNotContain(admin.Writes, write => write.Contains("cli", StringComparison.Ordinal));
     }
 
     // ---- the account-deletion client -------------------------------------------------------

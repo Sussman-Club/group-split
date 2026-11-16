@@ -231,7 +231,7 @@ public class SignedInSessionTest(AppHostFixture appHost) : WebPageTest(appHost)
 
         await Task.Delay(PastTokenExpiry, TestContext.Current.CancellationToken);
 
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Personal Open Just you" })
+        await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Personal Just you" })
             .ClickAsync(new LocatorClickOptions { Timeout = OperationTimeoutMs });
 
         // The personal ledger loads its figures from the API after the click, without

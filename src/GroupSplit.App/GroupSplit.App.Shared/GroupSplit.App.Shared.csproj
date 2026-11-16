@@ -24,26 +24,12 @@
         <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
         <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.12" />
         <PackageReference Include="MudBlazor" Version="9.9.0" />
-        <PackageReference Include="NSwag.ApiDescription.Client" Version="14.7.1">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\GroupSplit.API\GroupSplit.API.csproj"
-                          ReferenceOutputAssembly="false"
-                          PrivateAssets="all"/>
+        <ProjectReference Include="..\..\GroupSplit.ApiClient\GroupSplit.ApiClient.csproj"/>
         <ProjectReference Include="..\..\GroupSplit.Shared\GroupSplit.Shared.csproj"/>
     </ItemGroup>
     
-    <ItemGroup>
-        <OpenApiReference Include="..\..\GroupSplit.API\obj\Generated\GroupSplit.API_api.json">
-            <ClassName>{controller}Client</ClassName>
-            <Namespace>GroupSplit.Shared</Namespace>
-            <Options>/TemplateDirectory:../../GroupSplit.Shared/ClientTemplates /GenerateClientInterfaces:true /GenerateDtoTypes:false /UseBaseUrl:false /QueryNullValue:null /OperationGenerationMode:MultipleClientsFromFirstTagAndOperationId /GenerateOptionalParameters:true /DateType:DateOnly /TimeType:TimeOnly /DateTimeType:DateTimeOffset /JsonLibrary:SystemTextJson /JsonSerializerSettingsTransformationMethod:GroupSplitSerializer.Transform</Options>
-        </OpenApiReference>
-    </ItemGroup>
-
     <Import Project="../../../build/PdfJs.targets" />
 </Project>

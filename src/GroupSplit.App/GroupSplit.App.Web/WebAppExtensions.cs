@@ -153,6 +153,17 @@ public static class WebAppExtensions
             return group;
         }
 
+        /// <summary>Forwards MCP and its public OAuth metadata without substituting browser credentials.</summary>
+        public void MapMcpForwarder()
+        {
+            app.MapForwarder("/mcp/{**path}", "https+http://mcp", new ForwarderRequestConfig(),
+                    transforms => transforms.AddOriginalHost(true))
+                .AllowAnonymous().DisableAntiforgery();
+            app.MapForwarder("/.well-known/oauth-protected-resource/mcp", "https+http://mcp", new ForwarderRequestConfig(),
+                    transforms => transforms.AddOriginalHost(true))
+                .AllowAnonymous().DisableAntiforgery();
+        }
+
         /// <summary>
         /// Carries Keycloak on this app's own origin, so a deployment publishes one port
         /// rather than one per service -- the same arrangement <c>MapApiForwarder</c> gives

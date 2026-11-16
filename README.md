@@ -23,7 +23,7 @@ holds the ledger, and a web app, a MAUI app and a command-line client sit in fro
 
 ## Architecture at a glance
 
-The API owns the data and every rule about it; the web app, the MAUI app and the CLI are its
+The API owns the data and every rule about it; the web app, the MAUI app and the MCP server are its
 clients, and each signs in through Keycloak. The Aspire AppHost describes the whole stack
 once. Run it and it starts everything on your machine, with the development tooling added;
 publish it and it becomes the Docker Compose stack production runs.
@@ -34,8 +34,7 @@ publish it and it becomes the Docker Compose stack production runs.
   its WebAssembly client. The host forwards to the API, so the browser sees one origin.
 - MAUI app (`src/GroupSplit.App/GroupSplit.App`): Android, iOS, Mac Catalyst and Windows. Its
   pages are the web app's, from the shared Razor library `GroupSplit.App.Shared`.
-- CLI (`src/GroupSplit.Cli`): `groupsplit`, built from the same OpenAPI document as the apps'
-  API clients.
+- MCP (`src/GroupSplit.Mcp`): authenticated assistant tools; see [mcp.md](docs/mcp.md).
 - PostgreSQL: one server for the app database and Keycloak's. The migrations
   (`src/GroupSplit.Data.PostgreSQL.Migrations`) run before the API starts.
 - Keycloak: sign-in for every client. The `realm-settings` worker
@@ -78,7 +77,7 @@ these:
 
 Bank sync and receipt reading stay off until their credentials are in the AppHost's user
 secrets. [docs/getting-started.md](docs/getting-started.md) covers those, the dashboard,
-Mailpit, pointing the CLI at a local stack, and building with no SDK installed.
+Mailpit and building with no SDK installed.
 
 ## Tests
 
@@ -97,7 +96,7 @@ has the rest.
 Start here:
 
 - [getting-started.md](docs/getting-started.md): prerequisites, running the stack, demo
-  accounts, user secrets, Mailpit, the CLI against a local stack
+  accounts, user secrets and Mailpit
 - [architecture.md](docs/architecture.md): the projects, run and publish mode, the request
   path, data and migrations, background jobs, the domain model
 - [testing.md](docs/testing.md): the suites, how to run them, the coverage gate, the
@@ -117,12 +116,11 @@ How it works:
 
 Reference:
 
-- [cli.md](docs/cli.md): every `groupsplit` command, installing it, the output and exit-code
-  contract
+- [mcp.md](docs/mcp.md): MCP tools, authorization and deployment
 - [errors.md](docs/errors.md): the problem-details contract and the error code catalogue
 - [design-system.md](docs/design-system.md): the shared palette and type, and every file
   that carries a copy
-- [skills/README.md](skills/README.md): the agent skills that drive the CLI
+- [plugin/README.md](plugin/README.md): MCP-oriented assistant skills
 
 Operating it:
 
@@ -137,7 +135,6 @@ Operating it:
 - Aspire 13.6 for local orchestration and for publishing to Docker Compose
 - Redis, RustFS
 - Plaid for bank data; Veryfi or Azure OpenAI for reading receipts
-- System.CommandLine and Spectre.Console for the CLI
 - xUnit v3, bUnit, Moq and Playwright for tests
 
 ## C# formatting
