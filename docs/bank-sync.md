@@ -397,7 +397,7 @@ two answers to it. Nothing is merged, hidden, filed or ignored until a person ch
 
 Filing a row that looks like an expense already recorded is refused before a second expense
 exists: `POSSIBLE_DUPLICATE_EXPENSE`, a 409, whose `matches` extension names the candidates
-(see [the error catalog](errors.md)). The CLI exits 3 on it. The person answers by filing again
+(see [the error catalog](errors.md)). The person answers by filing again
 with `fileAnyway`, because they really did pay twice, or by linking the row to the expense that
 is already there; see
 [Linking to an expense already recorded](#linking-to-an-expense-already-recorded).
@@ -499,8 +499,7 @@ rather than once per row.
 | --- | --- | --- |
 | Inbox row | A warning, with both answers | The same block in a plain voice, saying how far apart they are |
 | Duplicate count on Home, `inbox summary` | Counted | Not counted |
-| `groupsplit inbox list` | `(duplicate?)` | `(similar)` |
-| `groupsplit inbox matches` | `(same amount)` | `(similar amount)` |
+| MCP bank row review | Candidate returned with its grade | Candidate returned with its grade |
 
 Every candidate is listed, not only the best one. Select-all ticks a flagged row like any other,
 since a control called "select all" that quietly covers less than everything is worse than one
@@ -668,14 +667,6 @@ charges for review. There is no automatic filing or merchant-wide destination ru
 - Rotating the key-ring certificate. There is nothing to rotate away from yet, and losing the
   certificate loses the stored tokens and nothing else: everybody links their bank again.
 
-## The CLI and agents
+## MCP and agents
 
-`groupsplit bank` and `groupsplit inbox` cover the same routes. Linking runs in the provider's
-browser UI, so the terminal half is the link token and the exchange afterwards; everything else
-(refresh, sync, unlink, filing, linking to an expense, ignoring) is an ordinary command. See
-[The `bank` commands](../skills/groupsplit/references/commands.md#bank).
-
-An agent filing bank rows uses the
-[groupsplit-inbox skill](../skills/groupsplit-inbox/SKILL.md), which covers the
-`POSSIBLE_DUPLICATE_EXPENSE` refusal and when `fileAnyway` is the right answer. A change to
-these commands moves `docs/cli.md` and the skill with it.
+The [MCP server](mcp.md) exposes bank inbox, candidate matching and filing tools. The [inbox review skill](../plugin/skills/inbox-review/SKILL.md) keeps review read-only and explains duplicate handling.

@@ -45,7 +45,6 @@ The admin console is reached through an SSH tunnel; see
 | Client | Used by | What it may do |
 | --- | --- | --- |
 | `web-app` | The web app's server, which holds the tokens on the browser's behalf | Authorization code with PKCE (`S256`), public. Redirects only to `${WEB_HOSTNAME}/signin-oidc`, and back after sign-out only to `${WEB_HOSTNAME}/signout-callback-oidc`. Its tokens carry `api` in the audience. |
-| `cli` | `groupsplit auth login` | The device authorization grant and nothing else, public, with `api` in the audience. A terminal cannot be given a redirect URI, and the browser that approves the sign-in is often on another machine. |
 | `account-deletion` | The API, deleting the login of somebody who deleted their account | Client credentials only, confidential. Its service account holds `realm-management`'s `manage-users` and nothing else. See [The Keycloak client it uses](#the-keycloak-client-it-uses). |
 
 A fourth client, `api`, has every flow switched off. It exists to be the audience: the API
@@ -130,7 +129,7 @@ What happens. Somebody is deleted in Keycloak and an admin creates them again wi
 address. Keycloak gives them a new `sub`. The app has never seen it, so it would make a new
 row, and the old row still holds the address. Every request is refused with
 `409 IDENTITY_EMAIL_IN_USE` ([errors.md](errors.md)). The web app shows "We could not open your
-account" with a reference; the CLI exits `2` and says to contact support.
+account" with a reference; the API returns the error to other clients.
 
 Why not link it automatically. Owning an address in Keycloak today is not proof of being the
 person whose expenses are on the old row, and linking would hand that row (its balances, its
@@ -232,7 +231,7 @@ Before this, deleting an account left the Keycloak user untouched, and that show
 | Their name and email address on the app's row. | The row itself, marked deleted and anonymised. Every other member's balance is calculated from the expenses and settlements it took part in, so deleting the row would rewrite other people's ledgers. Those records now show a deleted account. |
 | Their membership of every shared group. | The expenses and settlements they recorded, in the groups they were recorded in. Their personal group stays with the anonymised row: it has no balance and nobody to leave it to. |
 | Their Keycloak user: login, password, profile, Google link. | The Keycloak subject (an opaque id) on the anonymised row, as a tombstone; see [When Keycloak cannot be reached](#when-keycloak-cannot-be-reached). It names nobody once the user it identified is gone. |
-| Every Keycloak session: the web app's, the CLI's refresh token, any other device. | |
+| Every Keycloak session: the web app's and any other device's. | |
 | The web app's own session in the browser they deleted from. | |
 | Linked banks, accounts, imported bank rows and unfiled receipt files. | Filed expenses lose their private bank-row link. Unremovable provider Items are recorded for administrator reconciliation. |
 | Personal receipt files. | Shared receipt files and structured ledger/receipt history. File deletion jobs are saved in `BackgroundJob` with metadata removal and retried automatically. |
@@ -261,8 +260,7 @@ fixed backup expiry. See [personal data and operational reconciliation](personal
    the pending row is removed. This attempt waits at most ten seconds.
 3. The web app signs the person out locally and shows the sign-in page with a note that the
    account and its sign-in were deleted. Locally only: the Keycloak sessions went with the
-   user, and a Keycloak sign-out would only ask Keycloak to end a session it no longer has. The
-   CLI throws away its stored credentials.
+   user, and a Keycloak sign-out would only ask Keycloak to end a session it no longer has.
 
 Deleting a Keycloak user removes its sessions and offline sessions, so step 2's sign-out is the
 belt to that brace. It is the documented way to end sessions, and it runs first because after
@@ -481,19 +479,12 @@ A realm with no `web-app` client fails the run and points at the realm reset. Th
 not create it, because its redirect URIs are the environment's, and creating it would make the
 worker a second importer.
 
-### The cli client
+### Retired command-line client
 
-The worker manages the `cli` client that `groupsplit auth login` signs in through: the device
-authorization grant on and every other grant off (authorization code, implicit, password,
-service account and CIBA), public, and an audience mapper that puts `api` in its tokens.
-Without that mapper the API refuses every token the CLI brings. Unlike `web-app`, a missing
-`cli` client is created, from its definition in `realms.json`. A realm imported before the CLI
-existed has none, and nothing in the client depends on the environment, so creating it writes
-what an import would have.
-
-On the audience mapper, only the config entries the file names are compared. Keycloak adds
-entries of its own to a mapper over time, and those are left alone rather than fought over on
-every run.
+New realms no longer create the old `cli` client. Reconciliation does not delete existing
+clients, so an operator must separately assess and revoke that client in deployed realms
+when existing users have migrated. The MCP connection requires its own OAuth configuration;
+see [mcp.md](mcp.md).
 
 ### Which account a first Google sign-in lands in
 
@@ -529,7 +520,7 @@ When it is given `Realm__AdminConsoleUrl`, which only a deployment does, the wor
 ### What it does not manage
 
 The worker does not manage SMTP settings, the rest of each client and provider, protocol
-mappers other than the `cli` audience, the built-in authentication flows, roles, or users.
+unmanaged mappers, the built-in authentication flows, roles, or users.
 Those stay with realm import and the seeder. The allowlists in
 [`KeycloakRealmDefinition`](../src/GroupSplit.Keycloak/KeycloakRealmDefinition.cs) draw that
 line.
@@ -592,7 +583,7 @@ real Keycloak. How to run each is in [testing.md](testing.md).
   review abuse controls and explicitly decide whether Google may create users. Do not create
   a competing app registration endpoint.
 - Consider a separate confidential web client in production: the BFF can protect a secret,
-  while native and CLI clients must remain public. This needs secret provisioning and client
+  while native clients must remain public. This needs secret provisioning and client
   reconciliation changes, so it is a separate deployment change.
 - Consider OIDC back-channel logout if admin revocation must immediately remove local app
   tickets. The current API token checks/refresh path eventually detects revoked sessions;

@@ -242,10 +242,6 @@ if (builder.ExecutionContext.IsRunMode)
         .WaitForCompletion(migrations);
 
     builder
-        .AddCli<GroupSplit_Cli>("cli")
-        .WithGroupSplitEndpoints(api, keycloak);
-
-    builder
         .AddScalarApiReference()
         .WithApiReference(api);
 

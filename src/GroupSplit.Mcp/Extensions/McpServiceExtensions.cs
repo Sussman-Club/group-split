@@ -25,6 +25,8 @@ public static class McpServiceExtensions
         apiClient.AddTypedClient<InboxClient>();
         apiClient.AddTypedClient<ReceiptsClient>();
         apiClient.AddTypedClient<MerchantsClient>();
+        apiClient.AddTypedClient<Support_reportsClient>();
+        apiClient.AddTypedClient<Settlement_requestsClient>();
 #pragma warning restore EXTEXP0001
         return services;
     }
@@ -42,8 +44,11 @@ public static class McpServiceExtensions
             .WithTools<BankConnectionTools>()
             .WithTools<BankTransactionTools>()
             .WithTools<ReceiptTools>()
+            .WithTools<ReviewTools>()
             .WithTools<SettlementTools>()
             .WithTools<MerchantTools>()
+            .WithTools<SupportTools>()
+            .WithTools<StaffTools>()
             .WithTools<GroupInvitationTools>();
         return services;
     }

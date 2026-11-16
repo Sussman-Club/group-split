@@ -1,7 +1,6 @@
 # Architecture
 
-Group Split is one ASP.NET Core API with three clients in front of it: a Blazor web app, a
-.NET MAUI app and `groupsplit`, the command-line client. One Aspire AppHost describes the
+Group Split is one ASP.NET Core API with a Blazor web app, a .NET MAUI app, and an MCP server for assistant clients. One Aspire AppHost describes the
 whole stack, both on a developer's machine and on the Docker host a deploy ships it to.
 This page says which project holds what, how a request gets from a client to the database,
 and which decisions behind the model still constrain a change. Running the stack is in
@@ -39,7 +38,6 @@ below.
 | `src/GroupSplit.App/GroupSplit.App.Web` | Blazor Web host: serves the UI, signs people in, and forwards to the API and Keycloak |
 | `src/GroupSplit.App/GroupSplit.App.Web.Client` | Blazor WebAssembly client |
 | `src/GroupSplit.App/GroupSplit.App.Shared` | Razor class library holding the UI all three hosts render, and the generated API clients |
-| `src/GroupSplit.Cli` | `groupsplit`, the terminal client; see [cli.md](cli.md) |
 
 ### src/Data: persistence
 
@@ -62,7 +60,6 @@ below.
 | `tests/GroupSplit.API.Test` | API endpoint and service tests, on EF's in-memory provider |
 | `tests/GroupSplit.App.Web.Test` | Blazor Web host and component tests, with bUnit |
 | `tests/GroupSplit.AppHost.Test` | Aspire orchestration and integration tests against the whole stack in Docker, driven with Playwright |
-| `tests/GroupSplit.Cli.Test` | CLI configuration, output contract and auth tests |
 | `tests/GroupSplit.Jobs.Test` | Background-job configuration, processing and scheduling tests |
 | `tests/GroupSplit.Seeder.Test` | Seeder, Keycloak admin client and realm worker tests |
 
@@ -77,12 +74,11 @@ The API references `GroupSplit.Data.PostgreSQL` (and through it `GroupSplit.Data
 `GroupSplit.ServiceDefaults`. The seeder references the API itself, so it divides expenses
 with the same `SplitCalculator` and split-rule handlers the API does.
 
-`GroupSplit.App.Shared` and `GroupSplit.Cli` also reference the API project, but for its
+`GroupSplit.ApiClient` references the API project for its
 OpenAPI document and not its assembly (`ReferenceOutputAssembly="false"`). Building the API
 writes `obj/Generated/GroupSplit.API_api.json`, and NSwag turns it into typed clients using
 the templates in `src/GroupSplit.Shared/ClientTemplates`. The DTOs are not generated; both
-sides use the ones in `GroupSplit.Shared`. A changed endpoint therefore reaches the web app
-and the CLI on their next build, and a changed DTO is one edit.
+sides use the ones in `GroupSplit.Shared`. A changed endpoint therefore reaches the app and MCP clients on their next build, and a changed DTO is one edit.
 
 ## The AppHost
 
@@ -124,7 +120,7 @@ pair of extension methods next to the code that owns it:
 | API and web | [`WithHealthEndpoints`](../src/GroupSplit.AppHost/Extensions/HealthEndpointExtensions.cs): an unpublished management endpoint with liveness and readiness probes | `WithManagementHealthcheck`, in the same file: the readiness probe restated as a Compose healthcheck against that endpoint |
 | Compose | not present | `AddDockerComposeEnvironment` with [`WithProtectedDashboard`](../src/GroupSplit.AppHost/Extensions/DeploymentExtensions.cs), the image registry, `WithComposeDefaults`, and `WithComposeReleasePipeline` (`release-compose` pushes images and prepares the matching Compose files) |
 
-Only run mode adds the MAUI head, the demo seeder, the CLI, the local realm reset, Scalar,
+Only run mode adds the MAUI head, the demo seeder, the local realm reset, Scalar,
 Mailpit and the webhook tunnel. Publish mode adds the deployment-only parameters listed in
 [Deployment parameters](deployment.md#deployment-parameters); the integration parameters
 (Plaid, Veryfi, Azure OpenAI, Google sign-in) are declared in both. `PublishAs*` calls,
@@ -156,7 +152,6 @@ browser ──cookie──▶ web (GroupSplit.App.Web)
                     └─ /auth/*         sign-in and sign-out (IdentityApi.cs)
 
 web, rendering on the server ──token──▶ api   (service discovery, no forwarder)
-groupsplit CLI ──token──▶ web /native/api ──▶ api
 ```
 
 Deployed, the web app is the only thing with a public origin. The API and Keycloak publish no
@@ -212,19 +207,13 @@ the level back afterwards, and do not log the persisted state, authentication co
 circuit secrets. See Microsoft's
 [maximum receive message size guidance](https://learn.microsoft.com/aspnet/core/blazor/fundamentals/signalr?view=aspnetcore-10.0#maximum-receive-message-size).
 
-### The CLI and the MAUI app
+### The MAUI app
 
 Clients that hold a token rather than a session use `/native/api`. The `/api` forwarder
 cannot serve them: it authenticates with the cookie and then replaces the `Authorization`
 header, so a bearer token arriving there is challenged and, past that, thrown away.
 `/native/api` is anonymous at the web app and passes the header through; every endpoint group
 in the API requires authorisation, so the API decides.
-
-The CLI signs in with the device flow through Keycloak's `cli` client, and derives
-`/native/api` and `/idp/realms/group-split` from one server URL in
-[`EndpointResolver`](../src/GroupSplit.Cli/Configuration/EndpointResolver.cs). Locally the
-AppHost's `cli` resource hands it the API and the realm separately (`GROUPSPLIT_API_URL`,
-`GROUPSPLIT_AUTHORITY`), because there they are separate origins. See [cli.md](cli.md).
 
 The MAUI app exists in run mode only and references the API directly. Its `AuthService` is
 still a stub that throws, so it does not sign in yet; `/native/api` is the door it is meant to
@@ -537,10 +526,9 @@ to tell these cases apart; a `PUT` would delete it, and should when the verb cha
 rest of the rule is in [split-rules-and-membership.md](split-rules-and-membership.md).
 
 **The clients pin a preview of the JSON Patch package, on purpose.** The API takes the
-released `Microsoft.AspNetCore.JsonPatch.SystemTextJson` 10.0.x. `GroupSplit.App.Shared` and
-`GroupSplit.Cli` pin `10.0.0-preview.7.25380.108`, because every released 10.0.x declares a
+released `Microsoft.AspNetCore.JsonPatch.SystemTextJson` 10.0.x. `GroupSplit.App.Shared` pins `10.0.0-preview.7.25380.108`, because every released 10.0.x declares a
 framework reference on `Microsoft.AspNetCore.App`: the WebAssembly client cannot restore that
-(NETSDK1082), and the CLI would need the ASP.NET Core runtime to name a `JsonPatchDocument`.
+(NETSDK1082).
 Do not unify the versions, write a patch type of our own, or bring in central package
 management to hide the difference. When a released version ships as a plain library again, a
 version bump is the whole change; check its nuspec first.

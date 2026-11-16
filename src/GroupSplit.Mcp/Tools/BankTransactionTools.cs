@@ -6,6 +6,15 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public sealed class BankTransactionTools
 {
+    [McpServerTool(Name = "get_bank_row", ReadOnly = true, Destructive = false, Idempotent = true), Description("Get one of your imported bank rows.")]
+    public static Task<BankTransactionResponse> GetBankRow(InboxClient client, Guid bankRowId, CancellationToken ct = default) => client.GetBankTransactionAsync(bankRowId, ct);
+
+    [McpServerTool(Name = "search_receipt_bank_rows", ReadOnly = true, Destructive = false, Idempotent = true), Description("Search imported bank rows when matching a receipt, 100 per page.")]
+    public static Task<PagedResponseOfBankTransactionResponse> SearchReceiptBankRows(InboxClient client, string? search = null, int page = 1, CancellationToken ct = default) => client.SearchReceiptBankTransactionsAsync(search!, Math.Max(1, page), 100, ct);
+
+    [Authorize(Policy = "mcp:write")]
+    [McpServerTool(Name = "dismiss_bank_match", ReadOnly = false, Destructive = false, Idempotent = true), Description("Dismiss a suggested match between a bank row and an expense.")]
+    public static Task DismissBankMatch(InboxClient client, Guid bankRowId, DismissBankMatchRequest match, CancellationToken ct = default) => client.DismissBankTransactionMatchAsync(bankRowId, match, ct);
     [McpServerTool(Name = "suggest_bank_filings", ReadOnly = true, Destructive = false, Idempotent = true), Description("Suggest filing destinations for imported bank rows without creating expenses.")]
     public static Task<ICollection<FilingSuggestionResponse>> SuggestBankFilings(InboxClient client, SuggestFilingsRequest request, CancellationToken ct = default) =>
         client.SuggestBankTransactionFilingsAsync(request, ct);

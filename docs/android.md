@@ -200,9 +200,7 @@ The website checks the repository's latest public release, requiring an `android
 `GroupSplit.apk`, a checksum file, and download URLs in this repository. It caches the
 lookup for five minutes to limit GitHub API traffic. Missing, incomplete or removed
 releases show an unavailable message with a retry button instead of a broken download.
-A temporary GitHub outage preserves a previously verified download. Android releases
-currently own the repository's latest release; the CLI publishes packages and tags rather
-than GitHub releases.
+A temporary GitHub outage preserves a previously verified download. Android releases currently own the repository's latest release.
 
 People download the APK on their phone, open it, allow their browser to install apps if
 prompted, and install Group Split. They can turn that browser permission off afterward.

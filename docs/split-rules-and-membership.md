@@ -20,7 +20,7 @@ time, which the database enforces with a partial unique index rather than the se
 enforcing it with a check two concurrent edits can both pass.
 
 A version is never edited. Every path that changes what a rule says closes the version that
-was current and opens a new one -- editing it from the app or the CLI, and a member leaving,
+was current and opens a new one -- editing it from the app or API, and a member leaving,
 which is the one change that happens without anybody editing anything.
 
 Every transaction records the version that divided it, in `Transaction.SplitRuleVersionId`.
@@ -60,8 +60,7 @@ whatever the edit touched. Not by that rule as it reads now, though: an expense 
 records a version is divided again by that version, the same one an amount edit would use, so
 asking does not apply a rule edited since. What reaches a rule as it stands
 is filing the expense under another category, and an expense somebody split by hand, which
-records no version at all. The edit dialog's **Automatically** sends it, `transactions update
---redivide` sends it from the CLI, and `POST /transactions/{id}/preview?redivide=true` shows
+records no version at all. The edit dialog's **Automatically** sends it, and `POST /transactions/{id}/preview?redivide=true` shows
 beforehand what it would come to.
 A division carried forward unchanged keeps the version behind it, so provenance survives
 every edit that is not about the money.
@@ -114,9 +113,7 @@ what divided an expense above its shares, with a panel behind it for correcting 
 and it resolved the sentence through the category's rule as the category points now: the
 same mistake as the pass above, made in words. Nothing stored was wrong; the reading was. A
 screen that cannot tell the truth about an old expense is better silent, so the app says
-nothing about provenance at all. Both stay CLI commands (`split-rules versions set` and
-`transactions update --divided-by`), where the person running one knows what a re-pointed
-category means and `--dry-run` shows a history before it is written. Writing a rule's past
+nothing about provenance at all. The API exposes both operations for clients that need to correct historical provenance. Writing a rule's past
 wholesale was never going to be a dialog anyway: 42 months of a workbook are not re-lived
 one at a time.
 
@@ -376,8 +373,5 @@ unarchiving clears it and offers the category again; nothing else changes either
   The row stays, tagged Archived, and the same button offers it again.
 - **API:** `POST /categories/{id}/archive` and `POST /categories/{id}/unarchive`.
   `GET /categories?includeArchived=true` lists archived ones beside the rest.
-- **CLI:** `categories archive <id>`, `categories unarchive <id>`, and
-  `categories list --archived`. Neither asks for confirmation: one command undoes it, and
-  nothing it touches is money.
 
 Deleting is for a category nothing is filed under, and it is final.

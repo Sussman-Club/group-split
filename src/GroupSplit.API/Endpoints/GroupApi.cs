@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Errors;
+using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.Data.Entities;
@@ -29,6 +29,7 @@ public static class GroupApi
             group.MapGetGroupTransactions();
             group.MapGetGroupTransactionsSummary();
             group.MapGetGroupSpendingByCategory();
+            group.MapHouseholdMonth();
             group.MapGetActivity();
             group.MapGetMembers();
             group.MapGetPastMembers();
