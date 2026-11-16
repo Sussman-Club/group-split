@@ -11,7 +11,7 @@ screens use the resource catalogs.
 Settings contains a language picker. `PUT /users/me/language` stores the choice on
 the signed-in account; `GET /users/me` returns `preferredLanguage`. Null means the
 person has not chosen a language. The API accepts only the supported neutral tags.
-It does not localize responses, so CLI output remains unchanged.
+It does not localize API responses.
 
 The web host resolves the account preference before rendering HTML, using a custom
 ASP.NET request culture provider after authentication. If no account preference is

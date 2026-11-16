@@ -169,8 +169,7 @@ join link's because the person a guest's link is for has usually never heard of 
   second, after the work had begun.
 - **Shown to the group.** `GET /groups/{id}/guests` reports `LinkExpiresAt`, and for a link
   that ran out `LinkExpired` true, `HasLink` false and no `Token`: there is nothing to copy.
-  The web app's guest row says "link expired 7 Nov 2026" and offers "Send link" again; the CLI
-  marks it expired. The deprecated `GET /groups/{id}/invitations` and `GET /invitations` list
+  The web app's guest row says "link expired 7 Nov 2026" and offers "Send link" again. The deprecated `GET /groups/{id}/invitations` and `GET /invitations` list
   only links that still work, now with `ExpiresAt`.
 - **Issuing again is the fix.** Asking for the link (`POST .../link`) when the one out has
   expired issues a new one, `replace` or not -- "send link" means a link that works -- and
@@ -225,7 +224,7 @@ square, or send them their link.
 
 ## Deprecated routes
 
-The API still serves the invitation routes the published CLI and older skills call, marked
+The API still serves older invitation routes, marked
 deprecated in the OpenAPI document:
 
 - `POST /groups/{id}/invitations` adds guests and issues each a link;

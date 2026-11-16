@@ -10,7 +10,6 @@ stack in Docker.
 | --- | --- | --- |
 | [`GroupSplit.API.Test`](../tests/GroupSplit.API.Test) | The domain services on EF's in-memory provider, and the HTTP endpoints over a `TestServer`: routing, binding, validation, authorization, error codes, rate limits. The Plaid connector against recorded payloads. | no |
 | [`GroupSplit.App.Web.Test`](../tests/GroupSplit.App.Web.Test) | The Blazor components under bUnit; the web host's sign-in, cookies, token store, forwarders and security headers; client-side state; the wire contract between the API and the generated client. | no |
-| [`GroupSplit.Cli.Test`](../tests/GroupSplit.Cli.Test) | The CLI's commands, run in-process against a stub HTTP server: output, exit codes, auth, configuration, the confirmation protocol, and every documented example. | no |
 | [`GroupSplit.Jobs.Test`](../tests/GroupSplit.Jobs.Test) | The background-job library: handler registration, processing, scheduling, and the standalone runtime. | no |
 | [`GroupSplit.Seeder.Test`](../tests/GroupSplit.Seeder.Test) | The seeders and the order they run in, the Keycloak admin client, and the realm worker's definition and reconciler. | no |
 | [`GroupSplit.AppHost.Test`](../tests/GroupSplit.AppHost.Test) | The stack under Aspire: queries, constraints and races on real Postgres, Keycloak, mail, webhooks, and the web app in Chromium through Playwright. | yes |
@@ -28,7 +27,6 @@ in front of it. These are the suites the unit job runs, and the CSS check beside
 ```bash
 dotnet test --project tests/GroupSplit.API.Test
 dotnet test --project tests/GroupSplit.App.Web.Test
-dotnet test --project tests/GroupSplit.Cli.Test
 dotnet test --project tests/GroupSplit.Jobs.Test
 dotnet test --project tests/GroupSplit.Seeder.Test
 python3 tests/check-css.py src/GroupSplit.App/GroupSplit.App.Shared/wwwroot/app.css
@@ -83,7 +81,7 @@ ship. It has two jobs. How a deploy runs after it is in [deployment.md](deployme
 - restores and builds the five unit suites and the migrations project in Release;
 - runs [`check-css.py`](#the-css-check) over the shared bundle;
 - runs the deploy scripts' own test, `.github/scripts/classify-komodo-failure.test.sh`;
-- packs the CLI as a .NET tool, which catches packaging faults a build does not;
+- checks the plugin manifest and MCP skill tool names;
 - builds the web app in Debug, the configuration `aspire do` deploys from, where some build
   steps exist only in Debug;
 - runs the five suites with a TRX report and Cobertura coverage each;
@@ -254,7 +252,6 @@ By what could break:
 | What a component renders and what it asks the server for | `GroupSplit.App.Web.Test` | a subclass of `ComponentTest` |
 | The web host's own wiring: cookies, tokens, forwarders, headers | `GroupSplit.App.Web.Test` | a test over a `TestServer`; `SignInHost` for sign-in |
 | Whether the generated client reads what the API writes | `GroupSplit.App.Web.Test/Contract` | a serializer round trip |
-| A CLI command, its output or its exit code | `GroupSplit.Cli.Test` | `Cli.RunAsync` against a `StubApi` |
 | A seeder, the realm definition or the realm worker | `GroupSplit.Seeder.Test` | a plain class |
 | The job library | `GroupSplit.Jobs.Test` | a plain class |
 
@@ -363,38 +360,6 @@ dotnet test --project tests/GroupSplit.App.Web.Test -- --timeout 5m
 [`SharedServiceCompositionTest`](../tests/GroupSplit.App.Web.Test/State/SharedServiceCompositionTest.cs)
 builds the app's container with `ValidateOnBuild`. When it fails, something is registered
 without a dependency it takes; component tests register their own mocks and will not notice.
-
-### CLI tests
-
-[`Cli.RunAsync`](../tests/GroupSplit.Cli.Test/Cli.cs) runs the real command tree in-process
-with captured writers and returns the exit code, stdout and stderr; `.Json` parses stdout, and
-`.Error` reads the error envelope off the last JSON line of stderr. Those three are the CLI's
-contract, set out in [cli.md](cli.md), and what a test asserts on.
-
-[`StubApi`](../tests/GroupSplit.Cli.Test/StubApi.cs) is an `HttpListener` on a free loopback
-port, so the generated client runs for real: paths, bearer header, status handling, problem
-details. `Returns(path, body, status)` sets an answer, and `Requests` records each request's
-method, path, query, authorization and body, for asserting what a write sent and that a filter
-reached the query string.
-
-[`EnvironmentFixture`](../tests/GroupSplit.Cli.Test/EnvironmentFixture.cs) points the config and
-credential directories at a scratch directory and clears every `GROUPSPLIT_*` variable, so a
-test sees a clean machine rather than your own sign-in. Environment variables are
-process-wide, so a class using it goes in `[Collection(EnvironmentCollection.Name)]`, which
-does not run in parallel.
-
-Two tests read the source rather than a command:
-
-- [`ConfirmCommandTests`](../tests/GroupSplit.Cli.Test/ConfirmCommandTests.cs) runs every
-  confirmation gate twice, once with `--yes` and once by re-running the `confirmCommand` the
-  prompt handed back, and compares the writes the server received. A new
-  `Confirmation.Require(context, action: "…")` has to be added to its `Gates` table;
-  `Every_gate_in_the_cli_is_in_the_table` scans `src/GroupSplit.Cli` and fails until it is.
-- [`DocumentedExampleTests`](../tests/GroupSplit.Cli.Test/DocumentedExampleTests.cs) parses
-  every `groupsplit` command in a `bash` block of `docs/cli.md` and `skills/` against the real
-  command tree, with placeholders such as `<group-id>` and `$G` turned into guids. An example
-  with an option the command does not have fails the build. Fence anything that is not meant
-  to parse with another language.
 
 ### AppHost tests
 

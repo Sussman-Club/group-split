@@ -11,9 +11,7 @@ deleted, and transactions can be deleted. Deletion tools are marked destructive 
 should only be called after the user confirms. Other tools inspect groups, expenses, receipts,
 accounts, invitations, and join links. Additional tools support transaction editing,
 group membership, settlements, bank connections, support reports and staff operations.
-Staff operations are subject to the API's staff role checks. CLI-only commands for
-local configuration, device login, shell completion and local file paths are not
-remote operations; MCP clients handle authentication and their own local files.
+Staff operations are subject to the API's staff role checks. MCP clients handle authentication and their own local files.
 Receipt tools can upload and download expense and inbox attachments as base64-encoded
 file bytes (JPEG, PNG, WebP, or PDF, up to 10 MiB), and transcribe existing files.
 The MCP server cannot read a path on the agent's device; the client must send the file
