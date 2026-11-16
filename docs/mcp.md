@@ -121,17 +121,24 @@ The API still checks the signed-in user's group membership and ownership on each
 request. Tool annotations guide clients but are not authorization controls.
 
 For a household summary, use `list_groups` to identify the group if needed, then
-call `household_summary` with that group and explicit inclusive `from` and `to`
-instants. State the period and time zone used. The result combines category
-spending (including separate other-currency breakdowns) with the caller's gross
-paid and share amounts. Settlements are excluded. Exposure is grouped by UTC
-month and contains only its headline currency; it is not a full multi-currency
-personal total. Do not add unlike currencies or describe missing currencies as
-zero. For a local calendar month, the inclusive end and UTC month grouping can
-produce partial UTC-month rows; explain this and report the rows separately.
-The API's upper bound is inclusive, so callers must select an appropriate final
-instant for the data precision. Do not silently guess a group or time zone.
+call `household_summary` with its ID, year, month, and time-zone ID (for example,
+`America/New_York`). The API converts the local month to an inclusive start and
+exclusive next-month boundary, using the zone's offset at each boundary. The
+response includes those UTC instants, category spending, and the caller's gross
+paid and share amounts separately for every currency. Settlements are excluded.
+Do not add unlike currencies. Missing currencies in exposure mean the caller
+neither paid nor had a share in that currency; spending may still show them.
+An unavailable time zone or an ambiguous or nonexistent month boundary is refused.
+Do not silently guess a group or time zone.
 
+For a custom MCP client or plugin, connect to the authenticated `/mcp` endpoint
+as described above and let its tool discovery expose `household_summary` and the
+inbox tools. A starter prompt can instruct the assistant to identify the group,
+month and time zone, call the summary, and present each currency separately. The
+inbox starter can follow the sequence below. These instructions are advisory:
+the server and API enforce permissions, and a plugin must not embed user tokens.
+Deploy both the API and MCP images from this change before invoking the new tool
+contract. Test with a read-only account before enabling it for users.
 For inbox review, use `bank_inbox_summary`, `bank_inbox` (page through as needed)
 and `list_receipt_inbox`. Review selected items with `get_bank_row` or
 `review_receipt_inbox_item`; each returns the source item and expense candidates

@@ -86,12 +86,16 @@ public class McpHttpTests
         Assert.Contains("Page=2", transport.ApiPath);
         Assert.Contains("PageSize=100", transport.ApiPath);
         transport.ApiCalls.Clear();
-        using var household = await Call(subjectToken, "household_summary", "{\"groupId\":\"" + group + "\",\"from\":\"2026-01-01T00:00:00Z\",\"to\":\"2026-01-31T23:59:59Z\"}");
+        using var household = await Call(subjectToken, "household_summary", "{\"groupId\":\"" + group + "\",\"year\":2026,\"month\":3,\"timeZone\":\"America/New_York\"}");
         Assert.DoesNotContain("\"isError\":true", await household.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(2, transport.ApiCalls.Count);
-        Assert.Contains("/groups/" + group + "/transactions/by-category", transport.ApiCalls[0]);
-        Assert.Contains("/transactions/monthly", transport.ApiCalls[1]);
-        Assert.All(transport.ApiCalls, path => Assert.Contains("2026-01", Uri.UnescapeDataString(path)));
+        Assert.Single(transport.ApiCalls);
+        Assert.Contains("/groups/" + group + "/household-month", transport.ApiCalls[0]);
+        Assert.Contains("America%2FNew_York", transport.ApiCalls[0]);
+        Assert.Equal(HttpMethod.Get, transport.ApiMethod);
+        transport.RefuseApi = true;
+        using var refusedHousehold = await Call(subjectToken, "household_summary", "{\"groupId\":\"" + group + "\",\"year\":2026,\"month\":3,\"timeZone\":\"UTC\"}");
+        Assert.Contains("error", await refusedHousehold.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.OrdinalIgnoreCase);
+        transport.RefuseApi = false;
         transport.ApiCalls.Clear();
         using var receiptReview = await Call(subjectToken, "review_receipt_inbox_item", "{\"receiptId\":\"" + group + "\"}");
         Assert.DoesNotContain("\"isError\":true", await receiptReview.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
@@ -264,7 +268,7 @@ public class McpHttpTests
                     };
                 }
                 return new HttpResponseMessage(owner.RefuseApi ? HttpStatusCode.Forbidden : filing ? HttpStatusCode.Created : HttpStatusCode.OK)
-                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/transactions/by-category") ? "{\"categories\":[]}" : owner.ApiPath.Contains("/receipts/inbox/") && !owner.ApiPath.EndsWith("/matches") ? "{\"id\":\"00000000-0000-0000-0000-000000000001\",\"currency\":\"USD\",\"receipt\":{},\"attachments\":[]}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
+                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/household-month") ? "{\"year\":2026,\"month\":3,\"timeZone\":\"UTC\",\"from\":\"2026-03-01T00:00:00Z\",\"until\":\"2026-04-01T00:00:00Z\",\"spending\":{\"categories\":[]},\"exposure\":[]}" : owner.ApiPath.Contains("/transactions/by-category") ? "{\"categories\":[]}" : owner.ApiPath.Contains("/receipts/inbox/") && !owner.ApiPath.EndsWith("/matches") ? "{\"id\":\"00000000-0000-0000-0000-000000000001\",\"currency\":\"USD\",\"receipt\":{},\"attachments\":[]}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
             }
         }
     }
