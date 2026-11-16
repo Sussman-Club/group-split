@@ -50,7 +50,7 @@
             <div class="gs-currency-totals">
             @foreach (var position in Position.Currencies)
             {
-                <div class="gs-currency-total"><strong>@(position.Net > 0 ? Loc["You are owed"].Value : position.Net < 0 ? Loc["You owe"].Value : Loc["Even"].Value) · @position.Currency</strong><Money Value="position.Net" Currency="@position.Currency" Absolute /></div>
+                <div class="gs-currency-total @(position.Net < 0 ? "is-neg" : "")"><span class="gs-eyebrow">@(position.Net > 0 ? Loc["You are owed"].Value : position.Net < 0 ? Loc["You owe"].Value : Loc["Even"].Value)</span><div><Money Value="position.Net" Currency="@position.Currency" Absolute /> @if (MoneyExtensions.CurrencySymbol(position.Currency) != position.Currency) { <span class="gs-currency-code">@position.Currency</span> }</div></div>
             }
             </div>
         }
@@ -73,7 +73,7 @@
         <div class="gs-hero-sub">
             @if (Position?.Currencies.Count > 1)
             {
-                @Loc["Amounts are shown separately for each currency."]
+                @* Each amount is already labelled with its currency. *@
             }
             else if (OwedToYou > 0 && YouOwe > 0)
             {
@@ -99,18 +99,19 @@
             <div class="gs-dashboard-group-list">
                 @foreach (var group in Owing.GroupBy(position => new { position.GroupId, position.GroupName }))
                 {
-                    <div class="gs-dashboard-group">
+                    <a class="gs-dashboard-group" href="@($"/groups/{group.Key.GroupId}")">
                         <div class="gs-dashboard-group-name"><Avatar Name="@group.Key.GroupName" Size="sm" /><span>@group.Key.GroupName</span></div>
+                        <div class="gs-dashboard-positions">
                         @foreach (var position in group)
                         {
-                            <div class="gs-dashboard-position">
+                            <div class="gs-dashboard-position @(position.Balance < 0 ? "is-neg" : "")">
                                 <div class="gs-dashboard-position-label">@(position.Balance > 0 ? Loc["You are owed"].Value : Loc["You owe"].Value) @if (group.Count() > 1) { <span>· @position.Currency</span> }</div>
-                                <Money Value="@Math.Abs(position.Balance)" Currency="@position.Currency" Animate />
-                                <div class="gs-dashboard-position-action"><MudButton Color="Color.Primary" Size="Size.Small" Variant="Variant.Text"
-                                    Href="@SettlementHref(position.GroupId, position.Currency)">@(group.Count() > 1 ? Loc["Settle {0}", position.Currency].Value : Loc["Settle"].Value)</MudButton></div>
+                                <Money Value="@position.Balance" Currency="@position.Currency" Absolute Animate />
                             </div>
                         }
-                    </div>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
+                    </a>
                 }
             </div>
     </section>
@@ -262,8 +263,6 @@
     };
 
     private void Open(Guid groupId) => Nav.NavigateTo($"/groups/{groupId}");
-
-    private static string SettlementHref(Guid groupId, string currency) => $"/groups/{groupId}?currency={Uri.EscapeDataString(currency)}";
 
     // Greeting lives in Dashboard.razor.cs; see the note there.
 

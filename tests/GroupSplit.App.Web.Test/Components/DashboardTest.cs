@@ -152,7 +152,7 @@ public class DashboardTest : ComponentTest
             Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()), Times.Once);
 
     [Fact]
-    public void Multiple_currencies_are_grouped_with_separate_settlement_links()
+    public void Multiple_currencies_are_grouped_in_one_navigable_row()
     {
         _position = new UserPositionResponse(0, 0, 0,
         [
@@ -165,8 +165,10 @@ public class DashboardTest : ComponentTest
         var hero = page.Find(".gs-hero");
         Assert.Single(page.FindAll(".gs-dashboard-group-name"));
         Assert.Equal(2, hero.QuerySelectorAll(".gs-currency-total").Length);
-        Assert.Contains(page.FindAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=EUR");
-        Assert.Contains(page.FindAll("a"), link => link.GetAttribute("href") == $"/groups/{Lisbon.Id}?currency=USD");
+        var row = page.Find(".gs-dashboard-group");
+        Assert.Equal($"/groups/{Lisbon.Id}", row.GetAttribute("href"));
+        Assert.Equal(2, row.QuerySelectorAll(".gs-dashboard-position").Length);
+        Assert.DoesNotContain("Settle", row.TextContent);
     }
 
     [Fact]
