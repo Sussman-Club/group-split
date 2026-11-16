@@ -441,7 +441,8 @@ public class SettlementService(
             date,
             description,
             allocations,
-            cutoff?.Through) { Currency = person.Currency };
+            cutoff?.Through)
+        { Currency = person.Currency };
     }
 
     public async Task<IQueryable<SettlementResponse>> GetHistory(
