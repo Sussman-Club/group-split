@@ -452,27 +452,17 @@
 .gs-position.is-neg { background: var(--gs-clay-soft); color: var(--gs-clay-deep); }
 .gs-position .gs-money, .gs-position > strong { font-size: 1.4rem; font-weight: 800; }
 .gs-currency-code { font-size: .75rem; font-weight: 700; }
-.gs-person-balance { padding: 16px 0; border-top: 1px solid var(--gs-line); }
+.gs-person-balance { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 12px; padding: 16px 0; border-top: 1px solid var(--gs-line); }
 .gs-person-balance:first-child { border-top: 0; }
 .gs-person-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.gs-person-summary { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 12px; list-style: none; cursor: pointer; }
-.gs-person-summary::-webkit-details-marker { display: none; }
-.gs-person-summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; }
-.gs-person-summary-amounts { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.gs-person-summary-amount { color: var(--gs-muted); font-size: .875rem; white-space: nowrap; }
-.gs-person-summary-amount strong { color: var(--gs-teal-deep); }
-.gs-person-summary-amount.is-neg strong { color: var(--gs-clay-deep); }
-.gs-person-settle { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--gs-line); border-radius: var(--gs-radius-pill); padding: 6px 10px; white-space: nowrap; font-size: .875rem; }
-.gs-person-settle .mud-icon-root { font-size: 1.1rem; }
-.gs-person-balance[open] .gs-person-settle .mud-icon-root { transform: rotate(180deg); }
-.gs-person-debts { display: grid; gap: 10px; padding: 16px 0 0; }
+.gs-person-debts { display: grid; gap: 10px; }
 .gs-person-debt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--gs-ink-2); }
 .gs-person-debt > strong { color: var(--gs-teal-deep); white-space: nowrap; }
 .gs-person-debt.is-neg > strong { color: var(--gs-clay-deep); }
 .gs-person-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
-:root[data-theme="dark"] .gs-position, :root[data-theme="dark"] .gs-person-debt > strong, :root[data-theme="dark"] .gs-person-summary-amount strong { color: var(--gs-teal-bright); }
-:root[data-theme="dark"] .gs-position.is-neg, :root[data-theme="dark"] .gs-person-debt.is-neg > strong, :root[data-theme="dark"] .gs-person-summary-amount.is-neg strong { color: var(--gs-clay); }
-@media (max-width: 600px) { .gs-person-summary { grid-template-columns: minmax(0, 1fr) auto; } .gs-person-summary-amounts { grid-column: 1 / -1; grid-row: 2; } .gs-person-actions { margin-left: 0; } }
+:root[data-theme="dark"] .gs-position, :root[data-theme="dark"] .gs-person-debt > strong { color: var(--gs-teal-bright); }
+:root[data-theme="dark"] .gs-position.is-neg, :root[data-theme="dark"] .gs-person-debt.is-neg > strong { color: var(--gs-clay); }
+@media (max-width: 600px) { .gs-person-balance { grid-template-columns: 1fr; } .gs-person-actions { margin-left: 0; } }
 
 .gs-member-balances { padding: 12px 0; border-top: 1px solid var(--gs-line); }
 .gs-member-balances:first-child { border-top: 0; }

@@ -75,21 +75,8 @@ else
                         {
                             var first = person.First();
                             var guest = IsGuest(first.UserId);
-                            <details class="gs-person-balance">
-                                <summary class="gs-person-summary">
-                                    <span class="gs-person-heading"><Avatar Name="@first.UserName" Size="sm" /><strong>@Named(first.UserId, first.UserName)</strong></span>
-                                    <span class="gs-person-summary-amounts">
-                                        @foreach (var owed in balance.OwedToYou.Where(debt => debt.UserId == first.UserId).OrderByDescending(debt => debt.Currency == SelectedCurrency))
-                                        {
-                                            <span class="gs-person-summary-amount"><span>@Loc["Owes you"]</span> <strong><Money Value="owed.Amount" Currency="@owed.Currency" /> @if (HasMultipleCurrencies && MoneyExtensions.CurrencySymbol(owed.Currency) != owed.Currency) { <span class="gs-currency-code">@owed.Currency</span> }</strong></span>
-                                        }
-                                        @foreach (var owing in balance.YouOwed.Where(debt => debt.UserId == first.UserId).OrderByDescending(debt => debt.Currency == SelectedCurrency))
-                                        {
-                                            <span class="gs-person-summary-amount is-neg"><span>@Loc["You owe"]</span> <strong><Money Value="owing.Amount" Currency="@owing.Currency" /> @if (HasMultipleCurrencies && MoneyExtensions.CurrencySymbol(owing.Currency) != owing.Currency) { <span class="gs-currency-code">@owing.Currency</span> }</strong></span>
-                                        }
-                                    </span>
-                                    <span class="gs-person-settle">@Loc["Settle"] <MudIcon Icon="@Icons.Material.Rounded.ExpandMore" /></span>
-                                </summary>
+                            <div class="gs-person-balance">
+                                <div class="gs-person-heading"><Avatar Name="@first.UserName" Size="sm" /><strong>@Named(first.UserId, first.UserName)</strong></div>
                                 <div class="gs-person-debts">
                                     @foreach (var debt in balance.OwedToYou.Where(debt => debt.UserId == first.UserId).OrderByDescending(debt => debt.Currency == SelectedCurrency))
                                     {
@@ -114,7 +101,7 @@ else
                                         </div>
                                     }
                                 </div>
-                            </details>
+                            </div>
                         }
                     </div>
                 </section>

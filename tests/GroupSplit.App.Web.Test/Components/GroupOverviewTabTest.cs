@@ -220,11 +220,6 @@ public class GroupOverviewTabTest : ComponentTest
             .Add(component => component.UserId, Me)
             .Add(component => component.OnSettle, ((DebtInfo Debt, SettlementDirection Direction, DateTime? Through) line) => selected = line));
         var omar = view.FindAll(".gs-person-balance").Single(row => row.TextContent.Contains("Omar"));
-        var summary = omar.QuerySelector("summary")!;
-        Assert.Equal(2, summary.QuerySelectorAll(".gs-person-summary-amount").Length);
-        Assert.Single(summary.QuerySelectorAll(".gs-person-settle"));
-        Assert.Contains("Owes you", summary.TextContent);
-        Assert.Contains("You owe", view.FindAll(".gs-person-balance").Single(row => row.TextContent.Contains("Dani")).QuerySelector("summary")!.TextContent);
         var debts = omar.QuerySelectorAll(".gs-person-debt");
         Assert.Equal(2, debts.Length);
         Assert.Contains("USD", debts[0].TextContent);
