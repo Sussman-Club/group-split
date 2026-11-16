@@ -149,3 +149,5 @@ confirmation before using a write tool. A preview does not reserve data or grant
 permission; recheck stale candidates and respect API duplicate refusals. Never set
 an override merely to bypass a refusal. The write scope and API authorization
 remain mandatory, and clients must not rely on prompt instructions as enforcement.
+
+The [repository plugin](../plugin/README.md) provides MCP-based `groupsplit` and `groupsplit-inbox` skills, plus focused household summary and read-only inbox review skills. Bank-and-receipt reconciliation requires a user decision and multiple separate writes; it is not atomic.

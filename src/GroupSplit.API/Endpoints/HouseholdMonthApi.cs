@@ -13,7 +13,9 @@ public static class HouseholdMonthApi
             IGroupService groups, ITransactionService transactions, ICurrentUser currentUser, CancellationToken ct) =>
         {
             if (year is < 2 or > 9998 || month is < 1 or > 12 || string.IsNullOrWhiteSpace(timeZone))
+            {
                 return Results.BadRequest("Provide a valid year, month and time zone.");
+            }
 
             TimeZoneInfo zone;
             try
@@ -29,12 +31,16 @@ public static class HouseholdMonthApi
             var localEnd = localStart.AddMonths(1);
             if (zone.IsInvalidTime(localStart) || zone.IsAmbiguousTime(localStart) ||
                 zone.IsInvalidTime(localEnd) || zone.IsAmbiguousTime(localEnd))
+            {
                 return Results.BadRequest("A month boundary is ambiguous or invalid in this time zone.");
+            }
 
             var from = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, zone));
             var until = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localEnd, zone));
             if (!await (await groups.GetGroupById(id, ct)).AnyAsync(ct))
+            {
                 return Problems.NotFound(ErrorCodes.GroupNotFound, "Group was not found.");
+            }
 
             var expenses = (await transactions.InGroup(id, ct)).Where(e => e.DateTime >= from && e.DateTime < until);
             var spending = await expenses.ToCategorySpendingAsync(new GroupSpendingFilter(), currentUser.User.Id, ct);
