@@ -11,7 +11,7 @@ namespace GroupSplit.App.Web.Test.Components;
 public class GroupsSearchTest : ComponentTest
 {
     [Fact]
-    public void A_group_has_a_separate_settlement_link_for_each_outstanding_currency()
+    public void The_whole_group_card_links_to_the_group_and_shows_each_balance()
     {
         var group = new GroupResponse(Guid.NewGuid(), "Trip", 2);
         var groups = new Mock<IGroupsPageStateService>();
@@ -25,8 +25,12 @@ public class GroupsSearchTest : ComponentTest
         Services.AddSingleton(groups.Object);
         var card = Render<Groups>().Find(".gs-group-card");
         Assert.Equal(2, card.QuerySelectorAll(".foot").Length);
-        Assert.Contains(card.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{group.Id}?currency=USD");
-        Assert.Contains(card.QuerySelectorAll("a"), link => link.GetAttribute("href") == $"/groups/{group.Id}?currency=EUR");
+        Assert.Equal("A", card.TagName);
+        Assert.Equal($"/groups/{group.Id}", card.GetAttribute("href"));
+        Assert.Empty(card.QuerySelectorAll("a"));
+        Assert.DoesNotContain("Settle", card.TextContent);
+        Assert.Contains("$10.00", card.TextContent);
+        Assert.Contains("€5.00", card.TextContent);
     }
 
     [Fact]

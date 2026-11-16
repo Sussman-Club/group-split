@@ -97,10 +97,10 @@
 
 @code {
     private RenderFragment GroupCard(GroupResponse group, int index) =>
-        @<article class="gs-card gs-card-hover gs-group-card gs-reveal" style="--i: @index">
+        @<a class="gs-card gs-card-hover gs-group-card gs-reveal" href="@($"/groups/{group.Id}")" style="--i: @index">
             <Avatar Name="@group.Name" />
             <div class="head">
-                <a class="name" href="@($"/groups/{group.Id}")">@group.Name</a>
+                <span class="name">@group.Name</span>
 
             </div>
             <div class="people">
@@ -115,15 +115,11 @@
                     <div class="foot">
                         <div class="gs-group-position"><span class="gs-eyebrow">@Standing(position.Balance)</span>
                         <Money Value="position.Balance" Currency="@position.Currency" Signed Animate /></div>
-                        @if (position.Balance != 0)
-                        {
-                            <a href="@($"/groups/{group.Id}?currency={Uri.EscapeDataString(position.Currency)}")">@(positions.Count > 1 ? Loc["Settle {0}", position.Currency].Value : Loc["Settle"].Value)</a>
-                        }
                     </div>
                 }
                 </div>
             }
-        </article>;
+        </a>;
 
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
