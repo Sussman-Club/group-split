@@ -451,7 +451,7 @@
         _filingSuggestion = null;
         _groupId = id;
         if (!_currencyWasChosen && InboxReceipt is null)
-            _currency = id is null ? "USD" : GroupCurrency;
+            _currency = GroupCurrency;
 
         await OnGroupChangedAsync();
     }
@@ -612,8 +612,7 @@
     }
 
     /// <summary>
-    /// The currency a personal expense is in, which the person picks. Ignored once there is
-    /// a group: the group's own is the only one it will take.
+    /// Starts with the selected group's default; an explicit expense choice stays with the draft.
     /// </summary>
     private string _currency = "USD";
     private bool _currencyWasChosen;
@@ -622,8 +621,11 @@
     private string Currency => _currency;
 
     private string GroupCurrency =>
-        (_groupId == SelectedGroupId ? SelectedGroupCurrency : null)
-        ?? _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
+        ((_groupId == SelectedGroupId || (_groupId is null && SelectedGroupId == Login.User?.Id)) ? SelectedGroupCurrency : null)
+        ?? (_groupId is null
+            ? _groups.FirstOrDefault(group => group.IsPersonal)?.Currency
+            : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency)
+        ?? "USD";
 
     private string ReceiptCurrency => Currency;
 
@@ -774,7 +776,7 @@
             async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
             Loc["Could not load your groups."].Value);
 
-        if (!_currencyWasChosen && InboxReceipt is null && _groupId is not null)
+        if (!_currencyWasChosen && InboxReceipt is null)
             _currency = GroupCurrency;
 
         // Somebody who picked another group while this was out has a load of their own

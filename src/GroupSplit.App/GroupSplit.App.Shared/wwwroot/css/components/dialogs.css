@@ -418,7 +418,7 @@
 }
 
 /* One size up from the rest of the form, which is enough to say it is the point. */
-.gs-expense-amount-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(105px, 125px); gap: 12px; align-items: start; }
+.gs-expense-amount-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(96px, 110px); gap: 12px; align-items: start; }
 .gs-expense-amount-row > * { min-width: 0; }
 
 .gs-amount .mud-input-root {

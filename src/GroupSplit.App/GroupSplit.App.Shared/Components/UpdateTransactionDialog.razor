@@ -83,7 +83,7 @@
                               HelperText="@(PayerHasLeft ? Loc["{0} paid this and has left the group, so the amount stays.", Original.PaidByUserName].Value : null)"
                               Class="gs-amount"/>
                 <MudSelect T="string" Value="@_model.Currency" ValueChanged="@OnCurrencyChangedAsync"
-                           Label="@Loc["Currency"]" Variant="Variant.Outlined" Disabled="@PayerHasLeft" data-testid="expense-currency">
+                           Label="@Loc["Currency"]" Variant="Variant.Outlined" Dense="true" Disabled="@PayerHasLeft" data-testid="expense-currency">
                     @foreach (var currency in CurrencyPrecision.Codes)
                     {
                         <MudSelectItem Value="@currency">@currency</MudSelectItem>

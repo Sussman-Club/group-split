@@ -1140,9 +1140,7 @@ public class CreateTransactionDialogTest : ComponentTest
     }
 
     /// <summary>
-    /// In a group there is nothing to pick: its balances are in one currency, and the API
-    /// takes the group's own when the request names none. Naming one would only invite the
-    /// refusal for a currency the person never chose.
+    /// A group starts in its usual currency, but an individual expense can use another.
     /// </summary>
     [Fact]
     public async Task A_group_expense_defaults_to_the_group_currency_and_can_use_another()
@@ -1187,6 +1185,22 @@ public class CreateTransactionDialogTest : ComponentTest
                 { dialog => dialog.SelectedGroupName, "Trip" },
                 { dialog => dialog.SelectedGroupCurrency, "EUR" }
             }));
+        var currency = provider.FindComponents<MudSelect<string>>().Single(select => select.Instance.Label == "Currency");
+        provider.WaitForAssertion(() => Assert.Equal("EUR", currency.Instance.Value));
+        var request = await SaveAsync(provider, reference!);
+        Assert.Equal("EUR", request!.Currency);
+    }
+
+    [Fact]
+    public async Task A_personal_expense_uses_the_personal_groups_default_currency()
+    {
+        _groups.Setup(g => g.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new GroupResponse(MeId, "Personal", 1) { IsPersonal = true, Currency = "EUR" }]);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>()));
+
         var currency = provider.FindComponents<MudSelect<string>>().Single(select => select.Instance.Label == "Currency");
         provider.WaitForAssertion(() => Assert.Equal("EUR", currency.Instance.Value));
         var request = await SaveAsync(provider, reference!);
