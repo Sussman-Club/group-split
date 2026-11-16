@@ -91,13 +91,23 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         Assert.Contains(plan.YouPay, line => line.Currency == "USD" && line.Amount == 20);
         Assert.Contains(plan.YouPay, line => line.Currency == "EUR" && line.Amount == 30);
 
-        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        var error = await Assert.ThrowsAsync<ValidationException>(() => Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 30,
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct));
+        Assert.Contains("currency", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await DbContext.Set<Transfer>().ToListAsync(Ct));
+
+        var payment = await Settlements().SettleWithPerson(new SettleWithPersonRequest
         {
             UserId = friend.Id,
             Amount = 30,
             Currency = "EUR",
             Direction = SettlementDirection.YouPaidThem
         }, Ct);
+        Assert.Equal("EUR", payment.Currency);
 
         var after = await Settlements().GetPlan(Ct);
         var remaining = Assert.Single(after.YouPay);

@@ -84,4 +84,7 @@ public record SettleWithPersonResponse(
     DateTimeOffset Date,
     string? Description,
     IReadOnlyList<GroupDebt> Groups,
-    DateOnly? CoversThrough = null);
+    DateOnly? CoversThrough = null)
+{
+    public string Currency { get; init; } = "USD";
+}

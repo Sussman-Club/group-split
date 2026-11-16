@@ -386,6 +386,10 @@ public class SettlementService(
         var side = request.Direction is SettlementDirection.YouPaidThem ? youPay : owedToYou;
 
         var matches = side.Where(entry => entry.UserId == request.UserId).ToList();
+        if (matches.Count > 1 && string.IsNullOrWhiteSpace(request.Currency))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Choose the currency of this payment.");
+        }
         var requestedCurrency = string.IsNullOrWhiteSpace(request.Currency)
             ? matches.Count == 1 ? matches[0].Currency : "USD"
             : request.Currency.Trim();
@@ -437,7 +441,7 @@ public class SettlementService(
             date,
             description,
             allocations,
-            cutoff?.Through);
+            cutoff?.Through) { Currency = person.Currency };
     }
 
     public async Task<IQueryable<SettlementResponse>> GetHistory(
