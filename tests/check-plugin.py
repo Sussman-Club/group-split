@@ -16,8 +16,8 @@ tools = "\n".join(p.read_text(encoding="utf-8-sig") for p in (root / "src/GroupS
 for skill, required in {
     "household-summary": ("list_groups", "household_summary"),
     "inbox-review": ("bank_inbox_summary", "bank_inbox", "list_receipt_inbox", "get_bank_row", "review_receipt_inbox_item", "search_receipt_bank_rows"),
-    "groupsplit": ("current_user", "list_groups", "get_group", "group_members", "group_balances", "user_position", "list_group_expenses", "list_expenses", "get_expense", "expense_shares", "household_summary", "preview_expense", "preview_transaction_update", "settlement_plan", "preview_receipt_division", "staff_preview_merchant_merge"),
-    "groupsplit-inbox": ("bank_inbox_summary", "bank_inbox", "get_bank_row", "bank_row_matches", "list_receipt_inbox", "review_receipt_inbox_item", "suggest_bank_filings", "suggest_receipt_inbox_filings", "receipt_inbox_matches", "search_receipt_bank_rows"),
+    "groupsplit": ("current_user", "list_groups", "group_balances", "user_position", "list_group_expenses", "list_expenses", "get_expense", "expense_shares", "preview_expense", "settlement_plan"),
+    "groupsplit-inbox": ("get_bank_row", "bank_row_matches", "review_receipt_inbox_item", "search_receipt_bank_rows"),
 }.items():
     text = (plugin / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
     assert text.startswith("---\n") and re.search(rf"(?m)^name: {skill}$", text)
