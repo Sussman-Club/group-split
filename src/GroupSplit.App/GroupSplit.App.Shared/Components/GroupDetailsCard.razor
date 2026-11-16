@@ -68,6 +68,21 @@
                               Immediate="true" />
             </div>
 
+            <div class="gs-group-setting-section" aria-labelledby="group-currency-heading">
+                <div class="gs-group-setting-heading">
+                    <div>
+                        <h3 id="group-currency-heading" class="gs-group-setting-title">@Loc["Default currency"]</h3>
+                        <span class="gs-group-setting-description">@Loc["Used for new expenses. Existing amounts keep their currency."]</span>
+                    </div>
+                </div>
+                <MudSelect T="string" @bind-Value="_edit.Currency" Label="@Loc["Default currency"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var currency in CurrencyPrecision.Codes)
+                    {
+                        <MudSelectItem Value="@currency">@currency</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+
             @* The group's and not the reader's: whether it is a trip or a household is true
                for everybody in it. Picking a span on the Activity tab itself never saves here. *@
             <div class="gs-group-setting-section" aria-labelledby="default-period-heading">
@@ -208,7 +223,7 @@
 
     private bool Dirty =>
         _edit.Name != _original.Name || _edit.Description != _original.Description || _edit.DefaultSplitRuleId != _original.DefaultSplitRuleId
-        || _edit.DefaultPeriod != _original.DefaultPeriod;
+        || _edit.DefaultPeriod != _original.DefaultPeriod || _edit.Currency != _original.Currency;
 
     /// <summary>
     /// Follows the group, not the keystrokes. The page re-renders whenever the groups
@@ -219,13 +234,14 @@
     protected override void OnParametersSet()
     {
         if (Group.Name == _original.Name && Group.Description == _original.Description && Group.DefaultSplitRuleId == _original.DefaultSplitRuleId
-            && Group.DefaultPeriod == _original.DefaultPeriod)
+            && Group.DefaultPeriod == _original.DefaultPeriod && Group.Currency == _original.Currency)
             return;
 
         _original = new CreateGroupRequest
         {
             Name = Group.Name,
             Description = Group.Description,
+            Currency = Group.Currency,
             DefaultSplitRuleId = Group.DefaultSplitRuleId,
             DefaultPeriod = Group.DefaultPeriod
         };
@@ -248,6 +264,9 @@
 
         if (_original.Description != _edit.Description)
             patch.Replace(request => request.Description, _edit.Description);
+
+        if (_original.Currency != _edit.Currency)
+            patch.Replace(request => request.Currency, _edit.Currency);
 
         if (_original.DefaultSplitRuleId != _edit.DefaultSplitRuleId)
             patch.Replace(request => request.DefaultSplitRuleId, _edit.DefaultSplitRuleId);

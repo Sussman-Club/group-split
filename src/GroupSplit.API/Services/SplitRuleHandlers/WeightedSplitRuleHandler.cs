@@ -19,7 +19,7 @@ public abstract class WeightedSplitRuleHandler<TRule> : ISplitRuleHandler<TRule>
     public IReadOnlyList<SplitAmount> Divide(
         TRule rule, SplitRuleContext transaction, IReadOnlyCollection<Guid> members) =>
         SplitCalculator.Divide(
-            transaction.Amount, transaction.Payer, Among(WeightsFor(rule, members), members));
+            transaction.Amount, transaction.Payer, Among(WeightsFor(rule, members), members), CurrencyPrecision.DecimalPlaces(transaction.Currency));
 
     /// <summary>
     /// The weights, less anybody who is no longer one of <paramref name="members"/>.

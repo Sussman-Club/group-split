@@ -1,4 +1,4 @@
-﻿@page "/settle"
+@page "/settle"
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Extensions
 @using GroupSplit.App.Shared.Services.Settling
@@ -50,22 +50,35 @@
             <div class="gs-eyebrow">@Loc["Overall"]</div>
             <div class="gs-hero-amount">@(_planFailed ? Loc["Not loaded"].Value : "…")</div>
         }
+        else if (Plan.Currencies.Count > 1)
+        {
+            <div class="gs-eyebrow">@Loc["Balances by currency"]</div>
+            <div class="gs-currency-totals">
+            @foreach (var position in Plan.Currencies)
+            {
+                <div class="gs-currency-total"><strong>@position.Currency</strong><Money Value="position.Net" Currency="@position.Currency" Signed /></div>
+            }
+            </div>
+        }
         else if (Net > 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
-            <Money Value="Net" Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Animate Class="gs-hero-amount" />
         }
         else if (Net < 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you owe"]</div>
-            <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Absolute Animate Class="gs-hero-amount" />
         }
         else
         {
             <div class="gs-eyebrow">@Loc["Overall"]</div>
             <div class="gs-hero-amount">@Loc["All settled"]</div>
         }
-        <div class="gs-hero-sub">@HeroSub</div>
+        @if (Plan is null || Plan.Currencies.Count <= 1)
+        {
+            <div class="gs-hero-sub">@HeroSub</div>
+        }
         @if (Plan is null && _planFailed)
         {
             <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RetryPlanAsync">@Loc["Try again"]</MudButton>
@@ -168,7 +181,7 @@
                             <div class="meta">@Detail(settlement)</div>
                         </div>
                         <div>
-                            <div><Money Value="settlement.Amount" /></div>
+                            <div><Money Value="settlement.Amount" Currency="@settlement.Currency" /></div>
                             <span class="when">@Clock.Day(settlement.DateTime).ToString("d MMM")</span>
                         </div>
                     </div>
@@ -195,7 +208,9 @@
     private IReadOnlyList<PersonSettlement> YouPay => Plan?.YouPay ?? [];
     private IReadOnlyList<PersonSettlement> OwedToYou => Plan?.OwedToYou ?? [];
 
-    private decimal Net => Plan?.Net ?? 0m;
+    private CurrencyPosition? SingleCurrency => Plan?.Currencies.Count == 1 ? Plan.Currencies[0] : null;
+    private string OverallCurrency => SingleCurrency?.Currency ?? "USD";
+    private decimal Net => SingleCurrency?.Net ?? Plan?.Net ?? 0m;
 
     private bool Nothing => Plan is not null && YouPay.Count == 0 && OwedToYou.Count == 0;
 
@@ -231,12 +246,12 @@
 
     private string HeroSub => Plan is null
         ? (_planFailed ? Loc["Could not load what you owe and are owed."].Value : "")
-        : Plan is { OwedToYouTotal: > 0, YouOweTotal: > 0 }
-            ? Loc["{0} owed to you by {1}, ", Plan.OwedToYouTotal.ToMoney(), People(OwedToYou.Count)].Value
-              + Loc["{0} owed by you to {1}. They do not cancel out.", Plan.YouOweTotal.ToMoney(), People(YouPay.Count)].Value
-            : Plan.OwedToYouTotal > 0
+        : (SingleCurrency?.OwedToYou ?? Plan.OwedToYouTotal) > 0 && (SingleCurrency?.YouOwe ?? Plan.YouOweTotal) > 0
+            ? Loc["{0} owed to you by {1}, ", (SingleCurrency?.OwedToYou ?? Plan.OwedToYouTotal).ToMoney(OverallCurrency), People(OwedToYou.Count)].Value
+              + Loc["{0} owed by you to {1}. They do not cancel out.", (SingleCurrency?.YouOwe ?? Plan.YouOweTotal).ToMoney(OverallCurrency), People(YouPay.Count)].Value
+            : (SingleCurrency?.OwedToYou ?? Plan.OwedToYouTotal) > 0
                 ? Loc["From {0}.", People(OwedToYou.Count)].Value
-                : Plan.YouOweTotal > 0
+                : (SingleCurrency?.YouOwe ?? Plan.YouOweTotal) > 0
                     ? Loc["To {0}.", People(YouPay.Count)].Value
                     : Loc["Nothing outstanding in any of your groups."].Value;
 

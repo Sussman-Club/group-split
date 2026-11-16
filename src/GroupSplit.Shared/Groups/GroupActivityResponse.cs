@@ -36,6 +36,7 @@ public record GroupActivityResponse
     public DateOnly? CoversThrough { get; init; }
 
     public decimal Amount { get; init; }
+    public string Currency { get; init; } = "USD";
 
     public DateTimeOffset DateTime { get; init; }
 

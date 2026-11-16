@@ -340,7 +340,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.Property(request => request.Token).HasMaxLength(64).IsRequired();
             entity.Property(request => request.Currency).HasMaxLength(Currencies.CodeLength).IsFixedLength().IsRequired();
-            entity.Property(request => request.Amount).HasPrecision(18, 2).IsRequired();
+            entity.Property(request => request.Amount).HasPrecision(19, 3).IsRequired();
             entity.Property(request => request.CreatedAt).IsRequired();
             entity.Property(request => request.CancelledAt).IsConcurrencyToken();
             entity.Property(request => request.ResolvedAt).IsConcurrencyToken();
@@ -357,8 +357,8 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<SettlementRequestGroup>(entity =>
         {
             entity.HasKey(part => new { part.SettlementRequestId, part.GroupId });
-            entity.Property(part => part.DebtAtCreation).HasPrecision(18, 2).IsRequired();
-            entity.Property(part => part.RequestedAmount).HasPrecision(18, 2).IsRequired();
+            entity.Property(part => part.DebtAtCreation).HasPrecision(19, 3).IsRequired();
+            entity.Property(part => part.RequestedAmount).HasPrecision(19, 3).IsRequired();
             entity.HasOne(part => part.SettlementRequest).WithMany(request => request.Groups)
                 .HasForeignKey(part => part.SettlementRequestId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(part => part.Group).WithMany().HasForeignKey(part => part.GroupId)
@@ -540,7 +540,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<TransactionSplit>(entity =>
         {
-            entity.Property(split => split.Amount).IsRequired().HasPrecision(18, 2);
+            entity.Property(split => split.Amount).IsRequired().HasPrecision(19, 3);
 
             entity.HasOne(split => split.Transaction)
                 .WithMany(transaction => transaction.Splits)
@@ -568,7 +568,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<Transaction>(entity =>
         {
-            entity.Property(transaction => transaction.Amount).IsRequired().HasPrecision(18, 2);
+            entity.Property(transaction => transaction.Amount).IsRequired().HasPrecision(19, 3);
 
             entity.Property(transaction => transaction.DateTime).IsRequired();
             entity.Property(transaction => transaction.Name).HasMaxLength(128).IsRequired();
@@ -749,7 +749,7 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
         {
             entity.Property(row => row.ProviderTransactionId).HasMaxLength(128).IsRequired();
             entity.Property(row => row.Date).IsRequired();
-            entity.Property(row => row.Amount).IsRequired().HasPrecision(18, 2);
+            entity.Property(row => row.Amount).IsRequired().HasPrecision(19, 3);
             entity.Property(row => row.Description).HasMaxLength(256).IsRequired();
             entity.Property(row => row.MerchantName).HasMaxLength(128);
             entity.Property(row => row.ProviderCategory).HasMaxLength(64);
@@ -851,12 +851,12 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<Receipt>(entity =>
         {
-            entity.Property(r => r.Subtotal).HasPrecision(18, 2);
+            entity.Property(r => r.Subtotal).HasPrecision(19, 3);
             entity.Property(r => r.MerchantName).HasMaxLength(128);
             entity.HasOne(r => r.Merchant).WithMany().HasForeignKey(r => r.MerchantId).OnDelete(DeleteBehavior.SetNull);
-            entity.Property(r => r.Tax).HasPrecision(18, 2);
-            entity.Property(r => r.Tip).HasPrecision(18, 2);
-            entity.Property(r => r.Total).HasPrecision(18, 2);
+            entity.Property(r => r.Tax).HasPrecision(19, 3);
+            entity.Property(r => r.Tip).HasPrecision(19, 3);
+            entity.Property(r => r.Total).HasPrecision(19, 3);
             entity.HasOne(r => r.Expense).WithOne(e => e.Receipt)
                 .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<User>().WithMany().HasForeignKey(r => r.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
@@ -884,10 +884,10 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(i => i.NormalizedName).HasMaxLength(128).IsRequired();
             entity.Property(i => i.Description).HasMaxLength(1000);
             entity.HasIndex(i => i.NormalizedName);
-            entity.Property(i => i.UnitPrice).HasPrecision(18, 2);
+            entity.Property(i => i.UnitPrice).HasPrecision(19, 3);
             entity.Property(i => i.Quantity).HasPrecision(18, 3);
-            entity.Property(i => i.TotalPrice).HasPrecision(18, 2);
-            entity.Property(i => i.TaxAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+            entity.Property(i => i.TotalPrice).HasPrecision(19, 3);
+            entity.Property(i => i.TaxAmount).HasPrecision(19, 3).HasDefaultValue(0m);
             entity.Property(i => i.TaxRate).HasPrecision(9, 4);
             entity.HasOne(i => i.Receipt).WithMany(r => r.Items)
                 .HasForeignKey(i => i.ReceiptId).OnDelete(DeleteBehavior.Cascade);

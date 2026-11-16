@@ -67,7 +67,7 @@ public class TransactionSeeder(
         {
             Id = dto.Id,
             Amount = dto.Amount,
-            Currency = category?.Group.Currency ?? Currencies.Default,
+            Currency = dto.Currency?.Trim().ToUpperInvariant() ?? category?.Group.Currency ?? Currencies.Default,
             Name = dto.Name,
             Description = dto.Description,
             DateTime = When(dto),

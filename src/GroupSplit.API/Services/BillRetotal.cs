@@ -72,6 +72,7 @@ public static class BillRetotal
         {
             Id = bill.Id,
             ExpenseId = bill.ExpenseId,
+            Currency = bill.Currency,
             Subtotal = bill.Subtotal,
             Tax = bill.Tax,
             Tip = bill.Tip,

@@ -7,6 +7,9 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public sealed class GroupTools
 {
+    [McpServerTool(Name = "list_supported_currencies", ReadOnly = true, Destructive = false, Idempotent = true), Description("List the supported currency codes for groups, expenses and repayments. No conversion is performed.")]
+    public static IReadOnlyList<string> ListSupportedCurrencies() => CurrencyPrecision.Codes;
+
     [Authorize(Policy = "mcp:write")]
     [McpServerTool(Name = "add_group_guests", ReadOnly = false, Destructive = false, Idempotent = false), Description("Add named guests to a group you can manage.")]
     public static Task<ICollection<GroupGuestResponse>> AddGroupGuests(GroupsClient client, Guid groupId, AddGuestsRequest guests, CancellationToken ct = default) =>
@@ -29,8 +32,17 @@ public sealed class GroupTools
     public static Task<GroupResponse> SetGroupArchived(GroupsClient client, Guid groupId, bool archived, CancellationToken ct = default) => archived ? client.ArchiveGroupAsync(groupId, ct) : client.UnarchiveGroupAsync(groupId, ct);
 
     [Authorize(Policy = "mcp:write")]
-    [McpServerTool(Name = "create_group", ReadOnly = false, Destructive = false, Idempotent = false), Description("Create a group for the signed-in user.")]
-    public static Task<GroupResponse> CreateGroup(GroupsClient client, string name, string description = "", CancellationToken ct = default) => client.CreateGroupAsync(new CreateGroupRequest { Name = name, Description = description }, ct);
+    [McpServerTool(Name = "create_group", ReadOnly = false, Destructive = false, Idempotent = false), Description("Create a group. Currency is its default for new expenses; omit it for USD. Other supported currencies can still be used per expense.")]
+    public static Task<GroupResponse> CreateGroup(GroupsClient client, string name, string description = "", string currency = "USD", CancellationToken ct = default) => client.CreateGroupAsync(new CreateGroupRequest { Name = name, Description = description, Currency = currency }, ct);
+
+    [Authorize(Policy = "mcp:write")]
+    [McpServerTool(Name = "set_group_default_currency", ReadOnly = false, Destructive = false, Idempotent = true), Description("Set the supported default currency for new group expenses. Existing expenses retain their currency; no amounts are converted.")]
+    public static Task<GroupResponse> SetGroupDefaultCurrency(GroupsClient client, Guid groupId, string currency, CancellationToken ct = default)
+    {
+        var patch = new JsonPatchDocument<CreateGroupRequest>();
+        patch.Replace(request => request.Currency, currency);
+        return client.UpdateGroupAsync(groupId, patch, ct);
+    }
 
     [Authorize(Policy = "mcp:write")]
     [McpServerTool(Name = "rename_group", ReadOnly = false, Destructive = false, Idempotent = true), Description("Rename a group and optionally replace its description. Omit description to keep it unchanged.")]

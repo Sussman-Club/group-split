@@ -66,6 +66,11 @@ public class McpHttpTests
         using var wrongAudience = await Call(Token("https://wrong.example/mcp", "mcp:read"), "list_groups");
         Assert.Equal(HttpStatusCode.Unauthorized, wrongAudience.StatusCode);
         var subjectToken = Token(resource, "mcp:read");
+        using var currencies = await Call(subjectToken, "list_supported_currencies");
+        var currenciesBody = await currencies.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("\"isError\":true", currenciesBody);
+        Assert.Contains("USD", currenciesBody);
+        Assert.Contains("EUR", currenciesBody);
         using var deniedWrite = await Call(subjectToken, "create_group");
         var denied = await deniedWrite.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(deniedWrite.StatusCode == HttpStatusCode.Forbidden || denied.Contains("error", StringComparison.OrdinalIgnoreCase));
@@ -214,6 +219,17 @@ public class McpHttpTests
         using var excludedAccountDelete = await Call(writeToken, "delete_current_account");
         Assert.Contains("error", await excludedAccountDelete.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(beforeExcludedTool, transport.ExchangeCount);
+        using var currencyGroup = await Call(writeToken, "create_group", "{\"name\":\"Home\",\"currency\":\"EUR\"}");
+        Assert.DoesNotContain("\"isError\":true", await currencyGroup.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Contains("\"currency\":\"EUR\"", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        using var defaultCurrency = await Call(writeToken, "set_group_default_currency", "{\"groupId\":\"" + group + "\",\"currency\":\"EUR\"}");
+        Assert.DoesNotContain("\"isError\":true", await defaultCurrency.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Contains("currency", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EUR", transport.ApiBody);
+        using var currencyEdit = await Call(writeToken, "update_transaction", "{\"transactionId\":\"" + group + "\",\"edit\":{\"currency\":\"EUR\"}}");
+        Assert.DoesNotContain("\"isError\":true", await currencyEdit.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Contains("currency", transport.ApiBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EUR", transport.ApiBody);
         transport.RefuseApi = true;
         using var forbiddenStaff = await Call(subjectToken, "staff_team");
         Assert.Contains("\"isError\":true", await forbiddenStaff.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
@@ -268,7 +284,7 @@ public class McpHttpTests
                     };
                 }
                 return new HttpResponseMessage(owner.RefuseApi ? HttpStatusCode.Forbidden : filing ? HttpStatusCode.Created : HttpStatusCode.OK)
-                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/household-month") ? "{\"year\":2026,\"month\":3,\"timeZone\":\"UTC\",\"from\":\"2026-03-01T00:00:00Z\",\"until\":\"2026-04-01T00:00:00Z\",\"spending\":{\"categories\":[]},\"exposure\":[]}" : owner.ApiPath.Contains("/transactions/by-category") ? "{\"categories\":[]}" : owner.ApiPath.Contains("/receipts/inbox/") && !owner.ApiPath.EndsWith("/matches") ? "{\"id\":\"00000000-0000-0000-0000-000000000001\",\"currency\":\"USD\",\"receipt\":{},\"attachments\":[]}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch ? "{}" : "[]", Encoding.UTF8, "application/json") };
+                { Content = new StringContent(owner.RefuseApi ? "{}" : owner.ApiPath.Contains("/household-month") ? "{\"year\":2026,\"month\":3,\"timeZone\":\"UTC\",\"from\":\"2026-03-01T00:00:00Z\",\"until\":\"2026-04-01T00:00:00Z\",\"spending\":{\"categories\":[]},\"exposure\":[]}" : owner.ApiPath.Contains("/transactions/by-category") ? "{\"categories\":[]}" : owner.ApiPath.Contains("/receipts/inbox/") && !owner.ApiPath.EndsWith("/matches") ? "{\"id\":\"00000000-0000-0000-0000-000000000001\",\"currency\":\"USD\",\"receipt\":{},\"attachments\":[]}" : owner.ApiPath.Contains("/activity") ? "{\"items\":[],\"page\":2,\"pageSize\":100,\"totalCount\":0}" : owner.ApiPath.Contains("preview") ? "{\"splits\":[],\"ruleName\":null}" : owner.ApiPath.Contains("example-token") || filing || request.Method == HttpMethod.Patch || (request.Method == HttpMethod.Post && owner.ApiPath == "/groups") ? "{}" : "[]", Encoding.UTF8, "application/json") };
             }
         }
     }

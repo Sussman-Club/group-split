@@ -112,7 +112,9 @@
                 }
 
                 @* First, and a size up from everything else. It is why the dialog is open. *@
+                <div class="gs-expense-amount-row">
                 <DecimalField @bind-Value="_model.Amount"
+                              Places="@CurrencyPrecision.DecimalPlaces(Currency)"
                               @bind-Value:after="OnMoneyChangedAsync"
                               For="@(() => _model.Amount)"
                               Label="@Loc["How much?"]"
@@ -122,12 +124,7 @@
                               HideSpinButtons="true"
                               Class="gs-amount"/>
 
-                @* Only for a personal expense. A group keeps its balances in one currency and
-                   nothing converts between them, so there the group's is the only answer and
-                   the symbol above already says it; on your own ledger anything goes, and a
-                   dinner abroad is written down in what it cost. *@
-                @if (!IsShared)
-                {
+                @* Start with the group default, while allowing an expense to keep its own currency. *@
                     <MudSelect T="string"
                                Value="@_currency"
                                ValueChanged="@OnCurrencyPicked"
@@ -135,12 +132,12 @@
                                Variant="Variant.Outlined"
                                Dense="true"
                                data-testid="expense-currency">
-                        @foreach (var offered in MoneyExtensions.OfferedCurrencies)
+                        @foreach (var offered in CurrencyPrecision.Codes)
                         {
                             <MudSelectItem Value="@offered">@offered</MudSelectItem>
                         }
                     </MudSelect>
-                }
+                </div>
 
                 <MudTextField @bind-Value="_model.Name"
                               For="@(() => _model.Name)"
@@ -198,6 +195,7 @@
                         @* One component and one list of people: editable when the person is
                            stating the division, read-only when the API worked it out. *@
                         <SplitEditor Members="@_members"
+                                     Currency="@Currency"
                                      Amount="@_model.Amount"
                                      PayerId="@_model.PaidByUserId"
                                      Value="@_model.Splits"
@@ -364,18 +362,18 @@
 
     private decimal[] ReceiptTaxAmounts(bool allocateUnidentified) => _receipt is not { } receipt ? [] :
         ReceiptTaxes.Calculate(receipt.Tax, receipt.Items.Select(item =>
-            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), allocateUnidentified);
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), allocateUnidentified, CurrencyPrecision.DecimalPlaces(Currency));
     private bool HasUnassignedReceiptTax => _receipt is { Items.Count: > 0 } receipt
         && ReceiptTaxAmounts(false).Sum() != receipt.Tax;
     private bool CanDistributeReceiptTax => _receipt is { } receipt
         && ReceiptTaxAmounts(true).Sum() == receipt.Tax;
 
-    private static SaveReceiptRequest DistributeImportedTax(SaveReceiptRequest receipt)
+    private SaveReceiptRequest DistributeImportedTax(SaveReceiptRequest receipt)
     {
         if (receipt.Subtotal + receipt.Tax + receipt.Tip != receipt.Total ||
             receipt.Items.Sum(item => item.TotalPrice) != receipt.Subtotal) return receipt;
         var taxes = ReceiptTaxes.DistributeUnassigned(receipt.Tax, receipt.Items.Select(item =>
-            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), CurrencyPrecision.DecimalPlaces(InboxCurrency));
         return taxes is null ? receipt : receipt with
         { Items = receipt.Items.Select((item, index) => item with { TaxAmount = taxes[index] }).ToArray() };
     }
@@ -452,6 +450,8 @@
     {
         _filingSuggestion = null;
         _groupId = id;
+        if (!_currencyWasChosen && InboxReceipt is null)
+            _currency = GroupCurrency;
 
         await OnGroupChangedAsync();
     }
@@ -612,24 +612,29 @@
     }
 
     /// <summary>
-    /// The currency a personal expense is in, which the person picks. Ignored once there is
-    /// a group: the group's own is the only one it will take.
+    /// Starts with the selected group's default; an explicit expense choice stays with the draft.
     /// </summary>
     private string _currency = "USD";
+    private bool _currencyWasChosen;
 
     /// <summary>What the amount is in, as the field's symbol and the request say it.</summary>
-    private string Currency => IsShared ? GroupCurrency : _currency;
+    private string Currency => _currency;
 
     private string GroupCurrency =>
-        (_groupId == SelectedGroupId ? SelectedGroupCurrency : null)
-        ?? _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency ?? "USD";
+        ((_groupId == SelectedGroupId || (_groupId is null && SelectedGroupId == Login.User?.Id)) ? SelectedGroupCurrency : null)
+        ?? (_groupId is null
+            ? _groups.FirstOrDefault(group => group.IsPersonal)?.Currency
+            : _groups.FirstOrDefault(group => group.Id == _groupId)?.Currency)
+        ?? "USD";
 
     private string ReceiptCurrency => Currency;
 
-    private void OnCurrencyPicked(string currency)
+    private async Task OnCurrencyPicked(string currency)
     {
         _currency = currency;
+        _currencyWasChosen = true;
         _filingSuggestion = null;
+        await RefreshPreviewAsync();
     }
 
 
@@ -770,6 +775,9 @@
         await Errors.TryAsync(
             async () => _groups = [.. await GroupsClient.GetGroupsAsync()],
             Loc["Could not load your groups."].Value);
+
+        if (!_currencyWasChosen && InboxReceipt is null)
+            _currency = GroupCurrency;
 
         // Somebody who picked another group while this was out has a load of their own
         // running, and it does the rest.
@@ -1070,7 +1078,7 @@
 
         // Stated only for a personal expense. In a group the API takes the group's own when
         // none is named, and naming the one picked while it was personal would be refused.
-        _model.Currency = IsShared ? null : _currency;
+        _model.Currency = _currency;
 
         // The date is applied here rather than on the way out, because which version of a
         // rule divides an expense depends on when it was spent: a preview built from an

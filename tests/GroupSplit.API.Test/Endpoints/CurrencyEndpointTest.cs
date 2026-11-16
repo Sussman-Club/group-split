@@ -69,6 +69,8 @@ public class CurrencyEndpointTest : IAsyncLifetime
     [InlineData("EURO")]
     [InlineData("E1")]
     [InlineData("€")]
+    [InlineData("ZZZ")]
+    [InlineData("CLF")]
     public async Task A_currency_that_is_not_a_three_letter_code_is_a_validation_failure(string currency)
     {
         var response = await Create(20m, currency);
@@ -77,18 +79,18 @@ public class CurrencyEndpointTest : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Recording_into_a_group_in_another_currency_is_a_409_currency_mismatch()
+    public async Task Recording_into_a_group_in_another_currency_preserves_it()
     {
         var group = await AGroup();
 
         var response = await Create(20m, "EUR", group);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("CURRENCY_MISMATCH", await CodeOf(response));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("EUR", (await response.Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct))!.Currency);
     }
 
     [Fact]
-    public async Task Moving_a_euro_expense_into_a_dollar_group_is_a_409_and_changes_nothing()
+    public async Task Moving_a_euro_expense_into_a_dollar_group_preserves_its_currency()
     {
         var group = await AGroup();
         var created = (await (await Create(20m, "EUR")).Content.ReadFromJsonAsync<TransactionResponse>(Json, Ct))!;
@@ -99,11 +101,10 @@ public class CurrencyEndpointTest : IAsyncLifetime
                 Encoding.UTF8, "application/json-patch+json"),
             Ct);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("CURRENCY_MISMATCH", await CodeOf(response));
+        response.EnsureSuccessStatusCode();
 
         var read = await Client.GetFromJsonAsync<TransactionDetailsResponse>($"/transactions/{created.Id}", Json, Ct);
-        Assert.Equal(read!.PaidByUserId, read.GroupId);
+        Assert.Equal(group, read!.GroupId);
         Assert.Equal("EUR", read.Currency);
     }
 

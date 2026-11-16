@@ -205,7 +205,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
     /// figure while sending this one back.
     /// </summary>
     [Fact]
-    public async Task Money_comes_back_in_cents_and_quantities_and_rates_to_what_a_bill_keeps()
+    public async Task Money_retains_three_decimal_places_and_quantities_and_rates_fit_the_bill()
     {
         var provider = new AzureOpenAIReceiptTranscriptionProvider(
             new StubChatClient("{\"subtotal\":10.004,\"tax\":0.8255,\"tip\":1.005,\"total\":11.8345," +
@@ -218,15 +218,15 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
             new ReceiptSourceDocument(Guid.NewGuid(), "market.jpg", "image/jpeg", [1]),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(10.00m, receipt.Subtotal);
-        Assert.Equal(0.83m, receipt.Tax);
-        Assert.Equal(1.01m, receipt.Tip);
-        Assert.Equal(11.83m, receipt.Total);
+        Assert.Equal(10.004m, receipt.Subtotal);
+        Assert.Equal(0.826m, receipt.Tax);
+        Assert.Equal(1.005m, receipt.Tip);
+        Assert.Equal(11.835m, receipt.Total);
         var bananas = receipt.Items[0];
-        Assert.Equal(3.33m, bananas.UnitPrice);
+        Assert.Equal(3.333m, bananas.UnitPrice);
         Assert.Equal(3.000m, bananas.Quantity);
-        Assert.Equal(10.00m, bananas.TotalPrice);
-        Assert.Equal(0.83m, bananas.TaxAmount);
+        Assert.Equal(10.004m, bananas.TotalPrice);
+        Assert.Equal(0.826m, bananas.TaxAmount);
         Assert.Equal(8.2500m, bananas.TaxRate);
         // No quantity is one of it, and a rate past 100 % is a misreading, not a rate.
         Assert.Equal(1m, receipt.Items[1].Quantity);

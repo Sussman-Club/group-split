@@ -58,17 +58,15 @@ public class Group : Entity
     public string Description { get; set; } = string.Empty;
 
     /// <summary>
-    /// ISO 4217, and the currency every balance in this group is stated in.
+    /// ISO 4217 code used by default for new expenses and settlements in the group.
     /// </summary>
     /// <remarks>
     /// Not <c>required</c>, and defaulted here rather than only in the database, because
     /// a group has to have one and there is no sensible moment to ask: every existing
     /// group is in dollars, and a group created without a stated currency means dollars
-    /// too. Conversion is out of scope, so a transaction in another currency is refused
-    /// rather than converted -- balances that mix currencies are wrong, not merely
-    /// unavailable.
+    /// too. Changing this default never changes a recorded transaction's currency.
     /// </remarks>
-    public string Currency { get; init; } = Currencies.Default;
+    public string Currency { get; set; } = Currencies.Default;
 
     /// <summary>
     /// The span the group's Activity tab opens on, for every member. A display preference:

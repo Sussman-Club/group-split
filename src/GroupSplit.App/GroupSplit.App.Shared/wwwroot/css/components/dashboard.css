@@ -96,6 +96,19 @@
     font-size: 0.9375rem;
 }
 
+.gs-currency-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr)); gap: 8px; margin: 14px 0; }
+.gs-currency-total { display: grid; gap: 6px; padding: 12px 14px; border-radius: 10px; background: rgb(0 0 0 / 28%); color: #fff; }
+.gs-currency-total .gs-money { font-size: clamp(1.25rem, 2vw, 1.75rem); font-weight: 800; color: #fff !important; }
+.gs-currency-total.is-neg .gs-money { color: #ffd1b5 !important; }
+.gs-hero.is-zero .gs-currency-total { background: #154a46; color: #fff; }
+.gs-hero-group { padding: 8px 0; }
+.gs-hero-group + .gs-hero-group { border-top: 1px solid currentColor; }
+.gs-hero-group-name { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.gs-hero-group .gs-hero-row { grid-template-columns: minmax(0, 1fr) auto; }
+.gs-hero-group .gs-hero-actions { grid-column: 1 / -1; }
+.gs-hero.is-zero .gs-btn-glass { background: #154a46 !important; color: #fff !important; }
+.gs-hero-currency { font-size: .875rem; font-weight: 800; letter-spacing: .04em; margin-bottom: 8px; }
+
 .gs-hero-list {
     display: flex;
     flex-direction: column;
@@ -432,3 +445,53 @@
 .gs-balance-row .gs-money {
     font-size: 0.9375rem;
 }
+
+
+/* Person-first balances: the amount and action remain together on narrow screens. */
+.gs-position-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.gs-position { padding: 16px; border-radius: var(--gs-radius); background: var(--gs-teal-soft); color: var(--gs-teal-deep); }
+.gs-position.is-neg { background: var(--gs-clay-soft); color: var(--gs-clay-deep); }
+.gs-position .gs-money, .gs-position > strong { font-size: 1.4rem; font-weight: 800; }
+.gs-currency-code { font-size: .75rem; font-weight: 700; }
+.gs-person-balance { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 12px; padding: 16px 0; border-top: 1px solid var(--gs-line); }
+.gs-person-balance:first-child { border-top: 0; }
+.gs-person-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gs-person-debts { display: grid; gap: 10px; }
+.gs-person-debt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--gs-ink-2); }
+.gs-person-debt > strong { color: var(--gs-teal-deep); white-space: nowrap; }
+.gs-person-debt.is-neg > strong { color: var(--gs-clay-deep); }
+.gs-person-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+:root[data-theme="dark"] .gs-position, :root[data-theme="dark"] .gs-person-debt > strong { color: var(--gs-teal-bright); }
+:root[data-theme="dark"] .gs-position.is-neg, :root[data-theme="dark"] .gs-person-debt.is-neg > strong { color: var(--gs-clay); }
+@media (max-width: 600px) { .gs-person-balance { grid-template-columns: 1fr; } .gs-person-actions { margin-left: 0; } }
+
+.gs-member-balances { padding: 12px 0; border-top: 1px solid var(--gs-line); }
+.gs-member-balances:first-child { border-top: 0; }
+.gs-member-amounts { display: grid; gap: 4px; padding: 8px 0 0 42px; }
+.gs-member-amounts > div { display: flex; justify-content: space-between; gap: 12px; font-size: .8125rem; }
+.gs-member-amounts > div > span:first-child { color: var(--gs-muted); }
+
+.gs-plan-summary { cursor: pointer; list-style-position: inside; }
+.gs-plan-summary:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 4px; }
+details[open] .gs-plan-chevron { transform: rotate(180deg); }
+
+/* Group balances sit below the overall total, with each currency kept on one line. */
+.gs-dashboard-group-list { display: grid; }
+.gs-dashboard-group { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr) auto; align-items: center; gap: 16px; min-width: 0; padding: 16px 0; border-top: 1px solid var(--gs-line); color: inherit; text-decoration: none; }
+.gs-dashboard-group:focus-visible { outline: 2px solid var(--gs-teal); outline-offset: 3px; }
+.gs-dashboard-group-name { display: flex; align-items: center; gap: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.gs-dashboard-positions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 20px; }
+.gs-dashboard-position { display: flex; align-items: baseline; gap: 8px; }
+.gs-dashboard-position-label { color: var(--gs-muted); font-size: .8125rem; }
+.gs-dashboard-position > .gs-money { font-weight: 700; white-space: nowrap; }
+.gs-dashboard-position.is-neg > .gs-money { color: var(--gs-clay-deep); }
+:root[data-theme="dark"] .gs-dashboard-position.is-neg > .gs-money { color: var(--gs-clay); }
+@media (max-width: 600px) {
+    .gs-currency-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .gs-dashboard-group { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .gs-dashboard-positions { grid-column: 1; justify-content: stretch; padding-left: 38px; }
+    .gs-dashboard-position { width: 100%; justify-content: space-between; }
+    .gs-dashboard-group > .mud-icon-root { grid-column: 2; grid-row: 1 / 3; }
+}
+.gs-member-amounts.is-single { padding-top: 0; }
+.gs-member-amounts.is-single > div { justify-content: flex-end; }

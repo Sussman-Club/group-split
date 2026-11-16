@@ -11,6 +11,29 @@ namespace GroupSplit.App.Web.Test.Components;
 public class GroupsSearchTest : ComponentTest
 {
     [Fact]
+    public void The_whole_group_card_links_to_the_group_and_shows_each_balance()
+    {
+        var group = new GroupResponse(Guid.NewGuid(), "Trip", 2);
+        var groups = new Mock<IGroupsPageStateService>();
+        groups.SetupGet(x => x.IsReadyTask).Returns(Task.CompletedTask);
+        groups.SetupGet(x => x.Groups).Returns([group]);
+        groups.SetupGet(x => x.Position).Returns(new UserPositionResponse(0, 0, 0,
+        [
+            new GroupPosition(group.Id, group.Name, 10, false) { Currency = "USD" },
+            new GroupPosition(group.Id, group.Name, -5, false) { Currency = "EUR" }
+        ]));
+        Services.AddSingleton(groups.Object);
+        var card = Render<Groups>().Find(".gs-group-card");
+        Assert.Equal(2, card.QuerySelectorAll(".foot").Length);
+        Assert.Equal("A", card.TagName);
+        Assert.Equal($"/groups/{group.Id}", card.GetAttribute("href"));
+        Assert.Empty(card.QuerySelectorAll("a"));
+        Assert.DoesNotContain("Settle", card.TextContent);
+        Assert.Contains("$10.00", card.TextContent);
+        Assert.Contains("€5.00", card.TextContent);
+    }
+
+    [Fact]
     public async Task First_shared_group_guidance_appears_only_when_not_searching()
     {
         var groups = new Mock<IGroupsPageStateService>();

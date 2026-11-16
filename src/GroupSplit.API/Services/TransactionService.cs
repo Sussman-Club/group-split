@@ -474,9 +474,8 @@ public class TransactionService(
 
         var groupMoved = group.Id != existing.GroupId;
 
-        // Before anything is divided, as the save refuses it: a preview that showed the
-        // shares of a move the save will not make is a promise nobody can keep.
-        RefuseCurrencyMove(existing, group);
+        var currency = UpdatedCurrency(existing, request.Currency, departed, existing.Receipt);
+
 
         // And the payer asked about only when it changes, as the save asks it.
         var payerId = request.PaidByUserId == existing.UserId && !groupMoved
@@ -534,9 +533,8 @@ public class TransactionService(
         var draft = new Expense
         {
             Amount = request.Amount,
-            // Its own, wherever the edit puts it: a move into a group in another currency
-            // was refused above, and a move out of one keeps what the money was spent in.
-            Currency = existing.Currency,
+            // Moving an expense never changes the currency it was recorded in.
+            Currency = currency,
             DateTime = request.DateTime.ToUniversalTime(),
             Name = request.Name,
             GroupId = group.Id,
@@ -558,6 +556,12 @@ public class TransactionService(
                 ? BillRetotal.Copy(moving, withoutRules: true)
                 : existing.Receipt
         };
+
+        if (draft.Receipt is { } draftBill && currency != existing.Currency)
+        {
+            draft.Receipt = BillRetotal.Copy(draftBill, withoutRules: false);
+            draft.Receipt.Currency = currency;
+        }
 
         // And re-totalled to the new amount where the save would re-total it -- see Update --
         // on a copy, so the bill the context is tracking is never the one that moves.
@@ -723,6 +727,7 @@ public class TransactionService(
         return new UpdateTransactionRequest
         {
             Amount = transaction.Amount,
+            Currency = transaction.Currency,
             Description = transaction.Description,
             Name = transaction.Name,
             DateTime = transaction.DateTime,
@@ -760,6 +765,10 @@ public class TransactionService(
 
         if (transaction is Transfer transfer)
         {
+            if (request.Currency is not null && !string.Equals(request.Currency, transfer.Currency, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ValidationException(ErrorCodes.ValidationFailed, "A settlement's currency cannot be changed.");
+            }
             // Participants on both ends, as for an expense: the members record what a guest
             // pays and is paid.
             //
@@ -775,6 +784,10 @@ public class TransactionService(
             {
                 throw new ValidationException(ErrorCodes.SettlementAmountNotPositive,
                     "A settlement's amount must be greater than 0.");
+            }
+            if (!CurrencyPrecision.IsValidAmount(request.Amount, transfer.Currency))
+            {
+                throw new ValidationException(ErrorCodes.ValidationFailed, "Amount must use the currency's decimal precision.");
             }
 
             if (request.Splits is { Count: > 1 })
@@ -849,6 +862,10 @@ public class TransactionService(
 
         var expense = (Expense)transaction;
 
+        var newCurrency = UpdatedCurrency(expense, request.Currency, departed,
+            request.Currency is not null && !string.Equals(request.Currency, expense.Currency, StringComparison.OrdinalIgnoreCase)
+                ? await BillOf(expense, ct) : null);
+
         if (request.CoversThrough is not null)
         {
             throw new ValidationException(ErrorCodes.NotASettlement,
@@ -872,6 +889,7 @@ public class TransactionService(
         var previousAmount = expense.Amount;
         var groupMoved = expense.GroupId != request.GroupId;
         var payerMoved = expense.UserId != request.PaidByUserId;
+        var currencyMoved = newCurrency != expense.Currency;
 
         // What a departed payer paid *is* the amount, so no new amount can leave their part
         // as it was -- whatever the shares say. Refused here, by name, before the shares are
@@ -894,12 +912,6 @@ public class TransactionService(
             ? expense.Group
             : await GroupFor(request.GroupId, ct);
 
-        // Refused before a single field moves. The expense keeps the currency it was
-        // recorded in, so a group in another one cannot take it: its balances are one
-        // currency, and adding these figures to them would relabel the money rather than
-        // convert it.
-        RefuseCurrencyMove(expense, group);
-
         // Which division the expense holds from here on, asked while it still holds the
         // category and the group the question is about: the one it was written under, a rule
         // the request names instead, or none where the edit hands it back to its category.
@@ -909,9 +921,7 @@ public class TransactionService(
         {
             expense.Group = group;
             expense.GroupId = group.Id;
-            // The currency stays. Into a group it already matches -- anything else was
-            // refused above -- and into a personal one, which takes any currency, it is
-            // still what the money was spent in.
+            // The original currency stays, regardless of the destination's default.
 
             if (IsPersonal(group))
             {
@@ -944,6 +954,11 @@ public class TransactionService(
         var category = await CategoryFor(group, request.CategoryId, ct);
 
         expense.Amount = request.Amount;
+        expense.Currency = newCurrency;
+        if (currencyMoved && expense.Receipt is { } currencyReceipt)
+        {
+            currencyReceipt.Currency = newCurrency;
+        }
         expense.DateTime = request.DateTime.ToUniversalTime();
         expense.Name = request.Name;
         expense.Description = request.Description;
@@ -990,7 +1005,7 @@ public class TransactionService(
         {
             await splitter.WriteSplitsAsync(expense, null, ct);
         }
-        else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved)
+        else if (request.Splits is not null && saysNothingNew && !amountMoved && !groupMoved && !currencyMoved)
         {
             // The shares the expense already holds, carried in by the endpoint, on an edit
             // that moved nothing they were worked out from: a rename, a note, a date, a
@@ -1063,12 +1078,41 @@ public class TransactionService(
     /// </remarks>
     private static bool InputsMoved(Expense expense, UpdateTransactionRequest request) =>
         expense.Amount != request.Amount ||
+        request.Currency is not null && !string.Equals(expense.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) ||
         expense.UserId != request.PaidByUserId ||
         expense.CategoryId != request.CategoryId ||
         expense.GroupId != request.GroupId ||
         // Naming a rule is an edit to the division itself, and the loudest of them: it is
         // somebody saying who the money was for.
         request.SplitRuleId is not null;
+
+    private static string UpdatedCurrency(Expense expense, string? requested, IReadOnlyList<ParticipantPosition> departed, Receipt? receipt)
+    {
+        var currency = requested?.Trim().ToUpperInvariant() ?? expense.Currency;
+        if (!CurrencyPrecision.IsSupported(currency))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Enter a supported currency code.");
+        }
+        if (currency == expense.Currency)
+        {
+            return currency;
+        }
+        if (expense.BankTransactionId is not null)
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "A bank-linked expense must keep the bank transaction's currency.");
+        }
+        if (departed.Count != 0)
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "The currency cannot be changed after a participant has left the group.");
+        }
+        if (receipt is not null &&
+            (new[] { receipt.Subtotal, receipt.Tax, receipt.Tip, receipt.Total }.Any(value => !CurrencyPrecision.IsValidAmount(value, currency)) ||
+             receipt.Items.Any(item => !CurrencyPrecision.IsValidAmount(item.TotalPrice, currency) || !CurrencyPrecision.IsValidAmount(item.TaxAmount, currency))))
+        {
+            throw new ValidationException(ErrorCodes.ValidationFailed, "The receipt amounts do not fit the selected currency's precision.");
+        }
+        return currency;
+    }
 
     /// <summary>
     /// Whether the shares the request carries are the ones the expense already holds, and so
@@ -1265,57 +1309,16 @@ public class TransactionService(
     /// The currency a new expense is recorded in: the one it was stated in, or the group's
     /// when nothing was said.
     /// </summary>
-    /// <remarks>
-    /// A personal expense may be in any currency, because nothing sums it with anybody
-    /// else's. It used to be stamped with the default whatever it was given, so a euro row
-    /// kept personal became the same number of dollars -- a different amount of money,
-    /// written down as though it were the one the bank reported. A group's balances are in
-    /// one currency and conversion is out of scope, so there a stated currency has to be
-    /// the group's own.
-    /// </remarks>
     private string CurrencyFor(Group group, string? stated)
     {
         var currency = string.IsNullOrWhiteSpace(stated) ? null : stated.Trim().ToUpperInvariant();
-
-        if (IsPersonal(group))
+        if (currency is not null && !CurrencyPrecision.IsSupported(currency))
         {
-            return currency ?? group.Currency;
+            throw new ValidationException(ErrorCodes.ValidationFailed, "Choose a supported currency code.");
         }
 
-        if (currency is not null && !SameCurrency(currency, group.Currency))
-        {
-            throw CurrencyMismatch(currency, group);
-        }
-
-        return group.Currency;
+        return currency ?? group.Currency;
     }
-
-    /// <summary>
-    /// Refuses to put an expense into a group that keeps its balances in another currency.
-    /// </summary>
-    /// <remarks>
-    /// The same refusal filing into the group meets, on the other way in. A move used to
-    /// take the destination's currency, which relabelled the amount rather than converting
-    /// it -- twenty euros became twenty dollars in everybody's balance. Never into the
-    /// caller's personal group, which takes any currency for the reason above.
-    /// </remarks>
-    private void RefuseCurrencyMove(Expense expense, Group destination)
-    {
-        if (!IsPersonal(destination) && destination.Id != expense.GroupId &&
-            !SameCurrency(expense.Currency, destination.Currency))
-        {
-            throw CurrencyMismatch(expense.Currency, destination);
-        }
-    }
-
-    private static bool SameCurrency(string left, string right) =>
-        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-
-    private static DomainException CurrencyMismatch(string currency, Group group) =>
-        new ConflictException(ErrorCodes.CurrencyMismatch,
-                $"This is in {currency} and the group keeps its balances in {group.Currency}.")
-            .WithExtension("transactionCurrency", currency)
-            .WithExtension("groupCurrency", group.Currency);
 
     /// <summary>
     /// Which of a group's participants are its guests, as ids. Empty for a personal group,

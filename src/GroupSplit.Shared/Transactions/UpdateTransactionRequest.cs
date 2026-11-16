@@ -5,6 +5,9 @@ namespace GroupSplit.Shared;
 
 public record UpdateTransactionRequest
 {
+    /// <summary>The expense currency, or null to retain the recorded currency.</summary>
+    public string? Currency { get; set; }
+
     [Required]
     public Guid PaidByUserId { get; set; }
 
@@ -18,9 +21,8 @@ public record UpdateTransactionRequest
     /// an import lands as the account holder's own and "share this with the flat" is a
     /// move -- so it exists as an ordinary edit rather than as an endpoint of its own. A
     /// move re-derives the division among the destination's members (the old shares name
-    /// people who may not be in it), refuses a category from anywhere else, and refuses a
-    /// group whose currency is not the expense's own (<c>CURRENCY_MISMATCH</c>): the
-    /// expense keeps the currency it was recorded in, and conversion is out of scope. Only your own expense can be made personal: taking
+    /// people who may not be in it), refuses a category from anywhere else, and retains the
+    /// expense currency unless explicitly changed. Only your own expense can be made personal: taking
     /// somebody else's out of a group would delete a debt owed to them.
     /// <para>
     /// The model a PATCH is applied to carries the current group, so a patch that says
@@ -106,7 +108,7 @@ public record UpdateTransactionRequest
     /// </summary>
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
     [NotZero(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountNotZero))]
-    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
+    [MaxDecimalPlaces(3, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     public decimal Amount { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.DateRequired))]

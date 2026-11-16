@@ -148,6 +148,7 @@
             else
             {
                 <GroupOverviewTab GroupId="@group.Id" GroupName="@group.Name" UserId="@UserInfo?.Id"
+                                  SelectedCurrency="@CurrencyParameter"
                                   OnSettle="OnSettleAsync" OnRequestPayment="RequestPaymentAsync" />
             }
         </div>
@@ -214,6 +215,9 @@ else if (NotFound)
     /// </summary>
     [Parameter, SupplyParameterFromQuery(Name = "kind")]
     public string? KindParameter { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "currency")]
+    public string? CurrencyParameter { get; set; }
 
     // The group questions, named for the decision somebody is about to make. Settings is
     // not among them -- it is the cog after them. The old paths still resolve below, so
@@ -341,6 +345,7 @@ else if (NotFound)
         {
             { x => x.GroupId, GroupId }, { x => x.RecipientUserId, debt.UserId },
             { x => x.RecipientName, debt.UserName }, { x => x.CurrentDebt, debt.Amount },
+            { x => x.Currency, debt.Currency },
             { x => x.InitialThrough, selection.Through }
         };
         await DialogService.ShowAsync<RequestPaymentDialog>(Loc["Request payment"].Value, parameters,
@@ -441,6 +446,7 @@ else if (NotFound)
             { x => x.UserId, debt.UserId },
             { x => x.Username, debt.UserName },
             { x => x.TotalDebt, debt.Amount },
+            { x => x.Currency, debt.Currency },
             { x => x.Direction, direction },
             { x => x.InitialThrough, through }
         };

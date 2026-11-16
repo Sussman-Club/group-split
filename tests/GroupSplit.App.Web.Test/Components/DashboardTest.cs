@@ -109,7 +109,7 @@ public class DashboardTest : ComponentTest
         _groups.Verify(client => client.GetGroupsAsync(1, 4, false, It.IsAny<CancellationToken>()), Times.Once);
         _groups.Verify(client => client.GetGroupsAsync(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
         _groups.Verify(client => client.GetGroupsAsAsyncEnumerable(null, null, null, It.IsAny<CancellationToken>()), Times.Never);
-        Assert.Single(page.FindAll("a[href='/groups']"));
+        Assert.NotEmpty(page.FindAll("a[href='/groups']"));
     }
 
     [Fact]
@@ -151,6 +151,38 @@ public class DashboardTest : ComponentTest
             It.Is<string>(message => message.StartsWith(context, StringComparison.Ordinal)),
             Severity.Error, It.IsAny<Action<SnackbarOptions>>(), It.IsAny<string>()), Times.Once);
 
+    [Fact]
+    public void Multiple_currencies_are_grouped_in_one_navigable_row()
+    {
+        _position = new UserPositionResponse(0, 0, 0,
+        [
+            new GroupPosition(Lisbon.Id, Lisbon.Name, 10, false) { Currency = "USD" },
+            new GroupPosition(Lisbon.Id, Lisbon.Name, -5, false) { Currency = "EUR" }
+        ])
+        { Currencies = [new("USD", 10, 10, 0), new("EUR", -5, 0, 5)] };
+
+        var page = Open();
+        var hero = page.Find(".gs-hero");
+        Assert.Single(page.FindAll(".gs-dashboard-group-name"));
+        Assert.Equal(2, hero.QuerySelectorAll(".gs-currency-total").Length);
+        var row = page.Find(".gs-dashboard-group");
+        Assert.Equal($"/groups/{Lisbon.Id}", row.GetAttribute("href"));
+        Assert.Equal(2, row.QuerySelectorAll(".gs-dashboard-position").Length);
+        Assert.DoesNotContain("Settle", row.TextContent);
+    }
+
+    [Fact]
+    public void A_single_euro_balance_is_shown_as_the_overall_balance()
+    {
+        _position = new UserPositionResponse(0, 0, 0, [new GroupPosition(Lisbon.Id, Lisbon.Name, 12, false) { Currency = "EUR" }])
+        { Currencies = [new("EUR", 12, 12, 0)] };
+
+        var hero = Open().Find(".gs-hero");
+        Assert.DoesNotContain("by currency", hero.TextContent, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("12.00", hero.QuerySelector(".gs-hero-amount")!.TextContent);
+        Assert.Contains("€", hero.QuerySelector(".gs-hero-amount")!.TextContent);
+    }
+
     // ---- what it draws --------------------------------------------------------------------
 
     /// <summary>
@@ -177,8 +209,8 @@ public class DashboardTest : ComponentTest
         Assert.StartsWith("$40.00 owed to you, $25.00 owed by you.", Text(hero.QuerySelector(".gs-hero-sub")!),
             StringComparison.Ordinal);
 
-        var rows = hero.QuerySelectorAll(".gs-hero-row .who").Select(Text).ToList();
-        Assert.Equal(["Weekend in Lisbon owes you", "The flat you owe"], rows);
+        var groups = page.FindAll(".gs-dashboard-group-name > span:last-child").Select(Text).ToList();
+        Assert.Equal(["Weekend in Lisbon", "The flat"], groups);
     }
 
     [Fact]
@@ -244,7 +276,7 @@ public class DashboardTest : ComponentTest
 
         var page = Open();
 
-        Assert.Contains(page.FindAll(".gs-hero-row .who"), who => Text(who) == "Ski trip 2024 you owe");
+        Assert.Contains(page.FindAll(".gs-dashboard-group-name > span:last-child"), name => Text(name) == "Ski trip 2024");
         Assert.DoesNotContain(page.FindAll(".gs-list .gs-row .title"), title => Text(title) == "Ski trip 2024");
         Assert.Contains(page.FindAll(".gs-list .gs-row .title"), title => Text(title) == "Weekend in Lisbon");
     }

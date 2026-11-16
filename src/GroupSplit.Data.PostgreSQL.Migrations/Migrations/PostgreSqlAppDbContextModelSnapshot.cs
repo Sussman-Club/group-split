@@ -171,8 +171,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<DateOnly?>("AuthorizedDate")
                         .HasColumnType("date");
@@ -820,20 +820,20 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("date");
 
                     b.Property<decimal>("Subtotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<decimal>("Tax")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<decimal>("Tip")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<decimal>("Total")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.HasKey("Id");
 
@@ -933,8 +933,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
 
                     b.Property<decimal>("TaxAmount")
                         .ValueGeneratedOnAdd()
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)")
                         .HasDefaultValue(0m);
 
                     b.Property<decimal?>("TaxRate")
@@ -942,12 +942,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("numeric(9,4)");
 
                     b.Property<decimal>("TotalPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.HasKey("Id");
 
@@ -989,8 +989,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .IsConcurrencyToken()
@@ -1051,12 +1051,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("DebtAtCreation")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<decimal>("RequestedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.HasKey("SettlementRequestId", "GroupId");
 
@@ -1494,8 +1494,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<Guid?>("BankTransactionId")
                         .HasColumnType("uuid");
@@ -1570,8 +1570,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(19, 3)
+                        .HasColumnType("numeric(19,3)");
 
                     b.Property<Guid>("TransactionId")
                         .HasColumnType("uuid");

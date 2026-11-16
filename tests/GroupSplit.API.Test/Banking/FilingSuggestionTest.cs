@@ -219,7 +219,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
-    public async Task A_group_in_another_currency_is_not_offered()
+    public async Task A_group_in_another_currency_is_offered()
     {
         await Home();
         var row = await Row(30m, currency: "EUR");
@@ -227,8 +227,7 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         await Suggest(row);
 
-        // Asked only if the personal group has categories; either way, Home is not offered.
-        Assert.DoesNotContain(_model.Asked, asked => asked.Options.ContainsKey("Home · Groceries"));
+        Assert.Contains(_model.Asked, asked => asked.Options.ContainsKey("Home · Groceries"));
     }
 
     [Fact]

@@ -13,6 +13,63 @@ namespace GroupSplit.API.Test.Group;
 public class GroupGetAllTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
     [Fact]
+    public async Task Currency_balance_queries_execute_on_postgresql_when_test_database_is_configured()
+    {
+        var connection = Environment.GetEnvironmentVariable("GROUPSPLIT_CURRENCY_TEST_DATABASE");
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            return;
+        }
+
+        await using var context = new PostgreSqlAppDbContext(
+            new DbContextOptionsBuilder<PostgreSqlAppDbContext>().UseNpgsql(connection).Options);
+        var service = new GroupService(GetService<ICurrentUser>(), context,
+            GetService<IGroupParticipants>(), GetService<ISplitRuleRevisions>(),
+            GetService<IMemberSplitRules>(), GetService<IBillSplitRule>(),
+            GetService<IEvenSplitRule>(), GetService<IJoinLinkService>(), TimeProvider.System);
+        var ct = TestContext.Current.CancellationToken;
+        var me = new GroupSplit.Data.Entities.User { Id = GetService<ICurrentUser>().User.Id, FirstName = "Currency tester" };
+        var friend = new GroupSplit.Data.Entities.User { FirstName = "Friend" };
+        var group = new GroupSplit.Data.Entities.Group { Name = "Currency query test", Users = { me, friend } };
+        var expense = new GroupSplit.Data.Entities.Expense
+        {
+            Name = "Three decimal expense",
+            Amount = 1.001m,
+            Currency = "KWD",
+            DateTime = DateTimeOffset.UtcNow,
+            User = me,
+            Group = group
+        };
+        expense.Splits.Add(new GroupSplit.Data.Entities.TransactionSplit { User = me, Amount = .501m });
+        expense.Splits.Add(new GroupSplit.Data.Entities.TransactionSplit { User = friend, Amount = .500m });
+        context.Add(expense);
+        await context.SaveChangesAsync(ct);
+
+        var rows = await (await service.GetGroupNetBalance(group.Id, ct)).ToListAsync(ct);
+        Assert.Contains(rows, row => row.UserId == me.Id && row.Currency == "KWD" && row.Balance == .500m);
+        var all = await (await service.GetAllGroupNetBalances(ct)).ToListAsync(ct);
+        Assert.Contains(all, row => row.GroupId == group.Id && row.UserId == me.Id && row.Currency == "KWD" && row.Balance == .500m);
+        var position = await service.GetPosition(ct);
+        Assert.Contains(position.Currencies, row => row.Currency == "KWD" && row.Net == .500m);
+    }
+    [Fact]
+    public async Task Currency_balance_queries_translate_to_postgresql()
+    {
+        await using var context = new PostgreSqlAppDbContext(
+            new DbContextOptionsBuilder<PostgreSqlAppDbContext>()
+                .UseNpgsql("Host=localhost;Database=query_translation").Options);
+        var service = new GroupService(GetService<ICurrentUser>(), context,
+            GetService<IGroupParticipants>(), GetService<ISplitRuleRevisions>(),
+            GetService<IMemberSplitRules>(), GetService<IBillSplitRule>(),
+            GetService<IEvenSplitRule>(), GetService<IJoinLinkService>(), TimeProvider.System);
+        var ct = TestContext.Current.CancellationToken;
+        var group = await service.GetGroupNetBalance(Guid.NewGuid(), ct);
+        var all = await service.GetAllGroupNetBalances(ct);
+        Assert.Contains("Currency", group.ToQueryString());
+        Assert.Contains("Currency", group.Where(row => row.UserId == Guid.Empty && row.Balance != 0).ToQueryString());
+        Assert.Contains("Currency", all.ToQueryString());
+    }
+    [Fact]
     public async Task Group_pagination_translates_to_limit_and_offset_in_PostgreSQL()
     {
         await using var context = new PostgreSqlAppDbContext(

@@ -51,6 +51,11 @@ public sealed class TransactionTools
             patch.Replace(x => x.Amount, edit.Amount.Value);
         }
 
+        if (edit.Currency is not null)
+        {
+            patch.Replace(x => x.Currency, edit.Currency);
+        }
+
         if (edit.DateTime is not null)
         {
             patch.Replace(x => x.DateTime, edit.DateTime.Value);
@@ -136,6 +141,7 @@ public sealed record TransactionEdit
 {
     public string? Name { get; init; }
     public decimal? Amount { get; init; }
+    public string? Currency { get; init; }
     public DateTimeOffset? DateTime { get; init; }
     public string? Description { get; init; }
     public Guid? PaidByUserId { get; init; }

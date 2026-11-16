@@ -11,6 +11,7 @@ public class TransactionSeedDto
     /// </summary>
     public Guid? CategoryId { get; init; }
     public required decimal Amount { get; set; }
+    public string? Currency { get; init; }
 
     /// <summary>
     /// The moment it was recorded, for the history: three years of it, on the days it

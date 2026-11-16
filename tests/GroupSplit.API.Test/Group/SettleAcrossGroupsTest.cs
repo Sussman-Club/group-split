@@ -23,6 +23,98 @@ namespace GroupSplit.API.Test.Group;
 /// </remarks>
 public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 {
+    [Fact]
+    public async Task Three_decimal_expense_and_settlement_keep_their_minor_units()
+    {
+        var friend = await CreateNewUser();
+        var group = await GroupWith("Trip", friend);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group,
+            PaidByUserId = friend.Id,
+            Name = "Dinner",
+            Amount = 1.001m,
+            Currency = "KWD",
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+        var line = Assert.Single((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("KWD", line.Currency);
+        Assert.Equal(.500m, line.Amount);
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = .500m,
+            Currency = "KWD",
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+        Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("KWD", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+    }
+    [Fact]
+    public async Task An_unspecified_payment_currency_uses_the_only_outstanding_currency()
+    {
+        var friend = await CreateNewUser();
+        var group = await GetService<IGroupService>().CreateGroup(new CreateGroupRequest { Name = "Euro group", Currency = "EUR" }, Ct);
+        var groupId = group.Id;
+        await JoinGroup(groupId, friend);
+        await Expense(groupId, 40, paidBy: friend);
+
+        var line = Assert.Single((await Settlements().GetPlan(Ct)).YouPay);
+        Assert.Equal("EUR", line.Currency);
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 20,
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+        Assert.Equal("EUR", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+        Assert.Empty((await Settlements().GetPlan(Ct)).YouPay);
+    }
+    [Fact]
+    public async Task Plan_and_payment_keep_currencies_separate_for_the_same_person()
+    {
+        var friend = await CreateNewUser();
+        var group = await GroupWith("Trip", friend);
+        await Expense(group, 40, paidBy: friend);
+        await GetService<ITransactionService>().Create(new CreateTransactionRequest
+        {
+            GroupId = group,
+            PaidByUserId = friend.Id,
+            Name = "Euro dinner",
+            Amount = 60,
+            Currency = "EUR",
+            DateTime = DateTimeOffset.UtcNow
+        }, Ct);
+
+        var plan = await Settlements().GetPlan(Ct);
+        Assert.Equal(2, plan.YouPay.Count);
+        Assert.Contains(plan.YouPay, line => line.Currency == "USD" && line.Amount == 20);
+        Assert.Contains(plan.YouPay, line => line.Currency == "EUR" && line.Amount == 30);
+
+        var error = await Assert.ThrowsAsync<ValidationException>(() => Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 30,
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct));
+        Assert.Contains("currency", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await DbContext.Set<Transfer>().ToListAsync(Ct));
+
+        var payment = await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 30,
+            Currency = "EUR",
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+        Assert.Equal("EUR", payment.Currency);
+
+        var after = await Settlements().GetPlan(Ct);
+        var remaining = Assert.Single(after.YouPay);
+        Assert.Equal("USD", remaining.Currency);
+        Assert.Equal(20, remaining.Amount);
+        Assert.Equal("EUR", (await DbContext.Set<Transfer>().SingleAsync(Ct)).Currency);
+    }
     /// <summary>
     /// The whole point in one test: two groups, one person, one line.
     /// </summary>

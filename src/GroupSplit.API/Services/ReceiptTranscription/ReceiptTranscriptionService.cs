@@ -104,8 +104,11 @@ public sealed class ReceiptTranscriptionService(
 
     private static SaveReceiptRequest ToRequest(TranscribedReceipt transcription)
     {
+        var places = new[] { transcription.Subtotal, transcription.Tax, transcription.Tip, transcription.Total }
+            .Concat(transcription.Items.SelectMany(item => new[] { item.TotalPrice, item.UnitPrice, item.TaxAmount }))
+            .Any(value => decimal.Round(value, 2) != value) ? 3 : 2;
         var taxes = ReceiptTaxes.Calculate(transcription.Tax, transcription.Items.Select(item =>
-            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+            new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), decimalPlaces: places);
         return new SaveReceiptRequest
         {
             Subtotal = transcription.Subtotal,

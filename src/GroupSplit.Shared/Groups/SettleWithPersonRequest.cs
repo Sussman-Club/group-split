@@ -28,11 +28,12 @@ namespace GroupSplit.Shared;
 /// </remarks>
 public record SettleWithPersonRequest
 {
+    public string? Currency { get; set; }
     /// <summary>The other end of the payment.</summary>
     public Guid UserId { get; set; }
 
     [Required(ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountRequired))]
-    [MaxDecimalPlaces(2, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
+    [MaxDecimalPlaces(3, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPrecision))]
     [GreaterThan(0, ErrorMessageResourceType = typeof(GroupSplit.Shared.Localization.ValidationMessages), ErrorMessageResourceName = nameof(GroupSplit.Shared.Localization.ValidationMessages.AmountPositive))]
     public decimal Amount { get; set; }
 
@@ -83,4 +84,7 @@ public record SettleWithPersonResponse(
     DateTimeOffset Date,
     string? Description,
     IReadOnlyList<GroupDebt> Groups,
-    DateOnly? CoversThrough = null);
+    DateOnly? CoversThrough = null)
+{
+    public string Currency { get; init; } = "USD";
+}

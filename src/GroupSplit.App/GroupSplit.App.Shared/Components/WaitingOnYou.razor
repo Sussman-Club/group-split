@@ -144,15 +144,20 @@
 
     private string SettleDetail(SettlementPlanResponse plan)
     {
+        if (plan.Currencies.Count > 1)
+            return Loc["See amounts separately for each currency."].Value;
+        var currency = plan.Currencies.Count == 1 ? plan.Currencies[0] : null;
+        var youOwe = currency?.YouOwe ?? plan.YouOweTotal;
+        var owedToYou = currency?.OwedToYou ?? plan.OwedToYouTotal;
         var owing = plan.YouPay.Count == 0
             ? null
             : plan.YouPay.Count == 1
-                ? Loc["{0} to {1}", plan.YouOweTotal.ToMoney(), plan.YouPay[0].UserName.Split(' ')[0]].Value
-                : Loc["{0} to {1}", plan.YouOweTotal.ToMoney(), People(plan.YouPay.Count)].Value;
+                ? Loc["{0} to {1}", youOwe.ToMoney(currency?.Currency), plan.YouPay[0].UserName.Split(' ')[0]].Value
+                : Loc["{0} to {1}", youOwe.ToMoney(currency?.Currency), People(plan.YouPay.Count)].Value;
 
         var owed = plan.OwedToYou.Count == 0
             ? null
-            : Loc["{0} owe you {1}", People(plan.OwedToYou.Count), plan.OwedToYouTotal.ToMoney()].Value;
+            : Loc["{0} owe you {1}", People(plan.OwedToYou.Count), owedToYou.ToMoney(currency?.Currency)].Value;
 
         return string.Join(Loc[", and "].Value, new[] { owing, owed }.Where(part => part is not null));
     }

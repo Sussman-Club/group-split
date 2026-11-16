@@ -161,6 +161,12 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             db.Add(r);
         }
         Unfiled(r);
+        if (!string.Equals(r.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) &&
+            !CurrencyPrecision.IsSupported(request.Currency))
+        {
+            throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose a supported currency code.");
+        }
+
         r.Currency = request.Currency.ToUpperInvariant();
         if (request.UpdateMerchant)
         {
@@ -206,7 +212,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             {
                 var lines = r.Items.OrderBy(item => item.Position).ToArray();
                 var taxes = ReceiptTaxes.DistributeUnassigned(r.Tax, lines.Select(item =>
-                    new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray());
+                    new ReceiptTaxLine(item.TotalPrice, item.TaxAmount, item.TaxRate, item.IsTaxable)).ToArray(), CurrencyPrecision.DecimalPlaces(r.Currency));
                 if (taxes is not null)
                 {
                     for (var index = 0; index < lines.Length; index++)

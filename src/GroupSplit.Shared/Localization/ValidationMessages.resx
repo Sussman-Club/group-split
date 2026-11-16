@@ -54,7 +54,7 @@
     <value>Amount is required.</value>
   </data>
   <data name="AmountPrecision" xml:space="preserve">
-    <value>Amount must be a number with no more than 2 decimal places.</value>
+    <value>Amount must be a number with no more than 3 decimal places.</value>
   </data>
   <data name="AmountPositive" xml:space="preserve">
     <value>Amount must be greater than 0.</value>
@@ -69,6 +69,6 @@
     <value>Currency must be a three-letter ISO 4217 code, such as EUR.</value>
   </data>
   <data name="SharePrecision" xml:space="preserve">
-    <value>A share must be a number with no more than 2 decimal places.</value>
+    <value>A share must be a number with no more than 3 decimal places.</value>
   </data>
 </root>

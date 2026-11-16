@@ -162,6 +162,22 @@ public class GroupLedgerTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     /// a history of it cannot be drawn against a list that hides half of them.
     /// </summary>
     [Fact]
+    public async Task Running_balances_are_independent_for_each_currency()
+    {
+        var (group, friend) = await GroupOfTwo();
+        await Expense(group, 100, "Dollar dinner", at: Day(1));
+        await Expense(group, 60, "Euro taxi", paidBy: friend, at: Day(2));
+        var euro = await DbContext.Set<Data.Entities.Expense>()
+            .SingleAsync(expense => expense.GroupId == group && expense.Name == "Euro taxi", Ct);
+        euro.Currency = "EUR";
+        await DbContext.SaveChangesAsync(Ct);
+
+        var entries = await Ledger(group);
+        Assert.Contains(entries, entry => entry.Currency == "USD" && entry.RunningBalance == 50m);
+        Assert.Contains(entries, entry => entry.Currency == "EUR" && entry.RunningBalance == -30m);
+    }
+
+    [Fact]
     public async Task TheRunningBalance_MovesOnExpensesAndOnSettlementsAlike()
     {
         var (group, friend) = await GroupOfTwo();

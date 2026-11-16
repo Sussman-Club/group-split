@@ -36,7 +36,7 @@ public static class SplitCalculator
 {
     /// <summary>
     /// Divides <paramref name="amount"/> between <paramref name="weights"/> in proportion,
-    /// truncated to the cent, with the remainder given to one participant so that the
+    /// truncated to the requested number of decimal places, with the remainder given to one participant so that the
     /// result sums to <paramref name="amount"/> exactly.
     /// </summary>
     /// <param name="payerId">
@@ -44,6 +44,7 @@ public static class SplitCalculator
     /// common case and the one people expect: the person who put the money down carries
     /// the fraction of a cent nobody else can.
     /// </param>
+    /// <param name="decimalPlaces">The currency's minor-unit precision. Defaults to two.</param>
     /// <remarks>
     /// Truncation rather than rounding, so no participant is ever charged more than their
     /// proportion; the remainder is always the payer's to carry, never somebody else's to
@@ -62,9 +63,14 @@ public static class SplitCalculator
     public static IReadOnlyList<SplitAmount> Divide(
         decimal amount,
         Guid payerId,
-        IReadOnlyList<SplitWeight> weights)
+        IReadOnlyList<SplitWeight> weights,
+        int decimalPlaces = 2)
     {
         ArgumentNullException.ThrowIfNull(weights);
+        ArgumentOutOfRangeException.ThrowIfNegative(decimalPlaces);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(decimalPlaces, 3);
+
+        var scale = decimalPlaces switch { 0 => 1m, 1 => 10m, 2 => 100m, _ => 1000m };
 
         if (weights.Count == 0)
         {
@@ -100,7 +106,7 @@ public static class SplitCalculator
                 continue;
             }
 
-            var share = TruncateToCents(amount * weights[i].Weight / totalWeight);
+            var share = Math.Truncate(amount * weights[i].Weight / totalWeight * scale) / scale;
 
             splits[i] = new SplitAmount(weights[i].UserId, share);
             distributed += share;
@@ -120,8 +126,9 @@ public static class SplitCalculator
     public static IReadOnlyList<SplitAmount> DivideEvenly(
         decimal amount,
         Guid payerId,
-        IEnumerable<Guid> participants) =>
-        Divide(amount, payerId, [.. participants.Select(id => new SplitWeight(id, 1))]);
+        IEnumerable<Guid> participants,
+        int decimalPlaces = 2) =>
+        Divide(amount, payerId, [.. participants.Select(id => new SplitWeight(id, 1))], decimalPlaces);
 
     private static int RemainderIndex(Guid payerId, IReadOnlyList<SplitWeight> weights)
     {
@@ -160,9 +167,4 @@ public static class SplitCalculator
         return fallback;
     }
 
-    /// <summary>
-    /// Toward zero, so a refund truncates the same way an expense does and the remainder
-    /// stays the payer's in both directions.
-    /// </summary>
-    private static decimal TruncateToCents(decimal value) => Math.Truncate(value * 100m) / 100m;
 }

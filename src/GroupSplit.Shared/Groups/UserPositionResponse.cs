@@ -15,7 +15,12 @@ public record UserPositionResponse(
     decimal Net,
     decimal OwedToYou,
     decimal YouOwe,
-    IReadOnlyList<GroupPosition> Groups);
+    IReadOnlyList<GroupPosition> Groups)
+{
+    public IReadOnlyList<CurrencyPosition> Currencies { get; init; } = [];
+}
+
+public record CurrencyPosition(string Currency, decimal Net, decimal OwedToYou, decimal YouOwe);
 
 /// <summary>
 /// What one group comes to for the person asking.
@@ -26,4 +31,7 @@ public record UserPositionResponse(
 /// the list while still counting its balance -- archiving tidies a list, it does not
 /// forgive a debt.
 /// </param>
-public record GroupPosition(Guid GroupId, string GroupName, decimal Balance, bool IsArchive);
+public record GroupPosition(Guid GroupId, string GroupName, decimal Balance, bool IsArchive)
+{
+    public string Currency { get; init; } = "USD";
+}

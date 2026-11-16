@@ -34,6 +34,28 @@ public class DebtCalculationTests
         };
 
     [Fact]
+    public async Task Opposite_debts_in_different_currencies_do_not_cancel()
+    {
+        var alice = Guid.NewGuid();
+        var bob = Guid.NewGuid();
+        var balances = new[]
+        {
+            Balance(alice, "Alice", 10m) with { Currency = "USD" },
+            Balance(bob, "Bob", -10m) with { Currency = "USD" },
+            Balance(alice, "Alice", -10m) with { Currency = "EUR" },
+            Balance(bob, "Bob", 10m) with { Currency = "EUR" }
+        };
+
+        var position = await ServiceFor(alice).GetUserBalance(balances);
+
+        Assert.Equal("USD", Assert.Single(position.OwedToYou).Currency);
+        Assert.Equal("EUR", Assert.Single(position.YouOwed).Currency);
+        Assert.Equal(2, position.Plan.Count);
+        Assert.Contains(position.Plan, payment => payment.Currency == "USD" && payment.Amount == 10m);
+        Assert.Contains(position.Plan, payment => payment.Currency == "EUR" && payment.Amount == 10m);
+    }
+
+    [Fact]
     public async Task A_settled_group_produces_no_payments()
     {
         var alice = Guid.NewGuid();

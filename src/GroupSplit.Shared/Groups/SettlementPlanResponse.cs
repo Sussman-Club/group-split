@@ -37,7 +37,10 @@ public record SettlementPlanResponse(
     decimal YouOweTotal,
     IReadOnlyList<PersonSettlement> YouPay,
     IReadOnlyList<PersonSettlement> OwedToYou,
-    DateTimeOffset? LastSettled);
+    DateTimeOffset? LastSettled)
+{
+    public IReadOnlyList<CurrencyPosition> Currencies { get; init; } = [];
+}
 
 /// <summary>
 /// One person, and the one payment that squares the caller with them.
@@ -62,6 +65,7 @@ public record PersonSettlement(
     IReadOnlyList<GroupDebt> Groups,
     bool IsGuest = false)
 {
+    public string Currency { get; init; } = "USD";
     /// <summary>
     /// Spends one payment over the groups the debt spans, largest group first.
     /// </summary>

@@ -44,20 +44,16 @@ public abstract class Transaction : Entity
     public Guid GroupId { get; set; }
 
     /// <summary>
-    /// Stored to two decimal places, which the column enforces rather than the callers
-    /// being trusted with it.
+    /// Stored with up to three decimal places; validation applies the currency's minor unit.
     /// </summary>
     /// <remarks>
-    /// The division depends on it. <c>SplitCalculator</c> truncates every share to the
-    /// cent and hands the leftover to one participant, so the shares sum to this exactly;
-    /// an amount carrying a third decimal would push a fraction of a cent nobody can pay
-    /// onto whoever holds the remainder, on every expense filed under the rule.
+    /// The division truncates shares to the currency's precision and hands the remainder to
+    /// one participant, so the stored shares sum to this amount exactly.
     /// </remarks>
     public required decimal Amount { get; set; }
 
     /// <summary>
-    /// ISO 4217. Must match the group's -- conversion is out of scope, and a group whose
-    /// balances silently mixed currencies would be wrong rather than incomplete.
+    /// ISO 4217. Balances and settlements are calculated separately for each currency.
     /// </summary>
     public string Currency { get; set; } = Currencies.Default;
 

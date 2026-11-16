@@ -235,5 +235,11 @@
     "SplitRule": {
       "$type": "itemized"
     }
+  },
+  {
+    "Id": "45500002-0000-4000-8000-000000000002",
+    "GroupId": "45500001-0000-4000-8000-000000000001",
+    "Category": "Weekend meals",
+    "SplitRule": { "$type": "even", "Among": [] }
   }
 ]

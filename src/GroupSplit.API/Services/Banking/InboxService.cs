@@ -155,7 +155,6 @@ public sealed class InboxService(
 
         // Bank credits already use the ledger's refund sign: negative amounts and
         // negative shares reduce spending and reverse the recipient's group balance.
-        await RefuseCurrencyMismatch(row, request.GroupId, ct);
 
         // Before the expense exists, not after: a duplicate discovered afterwards is a
         // wrong balance somebody has to notice and undo. The refusal names what it matched,
@@ -424,37 +423,6 @@ public sealed class InboxService(
             .FirstOrDefaultAsync(expense => expense.Id == transactionId
                                             && expense.UserId == userContext.User.Id, ct)
         ?? throw new NotFoundException(ErrorCodes.TransactionNotFound, "Transaction not found.");
-
-    /// <summary>
-    /// A group's balances are one currency, and conversion is out of scope, so a row in
-    /// another one cannot join them. Checked before the expense is created rather than
-    /// after, and only for a group the caller is actually in -- otherwise the group's own
-    /// 404 is the answer, and this must not leak that the group exists. Never for the
-    /// caller's personal group, null or named, which takes any currency: nothing sums it
-    /// with anybody else's.
-    /// </summary>
-    private async Task RefuseCurrencyMismatch(BankTransaction row, Guid? groupId, CancellationToken ct)
-    {
-        if (groupId is not { } id || id == userContext.User.Id)
-        {
-            return;
-        }
-
-        var currency = await dbContext.Entry(userContext.User).Collection(user => user.Groups).Query()
-            .Where(group => group.Id == id)
-            .Select(group => group.Currency)
-            .FirstOrDefaultAsync(ct);
-
-        if (currency is null || string.Equals(currency, row.Currency, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        throw new ConflictException(ErrorCodes.CurrencyMismatch,
-                $"This is in {row.Currency} and the group keeps its balances in {currency}.")
-            .WithExtension("transactionCurrency", row.Currency)
-            .WithExtension("groupCurrency", currency);
-    }
 
     private static string Named(string? requested, BankTransaction row) =>
         string.IsNullOrWhiteSpace(requested)

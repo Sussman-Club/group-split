@@ -33,6 +33,7 @@ public static class Extensions
             // App seeders
             builder.AddSeeder<GroupSeeder>();
             builder.AddSeeder<UserSeeder>();
+            builder.AddSeeder<CurrencyDemoMembershipSeeder>();
 
             // The shops, before anything that points at one. Both the expenses and the bank
             // rows name them and those two run together, so the row has to already exist.

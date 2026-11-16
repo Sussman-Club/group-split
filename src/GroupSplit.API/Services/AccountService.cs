@@ -88,14 +88,13 @@ public sealed class AccountService(
             // Scoped to this account, not to whoever is calling. The caller need not share
             // the group -- and when they do not, the caller-scoped query would return no
             // rows, which is indistinguishable from a settled balance.
-            var balance = await (await groups.GetGroupNetBalanceFor(group.Id, user.Id, cancellationToken))
-                .Where(netBalance => netBalance.UserId == user.Id)
-                .Select(netBalance => netBalance.Balance)
-                .FirstOrDefaultAsync(cancellationToken);
+            var balances = await (await groups.GetGroupNetBalanceFor(group.Id, user.Id, cancellationToken))
+                .Where(netBalance => netBalance.UserId == user.Id && netBalance.Balance != 0)
+                .ToListAsync(cancellationToken);
 
-            if (balance is not 0)
+            foreach (var balance in balances)
             {
-                outstanding.Add(new OutstandingBalance(group.Id, group.Name, balance));
+                outstanding.Add(new OutstandingBalance(group.Id, group.Name, balance.Balance, balance.Currency));
             }
         }
 

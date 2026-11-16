@@ -273,7 +273,7 @@
                                                 @Clock.Day(expense.DateTime).ToString("d MMM yyyy") · @(expense.PaidByUserId == Me ? Loc["you paid"] : Loc["{0} paid", expense.PaidByUserName ?? ""])
                                             </span>
                                         </div>
-                                        <span class="gs-period-amount">@expense.Amount.ToMoney()</span>
+                                        <span class="gs-period-amount">@expense.Amount.ToMoney(expense.Currency)</span>
                                     </div>
                                 }
                             </div>
@@ -426,9 +426,9 @@
     private string StillOwedSentence(TransactionDetailsResponse loaded, SettlementCoverage coverage) =>
         (loaded.PaidByUserId == Me, loaded.PaidToUserId == Me) switch
         {
-            (true, _) => Loc["You still owe {0} {1}.", loaded.PaidToUserName, coverage.StillOwed.ToMoney()].Value,
-            (_, true) => Loc["{0} still owes you {1}.", loaded.PaidByUserName, coverage.StillOwed.ToMoney()].Value,
-            _ => Loc["{0} still owes {1} {2}.", loaded.PaidByUserName, loaded.PaidToUserName, coverage.StillOwed.ToMoney()].Value
+            (true, _) => Loc["You still owe {0} {1}.", loaded.PaidToUserName, coverage.StillOwed.ToMoney(loaded.Currency)].Value,
+            (_, true) => Loc["{0} still owes you {1}.", loaded.PaidByUserName, coverage.StillOwed.ToMoney(loaded.Currency)].Value,
+            _ => Loc["{0} still owes {1} {2}.", loaded.PaidByUserName, loaded.PaidToUserName, coverage.StillOwed.ToMoney(loaded.Currency)].Value
         };
 
     /// <summary>
@@ -446,15 +446,24 @@
                 coverage.Through.ToDateTime(TimeOnly.MinValue))
             .Bounds(Clock.Offset, Clock.Today);
 
-        PagedResponseOfTransactionResponse? page = null;
-
+        var matching = new List<TransactionResponse>();
+        var count = 0;
         await Errors.TryAsync(async () =>
+        {
+            var pageNumber = 1;
+            PagedResponseOfTransactionResponse page;
+            do
+            {
                 page = await GroupsClient.GetGroupTransactionsAsync(groupId, from, to,
-                    page: 1, pageSize: PeriodListLimit),
-            Loc["Could not load the expenses in that period."].Value);
+                    page: pageNumber++, pageSize: PeriodListLimit);
+                var currencyExpenses = page.Items.Where(expense => expense.Currency == loaded.Currency).ToList();
+                count += currencyExpenses.Count;
+                matching.AddRange(currencyExpenses.Take(Math.Max(0, PeriodListLimit - matching.Count)));
+            } while (page.Items.Count > 0 && (pageNumber - 1) * PeriodListLimit < page.TotalCount);
+        }, Loc["Could not load the expenses in that period."].Value);
 
-        _periodExpenses = page?.Items ?? [];
-        _periodExpenseCount = page?.TotalCount ?? 0;
+        _periodExpenses = matching;
+        _periodExpenseCount = count;
     }
 
     // Failures go through the presenter, which names the reason the API gave; a dialog

@@ -190,6 +190,7 @@
                        API worked it out. There used to be an "Everyone's share" block under
                        this one, so stating a division drew every member twice. *@
                     <SplitEditor Members="@_members"
+                                 Currency="@Row.Currency"
                                  Amount="@Row.Amount"
                                  PayerId="@null"
                                  Value="@_splits"
@@ -593,6 +594,7 @@
             Name = string.IsNullOrWhiteSpace(_name) ? Row.Title : _name,
             Description = _description,
             Amount = Row.Amount,
+            Currency = Row.Currency,
             DateTime = Row.SpentOn.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
         }, asked);
 

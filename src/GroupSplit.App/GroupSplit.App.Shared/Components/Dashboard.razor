@@ -44,15 +44,25 @@
         opening every group in turn and adding up by hand.
     *@
     <section class="gs-hero @PositionClass gs-reveal" style="--i: 0" aria-live="polite">
-        @if (Net > 0)
+        @if (Position?.Currencies.Count > 1)
+        {
+            <div class="gs-eyebrow">@Loc["Overall balances by currency"]</div>
+            <div class="gs-currency-totals">
+            @foreach (var position in Position.Currencies)
+            {
+                <div class="gs-currency-total @(position.Net < 0 ? "is-neg" : "")"><span class="gs-eyebrow">@(position.Net > 0 ? Loc["You are owed"].Value : position.Net < 0 ? Loc["You owe"].Value : Loc["Even"].Value)</span><div><Money Value="position.Net" Currency="@position.Currency" Absolute /> @if (MoneyExtensions.CurrencySymbol(position.Currency) != position.Currency) { <span class="gs-currency-code">@position.Currency</span> }</div></div>
+            }
+            </div>
+        }
+        else if (Net > 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you are owed"]</div>
-            <Money Value="Net" Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Animate Class="gs-hero-amount" />
         }
         else if (Net < 0)
         {
             <div class="gs-eyebrow">@Loc["Overall, you owe"]</div>
-            <Money Value="Net" Absolute Animate Class="gs-hero-amount" />
+            <Money Value="Net" Currency="@OverallCurrency" Absolute Animate Class="gs-hero-amount" />
         }
         else
         {
@@ -61,13 +71,17 @@
         }
 
         <div class="gs-hero-sub">
-            @if (OwedToYou > 0 && YouOwe > 0)
+            @if (Position?.Currencies.Count > 1)
             {
-                @(Loc["{0} owed to you, {1} owed by you. They do not cancel out -- they are different people.", OwedToYou.ToMoney(), YouOwe.ToMoney()].Value)
+                @* Each amount is already labelled with its currency. *@
+            }
+            else if (OwedToYou > 0 && YouOwe > 0)
+            {
+                @(Loc["{0} owed to you, {1} owed by you. They do not cancel out -- they are different people.", OwedToYou.ToMoney(OverallCurrency), YouOwe.ToMoney(OverallCurrency)].Value)
             }
             else if (OwedToYou > 0 || YouOwe > 0)
             {
-                @(Loc["Across {0} group{1}.", Owing.Count, (Owing.Count == 1 ? "" : "s")].Value)
+                @(Loc["Across {0} group{1}.", Owing.Select(position => position.GroupId).Distinct().Count(), (Owing.Select(position => position.GroupId).Distinct().Count() == 1 ? "" : "s")].Value)
             }
             else
             {
@@ -75,27 +89,33 @@
             }
         </div>
 
-        @if (Owing.Count > 0)
-        {
-            <div class="gs-hero-list">
-                @foreach (var position in Owing.Take(4))
+
+    </section>
+
+    @if (Owing.Count > 0)
+    {
+    <section class="gs-card gs-card-pad gs-reveal">
+        <div class="gs-card-title"><h2>@Loc["Group balances"]</h2><MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/groups">@Loc["View all"]</MudButton></div>
+            <div class="gs-dashboard-group-list">
+                @foreach (var group in Owing.GroupBy(position => new { position.GroupId, position.GroupName }))
                 {
-                    var group = position;
-                    <div class="gs-hero-row">
-                        <Avatar Name="@group.GroupName" Size="sm" />
-                        <div class="who">
-                            @group.GroupName <small>@(group.Balance > 0 ? Loc["owes you"].Value : Loc["Copy.Lower.you_owe"].Value)</small>
+                    <a class="gs-dashboard-group" href="@($"/groups/{group.Key.GroupId}")">
+                        <div class="gs-dashboard-group-name"><Avatar Name="@group.Key.GroupName" Size="sm" /><span>@group.Key.GroupName</span></div>
+                        <div class="gs-dashboard-positions">
+                        @foreach (var position in group)
+                        {
+                            <div class="gs-dashboard-position @(position.Balance < 0 ? "is-neg" : "")">
+                                <div class="gs-dashboard-position-label">@(position.Balance > 0 ? Loc["You are owed"].Value : Loc["You owe"].Value) @if (group.Count() > 1) { <span>· @position.Currency</span> }</div>
+                                <Money Value="@position.Balance" Currency="@position.Currency" Absolute Animate />
+                            </div>
+                        }
                         </div>
-                        <Money Value="@Math.Abs(group.Balance)" Animate />
-                        <div class="gs-hero-actions">
-                            <MudButton Class="gs-btn-glass" Size="Size.Small" Variant="Variant.Text"
-                                       OnClick="@(() => Open(group.GroupId))">@Loc["Open"]</MudButton>
-                        </div>
-                    </div>
+                        <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" />
+                    </a>
                 }
             </div>
-        }
     </section>
+    }
 
     <WaitingOnYou Reveal="1" />
 
@@ -143,7 +163,6 @@
                         @foreach (var group in ActiveGroups)
                         {
                             var g = group;
-                            var balance = BalanceIn(g.Id);
                             <a class="gs-row" role="button" tabindex="0"
                                @onclick="@(() => Open(g.Id))"
                                @onkeydown="@(e => { if (e.Key is "Enter" or " ") Open(g.Id); })">
@@ -156,8 +175,11 @@
                                 @if (!g.IsPersonal)
                                 {
                                     <div>
-                                        <div><Money Value="balance" Signed /></div>
-                                        <span class="when">@(balance == 0 ? Loc["settled"].Value : balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</span>
+                                        @foreach (var position in PositionsFor(g))
+                                        {
+                                            <div><Money Value="position.Balance" Currency="@position.Currency" Signed /></div>
+                                            <span class="when">@(position.Balance == 0 ? Loc["settled"].Value : position.Balance > 0 ? Loc["owed to you"].Value : Loc["Copy.Lower.you_owe"].Value)</span>
+                                        }
                                     </div>
                                 }
                             </a>
@@ -214,9 +236,11 @@
     }
 
     private UserPositionResponse? Position { get; set; }
-    private decimal Net => Position?.Net ?? 0m;
-    private decimal OwedToYou => Position?.OwedToYou ?? 0m;
-    private decimal YouOwe => Position?.YouOwe ?? 0m;
+    private CurrencyPosition? SingleCurrency => Position?.Currencies.Count == 1 ? Position.Currencies[0] : null;
+    private string OverallCurrency => SingleCurrency?.Currency ?? "USD";
+    private decimal Net => SingleCurrency?.Net ?? Position?.Net ?? 0m;
+    private decimal OwedToYou => SingleCurrency?.OwedToYou ?? Position?.OwedToYou ?? 0m;
+    private decimal YouOwe => SingleCurrency?.YouOwe ?? Position?.YouOwe ?? 0m;
 
     /// <summary>
     /// The groups where something is still outstanding, largest first. An archived group
@@ -225,8 +249,11 @@
     private List<GroupPosition> Owing =>
         [.. (Position?.Groups ?? []).Where(position => position.Balance != 0)];
 
-    private decimal BalanceIn(Guid groupId) =>
-        Position?.Groups.FirstOrDefault(position => position.GroupId == groupId)?.Balance ?? 0m;
+    private IReadOnlyList<GroupPosition> PositionsFor(GroupResponse group)
+    {
+        var positions = Position?.Groups.Where(position => position.GroupId == group.Id && position.Balance != 0).ToList() ?? [];
+        return positions.Count > 0 ? positions : [new GroupPosition(group.Id, group.Name, 0m, group.IsArchive) { Currency = group.Currency }];
+    }
 
     private string PositionClass => Net switch
     {

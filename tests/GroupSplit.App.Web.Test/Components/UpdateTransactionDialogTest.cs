@@ -1321,7 +1321,7 @@ public class UpdateTransactionDialogTest : ComponentTest
     /// instead, and the dialog stays open holding the edit.
     /// </summary>
     [Fact]
-    public async Task Moving_a_euro_expense_into_a_dollar_group_is_refused_in_the_dialog_without_losing_the_edit()
+    public async Task Moving_a_euro_expense_into_a_dollar_group_keeps_the_edit()
     {
         var (provider, dialogRef) = await OpenEuroDinnerAsync();
 
@@ -1331,23 +1331,11 @@ public class UpdateTransactionDialogTest : ComponentTest
 
         await PickGroupAsync(provider, GroupId);
 
-        var refusal = provider.WaitForElement("[data-testid=currency-refusal]");
-        Assert.Contains("This expense is in EUR and Trip keeps its balances in USD", refusal.TextContent);
-
-        var save = provider.FindAll("button").First(button => button.TextContent.Trim() == "Review changes");
-        Assert.True(save.HasAttribute("disabled"));
-
-        await save.ClickAsync(new MouseEventArgs());
-
+        Assert.Empty(provider.FindAll("[data-testid=currency-refusal]"));
         Assert.False(dialogRef.Result.IsCompleted);
         Assert.Equal("Dinner at Ramiro", provider.FindComponents<MudTextField<string>>()
             .Single(field => field.Instance.Label == "What was it?").Instance.Value);
 
-        // And no division asked for a move that cannot happen: that is the API refusing
-        // the same thing a second time, in a snackbar.
-        _commands.Verify(c => c.PreviewUpdateAsync(It.IsAny<Guid>(),
-            It.Is<UpdateTransactionRequest>(request => request.GroupId == GroupId),
-            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -1356,7 +1344,7 @@ public class UpdateTransactionDialogTest : ComponentTest
         var (provider, dialogRef) = await OpenEuroDinnerAsync();
 
         await PickGroupAsync(provider, GroupId);
-        provider.WaitForElement("[data-testid=currency-refusal]");
+        Assert.Empty(provider.FindAll("[data-testid=currency-refusal]"));
 
         await PickGroupAsync(provider, null);
 
@@ -1379,6 +1367,17 @@ public class UpdateTransactionDialogTest : ComponentTest
         var (provider, _) = await OpenEuroDinnerAsync();
 
         provider.WaitForAssertion(() => Assert.Contains("€", provider.Find(".gs-amount").TextContent));
+    }
+
+    [Fact]
+    public async Task Editing_currency_sends_a_currency_patch()
+    {
+        var (provider, dialogRef) = await OpenEuroDinnerAsync();
+        var currency = provider.FindComponents<MudSelect<string>>().Single(select => select.Instance.Label == "Currency");
+        await provider.InvokeAsync(() => currency.Instance.ValueChanged.InvokeAsync("USD"));
+        await ReviewAndConfirmAsync(provider);
+        var patch = await dialogRef.GetReturnValueAsync<JsonPatchDocument<UpdateTransactionRequest>>().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains(patch!.Operations, operation => Touches(operation, "currency") && (string?)operation.value == "USD");
     }
 
     // ---- a bank row's date (#252) ---------------------------------------------------------

@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public sealed class SettlementTools
 {
-    [McpServerTool(Name = "settlement_plan", ReadOnly = true, Destructive = false, Idempotent = true), Description("Preview your settlement plan across groups without recording repayments. Optional through date uses utcOffset minutes.")]
+    [McpServerTool(Name = "settlement_plan", ReadOnly = true, Destructive = false, Idempotent = true), Description("Preview your settlement plan across groups without recording repayments. Amounts and suggestions are separate per currency and must not be added together. Optional through date uses utcOffset minutes.")]
     public static Task<SettlementPlanResponse> SettlementPlan(UsersClient client, DateOnly? through = null, int? utcOffset = null, CancellationToken ct = default) =>
         client.GetSettlementPlanAsync(through, utcOffset, ct);
 
@@ -15,7 +15,7 @@ public sealed class SettlementTools
         client.GetSettlementsAsync(Math.Max(1, page), 100, ct);
 
     [Authorize(Policy = "mcp:write")]
-    [McpServerTool(Name = "settle_with_person", ReadOnly = false, Destructive = true, Idempotent = false), Description("Record a payment between you and another person across groups. First use settlement_plan, review the exact amount and direction, and obtain user confirmation. This changes balances and can duplicate a payment if repeated.")]
+    [McpServerTool(Name = "settle_with_person", ReadOnly = false, Destructive = true, Idempotent = false), Description("Record one payment in one currency between you and another person across groups. First use settlement_plan, specify the matching currency, review the exact amount and direction, and obtain user confirmation. Never combine currencies. Repeating can duplicate a payment.")]
     public static Task<SettleWithPersonResponse> SettleWithPerson(UsersClient client, SettleWithPersonRequest payment, CancellationToken ct = default) =>
         client.SettleWithPersonAsync(payment, ct);
 
