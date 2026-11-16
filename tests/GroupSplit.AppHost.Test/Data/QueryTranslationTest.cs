@@ -1,4 +1,4 @@
-﻿using GroupSplit.API.Endpoints;
+using GroupSplit.API.Endpoints;
 using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
@@ -310,6 +310,14 @@ public class QueryTranslationTest(AppHostFixture appHost) : IAsyncLifetime
                 await transactions.List(Ct), new TransactionFilter(), me, owedOnly, Ct);
         }
 
+        // The household month uses a half-open UTC interval and aggregates paid by currency.
+        var from = new DateTimeOffset(2026, 3, 1, 5, 0, 0, TimeSpan.Zero);
+        var until = new DateTimeOffset(2026, 4, 1, 4, 0, 0, TimeSpan.Zero);
+        var localMonth = (await transactions.InGroup(await AGroupOfTheirs(), Ct))
+            .Where(e => e.DateTime >= from && e.DateTime < until);
+        await localMonth.ToCategorySpendingAsync(new GroupSpendingFilter(), me, Ct);
+        await localMonth.Where(e => e.UserId == me).GroupBy(e => e.Currency)
+            .Select(g => new { Currency = g.Key, Total = g.Sum(e => e.Amount) }).ToListAsync(Ct);
         var months = await transactions.MonthlyExposure(new TransactionFilter(), Ct);
 
         Assert.All(months, month => Assert.Equal(months[0].Currency, month.Currency));

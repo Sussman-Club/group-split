@@ -11,9 +11,7 @@ deleted, and transactions can be deleted. Deletion tools are marked destructive 
 should only be called after the user confirms. Other tools inspect groups, expenses, receipts,
 accounts, invitations, and join links. Additional tools support transaction editing,
 group membership, settlements, bank connections, support reports and staff operations.
-Staff operations are subject to the API's staff role checks. CLI-only commands for
-local configuration, device login, shell completion and local file paths are not
-remote operations; MCP clients handle authentication and their own local files.
+Staff operations are subject to the API's staff role checks. MCP clients handle authentication and their own local files.
 Receipt tools can upload and download expense and inbox attachments as base64-encoded
 file bytes (JPEG, PNG, WebP, or PDF, up to 10 MiB), and transcribe existing files.
 The MCP server cannot read a path on the agent's device; the client must send the file
@@ -109,6 +107,47 @@ This is experimental. `python tests/mcp_keycloak_exchange.py` tests Keycloak
 26.6 with synthetic accounts in an isolated disposable container, including
 identity, API audience, staff role, and invalid-exchange rejection. Authenticated
 tool calls have also been tested with locally signed tokens and a simulated API.
-The real assistant OAuth flow, production Keycloak configuration, and proxy
-deployment have not yet been validated end to end. Do not
-expose the host publicly until those checks and authorization tests are complete.
+The production OAuth flow has also been validated for an existing deployment. Confirm
+the scopes, permissions and connection flow for each client and deployment; the new
+plugin and reconciliation workflows still need their own end-to-end validation.
+
+## Guided read-only reviews
+
+Starter prompts: “Summarize November for my household” and “Review my inbox”.
+These workflows use `mcp:read`; they do not require or invoke write tools.
+The API still checks the signed-in user's group membership and ownership on each
+request. Tool annotations guide clients but are not authorization controls.
+
+For a household summary, use `list_groups` to identify the group if needed, then
+call `household_summary` with its ID, year, month, and time-zone ID (for example,
+`America/New_York`). The API converts the local month to an inclusive start and
+exclusive next-month boundary, using the zone's offset at each boundary. The
+response includes those UTC instants, category spending, and the caller's gross
+paid and share amounts separately for every currency. Settlements are excluded.
+Do not add unlike currencies. Missing currencies in exposure mean the caller
+neither paid nor had a share in that currency; spending may still show them.
+An unavailable time zone or an ambiguous or nonexistent month boundary is refused.
+Do not silently guess a group or time zone.
+
+For a custom MCP client or plugin, connect to the authenticated `/mcp` endpoint
+as described above and let its tool discovery expose `household_summary` and the
+inbox tools. A starter prompt can instruct the assistant to identify the group,
+month and time zone, call the summary, and present each currency separately. The
+inbox starter can follow the sequence below. These instructions are advisory:
+the server and API enforce permissions, and a plugin must not embed user tokens.
+Deploy both the API and MCP images from this change before invoking the new tool
+contract. Test with a read-only account before enabling it for users.
+For inbox review, use `bank_inbox_summary`, `bank_inbox` (page through as needed)
+and `list_receipt_inbox`. Review selected items with `get_bank_row` or
+`review_receipt_inbox_item`; each returns the source item and expense candidates
+without filing, linking, dismissing or changing it. Show dates, amounts, currencies
+and candidate details, and treat matches as suggestions, not proof. A duplicate
+count is optional and a missing count is not zero. Use the existing suggestion
+and preview tools when useful; never assume an empty page covers the whole inbox.
+If a user later requests a change, present the intended action and obtain explicit
+confirmation before using a write tool. A preview does not reserve data or grant
+permission; recheck stale candidates and respect API duplicate refusals. Never set
+an override merely to bypass a refusal. The write scope and API authorization
+remain mandatory, and clients must not rely on prompt instructions as enforcement.
+
+The [repository plugin](../plugin/README.md) provides MCP-based `groupsplit` and `groupsplit-inbox` skills, plus focused household summary and read-only inbox review skills. Bank-and-receipt reconciliation requires a user decision and multiple separate writes; it is not atomic.

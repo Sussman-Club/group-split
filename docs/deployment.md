@@ -32,9 +32,7 @@ explains that the change belongs in `dev` first.
 A merge to `main` raises the **patch**: the job reads the newest `app-v*` tag, adds one,
 and writes the new tag before it builds anything. A minor or major release has to be
 asked for, because nothing in a commit says which it should be. Run the workflow
-manually (`Actions` -> `Deploy` -> `Run workflow`) and choose the `bump`. It is the CLI's
-release job in shape, [`release-cli.yml`](../.github/workflows/release-cli.yml), including
-that a tag already on `HEAD` is reused, so re-running a failed deploy ships the same
+manually (`Actions` -> `Deploy` -> `Run workflow`) and choose the `bump`. A tag already on `HEAD` is reused, so re-running a failed deploy ships the same
 version rather than burning a new number.
 
 The version is the image tag and the `Deployment__Version` the AppHost refuses to publish
@@ -42,8 +40,7 @@ without, so a deployed stack, its images and its tag all name the same thing. Th
 claimed before the build, so a build that then fails leaves a version number spent and a
 tag on a commit that never shipped.
 
-`app-v*` is the application. `cli-v*` is the command line, which releases on its own and
-never touches the deployed stack.
+`app-v*` is the application release tag.
 
 ### What has to be in place
 
@@ -436,7 +433,7 @@ removes the item at Plaid, which kills its token); go straight to step 4.
 still there and still readable, which the next step needs.
 
 **3. Retire every token the unwrapped key protected.** Each person unlinks each of their
-banks: **Unlink** on the linked-banks card, or `groupsplit bank unlink <connection-id>`.
+banks using **Unlink** on the linked-banks card.
 Unlinking hands the token to Plaid's `/item/remove` first, so the token a backup holds stops
 working at Plaid. File or skip anything still in the inbox first: unlinking deletes the
 connection's imported rows, though expenses already filed from them keep everything but the
@@ -562,8 +559,7 @@ browser. Use **Sign out** before sharing a device.
 Keycloak's `ssoSessionIdleTimeout` is 15 days and `ssoSessionMaxLifespan` is 90 days, matching
 `AuthenticationExtensions.SessionLifetime` and `MaximumSessionLifetime`. The realm worker
 applies those settings and `rememberMe=false` to existing realms. Native sign-in saves refresh
-tokens in secure device storage by default, subject to the same realm limits. CLI sessions
-also inherit those limits.
+tokens in secure device storage by default, subject to the same realm limits.
 
 A visible page reports user interaction or focus to the antiforgery-protected `/auth/session`
 endpoint, at most once per five minutes. This refreshes token management and renews the cookie
@@ -588,8 +584,7 @@ Realm import only creates a realm that does not exist yet. The `realm-settings` 
 reconciles the managed realm-level values from `realms.json` after Keycloak becomes healthy
 in both run and publish modes, the flow bindings among them. It does the same for the
 `web-app` client's redirect URIs, web origins and post-logout redirect URIs, resolving
-`${WEB_HOSTNAME}` from its environment, and for the `cli` client's grants and `api` audience
-mapper, creating the `cli` client when the realm has none.
+`${WEB_HOSTNAME}` from its environment.
 It also reconciles the `google` provider's `trustEmail`, its essential-claim filter on
 `email_verified`, and the first broker login flow it names, which is rebuilt whole when it
 differs. It creates the `account-deletion` client when the realm lacks it, and holds it to
@@ -747,7 +742,7 @@ applies it on every start, so a realm imported before it said so records them to
 - **User events** are on and kept for 90 days (`eventsExpiration`, in seconds). They cover the
   types in `enabledEventTypes`: signing in and out, registering, the Google first sign-in, link
   and unlink, password and credential changes, password reset, email verification and change,
-  profile change, account deletion, and the CLI's device sign-in, each with its `_ERROR` twin.
+  profile change and account deletion, each with its `_ERROR` twin.
 - **Admin events** are on, without their details (`adminEventsDetailsEnabled` is `false`). The
   details are the representation that was sent, and that can carry a secret: a client or
   identity provider secret, or a user's initial password. The event still says who did what to

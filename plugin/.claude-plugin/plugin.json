@@ -1,0 +1,10 @@
+{
+  "name": "groupsplit",
+  "version": "0.2.0",
+  "description": "Review Group Split household spending and inbox items with MCP.",
+  "author": {
+    "name": "Sussman Club"
+  },
+  "repository": "https://github.com/Sussman-Club/group-split",
+  "license": "MIT"
+}

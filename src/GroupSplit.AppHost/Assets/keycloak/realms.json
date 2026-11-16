@@ -182,35 +182,6 @@
       ]
     },
     {
-      "clientId": "cli",
-      "name": "Command Line",
-      "description": "The groupsplit CLI. Device authorization grant only: a terminal cannot be given a redirect URI, and the browser that approves a sign-in is often on another machine.",
-      "enabled": true,
-      "publicClient": true,
-      "protocol": "openid-connect",
-      "standardFlowEnabled": false,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "attributes": {
-        "oauth2.device.authorization.grant.enabled": "true",
-        "oidc.ciba.grant.enabled": "false"
-      },
-      "protocolMappers": [
-        {
-          "name": "audience-mapper",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "consentRequired": false,
-          "config": {
-            "included.client.audience": "api",
-            "access.token.claim": "true",
-            "id.token.claim": "true"
-          }
-        }
-      ]
-    },
-    {
       "clientId": "account-deletion",
       "name": "Account Deletion",
       "description": "The API, deleting the login of somebody who deleted their account. Client credentials only, and its service account holds realm-management's manage-users and nothing else.",
