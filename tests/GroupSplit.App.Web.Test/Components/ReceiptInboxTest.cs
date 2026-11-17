@@ -190,12 +190,15 @@ public class ReceiptInboxTest : ComponentTest
         var page = Render<ReceiptInbox>();
         page.WaitForAssertion(() => Assert.Contains("First", page.Markup));
         Assert.Empty(page.FindAll("input[type=checkbox]"));
+        Assert.Single(page.FindAll(".gs-fab"));
         await page.FindAll("button").Single(x => x.TextContent.Trim() == "Select").ClickAsync(new MouseEventArgs());
+        Assert.Empty(page.FindAll(".gs-fab"));
         await page.InvokeAsync(() => page.Instance.SelectDraggedRows([first.Id.ToString(), second.Id.ToString()]));
         Assert.Equal(2, page.FindAll("input[type=checkbox]:checked").Count);
         Assert.Contains("Delete selected", page.Markup);
-        await page.FindAll("button").Single(x => x.TextContent.Trim() == "Done").ClickAsync(new MouseEventArgs());
+        await page.Find(".gs-selection-actions").QuerySelectorAll("button").Single(x => x.TextContent.Trim() == "Done").ClickAsync(new MouseEventArgs());
         Assert.Empty(page.FindAll("input[type=checkbox]"));
+        Assert.Single(page.FindAll(".gs-fab"));
         client.Verify(x => x.DeleteReceiptInboxAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

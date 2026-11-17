@@ -5972,4 +5972,6 @@
   <data name="Show original" xml:space="preserve"><value>Mostrar original</value></data>
   <data name="Hide original" xml:space="preserve"><value>Ocultar original</value></data>
   <data name="Loading original…" xml:space="preserve"><value>Cargando original…</value></data>
+  <data name="Selected receipt actions" xml:space="preserve"><value>Acciones para los recibos seleccionados</value></data>
+  <data name="Selected transaction actions" xml:space="preserve"><value>Acciones para las transacciones seleccionadas</value></data>
 </root>

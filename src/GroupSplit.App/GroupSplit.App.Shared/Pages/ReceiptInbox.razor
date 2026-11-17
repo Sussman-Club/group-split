@@ -17,7 +17,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div @ref="_selectionRoot">
+<div @ref="_selectionRoot" class="@(_selectMode ? "gs-selection-active" : null)">
 <PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
 <div class="gs-inbox-context gs-receipt-context">
     <h2>@Loc["Receipts"]</h2>
@@ -51,7 +51,7 @@
         </div>
     </div>
 }
-<ExtendedFab Label="@Loc["Add receipt"]" AlwaysExtended="true" OnClick="OpenUpload" />
+@if (!_selectMode) { <ExtendedFab Label="@Loc["Add receipt"]" AlwaysExtended="true" OnClick="OpenUpload" /> }
 @if (!_uploading && _uploadProgress is not null) { <p role="status">@_uploadProgress</p> }
 <nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Receipt status"]">
     @foreach (var status in Enum.GetValues<ReceiptFilter>())
@@ -165,14 +165,6 @@ else if (_rows is not null)
         }
         </div>
     }
-    @if (_selectMode)
-    {
-        <div class="gs-selection-actions">
-            <strong>@Loc["{0} selected", _selected.Count]</strong>
-            <MudButton Disabled="@(_busy || _selected.Count == 0)" OnClick="BulkSetIgnored">@(_filter == ReceiptFilter.Waiting ? Loc["Ignore selected"] : Loc["Restore selected"])</MudButton>
-            <MudButton Disabled="@(_busy || _selected.Count == 0)" Color="Color.Error" OnClick="BulkDelete">@Loc["Delete selected"]</MudButton>
-        </div>
-    }
     @if (_pageRows.Count < _visibleRows.Count)
     {
         <div class="gs-inbox-show-more">
@@ -184,6 +176,15 @@ else if (_rows is not null)
 </LoadView>
 </div>
 </div>
+@if (_selectMode)
+{
+    <div class="gs-selection-actions" role="region" aria-label="@Loc["Selected receipt actions"]">
+        <strong aria-live="polite">@Loc["{0} selected", _selected.Count]</strong>
+        <MudButton Variant="Variant.Outlined" Disabled="@(_busy || _selected.Count == 0)" OnClick="BulkSetIgnored">@(_filter == ReceiptFilter.Waiting ? Loc["Ignore selected"] : Loc["Restore selected"])</MudButton>
+        <MudButton Variant="Variant.Filled" Disabled="@(_busy || _selected.Count == 0)" Color="Color.Error" OnClick="BulkDelete">@Loc["Delete selected"]</MudButton>
+        <MudButton Disabled="_busy" OnClick="StopSelection">@Loc["Done"]</MudButton>
+    </div>
+}
 </div>
 @code {
     private static string? ReceiptLogo(ReceiptInboxResponse row)

@@ -27,7 +27,7 @@
     paid and how much, and everything else is secondary.
 *@
 
-<div @ref="_selectionRoot">
+<div @ref="_selectionRoot" class="@(_selectMode ? "gs-selection-active" : null)">
 <PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
 <div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review bank transactions and add them to a group or match an expense."]</span></div>
 <div>
@@ -191,12 +191,6 @@
 
                 }
             </div>
-            @if (_selectMode)
-            {
-                <div class="gs-selection-actions"><strong>@Loc["{0} selected", _selected.Count]</strong>
-                    <MudButton Disabled="@(_busy is not null || _selected.Count == 0)" OnClick="BulkChange">@(State.Filter == InboxStatus.New ? Loc["Ignore selected"] : Loc["Restore selected"])</MudButton>
-                </div>
-            }
 
             @if (State.HasMore)
             {
@@ -211,6 +205,14 @@
 </div>
 </div>
 </div>
+@if (_selectMode)
+{
+    <div class="gs-selection-actions" role="region" aria-label="@Loc["Selected transaction actions"]">
+        <strong aria-live="polite">@Loc["{0} selected", _selected.Count]</strong>
+        <MudButton Variant="Variant.Outlined" Disabled="@(_busy is not null || _selected.Count == 0)" OnClick="BulkChange">@(State.Filter == InboxStatus.New ? Loc["Ignore selected"] : Loc["Restore selected"])</MudButton>
+        <MudButton Disabled="@(_busy is not null)" OnClick="StopSelection">@Loc["Done"]</MudButton>
+    </div>
+}
 </div>
 
 @code {
