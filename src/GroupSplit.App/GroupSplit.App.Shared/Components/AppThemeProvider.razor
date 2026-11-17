@@ -29,6 +29,18 @@
             return;
         }
 
+        // The page is interactive from this render on, so say so now, before the theme
+        // is asked about. This used to come last, after four round trips to the browser,
+        // and the chrome that waits on it -- the boot sweep, the muted rows and buttons
+        // -- came to life a beat after the runtime had already rebuilt the page: two
+        // visible changes where there need only be one. Under WebAssembly the call runs
+        // in the same task as the render, so the two now land in the same frame.
+        await JS.InvokeVoidAsync("gs.ready");
+
+        // The theme itself was seeded before this render: by the cookie gs.js keeps for
+        // the prerender, and by the state the prerender persists for the runtime. What
+        // follows is the browser's own answer, which is the one that counts; in the
+        // common case it changes nothing and announces nothing.
         // Both answers are read before either is applied. Applying them one at a
         // time resolved to dark in between for a dark-desktop user who had chosen
         // Light, for as long as the second interop call took -- long enough to
@@ -45,7 +57,6 @@
         });
 
         await ApplyDocumentThemeAsync();
-        await JS.InvokeVoidAsync("gs.ready");
         StateHasChanged();
     }
 
@@ -77,9 +88,11 @@
             // told us at best repeats the read, and at worst -- as it did during
             // hydration -- races it, leaving "System" where the person's own
             // choice had been.
+            // Stored twice over: in localStorage for the browser, and in a cookie so the
+            // next prerender can draw the chosen theme instead of guessing light.
             if (origin is ThemeChangeOrigin.Choice)
             {
-                await JS.InvokeVoidAsync("localStorage.setItem", ThemePreference.StorageKey, Preference.Mode.ToString());
+                await JS.InvokeVoidAsync("gs.storeTheme", Preference.Mode.ToString());
             }
         }
         catch (Exception exception) when (exception is JSException or ObjectDisposedException or TaskCanceledException or InvalidOperationException)

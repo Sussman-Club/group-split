@@ -1,11 +1,9 @@
 @using GroupSplit.App.Shared.Components
 @using GroupSplit.App.Shared.Services
 @using GroupSplit.Shared
-@inherits LayoutComponentBase
-@inject NavigationManager Nav
+@inherits NavigatedLayout
 @inject IJSRuntime JS
 @inject LocalClock Clock
-@implements IDisposable
 
 <AppThemeProvider />
 
@@ -39,7 +37,12 @@
     <div class="gs-main">
         <AppBar />
         <main class="gs-content">
-            <div class="gs-page" @key="_path">
+            @* Re-keyed on every navigation, which is what makes a route change feel like a
+               transition: the wrapper and everything in it are built afresh, and the class
+               -- there only once the person has navigated -- lets them animate in. The page
+               they loaded carries no class, so the runtime's takeover, which rebuilds the
+               same nodes, has nothing to replay. See NavigatedLayout. *@
+            <div class="gs-page @EnterClass" @key="Path">
                 @* The last resort, for bugs. Rejected requests never reach it: the API's
                    refusals are read by ApiErrorPresenter and shown as messages, so what
                    lands here is an exception nothing expected. Re-keyed with the page, so
@@ -70,42 +73,9 @@
     [CascadingParameter] public UserInfo? UserInfo { get; set; }
 
     private bool _rail;
-    private string _path = "";
     private ErrorBoundary? _errorBoundary;
 
     private void Recover() => _errorBoundary?.Recover();
-
-    protected override void OnInitialized()
-    {
-        _path = PathOf(Nav.Uri);
-        Nav.LocationChanged += OnLocationChanged;
-    }
-
-    // Re-keying the page wrapper on every navigation replays the entrance
-    // animation, which is what makes route changes feel like transitions.
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-    {
-        _path = PathOf(e.Location);
-        InvokeAsync(StateHasChanged);
-    }
-
-    /// <summary>
-    /// The address without its query string or fragment: the part that says which page.
-    /// </summary>
-    /// <remarks>
-    /// The key used to be the whole address, and a page that keeps a filter in its query
-    /// string -- the You page's view, the ledger's kind -- was torn down and built again
-    /// every time that filter moved. The date range and the search box went with it, and
-    /// the instance that had asked the server for the new figures was disposed before they
-    /// arrived. A change of query is the same page answering a different question, not a
-    /// navigation.
-    /// </remarks>
-    private static string PathOf(string uri)
-    {
-        var cut = uri.IndexOfAny(['?', '#']);
-
-        return cut < 0 ? uri : uri[..cut];
-    }
 
     // The collapse works before the runtime arrives (gs.js), so pick up
     // whatever the user did in the meantime rather than snapping it back.
@@ -145,5 +115,4 @@
         }
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

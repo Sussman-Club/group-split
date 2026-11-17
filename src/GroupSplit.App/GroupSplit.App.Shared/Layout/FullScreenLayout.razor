@@ -1,5 +1,5 @@
 @using GroupSplit.App.Shared.Components
-@inherits LayoutComponentBase
+@inherits NavigatedLayout
 
 @* Minimal layout for standalone pages like Login. Includes Mud providers so Mud components work without MainLayout. *@
 <AppThemeProvider />
@@ -8,7 +8,10 @@
     <div style="display: flex; justify-content: flex-end; padding: 20px 24px">
         <ThemeModeMenu />
     </div>
-    <div style="flex: 1; display: flex; flex-direction: column; padding: 0 20px 48px">
+    @* Keyed and classed the same way as MainLayout's page wrapper, and for the same
+       reason: the mark draws itself in on arrival, and must not draw itself in again
+       when the runtime rebuilds the page it is already on. See NavigatedLayout. *@
+    <div class="@EnterClass" style="flex: 1; display: flex; flex-direction: column; padding: 0 20px 48px" @key="Path">
         @Body
     </div>
 </div>

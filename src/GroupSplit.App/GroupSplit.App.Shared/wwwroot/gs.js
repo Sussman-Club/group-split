@@ -24,6 +24,29 @@
 
     root.dataset.theme = resolve(stored) ? "dark" : "light";
 
+    // The same choice, and the OS preference beside it, in a cookie: the server
+    // cannot read localStorage, and without this it prerendered light for
+    // everybody, so a dark-mode user saw Mud's own colours flip once the runtime
+    // had asked the browser. Written on every load, since the OS preference can
+    // have moved since the last one. `Mode.scheme`, e.g. `System.dark`; the web
+    // host reads it back in ThemeCookie.cs.
+    function storeTheme(mode) {
+        if (mode !== "Light" && mode !== "Dark") mode = "System";
+
+        try { localStorage.setItem(storageKey, mode); } catch { /* blocked storage */ }
+
+        try {
+            const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            const secure = location.protocol === "https:" ? "; Secure" : "";
+            document.cookie = storageKey + "=" + mode + "." + system
+                + "; Path=/; Max-Age=31536000; SameSite=Lax" + secure;
+        } catch {
+            // No cookie, no seeded prerender: the runtime still puts it right.
+        }
+    }
+
+    storeTheme(stored);
+
     // --------------------------------------------------------- counters --
 
     // An element with `data-gs-count` already holds its final, formatted text.
@@ -234,7 +257,7 @@
         const seg = event.target.closest(".gs-seg-btn[data-mode]");
         if (seg) {
             const mode = seg.dataset.mode;
-            write(storageKey, mode);
+            storeTheme(mode);
             root.dataset.theme = resolve(mode) ? "dark" : "light";
             const group = seg.closest(".gs-seg");
             const buttons = [...group.querySelectorAll(".gs-seg-btn")];
@@ -261,6 +284,11 @@
     window.gs = {
         setTheme(isDark) {
             root.dataset.theme = isDark ? "dark" : "light";
+        },
+
+        // The person's choice, kept for the browser and for the next prerender.
+        storeTheme(mode) {
+            storeTheme(mode);
         },
 
         // Called once Blazor has rendered interactively: hands the chrome over

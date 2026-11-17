@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Components;
+
 namespace GroupSplit.App.Shared.Services;
 
 public enum ThemeMode
@@ -22,19 +24,41 @@ public enum ThemeChangeOrigin
 /// resolves the two into the dark/light flag the theme provider consumes.
 /// Deliberately free of JS interop so it can be set during prerender.
 /// </summary>
+/// <remarks>
+/// A fresh instance answers light, and for a long time that is what the first render
+/// showed everybody: the prerender has no browser to ask, and the runtime that replaced
+/// it started from a fresh instance too, so a dark-mode user watched Mud's colours go
+/// light and back on every page load. Two things now put the answer in before anything
+/// renders. The web host seeds the prerender's instance from a cookie that gs.js keeps
+/// beside the stored choice; and the two properties below are persisted from that
+/// prerender into the runtime, so its first render draws what the prerender drew. The
+/// browser's own answer still arrives afterwards and still wins -- it just has nothing
+/// to change, most of the time.
+/// </remarks>
 public sealed class ThemePreference
 {
     public const string StorageKey = "groupsplit.theme";
 
-    private bool _systemIsDark;
+    /// <summary>
+    /// The chosen mode. Settable for the seeding and persistence described above, which
+    /// happen before anybody is listening; a change worth announcing goes through
+    /// <see cref="Set"/>.
+    /// </summary>
+    [PersistentState]
+    public ThemeMode Mode { get; set; } = ThemeMode.System;
 
-    public ThemeMode Mode { get; private set; } = ThemeMode.System;
+    /// <summary>
+    /// The OS preference as last reported. Settable for the same reason as
+    /// <see cref="Mode"/>; a change worth announcing goes through <see cref="SetSystemIsDark"/>.
+    /// </summary>
+    [PersistentState]
+    public bool SystemIsDark { get; set; }
 
     public bool IsDark => Mode switch
     {
         ThemeMode.Light => false,
         ThemeMode.Dark => true,
-        _ => _systemIsDark
+        _ => SystemIsDark
     };
 
     public event Action<ThemeChangeOrigin>? Changed;
@@ -57,7 +81,7 @@ public sealed class ThemePreference
         var wasDark = IsDark;
 
         Mode = mode;
-        _systemIsDark = systemIsDark;
+        SystemIsDark = systemIsDark;
 
         // The menu renders the mode and the provider renders the resolved flag,
         // so either one moving is worth announcing.
@@ -81,12 +105,12 @@ public sealed class ThemePreference
     /// <summary>Records the OS preference, which only matters in <see cref="ThemeMode.System"/>.</summary>
     public void SetSystemIsDark(bool isDark)
     {
-        if (_systemIsDark == isDark)
+        if (SystemIsDark == isDark)
         {
             return;
         }
 
-        _systemIsDark = isDark;
+        SystemIsDark = isDark;
 
         if (Mode == ThemeMode.System)
         {

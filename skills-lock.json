@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "blazor-expert": {
+      "source": "markpitt/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/blazor-expert/SKILL.md",
+      "computedHash": "dd0358c4d8d0278d5d5933804bcd7ad255d28a6d19aa378a7d6339731b9fb4ea"
+    }
+  }
+}
