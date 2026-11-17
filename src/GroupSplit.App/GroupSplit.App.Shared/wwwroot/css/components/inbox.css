@@ -443,3 +443,29 @@ html.gs-receipt-import-open { overflow: hidden; }
 @media (max-width: 600px) {
     .gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 60px 36px minmax(0, 1fr) auto; gap: 6px; }
 }
+
+/* Keep the evidence visible and the decision anchored below it. */
+.gs-compare-heading h2 { margin: 0; }
+.gs-compare-heading p { margin: 5px 0 0; color: var(--gs-muted); font-size: .875rem; }
+.gs-compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.gs-compare-side { min-width: 0; border: 1px solid var(--gs-line); border-radius: var(--gs-radius); overflow: hidden; background: var(--mud-palette-surface); }
+.gs-compare-side-header { padding: 16px; display: grid; gap: 5px; }
+.gs-compare-side-header h3 { margin: 0; overflow-wrap: anywhere; }
+.gs-compare-label { color: var(--gs-teal-deep); font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .035em; }
+.gs-compare-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--gs-muted); }
+.gs-compare-meta strong { color: var(--gs-ink); }
+.gs-compare-detail { color: var(--gs-muted); font-size: .85rem; }
+.gs-compare-original { border-top: 1px solid var(--gs-line); }
+.gs-compare-file { padding: 10px 16px; display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: .8rem; }
+.gs-compare-file span { min-width: 0; overflow-wrap: anywhere; }
+.gs-compare-file a { flex-shrink: 0; color: var(--gs-teal-deep); }
+.gs-compare-original > img { display: block; max-height: 65vh; width: auto; max-width: 100%; margin: auto; object-fit: contain; }
+.gs-compare-original .gs-pdf-viewport { max-height: 55vh; }
+.gs-compare-empty { margin: 0; padding: 24px 16px; border-top: 1px solid var(--gs-line); color: var(--gs-muted); }
+.gs-compare-items { padding: 12px 16px; border-top: 1px solid var(--gs-line); }
+.gs-compare-items summary { cursor: pointer; font-weight: 600; }
+.gs-compare-items > div { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; }
+.gs-compare-warning { color: var(--gs-muted); margin: 16px 0 0; font-size: .875rem; }
+.gs-selection-toolbar { justify-content: flex-start; padding: 0 0 10px; }
+.gs-selection-hint { padding: 0; }
+@media (max-width: 600px) { .gs-compare-grid { grid-template-columns: 1fr; } .gs-compare-original > img { max-height: 55vh; } }

@@ -66,7 +66,15 @@
                   Placeholder="@Loc["Search merchants or items"]" aria-label="@Loc["Search merchants or items"]"
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
     <DateRangeFilter Value="_dateRange" ValueChanged="SetDateRange" />
+    @if (_filter != ReceiptFilter.Added && _visibleRows.Count > 0)
+    {
+        <MudButton Variant="@(_selectMode ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Checklist" Disabled="_busy" OnClick="@(_selectMode ? StopSelection : StartSelection)">@(_selectMode ? Loc["Done"] : Loc["Select"])</MudButton>
+    }
 </div>
+@if (_selectMode)
+{
+    <div class="gs-selection-toolbar"><span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="_busy">@Loc["Select visible"]</MudButton><span class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</span></div>
+}
 @{ var showLoading = _loading && !_uploading; }
 @if (_bulkResult is not null) { <p role="status">@_bulkResult</p> }
 <div class="gs-inbox-results" aria-busy="@_loading">
@@ -97,19 +105,6 @@ else if (_rows is not null && _visibleRows.Count == 0)
 else if (_rows is not null)
 {
     <div class="gs-card gs-receipt-inbox-list">
-    @if (_filter != ReceiptFilter.Added)
-    {
-        <div class="gs-selection-toolbar">
-            @if (!_selectMode) { <MudButton OnClick="StartSelection" Disabled="_busy">@Loc["Select"]</MudButton> }
-            else
-            {
-                <span>@Loc["{0} selected", _selected.Count]</span>
-                <MudButton OnClick="SelectVisible" Disabled="_busy">@Loc["Select visible"]</MudButton>
-                <MudButton OnClick="StopSelection" Disabled="_busy">@Loc["Done"]</MudButton>
-            }
-        </div>
-        @if (_selectMode) { <p class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</p> }
-    }
     @foreach (var row in _pageRows)
     {
         var source = row.Attachments.FirstOrDefault();
@@ -368,7 +363,7 @@ else if (_rows is not null)
         if (!await Errors.TryAsync(async () => other = await Client.GetReceiptInboxAsync(duplicateId), Loc["Could not load receipts."].Value) || other is null) return;
         var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
             new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
-            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
         if ((await dialog.Result)?.Canceled != false) return;
         _busy = true;
         try
@@ -491,7 +486,7 @@ else if (_rows is not null)
     {
         var dialog = await Dialogs.ShowAsync<ReceiptExpenseDuplicateDialog>(Loc["Possible duplicate receipt"].Value,
             new DialogParameters<ReceiptExpenseDuplicateDialog> { { x => x.Row, row }, { x => x.Match, match } },
-            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
         if (await dialog.Result is not { Canceled: false, Data: bool delete }) return;
         _busy = true;
         try

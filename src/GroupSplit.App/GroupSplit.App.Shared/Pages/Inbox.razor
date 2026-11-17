@@ -47,7 +47,15 @@
                       Placeholder="@Loc["Search merchants or accounts"]" aria-label="@Loc["Search merchants or accounts"]"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="gs-receipt-search" />
         <DateRangeFilter Value="@State.Range" ValueChanged="SetRangeAsync" />
+        @if (State.Filter != InboxStatus.Filed && State.Rows.Count > 0)
+        {
+            <MudButton Variant="@(_selectMode ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Checklist" Disabled="@(_busy is not null)" OnClick="@(_selectMode ? StopSelection : StartSelection)">@(_selectMode ? Loc["Done"] : Loc["Select"])</MudButton>
+        }
     </div>
+    @if (_selectMode)
+    {
+        <div class="gs-selection-toolbar"><span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="@(_busy is not null)">@Loc["Select visible"]</MudButton><span class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</span></div>
+    }
 
     @{ var showLoading = _initializing || (State.IsLoading && _busy is null); }
     @if (_bulkResult is not null) { <p role="status">@_bulkResult</p> }
@@ -91,14 +99,6 @@
     else
     {
         <div class="gs-card gs-receipt-inbox-list">
-            @if (State.Filter != InboxStatus.Filed)
-            {
-                <div class="gs-selection-toolbar">
-                    @if (!_selectMode) { <MudButton OnClick="StartSelection" Disabled="@(_busy is not null)">@Loc["Select"]</MudButton> }
-                    else { <span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="@(_busy is not null)">@Loc["Select visible"]</MudButton><MudButton OnClick="StopSelection" Disabled="@(_busy is not null)">@Loc["Done"]</MudButton> }
-                </div>
-                @if (_selectMode) { <p class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</p> }
-            }
                     <div class="gs-bank-inbox-list">
                 @foreach (var item in VisibleRows)
                 {

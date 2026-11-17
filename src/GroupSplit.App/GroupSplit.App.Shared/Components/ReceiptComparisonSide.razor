@@ -1,0 +1,57 @@
+@using GroupSplit.Shared
+@inject NavigationManager Nav
+
+<section class="gs-compare-side" aria-label="@Label">
+    <header class="gs-compare-side-header">
+        <span class="gs-compare-label">@Label</span>
+        <h3>@Name</h3>
+        <div class="gs-compare-meta"><span>@(Date?.ToString("d") ?? Loc["Date unavailable"].Value)</span><strong>@Total.ToString("N2") @Currency</strong></div>
+        @if (!string.IsNullOrWhiteSpace(Detail)) { <span class="gs-compare-detail">@Detail</span> }
+    </header>
+    @if (Loading)
+    {
+        <p class="gs-compare-empty" role="status">@Loc["Loading receipt…"]</p>
+    }
+    else if (Attachments.Count > 0)
+    {
+        <div class="gs-compare-originals">
+            @foreach (var file in Attachments)
+            {
+                var url = Source(file.Id);
+                <div class="gs-compare-original" @key="file.Id">
+                    <div class="gs-compare-file"><span>@file.FileName</span><a href="@url" target="_blank" rel="noopener noreferrer">@Loc["Open original"]</a></div>
+                    <ReceiptPreview Url="@url" ContentType="@file.ContentType" FileName="@file.FileName" />
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="gs-compare-empty">@Loc["No original receipt file available."]</p>
+    }
+    @if (Items.Count > 0)
+    {
+        <details class="gs-compare-items" open="@(Attachments.Count == 0)">
+            <summary>@Loc["Receipt items"] (@Items.Count)</summary>
+            @foreach (var item in Items) { <div><span>@item.Name</span><span>@item.Total.ToString("N2")</span></div> }
+        </details>
+    }
+</section>
+
+@code {
+    public sealed record Item(string Name, decimal Total);
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public DateOnly? Date { get; set; }
+    [Parameter] public decimal Total { get; set; }
+    [Parameter] public string Currency { get; set; } = "";
+    [Parameter] public Guid ReceiptId { get; set; }
+    [Parameter] public Guid? ExpenseId { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public IReadOnlyList<ReceiptAttachmentResponse> Attachments { get; set; } = [];
+    [Parameter] public IReadOnlyList<Item> Items { get; set; } = [];
+    private string Source(Guid id) => ExpenseId is { } expenseId
+        ? Nav.BaseUri + $"api/transactions/{expenseId}/receipt-attachments/{id}?inline=true"
+        : Nav.BaseUri + $"api/receipts/inbox/{ReceiptId}/files/{id}";
+}

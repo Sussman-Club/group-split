@@ -82,6 +82,28 @@ public class ReceiptInboxReviewTest : ComponentTest
     }
 
     [Fact]
+    public async Task Expense_duplicate_review_loads_both_original_receipt_images()
+    {
+        var id = Guid.NewGuid(); var expense = Guid.NewGuid(); var firstFile = Guid.NewGuid(); var secondFile = Guid.NewGuid();
+        var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Store", Total = 12 },
+            [new ReceiptAttachmentResponse(firstFile, null, null, id, "inbox.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([new ReceiptExpenseCandidate(expense, "Store", 12, "USD", DateTimeOffset.UtcNow, HasReceipt: true)]);
+        ReceiptAttachments.Setup(x => x.GetAsync(expense, It.IsAny<CancellationToken>())).ReturnsAsync([new ReceiptAttachmentResponse(secondFile, expense, null, null, "existing.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Possible duplicate receipt", page.Markup));
+        var pending = page.FindAll("button").Single(button => button.TextContent.Trim() == "Review").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Equal(2, dialogs.FindAll(".gs-compare-original img").Count));
+        Assert.Contains("inbox.jpg", dialogs.Markup);
+        Assert.Contains("existing.jpg", dialogs.Markup);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        await pending;
+    }
+
+    [Fact]
     public void A_match_can_be_dismissed_without_removing_the_receipt()
     {
         var id = Guid.NewGuid();

@@ -1,39 +1,24 @@
 @using GroupSplit.Shared
-@inject NavigationManager Nav
 
-<MudDialog>
-    <TitleContent><h2>@Loc["Compare receipts"]</h2></TitleContent>
+<MudDialog Class="gs-compare-dialog">
+    <TitleContent><div class="gs-compare-heading"><h2>@Loc["Compare receipts"]</h2><p>@Loc["Check the originals and details before deciding."]</p></div></TitleContent>
     <DialogContent>
-        <p>@Loc["Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone."]</p>
-        <div style="display: flex; flex-wrap: wrap; gap: 1rem">
+        <div class="gs-compare-grid">
             @foreach (var entry in new[] { (Row: DeleteRow, Label: Loc["Receipt to delete"].Value), (Row: KeepRow, Label: Loc["Receipt to keep"].Value) })
             {
-                <section class="gs-card gs-card-pad" style="flex: 1 1 220px; min-width: 0">
-                    <h3>@entry.Label</h3>
-                    <p>@(entry.Row.MerchantDisplayName ?? entry.Row.Receipt.MerchantName ?? Loc["Receipt"].Value)</p>
-                    <p>@entry.Row.Receipt.PurchaseDate?.ToString("d") · @entry.Row.Receipt.Total.ToString("N2") @entry.Row.Currency</p>
-                    @if (entry.Row.ExpenseName is { } expense) { <p>@Loc["Added to: {0}", expense]</p> }
-                    @foreach (var item in entry.Row.Receipt.Items) { <p>@item.Name · @item.TotalPrice.ToString("N2")</p> }
-                    @foreach (var file in entry.Row.Attachments)
-                    {
-                        <MudButton Href="@Source(entry.Row, file.Id)" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton>
-                        <ReceiptPreview @key="file.Id" Url="@Source(entry.Row, file.Id)" ContentType="@file.ContentType" FileName="@file.FileName" />
-                    }
-                </section>
+                <ReceiptComparisonSide Label="@entry.Label" Name="@(entry.Row.MerchantDisplayName ?? entry.Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
+                    Date="@entry.Row.Receipt.PurchaseDate" Total="@entry.Row.Receipt.Total" Currency="@entry.Row.Currency"
+                    Detail="@(entry.Row.ExpenseName is { } expense ? Loc["Added to: {0}", expense].Value : null)"
+                    ReceiptId="@entry.Row.Id" ExpenseId="@entry.Row.ExpenseId" Attachments="@entry.Row.Attachments"
+                    Items="@entry.Row.Receipt.Items.Select(item => new ReceiptComparisonSide.Item(item.Name, item.TotalPrice)).ToArray()" />
             }
         </div>
+        <p class="gs-compare-warning">@Loc["Deleting this receipt also deletes its original files and cannot be undone."]</p>
     </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Keep both"]</MudButton>
-        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@Loc["Delete receipt"]</MudButton>
-    </DialogActions>
+    <DialogActions><MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Keep both"]</MudButton><MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@Loc["Delete receipt"]</MudButton></DialogActions>
 </MudDialog>
-
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse DeleteRow { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse KeepRow { get; set; } = null!;
-    private string Source(ReceiptInboxResponse row, Guid id) => row.ExpenseId is { } expenseId
-        ? Nav.BaseUri + $"api/transactions/{expenseId}/receipt-attachments/{id}?inline=true"
-        : Nav.BaseUri + $"api/receipts/inbox/{row.Id}/files/{id}";
 }

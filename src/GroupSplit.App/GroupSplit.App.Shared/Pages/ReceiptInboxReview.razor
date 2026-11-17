@@ -254,7 +254,7 @@
         if (!await Errors.TryAsync(async () => other = await Client.GetReceiptInboxAsync(duplicateId), Loc["Could not load receipts."].Value) || other is null) return;
         var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
             new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
-            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
         if ((await dialog.Result)?.Canceled != false) return;
         await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });
     }
@@ -262,7 +262,7 @@
     {
         var dialog = await Dialogs.ShowAsync<ReceiptExpenseDuplicateDialog>(Loc["Possible duplicate receipt"].Value,
             new DialogParameters<ReceiptExpenseDuplicateDialog> { { x => x.Row, _row! }, { x => x.Match, match } },
-            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
         if (await dialog.Result is not { Canceled: false, Data: bool delete }) return;
         if (!delete) { await Dismiss(match.Id); return; }
         await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });

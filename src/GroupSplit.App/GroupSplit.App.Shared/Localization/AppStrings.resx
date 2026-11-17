@@ -5956,4 +5956,10 @@
   <data name="Delete selected receipts?" xml:space="preserve"><value>Delete selected receipts?</value></data>
   <data name="These receipts and their original files will be permanently deleted." xml:space="preserve"><value>These receipts and their original files will be permanently deleted.</value></data>
   <data name="Ignore selected transactions?" xml:space="preserve"><value>Ignore selected transactions?</value></data>
+  <data name="Check the originals and details before deciding." xml:space="preserve"><value>Check the originals and details before deciding.</value></data>
+  <data name="Date unavailable" xml:space="preserve"><value>Date unavailable</value></data>
+  <data name="Loading receipt…" xml:space="preserve"><value>Loading receipt…</value></data>
+  <data name="Open original" xml:space="preserve"><value>Open original</value></data>
+  <data name="No original receipt file available." xml:space="preserve"><value>No original receipt file available.</value></data>
+  <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Deleting this receipt also deletes its original files and cannot be undone.</value></data>
 </root>

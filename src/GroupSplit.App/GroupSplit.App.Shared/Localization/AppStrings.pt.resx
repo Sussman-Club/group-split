@@ -5956,4 +5956,10 @@
   <data name="Delete selected receipts?" xml:space="preserve"><value>Excluir os recibos selecionados?</value></data>
   <data name="These receipts and their original files will be permanently deleted." xml:space="preserve"><value>Estes recibos e seus arquivos originais serão excluídos permanentemente.</value></data>
   <data name="Ignore selected transactions?" xml:space="preserve"><value>Ignorar as transações selecionadas?</value></data>
+  <data name="Check the originals and details before deciding." xml:space="preserve"><value>Confira os originais e os detalhes antes de decidir.</value></data>
+  <data name="Date unavailable" xml:space="preserve"><value>Data indisponível</value></data>
+  <data name="Loading receipt…" xml:space="preserve"><value>Carregando recibo…</value></data>
+  <data name="Open original" xml:space="preserve"><value>Abrir original</value></data>
+  <data name="No original receipt file available." xml:space="preserve"><value>Nenhum arquivo original do recibo disponível.</value></data>
+  <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Excluir este recibo também exclui seus arquivos originais e não pode ser desfeito.</value></data>
 </root>
