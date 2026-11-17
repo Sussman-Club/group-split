@@ -146,8 +146,9 @@ public class ReceiptInboxTest : ComponentTest
         var review = page.FindAll("button").Single(x => x.TextContent.Contains("Compare receipts")).ClickAsync(new MouseEventArgs());
         dialog.WaitForAssertion(() => Assert.Contains("Inbox receipt", dialog.Markup));
         Assert.Contains("Matching receipt", dialog.Markup);
-        Assert.Contains("first.pdf", dialog.Markup);
-        Assert.Contains("second.pdf", dialog.Markup);
+        Assert.DoesNotContain("first.pdf", dialog.Markup);
+        Assert.DoesNotContain("second.pdf", dialog.Markup);
+        Assert.Empty(dialog.FindAll(".gs-pdf-preview, img"));
         Assert.Contains("Keep both", dialog.Markup);
         await dialog.FindAll("button").Single(x => x.TextContent.Contains("Keep both")).ClickAsync(new MouseEventArgs());
         await review;

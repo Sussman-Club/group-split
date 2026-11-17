@@ -26,7 +26,7 @@
         <MudAlert Severity="Severity.Warning" Class="mb-4">@Loc["Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing."]
             @foreach (var duplicate in row.PossibleDuplicates)
             {
-                <MudButton OnClick="@(() => CompareReceipt(row, duplicate.Id))" Size="Size.Small">@Loc["Compare receipts"]</MudButton>
+                <MudButton Class="gs-duplicate-compare-action" OnClick="@(() => CompareReceipt(row, duplicate.Id))" Size="Size.Small">@Loc["Compare receipts"]</MudButton>
             }
         </MudAlert>
     }

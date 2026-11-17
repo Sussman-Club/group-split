@@ -5967,4 +5967,6 @@
   <data name="Attached to an expense; this receipt will be kept." xml:space="preserve"><value>Este recibo está anexado a uma despesa e será mantido.</value></data>
   <data name="Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone." xml:space="preserve"><value>Selecione o recibo a excluir. O outro será mantido. A exclusão também remove seus arquivos originais e não pode ser desfeita.</value></data>
   <data name="This receipt will be kept." xml:space="preserve"><value>Este recibo será mantido.</value></data>
+  <data name="Compare the receipt details before deciding." xml:space="preserve"><value>Compare os detalhes dos recibos antes de decidir.</value></data>
+  <data name="No itemized receipt details available." xml:space="preserve"><value>Não há detalhes discriminados do recibo disponíveis.</value></data>
 </root>
