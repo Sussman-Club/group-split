@@ -24,9 +24,9 @@
     @if (row.ExpenseId is null && row.PossibleDuplicates.Count > 0)
     {
         <MudAlert Severity="Severity.Warning" Class="mb-4">@Loc["Possible duplicate receipt: another receipt has the same merchant, date, total and currency. Check both before filing."]
-            @foreach (var duplicate in row.PossibleDuplicates.Where(d => d.ExpenseId is null))
+            @foreach (var duplicate in row.PossibleDuplicates)
             {
-                <MudButton Href="@($"/inbox/receipts/{duplicate.Id}")" Size="Size.Small">@Loc["Review matching receipt"]</MudButton>
+                <MudButton OnClick="@(() => CompareReceipt(row, duplicate.Id))" Size="Size.Small">@Loc["Compare receipts"]</MudButton>
             }
         </MudAlert>
     }
@@ -247,6 +247,17 @@
     private Task Upload(InputFileChangeEventArgs args) => Run(async () => {
         await using var stream = args.File.OpenReadStream(10 * 1024 * 1024);
         await Client.UploadInboxReceiptFileAsync(Id, new FileParameter(stream, args.File.Name, args.File.ContentType)); await Load(); });
+    private async Task CompareReceipt(ReceiptInboxResponse row, Guid duplicateId)
+    {
+        if (_busy) return;
+        ReceiptInboxResponse? other = null;
+        if (!await Errors.TryAsync(async () => other = await Client.GetReceiptInboxAsync(duplicateId), Loc["Could not load receipts."].Value) || other is null) return;
+        var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
+            new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+        if ((await dialog.Result)?.Canceled != false) return;
+        await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });
+    }
     private async Task ReviewExpenseDuplicate(ReceiptExpenseCandidate match)
     {
         var dialog = await Dialogs.ShowAsync<ReceiptExpenseDuplicateDialog>(Loc["Possible duplicate receipt"].Value,

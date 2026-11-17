@@ -17,6 +17,7 @@
                     @foreach (var file in entry.Row.Attachments)
                     {
                         <MudButton Href="@Source(entry.Row, file.Id)" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton>
+                        <ReceiptPreview @key="file.Id" Url="@Source(entry.Row, file.Id)" ContentType="@file.ContentType" FileName="@file.FileName" />
                     }
                 </section>
             }

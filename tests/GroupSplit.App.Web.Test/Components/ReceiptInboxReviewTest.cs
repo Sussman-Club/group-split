@@ -5,6 +5,8 @@ using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Components;
 using Moq;
+using MudBlazor;
+using Microsoft.AspNetCore.Components.Web;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -54,6 +56,29 @@ public class ReceiptInboxReviewTest : ComponentTest
             client.Verify(x => x.MatchReceiptInboxAsync(first, It.IsAny<CancellationToken>()), Times.Once);
             Assert.Contains("Current expense", page.Markup);
         });
+    }
+
+    [Fact]
+    public async Task Comparing_a_filed_receipt_opens_both_sides_and_keep_both_deletes_nothing()
+    {
+        var id = Guid.NewGuid(); var otherId = Guid.NewGuid();
+        var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Inbox copy" }, [])
+        { PossibleDuplicates = [new ReceiptDuplicateCandidate(otherId, Guid.NewGuid())] };
+        var other = new ReceiptInboxResponse(otherId, Guid.NewGuid(), "USD", new SaveReceiptRequest { MerchantName = "Filed copy" }, []);
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
+        client.Setup(x => x.GetReceiptInboxAsync(otherId, It.IsAny<CancellationToken>())).ReturnsAsync(other);
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
+        var pending = page.FindAll("button").Single(button => button.TextContent.Trim() == "Compare receipts").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("Filed copy", dialogs.Markup));
+        Assert.Contains("Inbox copy", dialogs.Markup);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Contains("Keep both")).ClickAsync(new MouseEventArgs());
+        await pending;
+        client.Verify(x => x.DeleteReceiptInboxAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

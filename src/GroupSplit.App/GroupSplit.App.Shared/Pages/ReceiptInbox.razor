@@ -136,10 +136,13 @@ else if (_rows is not null)
         else if (_filter != ReceiptFilter.Added)
         {
             <div class="gs-receipt-inbox-actions">
-                @if (_filter == ReceiptFilter.Waiting && row.SuggestedDuplicateOfId is not null)
+                @if (DuplicateIds(row).Count > 0)
                 {
                     <div class="gs-receipt-inbox-shortcut">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Disabled="_busy" OnClick="@(() => ReviewDuplicate(row))">@Loc["Review and delete duplicate"]</MudButton>
+                        @foreach (var duplicateId in DuplicateIds(row))
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Disabled="_busy" OnClick="@(() => ReviewDuplicate(row, duplicateId))">@Loc["Compare receipts"]</MudButton>
+                        }
                     </div>
                 }
                 else if (_expenseMatches.TryGetValue(row.Id, out var match))
@@ -355,11 +358,14 @@ else if (_rows is not null)
         }
         catch (JSException) { _importHelp = true; }
     }
-    private async Task ReviewDuplicate(ReceiptInboxResponse row)
+    private static IReadOnlyList<Guid> DuplicateIds(ReceiptInboxResponse row) =>
+        row.PossibleDuplicates.Select(candidate => candidate.Id)
+            .Concat(row.SuggestedDuplicateOfId is { } suggested ? [suggested] : Array.Empty<Guid>()).Distinct().ToArray();
+    private async Task ReviewDuplicate(ReceiptInboxResponse row, Guid duplicateId)
     {
-        if (_busy || row.SuggestedDuplicateOfId is null) return;
+        if (_busy) return;
         ReceiptInboxResponse? other = null;
-        if (!await Errors.TryAsync(async () => other = await Client.GetReceiptInboxAsync(row.SuggestedDuplicateOfId.Value), Loc["Could not load receipts."].Value) || other is null) return;
+        if (!await Errors.TryAsync(async () => other = await Client.GetReceiptInboxAsync(duplicateId), Loc["Could not load receipts."].Value) || other is null) return;
         var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
             new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });

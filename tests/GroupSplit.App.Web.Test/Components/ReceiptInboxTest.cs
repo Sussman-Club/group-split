@@ -142,8 +142,8 @@ public class ReceiptInboxTest : ComponentTest
         Services.AddSingleton(client.Object);
         var dialog = Render<MudDialogProvider>();
         var page = Render<ReceiptInbox>();
-        page.WaitForAssertion(() => Assert.Contains("Review and delete duplicate", page.Markup));
-        var review = page.FindAll("button").Single(x => x.TextContent.Contains("Review and delete duplicate")).ClickAsync(new MouseEventArgs());
+        page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
+        var review = page.FindAll("button").Single(x => x.TextContent.Contains("Compare receipts")).ClickAsync(new MouseEventArgs());
         dialog.WaitForAssertion(() => Assert.Contains("Receipt to delete", dialog.Markup));
         Assert.Contains("Receipt to keep", dialog.Markup);
         Assert.Contains("first.pdf", dialog.Markup);
@@ -220,7 +220,7 @@ public class ReceiptInboxTest : ComponentTest
         client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([row]);
         Services.AddSingleton(client.Object);
         var page = Render<ReceiptInbox>();
-        page.WaitForAssertion(() => Assert.Contains("Review and delete duplicate", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
         client.Verify(x => x.DeleteReceiptInboxAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
