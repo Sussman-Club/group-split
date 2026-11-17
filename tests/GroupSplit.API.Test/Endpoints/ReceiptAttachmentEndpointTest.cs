@@ -298,6 +298,30 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
     }
 
+    [Fact]
+    public async Task Added_inbox_shows_expense_files_and_itemized_receipts_once_and_respects_access()
+    {
+        var expenseId = await CreateExpense();
+        var upload = await Client.PostAsync($"/transactions/{expenseId}/receipt-attachments", FileContent("direct.pdf", "application/pdf"), Ct);
+        upload.EnsureSuccessStatusCode();
+        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        var initial = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var fileOnly = Assert.Single(initial!, row => row.ExpenseId == expenseId);
+        Assert.True(fileOnly.ExpenseOnly);
+        Assert.Equal(attachment.Id, Assert.Single(fileOnly.Attachments).Id);
+        using var other = _host.ClientForAnotherUser();
+        Assert.DoesNotContain((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct))!, row => row.ExpenseId == expenseId);
+
+        var receipt = new SaveReceiptRequest { MerchantName = "Market", Subtotal = 10m, Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] };
+        (await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", receipt, Json, Ct)).EnsureSuccessStatusCode();
+        var after = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var combined = Assert.Single(after!, row => row.ExpenseId == expenseId);
+        Assert.True(combined.ExpenseOnly);
+        Assert.Equal("Market", combined.Receipt.MerchantName);
+        Assert.Equal(attachment.Id, Assert.Single(combined.Attachments).Id);
+    }
+
     private async Task<Guid> CreateExpense(decimal amount = 10m)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest

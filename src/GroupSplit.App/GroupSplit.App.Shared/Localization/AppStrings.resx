@@ -5962,4 +5962,9 @@
   <data name="Open original" xml:space="preserve"><value>Open original</value></data>
   <data name="No original receipt file available." xml:space="preserve"><value>No original receipt file available.</value></data>
   <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Deleting this receipt also deletes its original files and cannot be undone.</value></data>
+  <data name="Matching receipt" xml:space="preserve"><value>Matching receipt</value></data>
+  <data name="Delete this receipt" xml:space="preserve"><value>Delete this receipt</value></data>
+  <data name="Attached to an expense; this receipt will be kept." xml:space="preserve"><value>Attached to an expense; this receipt will be kept.</value></data>
+  <data name="Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone." xml:space="preserve"><value>Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone.</value></data>
+  <data name="This receipt will be kept." xml:space="preserve"><value>This receipt will be kept.</value></data>
 </root>

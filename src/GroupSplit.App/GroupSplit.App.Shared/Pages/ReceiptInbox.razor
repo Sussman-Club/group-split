@@ -116,7 +116,7 @@ else if (_rows is not null)
                 <span class="gs-drag-handle" data-select-handle aria-hidden="true" @onclick:stopPropagation="true">⋮⋮</span>
             </div>
         }
-        <a class="gs-receipt-inbox-row" href="@(_selectMode ? null : $"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" @onclick="() => ToggleSelected(row.Id)">
+        <a class="gs-receipt-inbox-row" href="@(_selectMode || row.ExpenseOnly ? null : $"/inbox/receipts/{row.Id}{new Uri(Nav.Uri).Query}")" role="@(row.ExpenseOnly ? "button" : null)" tabindex="@(row.ExpenseOnly ? "0" : null)" @onclick="() => OpenReceiptRow(row)" @onkeydown="args => OpenReceiptRowKey(row, args)">
             <div class="gs-receipt-inbox-thumb">
                 <MerchantMark MerchantName="@(row.MerchantDisplayName ?? row.Receipt.MerchantName)" MerchantLogoUrl="@ReceiptLogo(row)" />
             </div>
@@ -200,6 +200,8 @@ else if (_rows is not null)
     private bool _selectMode;
     private void StartSelection() => _selectMode = true;
     private void StopSelection() { _selectMode = false; _selected.Clear(); }
+    private async Task OpenReceiptRow(ReceiptInboxResponse row) { if (_selectMode) ToggleSelected(row.Id); else if (row.ExpenseOnly && row.ExpenseId is { } expenseId) await OpenExpense(expenseId); }
+    private Task OpenReceiptRowKey(ReceiptInboxResponse row, Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) => row.ExpenseOnly && args.Key is "Enter" or " " ? OpenReceiptRow(row) : Task.CompletedTask;
     private void ToggleSelected(Guid id) { if (_selectMode) SelectRow(id, !_selected.Contains(id)); }
     [JSInvokable] public void SelectDraggedRows(string[] ids) { if (!_selectMode || _busy) return; foreach (var id in ids) if (Guid.TryParse(id, out var value) && _pageRows.Any(row => row.Id == value)) _selected.Add(value); StateHasChanged(); }
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -364,11 +366,11 @@ else if (_rows is not null)
         var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
             new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
-        if ((await dialog.Result)?.Canceled != false) return;
+        if (await dialog.Result is not { Canceled: false, Data: Guid deleteId }) return;
         _busy = true;
         try
         {
-            if (await Errors.TryAsync(() => Client.DeleteReceiptInboxAsync(row.Id), Loc["Could not update receipt."].Value))
+            if (await Errors.TryAsync(() => Client.DeleteReceiptInboxAsync(deleteId), Loc["Could not update receipt."].Value))
             {
                 await Changes.NotifyReceiptsChangedAsync();
                 await Load();

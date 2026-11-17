@@ -4,20 +4,29 @@
     <TitleContent><div class="gs-compare-heading"><h2>@Loc["Compare receipts"]</h2><p>@Loc["Check the originals and details before deciding."]</p></div></TitleContent>
     <DialogContent>
         <div class="gs-compare-grid">
-            @foreach (var entry in new[] { (Row: DeleteRow, Label: Loc["Receipt to delete"].Value), (Row: KeepRow, Label: Loc["Receipt to keep"].Value) })
+            @foreach (var entry in new[] { (Row: DeleteRow, Label: Loc["Inbox receipt"].Value), (Row: KeepRow, Label: Loc["Matching receipt"].Value) })
             {
+                <div class="gs-compare-choice">
                 <ReceiptComparisonSide Label="@entry.Label" Name="@(entry.Row.MerchantDisplayName ?? entry.Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
                     Date="@entry.Row.Receipt.PurchaseDate" Total="@entry.Row.Receipt.Total" Currency="@entry.Row.Currency"
                     Detail="@(entry.Row.ExpenseName is { } expense ? Loc["Added to: {0}", expense].Value : null)"
                     ReceiptId="@entry.Row.Id" ExpenseId="@entry.Row.ExpenseId" Attachments="@entry.Row.Attachments"
                     Items="@entry.Row.Receipt.Items.Select(item => new ReceiptComparisonSide.Item(item.Name, item.TotalPrice)).ToArray()" />
+                @if (entry.Row.ExpenseId is null)
+                {
+                    <label class="gs-compare-choice-control"><input type="radio" name="receipt-to-delete" checked="@(_deleteId == entry.Row.Id)" @onchange="@(() => _deleteId = entry.Row.Id)" /> @Loc["Delete this receipt"]</label>
+                }
+                else { <p class="gs-compare-protected">@Loc["Attached to an expense; this receipt will be kept."]</p> }
+                @if (_deleteId is { } chosen && chosen != entry.Row.Id) { <p class="gs-compare-protected">@Loc["This receipt will be kept."]</p> }
+                </div>
             }
         </div>
-        <p class="gs-compare-warning">@Loc["Deleting this receipt also deletes its original files and cannot be undone."]</p>
+        <p class="gs-compare-warning">@Loc["Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone."]</p>
     </DialogContent>
-    <DialogActions><MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Keep both"]</MudButton><MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@Loc["Delete receipt"]</MudButton></DialogActions>
+    <DialogActions><MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Keep both"]</MudButton><MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_deleteId is null)" OnClick="@(() => Dialog.Close(DialogResult.Ok(_deleteId!.Value)))">@Loc["Delete receipt"]</MudButton></DialogActions>
 </MudDialog>
 @code {
+    private Guid? _deleteId;
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse DeleteRow { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse KeepRow { get; set; } = null!;

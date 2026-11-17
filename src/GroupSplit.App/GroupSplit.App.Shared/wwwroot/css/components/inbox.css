@@ -469,3 +469,7 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-selection-toolbar { justify-content: flex-start; padding: 0 0 10px; }
 .gs-selection-hint { padding: 0; }
 @media (max-width: 600px) { .gs-compare-grid { grid-template-columns: 1fr; } .gs-compare-original > img { max-height: 55vh; } }
+.gs-compare-choice { min-width: 0; }
+.gs-compare-choice-control { display: flex; align-items: center; gap: 8px; padding: 12px 4px; cursor: pointer; }
+.gs-compare-choice-control input { width: 20px; height: 20px; accent-color: var(--mud-palette-error); }
+.gs-compare-protected { margin: 0; padding: 12px 4px; color: var(--gs-muted); font-size: .875rem; }

@@ -255,8 +255,8 @@
         var dialog = await Dialogs.ShowAsync<ReceiptDuplicateDialog>(Loc["Compare receipts"].Value,
             new DialogParameters<ReceiptDuplicateDialog> { { x => x.DeleteRow, row }, { x => x.KeepRow, other } },
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large });
-        if ((await dialog.Result)?.Canceled != false) return;
-        await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });
+        if (await dialog.Result is not { Canceled: false, Data: Guid deleteId }) return;
+        await Run(async () => { await Client.DeleteReceiptInboxAsync(deleteId); await Changes.NotifyReceiptsChangedAsync(); if (deleteId == Id) Nav.NavigateTo("/inbox/receipts"); else await Load(); });
     }
     private async Task ReviewExpenseDuplicate(ReceiptExpenseCandidate match)
     {

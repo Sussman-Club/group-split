@@ -5962,4 +5962,9 @@
   <data name="Open original" xml:space="preserve"><value>Abrir original</value></data>
   <data name="No original receipt file available." xml:space="preserve"><value>No hay archivo original del recibo disponible.</value></data>
   <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Eliminar este recibo también elimina sus archivos originales y no se puede deshacer.</value></data>
+  <data name="Matching receipt" xml:space="preserve"><value>Recibo coincidente</value></data>
+  <data name="Delete this receipt" xml:space="preserve"><value>Eliminar este recibo</value></data>
+  <data name="Attached to an expense; this receipt will be kept." xml:space="preserve"><value>Este recibo está adjunto a un gasto y se conservará.</value></data>
+  <data name="Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone." xml:space="preserve"><value>Selecciona el recibo que deseas eliminar. El otro se conservará. La eliminación también borra sus archivos originales y no se puede deshacer.</value></data>
+  <data name="This receipt will be kept." xml:space="preserve"><value>Este recibo se conservará.</value></data>
 </root>

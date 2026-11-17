@@ -144,14 +144,38 @@ public class ReceiptInboxTest : ComponentTest
         var page = Render<ReceiptInbox>();
         page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
         var review = page.FindAll("button").Single(x => x.TextContent.Contains("Compare receipts")).ClickAsync(new MouseEventArgs());
-        dialog.WaitForAssertion(() => Assert.Contains("Receipt to delete", dialog.Markup));
-        Assert.Contains("Receipt to keep", dialog.Markup);
+        dialog.WaitForAssertion(() => Assert.Contains("Inbox receipt", dialog.Markup));
+        Assert.Contains("Matching receipt", dialog.Markup);
         Assert.Contains("first.pdf", dialog.Markup);
         Assert.Contains("second.pdf", dialog.Markup);
         Assert.Contains("Keep both", dialog.Markup);
         await dialog.FindAll("button").Single(x => x.TextContent.Contains("Keep both")).ClickAsync(new MouseEventArgs());
         await review;
         client.Verify(x => x.DeleteReceiptInboxAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Duplicate_review_can_delete_the_other_unfiled_receipt()
+    {
+        var first = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "First" }, []);
+        var second = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest { MerchantName = "Second" }, []);
+        first = first with { PossibleDuplicates = [new ReceiptDuplicateCandidate(second.Id, null)] };
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([first]);
+        client.Setup(x => x.GetReceiptInboxAsync(second.Id, It.IsAny<CancellationToken>())).ReturnsAsync(second);
+        client.Setup(x => x.DeleteReceiptInboxAsync(second.Id, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInbox>();
+        page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
+        var pending = page.FindAll("button").Single(x => x.TextContent.Trim() == "Compare receipts").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Equal(2, dialogs.FindAll("input[type=radio]").Count));
+        Assert.True(dialogs.FindAll("button").Single(x => x.TextContent.Trim() == "Delete receipt").HasAttribute("disabled"));
+        dialogs.FindAll("input[type=radio]")[1].Change(true);
+        await dialogs.FindAll("button").Single(x => x.TextContent.Trim() == "Delete receipt").ClickAsync(new MouseEventArgs());
+        await pending;
+        client.Verify(x => x.DeleteReceiptInboxAsync(second.Id, It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(x => x.DeleteReceiptInboxAsync(first.Id, It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

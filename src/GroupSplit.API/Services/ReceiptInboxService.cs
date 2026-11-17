@@ -26,9 +26,37 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     public async Task<IReadOnlyList<ReceiptInboxResponse>> List(CancellationToken ct) =>
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct, classify: true);
-    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct) =>
-        await WithDuplicates((await Owned().Where(r => r.ExpenseId != null).Include(r => r.Expense).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
-            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
+    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct)
+    {
+        var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
+        var expenses = await db.Set<Expense>().AsNoTracking()
+            .Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId)) &&
+                (e.Receipt != null || e.ReceiptAttachments.Any()))
+            .Include(e => e.Merchant)
+            .Include(e => e.Receipt)!.ThenInclude(r => r!.Items)
+            .Include(e => e.Receipt)!.ThenInclude(r => r!.Merchant)
+            .Include(e => e.ReceiptAttachments)
+            .AsSplitQuery().ToListAsync(ct);
+        return expenses.Select(e =>
+        {
+            var receipt = e.Receipt;
+            var source = receipt is null
+                ? new ReceiptInboxResponse(e.Id, e.Id, e.Currency,
+                    new SaveReceiptRequest { MerchantName = e.Merchant?.Name ?? e.Name, PurchaseDate = DateOnly.FromDateTime(e.DateTime.UtcDateTime), Total = e.Amount }, [])
+                : Response(receipt) with { Currency = e.Currency };
+            return source with
+            {
+                ExpenseId = e.Id,
+                ExpenseName = e.Name,
+                ExpenseOnly = receipt?.OwnerUserId != user.User.Id,
+                MerchantId = receipt?.MerchantId ?? e.MerchantId,
+                MerchantDisplayName = receipt?.Merchant?.Name ?? e.Merchant?.Name,
+                MerchantLogoUrl = receipt?.Merchant?.LogoUrl ?? e.Merchant?.LogoUrl,
+                Attachments = e.ReceiptAttachments.OrderByDescending(a => a.UploadedAt)
+                    .Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, null, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToArray()
+            };
+        }).OrderByDescending(r => r.Receipt.PurchaseDate).ThenBy(r => r.Id).ToArray();
+    }
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListIgnored(CancellationToken ct) =>
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);

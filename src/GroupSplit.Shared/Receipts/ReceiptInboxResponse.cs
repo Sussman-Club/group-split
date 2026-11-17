@@ -4,6 +4,8 @@ public sealed record ReceiptInboxResponse(Guid Id, Guid? ExpenseId, string Curre
     SaveReceiptRequest Receipt, IReadOnlyList<ReceiptAttachmentResponse> Attachments)
 {
     public string? ExpenseName { get; init; }
+    /// <summary>Open the expense for receipts that do not belong to this user's private inbox.</summary>
+    public bool ExpenseOnly { get; init; }
     public bool IsIgnored { get; init; }
     public Guid? MerchantId { get; init; }
     public string? MerchantLogoUrl { get; init; }
