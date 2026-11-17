@@ -426,3 +426,20 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-inbox-tab .gs-inbox-count { font-size: inherit; line-height: 1.2; font-weight: inherit; }
 
 .gs-bank-inbox-amount, .gs-receipt-inbox-end { grid-column: 3; justify-self: end; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Selection is explicit; the grip captures a drag without blocking ordinary touch scrolling. */
+.gs-selection-toolbar, .gs-selection-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; }
+.gs-selection-toolbar { justify-content: flex-end; }
+.gs-selection-actions { position: sticky; bottom: 0; z-index: 3; background: var(--mud-palette-surface); border-top: 1px solid var(--gs-line); }
+.gs-selection-actions strong { margin-right: auto; }
+.gs-selection-hint { margin: 0; padding: 0 16px 10px; color: var(--gs-muted); font-size: .8rem; }
+.gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 64px 40px minmax(0, 1fr) auto; align-items: center; }
+.gs-bank-inbox-entry.gs-selecting > :first-child { grid-row: auto; }
+.gs-selection-controls { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.gs-selection-controls input { width: 20px; height: 20px; accent-color: var(--gs-teal); }
+.gs-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 44px; color: var(--gs-muted); cursor: grab; touch-action: none; user-select: none; }
+.gs-drag-handle:active { cursor: grabbing; }
+.gs-selected, .gs-drag-preview { background: var(--gs-teal-soft); }
+@media (max-width: 600px) {
+    .gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 60px 36px minmax(0, 1fr) auto; gap: 6px; }
+}

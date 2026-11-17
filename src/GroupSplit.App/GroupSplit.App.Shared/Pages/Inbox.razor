@@ -18,7 +18,8 @@
 @inject ApiErrorPresenter Errors
 @inject NavigationManager Nav
 @inject IBankLinkLauncher BankLink
-@implements IDisposable
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @*
     What the bank sent, waiting to be dealt with. Each row is one decision with three
@@ -26,6 +27,7 @@
     paid and how much, and everything else is secondary.
 *@
 
+<div @ref="_selectionRoot">
 <PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
 <div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review bank transactions and add them to a group or match an expense."]</span></div>
 <div>
@@ -48,7 +50,8 @@
     </div>
 
     @{ var showLoading = _initializing || (State.IsLoading && _busy is null); }
-    <div class="gs-inbox-results" aria-busy="@(_initializing || State.IsLoading)">
+    @if (_bulkResult is not null) { <p role="status">@_bulkResult</p> }
+<div class="gs-inbox-results" aria-busy="@(_initializing || State.IsLoading)">
     <div class="gs-inbox-results-content" @key="(State.Filter, showLoading)">
     <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(!State.RowsLoaded && _busy is null)" Retry="InitializeAsync">
     @if (State.Connections is { Enabled: false })
@@ -88,14 +91,29 @@
     else
     {
         <div class="gs-card gs-receipt-inbox-list">
-            <div class="gs-bank-inbox-list">
+            @if (State.Filter != InboxStatus.Filed)
+            {
+                <div class="gs-selection-toolbar">
+                    @if (!_selectMode) { <MudButton OnClick="StartSelection" Disabled="@(_busy is not null)">@Loc["Select"]</MudButton> }
+                    else { <span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="@(_busy is not null)">@Loc["Select visible"]</MudButton><MudButton OnClick="StopSelection" Disabled="@(_busy is not null)">@Loc["Done"]</MudButton> }
+                </div>
+                @if (_selectMode) { <p class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</p> }
+            }
+                    <div class="gs-bank-inbox-list">
                 @foreach (var item in VisibleRows)
                 {
                     var row = item;
-                    <div class="gs-bank-inbox-entry @(row.Status == InboxStatus.Filed ? "is-added" : null) @(CanOpenRow(row) ? "is-clickable" : null)"
+                    <div class="gs-bank-inbox-entry @(row.Status == InboxStatus.Filed ? "is-added" : null) @(_selectMode ? "gs-selecting" : null) @(_selected.Contains(row.Id) ? "gs-selected" : null) @(CanOpenRow(row) ? "is-clickable" : null)" data-selection-id="@(_selectMode ? row.Id.ToString() : null)"
                          role="@(CanOpenRow(row) ? "button" : null)"
                          tabindex="@(CanOpenRow(row) ? "0" : null)"
                          @onclick="@(() => OpenRowAsync(row))" @onkeydown="@(args => OpenRowWithKeyboardAsync(row, args))" @key="row.Id">
+                        @if (_selectMode)
+                        {
+                            <div class="gs-selection-controls" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                                <input type="checkbox" checked="@_selected.Contains(row.Id)" disabled="@(_busy is not null)" aria-label="@Loc["Select transaction"]: @row.Title" @onchange="e => SelectRow(row.Id, e.Value is true)" />
+                                <span class="gs-drag-handle" data-select-handle aria-hidden="true" @onclick:stopPropagation="true">⋮⋮</span>
+                            </div>
+                        }
                         @* The merchant's own logo where the bank sent one: a row reads as
                            the place it happened rather than as two initials. No payer to
                            show yet -- nobody has filed this -- so the logo takes the square
@@ -128,7 +146,8 @@
                                    Class="@(row.IsCredit ? "gs-muted" : "")" />
 
                         </div>
-                            @if (row.Status == InboxStatus.New)
+                            @if (_selectMode) { }
+                            else if (row.Status == InboxStatus.New)
                             {
                                 <div class="gs-bank-inbox-actions">
                                     @if (SuggestedMatch(row) is { } match)
@@ -172,6 +191,12 @@
 
                 }
             </div>
+            @if (_selectMode)
+            {
+                <div class="gs-selection-actions"><strong>@Loc["{0} selected", _selected.Count]</strong>
+                    <MudButton Disabled="@(_busy is not null || _selected.Count == 0)" OnClick="BulkChange">@(State.Filter == InboxStatus.New ? Loc["Ignore selected"] : Loc["Restore selected"])</MudButton>
+                </div>
+            }
 
             @if (State.HasMore)
             {
@@ -186,14 +211,51 @@
 </div>
 </div>
 </div>
+</div>
 
 @code {
     private static readonly InboxStatus[] Filters = [InboxStatus.New, InboxStatus.Filed, InboxStatus.Ignored];
 
+    private ElementReference _selectionRoot;
+    private IJSObjectReference? _selectionModule, _selectionBinding;
+    private DotNetObjectReference<Inbox>? _selectionReference;
+    private readonly HashSet<Guid> _selected = [];
+    private bool _selectMode;
+    private string? _bulkResult;
+    private void StartSelection() => _selectMode = true;
+    private void StopSelection() { _selectMode = false; _selected.Clear(); }
+    private void SelectRow(Guid id, bool selected) { if (selected) _selected.Add(id); else _selected.Remove(id); }
+    private void SelectVisible() { foreach (var row in VisibleRows) _selected.Add(row.Id); }
+    [JSInvokable] public void SelectDraggedRows(string[] ids) { if (!_selectMode || _busy is not null) return; foreach (var id in ids) if (Guid.TryParse(id, out var value) && VisibleRows.Any(row => row.Id == value)) _selected.Add(value); StateHasChanged(); }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { _selectionModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GroupSplit.App.Shared/js/inbox-selection.js"); _selectionReference = DotNetObjectReference.Create(this); _selectionBinding = await _selectionModule.InvokeAsync<IJSObjectReference>("attach", _selectionRoot, _selectionReference); }
+        catch (JSException) { }
+    }
+    private async Task BulkChange()
+    {
+        if (_busy is not null || _selected.Count == 0) return;
+        var rows = VisibleRows.Where(row => _selected.Contains(row.Id)).ToArray();
+        var skipped = _selected.Count - rows.Length;
+        var ignore = State.Filter == InboxStatus.New;
+        if (ignore && await DialogService.ShowMessageBoxAsync(Loc["Ignore selected transactions?"].Value, Loc["Ignored items can be restored later."].Value, yesText: Loc["Ignore"].Value, cancelText: Loc["Cancel"].Value) != true) return;
+        _busy = Guid.Empty;
+        try
+        {
+            int done;
+            if (ignore) done = await Bank.IgnoreManyAsync(rows.Select(row => (row.Id, row.Title)).ToArray());
+            else { done = 0; foreach (var row in rows) if (await Bank.RestoreAsync(row.Id, row.Title)) done++; }
+            StopSelection(); _bulkResult = Loc["Finished: {0} updated, {1} skipped, {2} failed.", done, skipped, rows.Length - done].Value;
+            await State.RefreshAsync();
+        }
+        finally { _busy = null; }
+    }
     private Guid? _busy;
     private static bool CanOpenRow(BankTransactionResponse row) => true;
     private Task OpenRowAsync(BankTransactionResponse row)
     {
+        if (_selectMode) { SelectRow(row.Id, !_selected.Contains(row.Id)); return Task.CompletedTask; }
         Nav.NavigateTo($"/inbox/bank/{row.Id}{new Uri(Nav.Uri).Query}");
         return Task.CompletedTask;
     }
@@ -338,6 +400,7 @@
 
     private async Task SetFilterAsync(InboxStatus status)
     {
+        StopSelection(); _bulkResult = null;
         await State.SetFilterAsync(status);
         WriteUrl();
     }
@@ -524,5 +587,11 @@
         }
     }
 
-    public void Dispose() => State.OnChanged -= OnChanged;
+    public async ValueTask DisposeAsync()
+    {
+        State.OnChanged -= OnChanged;
+        try { if (_selectionBinding is not null) { await _selectionBinding.InvokeVoidAsync("dispose"); await _selectionBinding.DisposeAsync(); } if (_selectionModule is not null) await _selectionModule.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+        _selectionReference?.Dispose();
+    }
 }

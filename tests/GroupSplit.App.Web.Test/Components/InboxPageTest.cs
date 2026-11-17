@@ -109,6 +109,20 @@ public class InboxPageTest : ComponentTest
     }
 
     [Fact]
+    public async Task Selection_mode_selects_bank_rows_without_opening_them()
+    {
+        var row = _rows[0];
+        var page = Render<Inbox>();
+        page.WaitForAssertion(() => Assert.Contains("Lidl", page.Markup));
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
+        page.FindAll("button").Single(x => x.TextContent.Trim() == "Select").Click();
+        await page.InvokeAsync(() => page.Instance.SelectDraggedRows([row.Id.ToString()]));
+        Assert.Single(page.FindAll("input[type=checkbox]:checked"));
+        Assert.Contains("Ignore selected", page.Markup);
+        Assert.DoesNotContain("Delete selected", page.Markup);
+    }
+
+    [Fact]
     public void The_spans_are_on_the_page_and_it_starts_on_all_time()
     {
         var page = Render<Inbox>();
@@ -253,7 +267,7 @@ public class InboxPageTest : ComponentTest
         _rows = [Credit("Amazon refund", 19.50m)];
         var page = Render<Inbox>();
         Assert.Contains(page.FindAll("button"), button => button.TextContent.Trim() == "Add to group");
-        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Trim() == "Select");
+        Assert.Contains(page.FindAll("button"), button => button.TextContent.Trim() == "Select");
     }
 
     // ---- suggestions (#437) ---------------------------------------------------------

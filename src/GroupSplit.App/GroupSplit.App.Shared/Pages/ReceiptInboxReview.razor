@@ -88,12 +88,19 @@
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => Create(suggestion.IsPersonal ? null : suggestion.GroupId))">@Loc["Review suggested group"]</MudButton>
                 </div>
             }
-            @if (_matches.Any(match => !match.HasReceipt)) { <strong>@Loc["Possible expense matches"]</strong> }
-            @foreach (var match in _matches.Where(match => !match.HasReceipt))
+            @if (_matches.Count > 0) { <strong>@Loc["Possible expense matches"]</strong> }
+            @foreach (var match in _matches)
             {
                 <div class="gs-receipt-suggestion">
                     <strong>@match.Name</strong><span>@match.Amount.ToString("N2") @match.Currency · @Clock.Day(match.DateTime).ToString("d")</span>
-                    <div class="gs-inline"><MudButton OnClick="@(() => Attach(match.Id))" Disabled="_busy">@Loc["Attach"]</MudButton><MudButton OnClick="@(() => Dismiss(match.Id))" Disabled="_busy">@Loc["Not the same"]</MudButton></div>
+                    @if (match.HasReceipt)
+                    {
+                        <span>@Loc["Possible duplicate receipt"]</span><MudButton OnClick="@(() => ReviewExpenseDuplicate(match))" Disabled="_busy">@Loc["Review"]</MudButton>
+                    }
+                    else
+                    {
+                        <div class="gs-inline"><MudButton OnClick="@(() => Attach(match.Id))" Disabled="_busy">@Loc["Attach"]</MudButton><MudButton OnClick="@(() => Dismiss(match.Id))" Disabled="_busy">@Loc["Not the same"]</MudButton></div>
+                    }
                 </div>
             }
             <MudButton OnClick="AttachEntered" Disabled="_busy">@Loc["Find existing expense"]</MudButton>
@@ -240,6 +247,15 @@
     private Task Upload(InputFileChangeEventArgs args) => Run(async () => {
         await using var stream = args.File.OpenReadStream(10 * 1024 * 1024);
         await Client.UploadInboxReceiptFileAsync(Id, new FileParameter(stream, args.File.Name, args.File.ContentType)); await Load(); });
+    private async Task ReviewExpenseDuplicate(ReceiptExpenseCandidate match)
+    {
+        var dialog = await Dialogs.ShowAsync<ReceiptExpenseDuplicateDialog>(Loc["Possible duplicate receipt"].Value,
+            new DialogParameters<ReceiptExpenseDuplicateDialog> { { x => x.Row, _row! }, { x => x.Match, match } },
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+        if (await dialog.Result is not { Canceled: false, Data: bool delete }) return;
+        if (!delete) { await Dismiss(match.Id); return; }
+        await Run(async () => { await Client.DeleteReceiptInboxAsync(Id); await Changes.NotifyReceiptsChangedAsync(); Nav.NavigateTo("/inbox/receipts"); });
+    }
     private async Task Attach(Guid expense)
     {
         if (await Dialogs.ShowMessageBoxAsync(Loc["Attach receipt"].Value, Loc["Attach this receipt as evidence? The expense amount and existing shares will stay as recorded, even if this receipt has a different total."].Value, yesText: Loc["Attach receipt"].Value, cancelText: Loc["Cancel"].Value) == true)

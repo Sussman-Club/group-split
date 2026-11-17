@@ -1,0 +1,41 @@
+@using GroupSplit.Shared
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject GroupSplit.App.Shared.Services.LocalClock Clock
+
+<MudDialog>
+    <TitleContent><h2>@Loc["Possible duplicate receipt"]</h2></TitleContent>
+    <DialogContent>
+        <p>@Loc["This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase."]</p>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem">
+            <section class="gs-card gs-card-pad" style="flex:1 1 220px;min-width:0">
+                <h3>@Loc["Inbox receipt"]</h3>
+                <p>@(Row.MerchantDisplayName ?? Row.Receipt.MerchantName ?? Loc["Receipt"].Value)</p>
+                <p>@Row.Receipt.PurchaseDate?.ToString("d") · @Row.Receipt.Total.ToString("N2") @Row.Currency</p>
+                @foreach (var item in Row.Receipt.Items) { <p>@item.Name · @item.TotalPrice.ToString("N2")</p> }
+                @foreach (var file in Row.Attachments) { <MudButton Href="@(Nav.BaseUri + $"api/receipts/inbox/{Row.Id}/files/{file.Id}")" Target="_blank">@Loc["Original receipt"]: @file.FileName</MudButton> }
+            </section>
+            <section class="gs-card gs-card-pad" style="flex:1 1 220px;min-width:0">
+                <h3>@Loc["Existing expense"]</h3>
+                <p>@Match.Name</p>
+                <p>@Clock.Day(Match.DateTime).ToString("d") · @Match.Amount.ToString("N2") @Match.Currency</p>
+                <p>@Loc["This expense already has a receipt."]</p>
+                <MudButton OnClick="OpenExpense">@Loc["View expense and receipt"]</MudButton>
+            </section>
+        </div>
+        <p>@Loc["Deleting the inbox receipt also deletes its original files and cannot be undone. The existing expense and its receipt will be kept."]</p>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Cancel"]</MudButton>
+        <MudButton OnClick="@(() => Dialog.Close(DialogResult.Ok(false)))">@Loc["Not the same"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@Loc["Delete inbox receipt"]</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptInboxResponse Row { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptExpenseCandidate Match { get; set; } = null!;
+    private Task OpenExpense() => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, Match.Id } },
+        new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+}

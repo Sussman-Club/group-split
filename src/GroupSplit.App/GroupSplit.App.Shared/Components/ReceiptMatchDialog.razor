@@ -24,6 +24,7 @@
                                 @onclick="@(() => _selectedId = candidate.Id)">
                             <span class="gs-match-choice-copy"><span class="title">@candidate.Name</span>
                                 <span class="meta">@(candidate.GroupName ?? Loc["Personal"].Value) · @Clock.Day(candidate.DateTime).ToString("d")@if (!string.IsNullOrWhiteSpace(candidate.PaidByUserName)) { <text> · @Loc["{0} paid", candidate.PaidByUserName]</text> }</span>
+                                @if (Row.Receipt.PurchaseDate is { } receiptDay) { <span class="meta">@Loc["Date difference: {0} days", Math.Abs(Clock.Day(candidate.DateTime).DayNumber - receiptDay.DayNumber)]</span> }
                                 @if (candidate.Id == InitialId) { <span class="gs-match-recommended">@Loc["Suggested match"]</span> }</span>
                             <Money Value="@candidate.Amount" Currency="@candidate.Currency" />
                             <MudIcon Icon="@(_selectedId == candidate.Id ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"

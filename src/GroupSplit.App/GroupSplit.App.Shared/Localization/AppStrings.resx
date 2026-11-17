@@ -5931,4 +5931,29 @@
   <data name="On this device, add a receipt using a photo or PDF." xml:space="preserve"><value>On this device, add a receipt using a photo or PDF.</value></data>
   <data name="The browser extension did not respond. Install or enable it, then refresh this page and try again." xml:space="preserve"><value>The browser extension did not respond. Install or enable it, then refresh this page and try again.</value></data>
   <data name="If the importer opens but a store needs sign-in or an import fails, follow the message in the importer." xml:space="preserve"><value>If the importer opens but a store needs sign-in or an import fails, follow the message in the importer.</value></data>
+  <data name="Compare receipts" xml:space="preserve"><value>Compare receipts</value></data>
+  <data name="Receipt to delete" xml:space="preserve"><value>Receipt to delete</value></data>
+  <data name="Receipt to keep" xml:space="preserve"><value>Receipt to keep</value></data>
+  <data name="Keep both" xml:space="preserve"><value>Keep both</value></data>
+  <data name="Date difference: {0} days" xml:space="preserve"><value>Date difference: {0} days</value></data>
+  <data name="Select visible" xml:space="preserve"><value>Select visible</value></data>
+  <data name="Ignore selected" xml:space="preserve"><value>Ignore selected</value></data>
+  <data name="Restore selected" xml:space="preserve"><value>Restore selected</value></data>
+  <data name="Select receipt" xml:space="preserve"><value>Select receipt</value></data>
+  <data name="Ignore selected receipts?" xml:space="preserve"><value>Ignore selected receipts?</value></data>
+  <data name="Finished: {0} updated, {1} skipped, {2} failed." xml:space="preserve"><value>Finished: {0} updated, {1} skipped, {2} failed.</value></data>
+  <data name="Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone.</value></data>
+  <data name="This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase." xml:space="preserve"><value>This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase.</value></data>
+  <data name="Inbox receipt" xml:space="preserve"><value>Inbox receipt</value></data>
+  <data name="Existing expense" xml:space="preserve"><value>Existing expense</value></data>
+  <data name="This expense already has a receipt." xml:space="preserve"><value>This expense already has a receipt.</value></data>
+  <data name="View expense and receipt" xml:space="preserve"><value>View expense and receipt</value></data>
+  <data name="Deleting the inbox receipt also deletes its original files and cannot be undone. The existing expense and its receipt will be kept." xml:space="preserve"><value>Deleting the inbox receipt also deletes its original files and cannot be undone. The existing expense and its receipt will be kept.</value></data>
+  <data name="Delete inbox receipt" xml:space="preserve"><value>Delete inbox receipt</value></data>
+  <data name="Select transaction" xml:space="preserve"><value>Select transaction</value></data>
+  <data name="Drag the grip across rows to select several." xml:space="preserve"><value>Drag the grip across rows to select several.</value></data>
+  <data name="Delete selected" xml:space="preserve"><value>Delete selected</value></data>
+  <data name="Delete selected receipts?" xml:space="preserve"><value>Delete selected receipts?</value></data>
+  <data name="These receipts and their original files will be permanently deleted." xml:space="preserve"><value>These receipts and their original files will be permanently deleted.</value></data>
+  <data name="Ignore selected transactions?" xml:space="preserve"><value>Ignore selected transactions?</value></data>
 </root>
