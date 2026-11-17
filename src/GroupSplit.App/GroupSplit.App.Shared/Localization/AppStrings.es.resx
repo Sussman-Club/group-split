@@ -5969,4 +5969,7 @@
   <data name="This receipt will be kept." xml:space="preserve"><value>Este recibo se conservará.</value></data>
   <data name="Compare the receipt details before deciding." xml:space="preserve"><value>Compara los detalles de los recibos antes de decidir.</value></data>
   <data name="No itemized receipt details available." xml:space="preserve"><value>No hay detalles de recibo desglosados disponibles.</value></data>
+  <data name="Show original" xml:space="preserve"><value>Mostrar original</value></data>
+  <data name="Hide original" xml:space="preserve"><value>Ocultar original</value></data>
+  <data name="Loading original…" xml:space="preserve"><value>Cargando original…</value></data>
 </root>

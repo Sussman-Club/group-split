@@ -84,7 +84,7 @@ public class ReceiptInboxReviewTest : ComponentTest
     [Fact]
     public async Task Expense_duplicate_review_shows_itemized_bills_without_original_files()
     {
-        var id = Guid.NewGuid(); var expense = Guid.NewGuid(); var firstFile = Guid.NewGuid();
+        var id = Guid.NewGuid(); var expense = Guid.NewGuid(); var firstFile = Guid.NewGuid(); var secondFile = Guid.NewGuid();
         var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Store", Total = 12, Subtotal = 12, Items = [new ReceiptItemInput { Name = "Inbox item", UnitPrice = 12, TotalPrice = 12 }] },
             [new ReceiptAttachmentResponse(firstFile, null, null, id, "inbox.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
         var client = new Mock<IReceiptsClient>();
@@ -94,6 +94,7 @@ public class ReceiptInboxReviewTest : ComponentTest
         receipts.Setup(x => x.GetAsync(expense, It.IsAny<CancellationToken>())).ReturnsAsync(new ReceiptResponse(Guid.NewGuid(), expense, 12, 0, 0, 12, 0, false, false,
             [new ReceiptItemResponse(Guid.NewGuid(), "Existing item", 12, 1, 12, 0, null, null, null)]));
         Services.AddSingleton(receipts.Object);
+        ReceiptAttachments.Setup(x => x.GetAsync(expense, It.IsAny<CancellationToken>())).ReturnsAsync([new ReceiptAttachmentResponse(secondFile, expense, null, null, "existing.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
         Services.AddSingleton(client.Object);
         var dialogs = Render<MudDialogProvider>();
         var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
@@ -104,6 +105,15 @@ public class ReceiptInboxReviewTest : ComponentTest
         Assert.Contains("Existing item", dialogs.Markup);
         Assert.DoesNotContain("inbox.jpg", dialogs.Markup);
         Assert.Empty(dialogs.FindAll(".gs-pdf-preview, .gs-compare-original"));
+        ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Never);
+        var controls = dialogs.FindAll("button").Where(button => button.TextContent.Trim() == "Show original").ToArray();
+        Assert.Equal(2, controls.Length);
+        await controls[0].ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("inbox.jpg", dialogs.Markup));
+        Assert.DoesNotContain("existing.jpg", dialogs.Markup);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Show original").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("existing.jpg", dialogs.Markup));
+        ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Once);
         await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
         await pending;
     }

@@ -468,3 +468,11 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-compare-protected { margin: 0; padding: 12px 4px; color: var(--gs-muted); font-size: .875rem; }
 
 .gs-duplicate-compare-action { margin-inline-start: 8px; }
+
+.gs-compare-original-toggle { padding: 0 12px 12px; }
+.gs-compare-original { border-top: 1px solid var(--gs-line); }
+.gs-compare-file { padding: 10px 16px; display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: .8rem; }
+.gs-compare-file span { min-width: 0; overflow-wrap: anywhere; }
+.gs-compare-file a { flex-shrink: 0; color: var(--gs-teal-deep); }
+.gs-compare-original > img { display: block; max-height: 55vh; width: auto; max-width: 100%; margin: auto; object-fit: contain; }
+.gs-compare-original .gs-pdf-viewport { max-height: 50vh; }

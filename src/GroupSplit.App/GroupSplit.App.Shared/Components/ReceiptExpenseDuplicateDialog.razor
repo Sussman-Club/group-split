@@ -8,9 +8,9 @@
     <DialogContent>
         <div class="gs-compare-grid">
             <ReceiptComparisonSide Label="@Loc["Inbox receipt"].Value" Name="@(Row.MerchantDisplayName ?? Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
-                Date="@Row.Receipt.PurchaseDate" Total="@Row.Receipt.Total" Currency="@Row.Currency" Bill="@ReceiptComparisonSide.FromInbox(Row)" />
+                Date="@Row.Receipt.PurchaseDate" Total="@Row.Receipt.Total" Currency="@Row.Currency" ReceiptId="@Row.Id" Attachments="@Row.Attachments" Bill="@ReceiptComparisonSide.FromInbox(Row)" />
             <ReceiptComparisonSide Label="@Loc["Existing expense"].Value" Name="@(_receipt?.MerchantName ?? Match.Name)" Date="@(_receipt?.PurchaseDate ?? Clock.Day(Match.DateTime))"
-                Total="@(_receipt?.Total ?? Match.Amount)" Currency="@Match.Currency" Loading="@_loading" Bill="@_receipt" />
+                Total="@(_receipt?.Total ?? Match.Amount)" Currency="@Match.Currency" ExpenseId="@Match.Id" Loading="@_loading" Bill="@_receipt" />
         </div>
         <MudButton OnClick="OpenExpense">@Loc["View expense"]</MudButton>
         <p class="gs-compare-warning">@Loc["Deleting the inbox receipt also deletes its original files and cannot be undone. The existing expense and its receipt will be kept."]</p>

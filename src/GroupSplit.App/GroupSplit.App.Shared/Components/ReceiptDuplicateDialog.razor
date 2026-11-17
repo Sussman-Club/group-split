@@ -10,7 +10,7 @@
                 <ReceiptComparisonSide Label="@entry.Label" Name="@(entry.Row.MerchantDisplayName ?? entry.Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
                     Date="@entry.Row.Receipt.PurchaseDate" Total="@entry.Row.Receipt.Total" Currency="@entry.Row.Currency"
                     Detail="@(entry.Row.ExpenseName is { } expense ? Loc["Added to: {0}", expense].Value : null)"
-                    Bill="@ReceiptComparisonSide.FromInbox(entry.Row)" />
+                    ReceiptId="@entry.Row.Id" ExpenseId="@entry.Row.ExpenseId" Attachments="@entry.Row.Attachments" Bill="@ReceiptComparisonSide.FromInbox(entry.Row)" />
                 @if (entry.Row.ExpenseId is null)
                 {
                     <label class="gs-compare-choice-control"><input type="radio" name="receipt-to-delete" checked="@(_deleteId == entry.Row.Id)" @onchange="@(() => _deleteId = entry.Row.Id)" /> @Loc["Delete this receipt"]</label>
