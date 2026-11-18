@@ -106,12 +106,12 @@ public class ReceiptInboxReviewTest : ComponentTest
         Assert.DoesNotContain("inbox.jpg", dialogs.Markup);
         Assert.Empty(dialogs.FindAll(".gs-pdf-preview, .gs-compare-original"));
         ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Never);
-        var controls = dialogs.FindAll("button").Where(button => button.TextContent.Trim() == "Show original").ToArray();
+        var controls = dialogs.FindAll("button").Where(button => button.TextContent.Trim() == "See original").ToArray();
         Assert.Equal(2, controls.Length);
         await controls[0].ClickAsync(new MouseEventArgs());
         dialogs.WaitForAssertion(() => Assert.Contains("inbox.jpg", dialogs.Markup));
         Assert.DoesNotContain("existing.jpg", dialogs.Markup);
-        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Show original").ClickAsync(new MouseEventArgs());
+        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "See original").ClickAsync(new MouseEventArgs());
         dialogs.WaitForAssertion(() => Assert.Contains("existing.jpg", dialogs.Markup));
         ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Once);
         await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
