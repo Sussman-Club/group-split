@@ -6,6 +6,8 @@ public class Receipt : Entity
     public virtual Expense? Expense { get; set; }
     public Guid? ExpenseId { get; set; }
     public Guid? OwnerUserId { get; set; }
+    /// <summary>Hash of a stable retailer receipt identity, scoped to the inbox owner.</summary>
+    public string? ImportFingerprint { get; set; }
     public bool IsIgnored { get; set; }
     public string Currency { get; set; } = Currencies.Default;
     public required decimal Subtotal { get; set; }

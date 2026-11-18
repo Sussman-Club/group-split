@@ -64,6 +64,33 @@ test('recognizes sign-in and confirmed orders pages without assuming an unknown 
   assert.equal(context.retailerSignInState('amazon'), 'unknown');
 });
 
+test('fingerprints complete warehouse receipt identifiers and refuses incomplete or ambiguous ones', async () => {
+  const context = page('');
+  context.crypto = require('node:crypto').webcrypto;
+  context.TextEncoder = TextEncoder;
+  context.location.origin = 'https://www.costco.com';
+  const text = 'P1 11/05/2026 14:23 Whse: 123 Trm: 4 Trn: 567 OPT: 890';
+  context.document.querySelector = () => ({ innerText: text });
+  context.document.querySelectorAll = () => [{}];
+  const id = await context.warehouseFingerprint();
+  assert.match(id, /^[0-9a-f]{64}$/);
+  context.document.querySelector = () => ({ innerText: 'P1 11/05/2026 14:23 Whse: 123 Trm: 4' });
+  assert.equal(await context.warehouseFingerprint(), null);
+  context.document.querySelector = () => ({ innerText: text + ' ' + text });
+  assert.equal(await context.warehouseFingerprint(), null);
+});
+
+test('retailer identity hashes are stable and namespaced', async () => {
+  const context = page('');
+  context.crypto = require('node:crypto').webcrypto;
+  context.TextEncoder = TextEncoder;
+  const first = await context.importFingerprint('amazon', '123-4567890-1234567');
+  assert.match(first, /^[0-9a-f]{64}$/);
+  assert.equal(first, await context.importFingerprint('amazon', '123-4567890-1234567'));
+  assert.notEqual(first, await context.importFingerprint('costco-online', '123-4567890-1234567'));
+  assert.equal(await context.importFingerprint('amazon', null), null);
+});
+
 test('finds a visible receipt and normalizes its date', () => {
   const rows = page('Warehouse 9/5/2026 $266.39 View Receipt').scanPage();
   assert.equal(rows.length, 1);
@@ -218,9 +245,10 @@ test('uploads a PDF through the existing inbox endpoint and detects a retry', as
     assert.equal(url, '/api/receipts/inbox/11111111-1111-4111-8111-111111111111/files');
     assert.equal(options.credentials, 'same-origin');
     assert.equal(options.body.get('file').name, 'receipt.pdf');
+    assert.equal(options.body.get('importFingerprint'), 'a'.repeat(64));
     return { ok: true, json: async () => ({ receiptId: '22222222-2222-4222-8222-222222222222' }) };
   };
-  const result = await context.uploadToInbox('JVBERg==', 'receipt.pdf', context.location.origin);
+  const result = await context.uploadToInbox('JVBERg==', 'receipt.pdf', context.location.origin, null, 'a'.repeat(64));
   assert.equal(result.ok, true);
   assert.equal(result.alreadyImported, true);
 });
