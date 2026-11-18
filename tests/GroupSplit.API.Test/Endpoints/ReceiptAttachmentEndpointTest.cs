@@ -312,8 +312,13 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         using var other = _host.ClientForAnotherUser();
         Assert.DoesNotContain((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct))!, row => row.ExpenseId == expenseId);
 
-        var receipt = new SaveReceiptRequest { MerchantName = "Market", Subtotal = 10m, Total = 10m,
-            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }] };
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Market",
+            Subtotal = 10m,
+            Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+        };
         (await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", receipt, Json, Ct)).EnsureSuccessStatusCode();
         var after = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
         var combined = Assert.Single(after!, row => row.ExpenseId == expenseId);
@@ -334,8 +339,10 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var saved = (await created.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
         var nextId = Guid.NewGuid();
         using var retry = new MultipartFormDataContent();
-        var changed = new ByteArrayContent([9, 8, 7]); changed.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
-        retry.Add(changed, "file", "different.pdf"); retry.Add(new StringContent(fingerprint.ToUpperInvariant()), "importFingerprint");
+        var changed = new ByteArrayContent([9, 8, 7]);
+        changed.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        retry.Add(changed, "file", "different.pdf");
+        retry.Add(new StringContent(fingerprint.ToUpperInvariant()), "importFingerprint");
         var repeated = await Client.PostAsync($"/receipts/inbox/{nextId}/files", retry, Ct);
         repeated.EnsureSuccessStatusCode();
         var existing = (await repeated.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
@@ -344,14 +351,16 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
 
         using var other = _host.ClientForAnotherUser();
-        using var otherFile = FileContent("other.pdf", "application/pdf"); otherFile.Add(new StringContent(fingerprint), "importFingerprint");
+        using var otherFile = FileContent("other.pdf", "application/pdf");
+        otherFile.Add(new StringContent(fingerprint), "importFingerprint");
         var otherId = Guid.NewGuid();
         (await other.PostAsync($"/receipts/inbox/{otherId}/files", otherFile, Ct)).EnsureSuccessStatusCode();
         Assert.Single((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
 
         var fileRequest = new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest { Name = "Purchase", Amount = 10m, Currency = "USD", DateTime = DateTimeOffset.UtcNow } };
         (await Client.PostAsJsonAsync($"/receipts/inbox/{firstId}/file", fileRequest, Json, Ct)).EnsureSuccessStatusCode();
-        using var afterFiling = FileContent("again.pdf", "application/pdf"); afterFiling.Add(new StringContent(fingerprint), "importFingerprint");
+        using var afterFiling = FileContent("again.pdf", "application/pdf");
+        afterFiling.Add(new StringContent(fingerprint), "importFingerprint");
         Assert.Equal(HttpStatusCode.Conflict, (await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", afterFiling, Ct)).StatusCode);
     }
 
@@ -361,11 +370,14 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         var receiptId = Guid.NewGuid();
         (await Client.PostAsync($"/receipts/inbox/{receiptId}/files", FileContent("old.pdf", "application/pdf"), Ct)).EnsureSuccessStatusCode();
         var fingerprint = new string('b', 64);
-        using var retry = FileContent("retry.pdf", "application/pdf"); retry.Add(new StringContent(fingerprint), "importFingerprint");
+        using var retry = FileContent("retry.pdf", "application/pdf");
+        retry.Add(new StringContent(fingerprint), "importFingerprint");
         (await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", retry, Ct)).EnsureSuccessStatusCode();
         using var changed = new MultipartFormDataContent();
-        var file = new ByteArrayContent([5, 6, 7]); file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
-        changed.Add(file, "file", "changed.pdf"); changed.Add(new StringContent(fingerprint), "importFingerprint");
+        var file = new ByteArrayContent([5, 6, 7]);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        changed.Add(file, "file", "changed.pdf");
+        changed.Add(new StringContent(fingerprint), "importFingerprint");
         var response = await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", changed, Ct);
         response.EnsureSuccessStatusCode();
         Assert.Equal(receiptId, (await response.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!.ReceiptId);

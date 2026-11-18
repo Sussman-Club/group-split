@@ -429,7 +429,7 @@ html.gs-receipt-import-open { overflow: hidden; }
 
 /* Selection is explicit; the grip captures a drag without blocking ordinary touch scrolling. */
 .gs-selection-toolbar, .gs-selection-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; }
-.gs-selection-toolbar { justify-content: flex-end; }
+.gs-selection-toolbar { justify-content: flex-start; padding: 0 0 10px; }
 .gs-selection-actions { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 15; width: min(720px, calc(100vw - 32px)); box-sizing: border-box; background: var(--mud-palette-surface); border: 1px solid var(--gs-line); border-radius: var(--gs-radius-lg); box-shadow: var(--gs-shadow-lg); }
 .gs-selection-active { padding-bottom: 160px; }
 .gs-selection-actions .mud-button-root { min-height: 44px; }
@@ -437,7 +437,7 @@ html.gs-receipt-import-open { overflow: hidden; }
     .gs-selection-actions { bottom: calc(var(--gs-tabbar-h) + 24px + env(safe-area-inset-bottom, 0px)); }
 }
 .gs-selection-actions strong { margin-right: auto; }
-.gs-selection-hint { margin: 0; padding: 0 16px 10px; color: var(--gs-muted); font-size: .8rem; }
+.gs-selection-hint { margin: 0; padding: 0; color: var(--gs-muted); font-size: .8rem; }
 .gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 64px 40px minmax(0, 1fr) auto; align-items: center; }
 .gs-bank-inbox-entry.gs-selecting > :first-child { grid-row: auto; }
 .gs-selection-controls { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
@@ -464,8 +464,6 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-compare-slip .gs-slip { width: 100%; max-width: none; }
 .gs-compare-empty { margin: 0; padding: 24px 16px; border-top: 1px solid var(--gs-line); color: var(--gs-muted); }
 .gs-compare-warning { color: var(--gs-muted); margin: 16px 0 0; font-size: .875rem; }
-.gs-selection-toolbar { justify-content: flex-start; padding: 0 0 10px; }
-.gs-selection-hint { padding: 0; }
 @media (max-width: 600px) { .gs-compare-grid { grid-template-columns: 1fr; } }
 .gs-compare-choice { min-width: 0; }
 .gs-compare-choice-control { display: flex; align-items: center; gap: 8px; padding: 12px 4px; cursor: pointer; }

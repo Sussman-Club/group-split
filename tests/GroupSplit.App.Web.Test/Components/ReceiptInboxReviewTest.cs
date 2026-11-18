@@ -61,7 +61,8 @@ public class ReceiptInboxReviewTest : ComponentTest
     [Fact]
     public async Task Comparing_a_filed_receipt_opens_both_sides_and_keep_both_deletes_nothing()
     {
-        var id = Guid.NewGuid(); var otherId = Guid.NewGuid();
+        var id = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
         var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Inbox copy" }, [])
         { PossibleDuplicates = [new ReceiptDuplicateCandidate(otherId, Guid.NewGuid())] };
         var other = new ReceiptInboxResponse(otherId, Guid.NewGuid(), "USD", new SaveReceiptRequest { MerchantName = "Filed copy" }, []);
@@ -84,7 +85,10 @@ public class ReceiptInboxReviewTest : ComponentTest
     [Fact]
     public async Task Expense_duplicate_review_shows_itemized_bills_without_original_files()
     {
-        var id = Guid.NewGuid(); var expense = Guid.NewGuid(); var firstFile = Guid.NewGuid(); var secondFile = Guid.NewGuid();
+        var id = Guid.NewGuid();
+        var expense = Guid.NewGuid();
+        var firstFile = Guid.NewGuid();
+        var secondFile = Guid.NewGuid();
         var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Store", Total = 12, Subtotal = 12, Items = [new ReceiptItemInput { Name = "Inbox item", UnitPrice = 12, TotalPrice = 12 }] },
             [new ReceiptAttachmentResponse(firstFile, null, null, id, "inbox.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
         var client = new Mock<IReceiptsClient>();

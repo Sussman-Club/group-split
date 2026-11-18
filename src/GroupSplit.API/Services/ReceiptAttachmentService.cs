@@ -73,7 +73,9 @@ public sealed class ReceiptAttachmentService(
         await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         var contentType = Validate(file);
         if (importFingerprint is not null && (importFingerprint.Length != 64 || !importFingerprint.All(Uri.IsHexDigit)))
+        {
             throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid, "Invalid retailer receipt identity.");
+        }
         importFingerprint = importFingerprint?.ToUpperInvariant();
         if (importFingerprint is not null)
         {
@@ -82,7 +84,9 @@ public sealed class ReceiptAttachmentService(
             if (known is not null)
             {
                 if (known.ExpenseId is null && known.Attachments.FirstOrDefault() is { } original)
+                {
                     return ToResponse(original);
+                }
                 throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
                     "This retailer receipt was already imported. Review the existing receipt or expense.")
                     .WithExtension("expenseId", known.ExpenseId);
