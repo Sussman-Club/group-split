@@ -41,6 +41,7 @@ public sealed record TranscribedReceipt(
 {
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
+    public string? ObservedFingerprint { get; init; }
 }
 
 public sealed record TranscribedReceiptItem(
@@ -113,6 +114,7 @@ public sealed class ReceiptTranscriptionService(
             Total = transcription.Total,
             MerchantName = transcription.MerchantName,
             PurchaseDate = transcription.PurchaseDate,
+            ObservedFingerprint = transcription.ObservedFingerprint,
             Items = transcription.Items.Select((item, index) => new ReceiptItemInput
             {
                 Name = item.Name,

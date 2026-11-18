@@ -8,6 +8,8 @@ public class Receipt : Entity
     public Guid? OwnerUserId { get; set; }
     /// <summary>Hash of a stable retailer receipt identity, scoped to the inbox owner.</summary>
     public string? ImportFingerprint { get; set; }
+    /// <summary>Possible retailer identity read from the receipt, used only for review suggestions.</summary>
+    public string? ObservedFingerprint { get; set; }
     public bool IsIgnored { get; set; }
     public string Currency { get; set; } = Currencies.Default;
     public required decimal Subtotal { get; set; }

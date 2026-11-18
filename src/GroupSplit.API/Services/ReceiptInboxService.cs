@@ -90,20 +90,26 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     {
         var dates = receipts.Where(r => r.PurchaseDate != null && r.Total > 0 && !string.IsNullOrWhiteSpace(r.MerchantName))
             .Select(r => r.PurchaseDate!.Value).Distinct().ToArray();
-        if (dates.Length == 0)
+        var fingerprints = receipts.SelectMany(r => new[] { r.ImportFingerprint, r.ObservedFingerprint })
+            .Where(value => value is not null).Distinct().ToArray();
+        if (dates.Length == 0 && fingerprints.Length == 0)
         {
             return receipts.Select(Response).ToArray();
         }
 
-        var candidates = await Owned().Where(r => r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0)
-            .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName }).ToListAsync(ct);
+        var candidates = await Owned().Where(r => (r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0) ||
+                (r.ImportFingerprint != null && fingerprints.Contains(r.ImportFingerprint)) ||
+                (r.ObservedFingerprint != null && fingerprints.Contains(r.ObservedFingerprint)))
+            .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName, r.ImportFingerprint, r.ObservedFingerprint }).ToListAsync(ct);
         var responses = receipts.Select(r => Response(r) with
         {
             PossibleDuplicates = candidates
-            .Where(c => c.Id != r.Id && c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
+            .Where(c => c.Id != r.Id && ((r.ObservedFingerprint != null && (r.ObservedFingerprint == c.ObservedFingerprint || r.ObservedFingerprint == c.ImportFingerprint)) ||
+                (r.ImportFingerprint != null && r.ImportFingerprint == c.ObservedFingerprint) ||
+                (c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
                 !string.IsNullOrWhiteSpace(r.MerchantName) && !string.IsNullOrWhiteSpace(c.MerchantName) &&
                 string.Equals(c.Currency, r.Currency, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))
+                string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))))
             .Select(c => new ReceiptDuplicateCandidate(c.Id, c.ExpenseId)).ToArray()
         }).ToArray();
         if (!classify)
@@ -205,6 +211,10 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose split rules after filing into a group.");
             }
 
+            if (importingDetails && input.ObservedFingerprint is { Length: 64 } fingerprint && fingerprint.All(Uri.IsHexDigit))
+            {
+                r.ObservedFingerprint = fingerprint.ToUpperInvariant();
+            }
             r.MerchantName = input.MerchantName?.Trim();
             r.PurchaseDate = input.PurchaseDate;
             r.Subtotal = input.Subtotal;
@@ -468,6 +478,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         {
             MerchantName = r.MerchantName,
             PurchaseDate = r.PurchaseDate,
+            ObservedFingerprint = r.ObservedFingerprint,
             Subtotal = r.Subtotal,
             Tax = r.Tax,
             Tip = r.Tip,

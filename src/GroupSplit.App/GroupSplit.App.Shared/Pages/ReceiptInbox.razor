@@ -17,7 +17,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div @ref="_selectionRoot" class="@(_selectMode ? "gs-selection-active" : null)">
+<div @ref="_selectionRoot" class="gs-receipt-page @(_selectMode ? "gs-selection-active" : null)">
 <PageTitle>@Loc["Receipts - Group Split"]</PageTitle>
 <div class="gs-inbox-context gs-receipt-context">
     <h2>@Loc["Receipts"]</h2>

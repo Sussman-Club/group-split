@@ -861,6 +861,8 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey<Receipt>(r => r.ExpenseId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<User>().WithMany().HasForeignKey(r => r.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(r => r.OwnerUserId);
+            entity.Property(r => r.ObservedFingerprint).HasMaxLength(64);
+            entity.HasIndex(r => new { r.OwnerUserId, r.ObservedFingerprint });
             entity.Property(r => r.ImportFingerprint).HasMaxLength(64);
             entity.HasIndex(r => new { r.OwnerUserId, r.ImportFingerprint }).IsUnique();
         });

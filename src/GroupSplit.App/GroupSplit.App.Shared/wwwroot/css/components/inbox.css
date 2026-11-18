@@ -479,3 +479,6 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-compare-file a { flex-shrink: 0; color: var(--gs-teal-deep); }
 .gs-compare-original > img { display: block; max-height: 55vh; width: auto; max-width: 100%; margin: auto; object-fit: contain; }
 .gs-compare-original .gs-pdf-viewport { max-height: 50vh; }
+
+/* Keep the fixed add button relative to the viewport during page entry. */
+.gs-page > .gs-receipt-page { animation: none; }

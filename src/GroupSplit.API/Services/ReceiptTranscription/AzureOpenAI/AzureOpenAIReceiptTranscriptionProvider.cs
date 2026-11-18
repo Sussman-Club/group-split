@@ -1,5 +1,7 @@
 using System.ClientModel;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GroupSplit.API.Errors;
@@ -59,6 +61,17 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
           null. Zero tax alone does not establish exemption. Do not infer tax law from an
           item name or assume unidentified items are taxable.
         - Put service, cover and gratuity charges in tip. Use 0 for absent receipt tax or tip.
+
+        Receipt identity
+        - For an Amazon order, set identityKind to amazon and identityValue to the printed
+          order number in 123-1234567-1234567 format. For a Costco online order, set
+          identityKind to costco-online and identityValue to its printed numeric order number.
+        - For a Costco warehouse receipt, use costco-warehouse only if the same printed line
+          contains its transaction date, time, Whse, Trm and Trn. Put those values in
+          warehouseDate (yyyy-MM-dd), warehouseTime (HH:mm), warehouseNumber,
+          terminalNumber and transactionNumber. Do not use a page print timestamp.
+        - Only use legible, explicit values for the identified merchant; otherwise use null.
+          Never infer or invent an identifier. Do not include membership or payment numbers.
 
         Merchant, date and totals
         - merchantName is the printed merchant, normalized only when unambiguous; otherwise
@@ -168,6 +181,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         {
             MerchantName = Clip(receipt.MerchantName, MerchantNameLength),
             PurchaseDate = PurchaseDateFrom(receipt.PurchaseDate),
+            ObservedFingerprint = Fingerprint(receipt),
         };
     }
 
@@ -221,8 +235,49 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
             ? date
             : null;
 
+    private static string? Fingerprint(AzureReceipt receipt)
+    {
+        string? identity = null;
+        var kind = receipt.IdentityKind;
+        if (kind == "amazon" && System.Text.RegularExpressions.Regex.IsMatch(receipt.IdentityValue ?? "", @"^[0-9]{3}-[0-9]{7}-[0-9]{7}$"))
+        {
+            identity = receipt.IdentityValue;
+        }
+        else if (kind == "costco-online" && IsDigits(receipt.IdentityValue))
+        {
+            identity = receipt.IdentityValue;
+        }
+        else if (kind == "costco-warehouse" &&
+                 DateOnly.TryParseExact(receipt.WarehouseDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) &&
+                 TimeOnly.TryParseExact(receipt.WarehouseTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) &&
+                 Number(receipt.WarehouseNumber, out var warehouse) && Number(receipt.TerminalNumber, out var terminal) &&
+                 Number(receipt.TransactionNumber, out var transaction))
+        {
+            identity = FormattableString.Invariant($"{date:yyyy-MM-dd}:{time:HH:mm}:{warehouse}:{terminal}:{transaction}");
+        }
+
+        if (identity is null)
+            return null;
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"groupsplit:{kind}:v1:{identity}"));
+        return Convert.ToHexStringLower(bytes);
+    }
+
+    private static bool IsDigits(string? value) => value is { Length: > 0 and <= 20 } && value.All(c => c is >= '0' and <= '9');
+    private static bool Number(string? value, out long number)
+    {
+        number = 0;
+        return IsDigits(value) && long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out number);
+    }
+
     internal sealed class AzureReceipt
     {
+        [JsonPropertyName("identityKind")] public string? IdentityKind { get; init; }
+        [JsonPropertyName("identityValue")] public string? IdentityValue { get; init; }
+        [JsonPropertyName("warehouseDate")] public string? WarehouseDate { get; init; }
+        [JsonPropertyName("warehouseTime")] public string? WarehouseTime { get; init; }
+        [JsonPropertyName("warehouseNumber")] public string? WarehouseNumber { get; init; }
+        [JsonPropertyName("terminalNumber")] public string? TerminalNumber { get; init; }
+        [JsonPropertyName("transactionNumber")] public string? TransactionNumber { get; init; }
         [JsonPropertyName("merchantName")]
         public string? MerchantName { get; init; }
         // A string, not a DateOnly: a model that writes the date any other way would
