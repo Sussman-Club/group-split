@@ -13,8 +13,7 @@ public interface IReceiptTranscriptionService
 
 /// <summary>
 /// The boundary around a document-understanding provider. Implementations know their own
-/// wire protocol; nothing outside this interface needs to know whether the first provider
-/// is Veryfi or a later replacement.
+/// wire protocol; nothing outside this interface depends on its implementation.
 /// </summary>
 public interface IReceiptTranscriptionProvider
 {

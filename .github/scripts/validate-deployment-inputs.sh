@@ -65,21 +65,7 @@ if [ "$(value PLAID_ENABLED)" != "true" ] && [ -n "$(value PLAID_CLIENT_ID)" ] \
   missing=1
 fi
 
-require_when VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY \
-  || echo "::notice::VERYFI_ENABLED is not true. Receipt transcription through Veryfi is off."
-
-# An explicitly selected provider must also be enabled and fully configured.
-provider="$(value RECEIPT_TRANSCRIPTION_PROVIDER)"
-case "$provider" in
-  AzureOpenAI)
-    require_when AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY \
-      || echo "::notice::AZURE_OPENAI_ENABLED is not true. Azure OpenAI receipt transcription is off."
-    ;;
-  Veryfi|'') ;;
-  *)
-    echo "RECEIPT_TRANSCRIPTION_PROVIDER must be Veryfi or AzureOpenAI, not '$provider'" >&2
-    missing=1
-    ;;
-esac
+require_when AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY \
+  || echo "::notice::AZURE_OPENAI_ENABLED is not true. Azure OpenAI receipt transcription is off."
 
 [ "$missing" -eq 0 ]

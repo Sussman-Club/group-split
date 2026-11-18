@@ -55,7 +55,7 @@ public class AppHostFixture : IAsyncLifetime
     /// <remarks>
     /// These have to beat whatever the machine has configured, because what a developer
     /// keeps in the AppHost's user secrets for running the app is real: a real Azure OpenAI
-    /// endpoint and key, real Plaid and Veryfi credentials, providers switched on. Filled in
+    /// endpoint and key, real Plaid credentials, providers switched on. Filled in
     /// only where nothing else had a value, which is how they were first written, every one
     /// of them lost to those secrets -- and a local test run sent receipts to the
     /// developer's own Azure OpenAI deployment, on their key (issue 331). CI never noticed,
@@ -76,17 +76,11 @@ public class AppHostFixture : IAsyncLifetime
             ["mcp-resource"] = "https://mcp.example/mcp",
             ["mcp-exchange-client-id"] = "test-mcp-exchange",
             ["mcp-exchange-client-secret"] = "test-mcp-secret",
-            ["receipt-transcription-provider"] = "Veryfi",
             ["azure-openai-enabled"] = "false",
             ["azure-openai-endpoint"] = "https://azure-openai.test/openai/v1/",
             ["azure-openai-model"] = "test-receipt-model",
             ["azure-openai-api-key"] = "test-azure-openai-key",
             ["azure-openai-decision-deployment"] = "test-decision-model",
-            ["veryfi-enabled"] = "false",
-            ["veryfi-client-id"] = "test-veryfi-client-id",
-            ["veryfi-username"] = "test-veryfi-username",
-            ["veryfi-api-key"] = "test-veryfi-api-key",
-            ["veryfi-log-raw-responses"] = "false",
             ["google-sign-in-enabled"] = "false",
             ["google-client-id"] = "test-google-client-id",
             ["google-client-secret"] = "test-google-client-secret",

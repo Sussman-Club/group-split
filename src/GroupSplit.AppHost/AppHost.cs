@@ -45,10 +45,6 @@ var azureOpenAiReceiptModel = azureOpenAi.WithModel(
 var azureOpenAiFilingModel = azureOpenAi.WithFoundryModel(
     "filing-suggestions", azureOpenAiParameters.DecisionDeployment);
 
-// Veryfi remains SaaS-managed; this external resource gives its API calls a named dependency in
-// the Aspire dashboard without routing or persisting receipt content there.
-var veryfi = builder.AddExternalService("veryfi", new Uri("https://api.veryfi.com"));
-
 // Plaid is SaaS-managed too. The API client selects Sandbox or Production from Plaid__Environment;
 // this external resource is the local dashboard dependency and uses Plaid's Sandbox endpoint.
 var plaid = builder.AddExternalService("plaid", new Uri("https://sandbox.plaid.com"));
@@ -105,7 +101,6 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WithReference(db)
     .WithReference(keycloak)
     .WithReference(storage)
-    .WithReference(veryfi)
     .WithReference(plaid)
     .WithReference(azureOpenAiReceiptModel)
     .WithReference(azureOpenAiFilingModel)
@@ -118,7 +113,6 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     // In both modes: locally the credentials come from user secrets and default to nothing,
     // which leaves the API running with bank sync reported as off.
     .WithPlaid()
-    .WithVeryfiReceiptTranscription()
     .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
     // Deleting an account deletes its Keycloak login, through a client that can manage users
     // in the app's realm and do nothing else.

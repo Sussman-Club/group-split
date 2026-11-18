@@ -145,7 +145,7 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
     /// price out from a line total and a quantity, and 10.00 over three is 3.3333. A bill
     /// refuses more than two places, and the review dialog shows the rounded figure while
     /// sending the raw one back, so the save would fail over something nobody can see. Money
-    /// is rounded here, the way Veryfi's is, and quantities and rates to what the bill keeps.
+    /// is rounded here, and quantities and rates to what the bill keeps.
     /// <para>
     /// Nor does the schema keep a list or a string from being null. A missing list is a
     /// receipt with no lines; a missing line is no line; a line with money on it but no name

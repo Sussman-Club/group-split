@@ -7,7 +7,6 @@ namespace GroupSplit.AppHost.Extensions;
 
 public static class AzureOpenAIReceiptTranscriptionExtensions
 {
-    private const string ProviderParameterName = "receipt-transcription-provider";
     private const string EnabledParameterName = "azure-openai-enabled";
     private const string EndpointParameterName = "azure-openai-endpoint";
     private const string ModelParameterName = "azure-openai-model";
@@ -15,7 +14,6 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
     private const string DecisionDeploymentParameterName = "azure-openai-decision-deployment";
 
     public sealed record Parameters(
-        IResourceBuilder<ParameterResource> Provider,
         IResourceBuilder<ParameterResource> Enabled,
         IResourceBuilder<ParameterResource> Endpoint,
         IResourceBuilder<ParameterResource> Model,
@@ -25,8 +23,6 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
     public static Parameters AddAzureOpenAIReceiptTranscriptionParameters(
         this IDistributedApplicationBuilder builder)
     {
-        var provider = builder.AddOptionalParameter(ProviderParameterName, string.Empty)
-            .WithDescription("Receipt provider: Veryfi or AzureOpenAI.");
         var enabled = builder.AddOptionalParameter(EnabledParameterName, "false")
             .WithDescription("Whether receipt transcription through Azure OpenAI is enabled (true/false).");
         var endpoint = builder.AddOptionalParameter(EndpointParameterName, string.Empty)
@@ -45,17 +41,16 @@ public static class AzureOpenAIReceiptTranscriptionExtensions
             dependsOn: WellKnownPipelineSteps.ProcessParameters,
             requiredBy: WellKnownPipelineSteps.BuildPrereq);
 
-        return new Parameters(provider, enabled, endpoint, model, apiKey, decisionDeployment);
+        return new Parameters(enabled, endpoint, model, apiKey, decisionDeployment);
     }
 
     extension<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
     {
         /// <summary>
-        /// Passes the provider selector and Azure OpenAI feature switch to the API.
+        /// Passes the Azure OpenAI feature switch to the API.
         /// The endpoint, key, and model continue to flow through the model reference.
         /// </summary>
         public IResourceBuilder<T> WithAzureOpenAIReceiptTranscription(Parameters parameters) => resource
-            .WithEnvironment("ReceiptTranscription__Provider", parameters.Provider)
             .WithEnvironment("AzureOpenAI__Enabled", parameters.Enabled);
     }
 }
