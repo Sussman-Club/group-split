@@ -257,7 +257,9 @@ public sealed class AzureOpenAIReceiptTranscriptionProvider(
         }
 
         if (identity is null)
+        {
             return null;
+        }
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"groupsplit:{kind}:v1:{identity}"));
         return Convert.ToHexStringLower(bytes);
     }
