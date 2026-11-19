@@ -118,6 +118,7 @@ jobs:
           dotnet build tests/GroupSplit.Seeder.Test/GroupSplit.Seeder.Test.csproj -c Release --no-restore
           dotnet build tests/GroupSplit.Jobs.Test/GroupSplit.Jobs.Test.csproj -c Release --no-restore
           dotnet build src/GroupSplit.Data.PostgreSQL.Migrations/GroupSplit.Data.PostgreSQL.Migrations.csproj -c Release --no-restore
+          dotnet build src/GroupSplit.AppHost/GroupSplit.AppHost.csproj -c Release
 
       - name: Check plugin
         run: python3 tests/check-plugin.py
@@ -148,9 +149,6 @@ jobs:
       - name: Build the deploy configuration
         run: dotnet build src/GroupSplit.App/GroupSplit.App.Web/GroupSplit.App.Web.csproj -c Debug --no-restore
 
-      # GroupSplit.AppHost.Test is neither built nor run here. It has the `integration`
-      # job below, which is the only place carrying the Docker and Playwright setup it
-      # needs, so building it twice would buy nothing.
       - name: Test
         run: |
           # --results-directory stays ahead of the `--`: past it the CLI resolves the
@@ -287,7 +285,7 @@ jobs:
         run: |
           set -euo pipefail
           version="$(bash .github/scripts/get-aspire-apphost-sdk-version.sh)"
-          echo "Using Aspire CLI $version from the AppHost SDK."
+          echo "Using Aspire CLI $version from the AppHost package."
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -323,7 +321,7 @@ jobs:
       # and absent on a runner, and Chromium refused the endpoint with
       # ERR_CERT_AUTHORITY_INVALID before any assertion ran.
       #
-      # Read from the AppHost SDK by the preceding step, so the CLI stays on the same
+      # Read from the AppHost package by the preceding step, so the CLI stays on the same
       # servicing release as the evaluated deployment model. `dotnet tool install` puts
       # it in ~/.dotnet/tools.
       - name: Install the Aspire CLI

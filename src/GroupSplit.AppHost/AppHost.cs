@@ -1,6 +1,5 @@
 using GroupSplit.AppHost.Extensions;
 using Microsoft.Extensions.Configuration;
-using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
@@ -234,7 +233,7 @@ if (builder.ExecutionContext.IsRunMode)
         .WaitFor(api);
 
     builder
-        .AddSeeder<GroupSplit_Seeder>("seeder")
+        .AddSeeder("seeder", "../GroupSplit.Seeder")
         .WaitFor(db)
         .WithReference(db)
         .WithKeycloakSeeding(keycloak)

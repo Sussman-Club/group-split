@@ -155,7 +155,7 @@ jobs:
         run: |
           set -euo pipefail
           version="$(bash .github/scripts/get-aspire-apphost-sdk-version.sh)"
-          echo "Using Aspire CLI $version from the AppHost SDK."
+          echo "Using Aspire CLI $version from the AppHost package."
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -170,7 +170,7 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       # The NuGet global tool rather than the install script, using the version declared
-      # by the AppHost SDK. This keeps the CLI and evaluated application model aligned
+      # by the AppHost package. This keeps the CLI and evaluated application model aligned
       # when the AppHost is upgraded.
       - name: Install the Aspire CLI
         env:

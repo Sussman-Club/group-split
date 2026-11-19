@@ -48,7 +48,7 @@ model and the design decisions that still hold.
 ## Quick start
 
 You need the .NET 10 SDK (`global.json` pins 10.0.100 and rolls forward), Docker running, the
-[Aspire CLI](https://aspire.dev) 13.6 to match the AppHost SDK, and a trusted ASP.NET Core
+[Aspire CLI](https://aspire.dev) 17.0 to match the AppHost package, and a trusted ASP.NET Core
 development certificate (`aspire certs trust`).
 
 ```bash

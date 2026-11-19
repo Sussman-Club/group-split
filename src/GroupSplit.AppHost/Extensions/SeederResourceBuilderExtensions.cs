@@ -1,11 +1,8 @@
 using Aspire.Hosting.EntityFrameworkCore;
+using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GroupSplit.AppHost.Extensions;
-
-#pragma warning disable ASPIREPROJECTS001
-
-public class SeederResource(string name) : ProjectResource(name);
 
 public static class SeederCommandNames
 {
@@ -22,27 +19,18 @@ public static class SeederResourceBuilderExtensions
 {
     extension(IDistributedApplicationBuilder builder)
     {
-        public IResourceBuilder<SeederResource> AddSeeder<TProject>([ResourceName] string name)
-            where TProject : IProjectMetadata, new()
+        public IResourceBuilder<DotnetProjectResource> AddSeeder([ResourceName] string name, string projectPath)
         {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(name);
 
-            var options = new ProjectResourceOptions();
-            var project = new SeederResource(name);
-
-            var projectResourceBuilder = builder
-                .AddResource(project)
-                .WithAnnotation(new TProject())
-                .WithProjectDefaults(options);
-
-            return projectResourceBuilder
+            return builder.AddDotnetProject(name, projectPath)
                 .WithExplicitStart()
                 .WithIconName("FoodGrains");
         }
     }
 
-    extension(IResourceBuilder<SeederResource> resourceBuilder)
+    extension(IResourceBuilder<DotnetProjectResource> resourceBuilder)
     {
         /// <summary>
         /// Lets the seeder create the demo accounts in the realm as well as in the database.
@@ -59,14 +47,14 @@ public static class SeederResourceBuilderExtensions
         /// deployment has no seeder.
         /// </para>
         /// </summary>
-        public IResourceBuilder<SeederResource> WithKeycloakSeeding(
+        public IResourceBuilder<DotnetProjectResource> WithKeycloakSeeding(
             IResourceBuilder<KeycloakResource> keycloak)
             => resourceBuilder
                 .WithReference(keycloak)
                 .WaitFor(keycloak)
                 .WithKeycloakAdminAccess(keycloak);
 
-        public IResourceBuilder<SeederResource> WithResetAndSeedCommand()
+        public IResourceBuilder<DotnetProjectResource> WithResetAndSeedCommand()
         {
             return resourceBuilder.WithCommand(
                 name: SeederCommandNames.ResetAndSeed,
