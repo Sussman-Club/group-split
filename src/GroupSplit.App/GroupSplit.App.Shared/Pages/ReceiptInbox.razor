@@ -15,6 +15,7 @@
 @inject GroupSplit.App.Shared.Services.LocalClock Clock
 @inject GroupSplit.App.Shared.Services.AppLinks AppLinks
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 @implements IAsyncDisposable
 
 <div @ref="_selectionRoot" class="gs-receipt-page @(_selectMode ? "gs-selection-active" : null)">
@@ -76,7 +77,6 @@
     <div class="gs-selection-toolbar"><span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="_busy">@Loc["Select visible"]</MudButton><span class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</span></div>
 }
 @{ var showLoading = _loading && !_uploading; }
-@if (_bulkResult is not null) { <p role="status">@_bulkResult</p> }
 <div class="gs-inbox-results" aria-busy="@_loading">
 <div class="gs-inbox-results-content" @key="(_filter, showLoading)">
 <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(_rows is null && !_uploading)" Retry="Load">
@@ -131,7 +131,8 @@ else if (_rows is not null)
         else if (_filter != ReceiptFilter.Added)
         {
             <div class="gs-receipt-inbox-actions">
-                @if (DuplicateIds(row).Count > 0)
+                @* A confirmed duplicate comes first; a mere lookalike gives way to a matching expense, which is the more useful next step. *@
+                @if (row.SuggestedDuplicateOfId is not null || DuplicateIds(row).Count > 0 && !_expenseMatches.ContainsKey(row.Id))
                 {
                     <div class="gs-receipt-inbox-shortcut">
                         @foreach (var duplicateId in DuplicateIds(row))
@@ -153,6 +154,11 @@ else if (_rows is not null)
                         <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />@Loc["Suggested destination"]</span><strong>@destination.Destination</strong></div>
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" aria-label="@Loc["Review suggested destination: {0}", destination.Destination]" OnClick="@(() => ReviewSuggestion(row, destination))">@Loc["Review"]</MudButton>
                     </div>
+                }
+                else if (_filter == ReceiptFilter.Waiting && _checking)
+                {
+                    @* The row's action may still become a suggested match or destination. *@
+                    <div class="gs-receipt-inbox-shortcut"><span class="gs-inbox-checking" role="status">@Loc["Checking for matches…"]</span></div>
                 }
                 else if (_filter == ReceiptFilter.Waiting)
                 {
@@ -215,22 +221,29 @@ else if (_rows is not null)
     {
         if (_busy || _selected.Count == 0) return;
         if (await Dialogs.ShowMessageBoxAsync(Loc["Delete selected receipts?"].Value, Loc["These receipts and their original files will be permanently deleted."].Value, yesText: Loc["Delete"].Value, cancelText: Loc["Cancel"].Value) != true) return;
-        _busy = true; var succeeded = 0; var failed = 0; var skipped = 0;
+        _busy = true; var done = new List<ReceiptInboxResponse>(); var skipped = 0;
         try
         {
             foreach (var id in _selected.ToArray())
             {
-                if (_rows?.Any(row => row.Id == id && row.ExpenseId is null) != true) { skipped++; continue; }
-                if (await Errors.TryAsync(() => Client.DeleteReceiptInboxAsync(id), Loc["Could not update receipt."].Value)) succeeded++; else failed++;
+                if (_rows?.FirstOrDefault(row => row.Id == id && row.ExpenseId is null) is not { } row) { skipped++; continue; }
+                if (await Errors.TryAsync(() => Client.DeleteReceiptInboxAsync(id), Loc["Could not update receipt."].Value)) done.Add(row);
             }
-            StopSelection(); _bulkResult = Loc["Finished: {0} updated, {1} skipped, {2} failed.", succeeded, skipped, failed].Value;
-            if (succeeded > 0) await Changes.NotifyReceiptsChangedAsync();
+            StopSelection();
+            ReportBulk(done.Count switch { 0 => null, 1 => Loc["{0} deleted.", ReceiptName(done[0])].Value, _ => Loc["{0} receipts deleted.", done.Count].Value }, skipped);
+            if (done.Count > 0) await Changes.NotifyReceiptsChangedAsync();
             await Load();
         }
         finally { _busy = false; }
     }
+    // Failures already raise their own error through Errors.TryAsync; this reports the rest.
+    private void ReportBulk(string? done, int skipped)
+    {
+        if (done is not null) Snackbar.Add(done, Severity.Success);
+        if (skipped > 0) Snackbar.Add(Loc["{0} skipped because they are no longer in this list.", skipped].Value, Severity.Warning);
+    }
+    private string ReceiptName(ReceiptInboxResponse row) => row.MerchantDisplayName ?? row.Receipt.MerchantName ?? Loc["Receipt"].Value;
     private readonly HashSet<Guid> _selected = [];
-    private string? _bulkResult;
     private void SelectRow(Guid id, bool selected) { if (selected) _selected.Add(id); else _selected.Remove(id); }
     private void SelectVisible() { foreach (var row in _pageRows) _selected.Add(row.Id); }
     private async Task BulkSetIgnored()
@@ -240,18 +253,22 @@ else if (_rows is not null)
         if (ignore && await Dialogs.ShowMessageBoxAsync(Loc["Ignore selected receipts?"].Value,
             Loc["Ignored receipts can be restored later."].Value, yesText: Loc["Ignore"].Value, cancelText: Loc["Cancel"].Value) != true) return;
         _busy = true;
-        var succeeded = 0; var failed = 0; var skipped = 0;
+        var done = new List<ReceiptInboxResponse>(); var skipped = 0;
         try
         {
             foreach (var id in _selected.ToArray())
             {
-                if (_rows?.Any(row => row.Id == id) != true) { skipped++; continue; }
-                if (await Errors.TryAsync(async () => { if (ignore) await Client.IgnoreInboxReceiptAsync(id); else await Client.RestoreInboxReceiptAsync(id); }, Loc["Could not update receipt."].Value)) succeeded++;
-                else failed++;
+                if (_rows?.FirstOrDefault(row => row.Id == id) is not { } row) { skipped++; continue; }
+                if (await Errors.TryAsync(async () => { if (ignore) await Client.IgnoreInboxReceiptAsync(id); else await Client.RestoreInboxReceiptAsync(id); }, Loc["Could not update receipt."].Value)) done.Add(row);
             }
-            _selected.Clear();
-            _bulkResult = Loc["Finished: {0} updated, {1} skipped, {2} failed.", succeeded, skipped, failed].Value;
-            if (succeeded > 0) await Changes.NotifyReceiptsChangedAsync();
+            StopSelection();
+            ReportBulk(done.Count switch
+            {
+                0 => null,
+                1 => ignore ? Loc["{0} ignored.", ReceiptName(done[0])].Value : Loc["{0} is back in your inbox.", ReceiptName(done[0])].Value,
+                _ => ignore ? Loc["{0} receipts ignored.", done.Count].Value : Loc["{0} receipts restored.", done.Count].Value
+            }, skipped);
+            if (done.Count > 0) await Changes.NotifyReceiptsChangedAsync();
             await Load();
         }
         finally { _busy = false; }
@@ -269,6 +286,8 @@ else if (_rows is not null)
     private bool _uploading;
     private string? _uploadProgress;
     private bool _loading = true;
+    /// <summary>Rows are on screen while their expense matches and suggestions are still out.</summary>
+    private bool _checking;
     private bool _importHelp;
     private IJSObjectReference? _importModule;
     private DotNetObjectReference<ReceiptInbox>? _importReference;
@@ -293,7 +312,7 @@ else if (_rows is not null)
         _filter = asked.Status?.ToLowerInvariant() switch { "added" or "filed" => ReceiptFilter.Added, "ignored" => ReceiptFilter.Ignored, _ => ReceiptFilter.Waiting };
         _search = asked.Search;
         _dateRange = ListingQuery.ParseRange(asked.Range, asked.From, asked.To, DateFilter.AllTime);
-        if (previous != _filter) { StopSelection(); _bulkResult = null; }
+        if (previous != _filter) { StopSelection(); }
         if (first || previous != _filter) { _shownCount = PageSize; _rows = null; await Load(); }
         else { _shownCount = PageSize; ApplyFilters(); }
     }
@@ -325,7 +344,7 @@ else if (_rows is not null)
     private void SetDateRange(DateFilter range) { _shownCount = PageSize; _dateRange = range; ApplyFilters(); WriteUrl(); }
     private void ClearFilters() { _shownCount = PageSize; _search = null; _dateRange = DateFilter.AllTime; ApplyFilters(); WriteUrl(); }
     private string FilterLabel(ReceiptFilter status) => status switch { ReceiptFilter.Waiting => Loc["Waiting"], ReceiptFilter.Added => Loc["Added"], _ => Loc["Ignored"] };
-    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; StopSelection(); _bulkResult = null; _filter = status; _shownCount = PageSize; _rows = null; WriteUrl(); await Load(); }
+    private async Task SetFilter(ReceiptFilter status) { if (_filter == status) return; StopSelection(); _filter = status; _shownCount = PageSize; _rows = null; WriteUrl(); await Load(); }
     private Task OpenExpense(Guid id) => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
         new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, id } }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
     private async Task SetIgnored(ReceiptInboxResponse row, bool ignored)
@@ -388,22 +407,39 @@ else if (_rows is not null)
         var token = _suggestionLoad.Token;
         _suggestions.Clear();
         _expenseMatches.Clear();
+        _checking = false;
         try { await Errors.TryAsync(async () => {
             var loaded = (await (_filter switch { ReceiptFilter.Added => Client.ListAddedReceiptInboxAsync(token), ReceiptFilter.Ignored => Client.ListIgnoredReceiptInboxAsync(token), _ => Client.ListReceiptInboxAsync(token) })).ToList();
             if (token.IsCancellationRequested) return;
             _rows = loaded;
             ApplyFilters();
+            // The rows go on screen now. Matches and suggestions fill in as they arrive:
+            // waiting for the model kept the list on its skeleton, which read as empty.
+            _loading = false;
             if (_filter == ReceiptFilter.Waiting)
             {
                 SuggestionCache.Retain(_rows);
                 foreach (var row in _rows)
                     if (SuggestionCache.Get(row) is { } cached) _suggestions[row.Id] = cached;
                 Overview.SetReceiptCount(_rows.Count);
-                await Task.WhenAll(LoadExpenseMatches(_rows, token),
-                    LoadSuggestions(_rows, SuggestionCache.Generation, token));
+                // Not awaited: the list is shown without them, and a prerender, whose markup is
+                // replaced once the page is live, does not hold its response for the model.
+                // Disposing the page cancels them.
+                _checking = true;
+                _ = CheckRowsAsync(_rows, token);
             }
         }, Loc["Could not load receipts."].Value); }
         finally { if (!token.IsCancellationRequested) _loading = false; }
+    }
+    private async Task CheckRowsAsync(IReadOnlyList<ReceiptInboxResponse> rows, CancellationToken ct)
+    {
+        try
+        {
+            await Task.WhenAll(LoadExpenseMatches(rows, ct), LoadSuggestions(rows, SuggestionCache.Generation, ct));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        if (ct.IsCancellationRequested) return;
+        await InvokeAsync(() => { _checking = false; StateHasChanged(); });
     }
     private async Task LoadExpenseMatches(IReadOnlyList<ReceiptInboxResponse> rows, CancellationToken ct)
     {

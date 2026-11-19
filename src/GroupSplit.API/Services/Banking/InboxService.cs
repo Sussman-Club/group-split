@@ -359,7 +359,8 @@ public sealed class InboxService(
             ct);
         return [.. suggestions.Select(result => new FilingSuggestionResponse(result.SourceId,
             result.Destination.GroupId, result.Destination.GroupName, result.Destination.IsPersonal,
-            result.Destination.CategoryId, result.Destination.CategoryName, result.Destination.Confidence))];
+            result.Destination.CategoryId, result.Destination.CategoryName, result.Destination.Confidence,
+            result.Destination.SplitRuleId, result.Destination.SplitRuleName))];
     }
 
     public async Task DismissMatch(Guid id, DismissBankMatchRequest request, CancellationToken ct = default)

@@ -325,6 +325,54 @@ public class CreateTransactionDialogTest : ComponentTest
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task A_suggested_rule_is_used_instead_of_a_category()
+    {
+        var receipt = new SaveReceiptRequest
+        {
+            Subtotal = 40m,
+            Total = 40m,
+            MerchantName = "Gym",
+            PurchaseDate = new DateOnly(2026, 9, 12),
+            Items = [new ReceiptItemInput { Name = "Membership", Quantity = 1m, UnitPrice = 40m, TotalPrice = 40m }]
+        };
+        var gym = new SplitRuleResponse(Guid.NewGuid(), GroupId, "Ana's gym");
+        _splitRules.Setup(service => service.ForGroupAsync(GroupId, It.IsAny<CancellationToken>())).ReturnsAsync([gym]);
+        var receipts = new Mock<IReceiptCommands>();
+        receipts.Setup(service => service.TranscribeAsync(It.IsAny<Microsoft.AspNetCore.Components.Forms.IBrowserFile>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptDraftResponse("test", receipt));
+        receipts.Setup(service => service.SuggestFilingAsync(It.IsAny<SuggestReceiptFilingRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FilingDestinationSuggestion(GroupId, "Trip", false, null, null, .95, gym.Id, gym.Name));
+        Services.AddSingleton(receipts.Object);
+        var merchants = new Mock<IMerchantCommands>();
+        merchants.Setup(service => service.SearchAsync("Gym", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new MerchantResponse(Guid.NewGuid(), "Gym", null, DateTimeOffset.UtcNow, 0)]);
+        Services.AddSingleton(merchants.Object);
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () => reference = await Services.GetRequiredService<IDialogService>()
+            .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>
+            {
+                { component => component.SelectedGroupId, GroupId }
+            }));
+        var picker = provider.FindComponent<ReceiptFilePicker>();
+        var reading = provider.InvokeAsync(() => picker.Instance.FileChanged.InvokeAsync(new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+            [new BufferedBrowserFile("receipt.jpg", "image/jpeg", DateTimeOffset.UtcNow, [1, 2, 3])])));
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<ReceiptDraftDialog>()));
+        await provider.FindAll("button").Single(button => button.TextContent.Contains("Use this receipt")).ClickAsync(new MouseEventArgs());
+        await reading;
+        var suggestion = provider.FindAll("button").Single(button => button.TextContent.Contains("Use suggested"));
+        Assert.Contains("Trip · Ana's gym", suggestion.TextContent);
+        await suggestion.ClickAsync(new MouseEventArgs());
+        await provider.FindAll("button").Single(button => button.TextContent.Trim() == "Add expense").ClickAsync(new MouseEventArgs());
+        var answer = await reference!.GetReturnValueAsync<CreateTransactionDialog.Answer>();
+        Assert.NotNull(answer);
+        Assert.Equal(GroupId, answer.Request.GroupId);
+        Assert.Equal(gym.Id, answer.Request.SplitRuleId);
+        Assert.Null(answer.Request.CategoryId);
+    }
+
     private static Task OpenSplitChoices(IRenderedComponent<MudDialogProvider> provider)
     {
         var opening = provider.FindComponent<SplitEditor>().Find("button").ClickAsync(new MouseEventArgs());

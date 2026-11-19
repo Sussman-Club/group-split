@@ -185,7 +185,7 @@
 
     private string ChosenLabel => Chosen switch
     {
-        Mode.Automatic => Loc["Category default"].Value, Mode.Even => Loc["Copy.Sentence.Evenly"].Value, Mode.AllForOne => Loc["One person"].Value,
+        Mode.Automatic => NamedRule ?? Loc["Category default"].Value, Mode.Even => Loc["Copy.Sentence.Evenly"].Value, Mode.AllForOne => Loc["One person"].Value,
         Mode.ByBill => Loc["Receipt items"].Value, _ => Loc["Custom amounts"].Value
     };
     private async Task ChooseSplitAsync()
@@ -377,6 +377,15 @@
     [Parameter] public EventCallback<Guid?> SplitRuleIdChanged { get; set; }
 
     /// <summary>
+    /// The name of <see cref="SplitRuleId"/> when it is a rule none of the choices stands
+    /// for -- one a group wrote for itself, named by a filing suggestion -- so the control
+    /// says which rule divides it rather than "category default".
+    /// </summary>
+    [Parameter] public string? RuleName { get; set; }
+
+    private string? NamedRule => Chosen is Mode.Automatic && SplitRuleId is not null && RuleName is { Length: > 0 } name ? name : null;
+
+    /// <summary>
     /// The stated division, or null to leave it to the dialog. Null is not "no shares"; it
     /// is "don't state any", which is a different instruction and the ordinary one.
     /// </summary>
@@ -555,7 +564,7 @@
 
     private string ModeHint => Chosen switch
     {
-        Mode.Automatic => Loc["Use the category's split, or the group default when it is uncategorized."].Value,
+        Mode.Automatic => NamedRule is { } rule ? Loc["Divided by the group's rule {0}.", rule].Value : Loc["Use the category's split, or the group default when it is uncategorized."].Value,
         Mode.Even => Loc["Divide the total evenly across everyone in the group."].Value,
         Mode.AllForOne => Loc["Choose one person to cover the whole expense."].Value,
         Mode.ByBill => Loc["Assign receipt items, then split from those assignments."].Value,

@@ -20,15 +20,21 @@ namespace GroupSplit.Shared;
 /// caller's own id, and <paramref name="IsPersonal"/> says so.
 /// </param>
 /// <param name="Confidence">The model's confidence in this answer, from 0 to 1.</param>
+/// <param name="SplitRuleId">
+/// Set instead of <paramref name="CategoryId"/> when no category of the group fits but one
+/// of its split rules does: filing then names that rule and no category.
+/// </param>
 public sealed record FilingSuggestionResponse(
     Guid BankTransactionId,
     Guid GroupId,
     string GroupName,
     bool IsPersonal,
-    Guid CategoryId,
-    string CategoryName,
-    double Confidence)
+    Guid? CategoryId,
+    string? CategoryName,
+    double Confidence,
+    Guid? SplitRuleId = null,
+    string? SplitRuleName = null)
 {
-    /// <summary>Group and category in one phrase, as a row or a button says it.</summary>
-    public string Destination => $"{GroupName} · {CategoryName}";
+    /// <summary>Group and category (or rule) in one phrase, as a row or a button says it.</summary>
+    public string Destination => $"{GroupName} · {CategoryName ?? SplitRuleName}";
 }

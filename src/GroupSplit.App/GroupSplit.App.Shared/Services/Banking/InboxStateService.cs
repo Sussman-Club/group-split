@@ -21,6 +21,15 @@ public interface IInboxStateService
         get;
     }
 
+    /// <summary>
+    /// Whether the rows on screen are still waiting for their suggestions, so a row's
+    /// action may yet change from "Add to group" to a suggested match or destination.
+    /// </summary>
+    bool SuggestionsPending
+    {
+        get;
+    }
+
     /// <summary>How many rows are waiting, whatever the filter shows. What the nav badge reads.</summary>
     int NewCount
     {
@@ -162,6 +171,11 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     public bool RowsLoaded { get; private set; }
     public bool IsLoading => _pendingLoads > 0;
     private int _pendingLoads;
+    /// <summary>The read whose rows are on screen without their suggestions yet, or -1.</summary>
+    private int _suggestingFor = -1;
+
+    /// <inheritdoc />
+    public bool SuggestionsPending => _suggestingFor >= 0 && _suggestingFor == _written;
 
     private Task? _loaded;
     private bool _rowsWanted;
@@ -448,6 +462,23 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
     {
         _pendingLoads++;
         Announce();
+
+        // The rows count as loaded as soon as they are read. The model's suggestions follow
+        // when they come: waiting for them kept the inbox on its skeleton for as long as the
+        // model took, which read as an empty inbox.
+        var settled = false;
+        void Settle()
+        {
+            if (settled)
+            {
+                return;
+            }
+
+            settled = true;
+            _pendingLoads--;
+            Announce();
+        }
+
         try
         {
             await _guard.RunAsync(async () =>
@@ -491,26 +522,44 @@ public sealed class InboxStateService : IInboxStateService, IDisposable
 
                 if (shown is { } read)
                 {
-                    await Task.WhenAll(SuggestAsync(read.Rows, version, ct), SuggestMatchesAsync(read.Rows, version, ct));
-                    if (version != _version)
-                    {
-                        return;
-                    }
-
                     RowsLoaded = true;
                     Rows = WithSuggestions(read.Rows);
                     TotalCount = read.TotalCount;
+                    _suggestingFor = version;
                 }
 
                 _written = version;
 
-                Announce();
+                Settle();
+
+                if (shown is { } asked)
+                {
+                    try
+                    {
+                        await Task.WhenAll(SuggestAsync(asked.Rows, version, ct), SuggestMatchesAsync(asked.Rows, version, ct));
+                    }
+                    finally
+                    {
+                        // Finished or failed, the rows' own actions can show. A later read
+                        // owns the rows, and their suggestions, if one has started since.
+                        if (_suggestingFor == version)
+                        {
+                            _suggestingFor = -1;
+                        }
+
+                        if (version == _version)
+                        {
+                            Rows = WithSuggestions(Rows);
+                        }
+
+                        Announce();
+                    }
+                }
             }, UiText.Get("your bank inbox"));
         }
         finally
         {
-            _pendingLoads--;
-            Announce();
+            Settle();
         }
     }
 

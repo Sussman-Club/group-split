@@ -6,7 +6,7 @@
     <header class="gs-compare-side-header">
         <span class="gs-compare-label">@Label</span>
         @if (Bill is not { Items.Count: > 0 }) { <h3>@Name</h3> }
-        <div class="gs-compare-meta"><span>@(Date?.ToString("d") ?? Loc["Date unavailable"].Value)</span><strong>@Total.ToString("N2") @Currency</strong></div>
+        <div class="gs-compare-meta"><span>@(Date?.ToString("MMM d, yyyy") ?? Loc["Date unavailable"].Value)</span><strong>@Total.ToString("N2") @Currency</strong></div>
         @if (!string.IsNullOrWhiteSpace(Detail)) { <span class="gs-compare-detail">@Detail</span> }
         @if ((Attachments?.Count ?? 0) > 0 || ExpenseId is not null && Attachments is null)
         {

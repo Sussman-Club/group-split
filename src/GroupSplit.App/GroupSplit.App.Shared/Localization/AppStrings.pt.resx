@@ -5941,7 +5941,16 @@
   <data name="Restore selected" xml:space="preserve"><value>Restaurar selecionados</value></data>
   <data name="Select receipt" xml:space="preserve"><value>Selecionar recibo</value></data>
   <data name="Ignore selected receipts?" xml:space="preserve"><value>Ignorar os recibos selecionados?</value></data>
-  <data name="Finished: {0} updated, {1} skipped, {2} failed." xml:space="preserve"><value>Concluído: {0} atualizados, {1} ignorados, {2} falharam.</value></data>
+  <data name="Divided by the group's rule {0}." xml:space="preserve"><value>Dividido pela regra do grupo {0}.</value></data>
+  <data name="Checking for matches…" xml:space="preserve"><value>Procurando correspondências…</value></data>
+  <data name="This receipt" xml:space="preserve"><value>Este recibo</value></data>
+  <data name="{0} receipts ignored." xml:space="preserve"><value>{0} recibos ignorados.</value></data>
+  <data name="{0} receipts restored." xml:space="preserve"><value>{0} recibos restaurados.</value></data>
+  <data name="{0} receipts deleted." xml:space="preserve"><value>{0} recibos excluídos.</value></data>
+  <data name="{0} transactions restored." xml:space="preserve"><value>{0} movimentos restaurados.</value></data>
+  <data name="{0} could not be updated." xml:space="preserve"><value>Não foi possível atualizar {0}.</value></data>
+  <data name="{0} skipped because they are no longer in this list." xml:space="preserve"><value>{0} não processados porque já não estão nesta lista.</value></data>
+  <data name="Could not restore them." xml:space="preserve"><value>Não foi possível restaurar.</value></data>
   <data name="Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Compare os dois recibos antes de decidir. Excluir este recibo também exclui seus arquivos originais e não pode ser desfeito.</value></data>
   <data name="This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase." xml:space="preserve"><value>Esta despesa já tem um recibo. Compare os recibos antes de decidir se são a mesma compra.</value></data>
   <data name="Inbox receipt" xml:space="preserve"><value>Recibo da caixa de entrada</value></data>
@@ -5962,7 +5971,6 @@
   <data name="Open original" xml:space="preserve"><value>Abrir original</value></data>
   <data name="No original receipt file available." xml:space="preserve"><value>Nenhum arquivo original do recibo disponível.</value></data>
   <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Excluir este recibo também exclui seus arquivos originais e não pode ser desfeito.</value></data>
-  <data name="Matching receipt" xml:space="preserve"><value>Recibo correspondente</value></data>
   <data name="Delete this receipt" xml:space="preserve"><value>Excluir este recibo</value></data>
   <data name="Attached to an expense; this receipt will be kept." xml:space="preserve"><value>Este recibo está anexado a uma despesa e será mantido.</value></data>
   <data name="Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone." xml:space="preserve"><value>Selecione o recibo a excluir. O outro será mantido. A exclusão também remove seus arquivos originais e não pode ser desfeita.</value></data>

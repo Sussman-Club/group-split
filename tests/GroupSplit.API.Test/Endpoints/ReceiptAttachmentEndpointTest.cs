@@ -328,6 +328,24 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Added_inbox_names_and_dates_an_itemized_bill_after_its_expense()
+    {
+        var expenseId = await CreateExpense();
+        var bill = new SaveReceiptRequest
+        {
+            Subtotal = 10m,
+            Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+        };
+        (await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", bill, Json, Ct)).EnsureSuccessStatusCode();
+
+        var added = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var row = Assert.Single(added!, row => row.ExpenseId == expenseId);
+        Assert.Equal("Dinner", row.Receipt.MerchantName);
+        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow), row.Receipt.PurchaseDate);
+    }
+
+    [Fact]
     public async Task Retailer_identity_deduplicates_different_files_per_user_and_keeps_filed_receipts()
     {
         var fingerprint = new string('a', 64);

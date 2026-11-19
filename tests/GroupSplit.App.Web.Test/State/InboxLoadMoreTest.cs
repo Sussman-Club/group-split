@@ -79,19 +79,29 @@ public class InboxLoadMoreTest
     }
 
     [Fact]
-    public async Task Waits_for_suggestions_before_publishing_bank_rows()
+    public async Task Publishes_bank_rows_before_their_suggestions_arrive()
     {
         var pending = new TaskCompletionSource<ICollection<FilingSuggestionResponse>>(TaskCreationOptions.RunContinuationsAsynchronously);
         _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
             .Returns(pending.Task);
         var loading = _state.LoadRowsAsync(Ct);
         Assert.False(loading.IsCompleted);
-        Assert.Empty(_state.Rows);
-        Assert.True(_state.IsLoading);
-        pending.SetResult([]);
-        await loading;
         Assert.Equal(PageSize, _state.Rows.Count);
         Assert.False(_state.IsLoading);
+        Assert.True(_state.SuggestionsPending);
+        pending.SetResult([]);
+        await loading;
+        Assert.False(_state.SuggestionsPending);
+    }
+
+    [Fact]
+    public async Task A_failed_suggestion_read_still_lets_the_rows_actions_show()
+    {
+        _inbox.Setup(client => client.SuggestBankTransactionFilingsAsync(It.IsAny<SuggestFilingsRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("model unavailable"));
+        await _state.LoadRowsAsync(Ct);
+        Assert.Equal(PageSize, _state.Rows.Count);
+        Assert.False(_state.SuggestionsPending);
     }
 
     [Fact]

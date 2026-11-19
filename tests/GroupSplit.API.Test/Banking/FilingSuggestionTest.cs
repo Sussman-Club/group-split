@@ -143,6 +143,65 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task A_rule_no_category_divides_by_is_offered_and_suggested_without_a_category()
+    {
+        var (group, _) = await Home();
+        var gym = await GymRule(group.Id);
+        var row = await Row(30m);
+        _model.Answer("Home · rule Ana's gym", 0.9);
+
+        var suggestion = Assert.Single(await Suggest(row));
+
+        Assert.Equal(group.Id, suggestion.GroupId);
+        Assert.Null(suggestion.CategoryId);
+        Assert.Equal(gym, suggestion.SplitRuleId);
+        Assert.Equal("Home · Ana's gym", suggestion.Destination);
+        // Groceries' own rule comes with the category, and built-in rules are never offered.
+        var asked = Assert.Single(_model.Asked);
+        Assert.Equal(["Home · rule Ana's gym"], asked.Options.Keys.Where(option => option.Contains(" · rule ")));
+    }
+
+    [Fact]
+    public async Task Accepting_a_rule_suggestion_files_by_that_rule_and_no_category()
+    {
+        var (group, _) = await Home();
+        await GymRule(group.Id);
+        var row = await Row(30m);
+        _model.Answer("Home · rule Ana's gym", 0.9);
+
+        var suggestion = Assert.Single(await Suggest(row));
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest
+        {
+            GroupId = suggestion.GroupId,
+            CategoryId = suggestion.CategoryId,
+            SplitRuleId = suggestion.SplitRuleId
+        }, Ct);
+
+        Assert.Null(expense.CategoryId);
+        var split = Assert.Single(await DbContext.Set<TransactionSplit>().Where(split => split.TransactionId == expense.Id).ToListAsync(Ct));
+        Assert.Equal(GetService<ICurrentUser>().User.Id, split.UserId);
+    }
+
+    [Fact]
+    public async Task An_earlier_charge_filed_by_a_rule_alone_is_given_as_evidence()
+    {
+        var (group, _) = await Home();
+        var gym = await GymRule(group.Id);
+        var lidl = await Merchant("Lidl");
+
+        var earlier = await Row(18m, providerId: "earlier", date: new DateOnly(2026, 8, 1), merchant: lidl);
+        await Inbox.File(earlier.Id, new FileBankTransactionRequest { GroupId = group.Id, SplitRuleId = gym }, Ct);
+
+        var row = await Row(30m, merchant: lidl);
+        _model.Answer("Home · rule Ana's gym", 0.9);
+
+        await Suggest(row);
+
+        var asked = Assert.Single(_model.Asked);
+        Assert.Contains("Home · rule Ana's gym: 1 of the last 1", asked.State);
+    }
+
+    [Fact]
     public async Task Every_option_is_somewhere_the_person_can_file_and_cannot_tell_is_one_of_them()
     {
         await Home();
@@ -428,6 +487,22 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         await JoinGroup(group.Id, await CreateNewUser());
 
         return (group, await CreateEvenCategory(group.Id, "Groceries"));
+    }
+
+    /// <summary>A rule the group wrote for itself that no category divides by: all on the caller.</summary>
+    private async Task<Guid> GymRule(Guid groupId)
+    {
+        var rule = await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
+        {
+            GroupId = groupId,
+            Name = "Ana's gym",
+            Definition = new PercentSplitRuleDto
+            {
+                Percentages = new Dictionary<Guid, decimal> { [GetService<ICurrentUser>().User.Id] = 100 }
+            }
+        }, Ct);
+
+        return rule.Id;
     }
 
     private async Task<Merchant> Merchant(string name)

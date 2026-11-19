@@ -249,7 +249,8 @@
 .gs-inbox-context { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
 .gs-inbox-context h2 { margin: 0; font-size: 1.1rem; }
 .gs-inbox-add { margin-bottom: 24px; }
-.gs-receipt-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
+/* The heading row keeps the height of the import button even where there is none, so both inbox headers line up. */
+.gs-receipt-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(40px, auto) auto; align-items: center; column-gap: 12px; }
 .gs-receipt-context > .gs-muted { grid-column: 1 / -1; }
 .gs-receipt-context .gs-receipt-import-action { justify-self: end; min-height: 40px; white-space: nowrap; }
 .gs-receipt-import-help { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--gs-line); border-radius: var(--gs-radius); background: var(--gs-surface-3); color: var(--gs-ink); font-size: .8125rem; }
@@ -328,6 +329,8 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-receipt-inbox-entry:not(.has-suggestion) .gs-receipt-inbox-actions { justify-content: flex-end; }
 .gs-receipt-inbox-shortcut { min-width: 0; max-width: min(260px, calc(100% - 70px)); }
 .gs-bank-inbox-actions .gs-receipt-inbox-shortcut > span { display: inline-flex; max-width: 100%; vertical-align: middle; }
+/* Where a row's action will be once its matches and suggestions are in; as tall as a button so the row does not jump. */
+.gs-inbox-checking { display: inline-flex; align-items: center; min-height: 40px; color: var(--gs-muted); font-size: .8rem; white-space: nowrap; }
 .gs-receipt-inbox-shortcut .mud-button-root { max-width: 100%; min-width: 0; min-height: 40px; overflow: hidden; white-space: nowrap; text-align: left; }
 .gs-receipt-filters { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 16px 0; }
 .gs-receipt-filters .mud-button-root { min-height: 40px; padding-inline: 16px; white-space: nowrap; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
@@ -360,8 +363,8 @@ html.gs-receipt-import-open { overflow: hidden; }
 @media (min-width: 768px) {
     .gs-receipt-inbox-entry:hover, .gs-receipt-inbox-entry:focus-within { background: var(--gs-teal-soft); }
     .gs-receipt-inbox-actions { grid-column: 4; }
-    .gs-receipt-inbox-shortcut { flex: 1 1 auto; max-width: none; }
-    .gs-receipt-inbox-shortcut .mud-button-root { width: 100%; }
+    /* Sized to its button, so every action in the column sits at the end on both inboxes. */
+    .gs-receipt-inbox-shortcut { flex: 0 1 auto; max-width: none; }
     .gs-bank-inbox-entry, .gs-receipt-inbox-entry { grid-template-columns: 48px minmax(0, 1fr) auto minmax(0, 320px); align-items: center; padding-block: 10px; }
     .gs-receipt-inbox-thumb { grid-row: auto; }
     .gs-bank-inbox-entry > :first-child { grid-row: auto; }
@@ -369,9 +372,7 @@ html.gs-receipt-import-open { overflow: hidden; }
 }
 @media (max-width: 600px) {
     .gs-receipt-filters .mud-button-root { flex: 1 1 0; min-width: 0; padding-inline: 6px; }
-    .gs-receipt-inbox-entry.has-suggestion .gs-receipt-inbox-actions { justify-content: flex-start; }
     .gs-bank-inbox-entry, .gs-receipt-inbox-entry { grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 10px; padding: 12px; }
-    .gs-bank-inbox-actions { justify-content: flex-start; }
 }
 
 .gs-receipt-inbox-copy > .gs-receipt-duplicate { color: var(--mud-palette-warning-darken); font-weight: 600; }
@@ -439,12 +440,17 @@ html.gs-receipt-import-open { overflow: hidden; }
 .gs-selection-actions strong { margin-right: auto; }
 .gs-selection-hint { margin: 0; padding: 0; color: var(--gs-muted); font-size: .8rem; }
 .gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 64px 40px minmax(0, 1fr) auto; align-items: center; }
-.gs-bank-inbox-entry.gs-selecting > :first-child { grid-row: auto; }
+.gs-bank-inbox-entry.gs-selecting > :first-child, .gs-receipt-inbox-entry.gs-selecting .gs-receipt-inbox-thumb { grid-row: auto; }
+/* The selection controls take a column, so the amount moves one to the right instead of wrapping. */
+.gs-selecting .gs-bank-inbox-amount, .gs-selecting .gs-receipt-inbox-end { grid-column: 4; }
 .gs-selection-controls { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .gs-selection-controls input { width: 20px; height: 20px; accent-color: var(--gs-teal); }
 .gs-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 44px; color: var(--gs-muted); cursor: grab; touch-action: none; user-select: none; }
 .gs-drag-handle:active { cursor: grabbing; }
 .gs-selected, .gs-drag-preview { background: var(--gs-teal-soft); }
+/* In selection mode a row click toggles it on both tabs; hover must not look like selected. */
+.gs-receipt-inbox-entry.gs-selecting, .gs-receipt-inbox-entry.gs-selecting .gs-receipt-inbox-row { cursor: pointer; }
+.gs-bank-inbox-entry.gs-selecting:not(.gs-selected):is(:hover, :focus-within), .gs-receipt-inbox-entry.gs-selecting:not(.gs-selected):is(:hover, :focus-within) { background: var(--gs-surface-2); }
 @media (max-width: 600px) {
     .gs-receipt-inbox-entry.gs-selecting, .gs-bank-inbox-entry.gs-selecting { grid-template-columns: 60px 36px minmax(0, 1fr) auto; gap: 6px; }
 }

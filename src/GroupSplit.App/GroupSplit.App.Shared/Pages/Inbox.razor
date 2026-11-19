@@ -29,7 +29,7 @@
 
 <div @ref="_selectionRoot" class="@(_selectMode ? "gs-selection-active" : null)">
 <PageTitle>@Loc["Inbox - Group Split"]</PageTitle>
-<div class="gs-inbox-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review bank transactions and add them to a group or match an expense."]</span></div>
+<div class="gs-inbox-context gs-receipt-context"><h2>@Loc["Bank transactions"]</h2><span class="gs-muted">@Loc["Review bank transactions and add them to a group or match an expense."]</span></div>
 <div>
     <nav class="gs-inline gs-receipt-filters" aria-label="@Loc["Bank transaction status"]">
         @foreach (var status in Filters)
@@ -57,8 +57,8 @@
         <div class="gs-selection-toolbar"><span>@Loc["{0} selected", _selected.Count]</span><MudButton OnClick="SelectVisible" Disabled="@(_busy is not null)">@Loc["Select visible"]</MudButton><span class="gs-selection-hint">@Loc["Drag the grip across rows to select several."]</span></div>
     }
 
-    @{ var showLoading = _initializing || (State.IsLoading && _busy is null); }
-    @if (_bulkResult is not null) { <p role="status">@_bulkResult</p> }
+    @* Until the rows are in, not until their suggestions are: those fill in on rows already shown. *@
+    @{ var showLoading = (_initializing && !State.RowsLoaded) || (State.IsLoading && _busy is null); }
 <div class="gs-inbox-results" aria-busy="@(_initializing || State.IsLoading)">
     <div class="gs-inbox-results-content" @key="(State.Filter, showLoading)">
     <LoadView Skeleton="SkeletonLayout.Inbox" Loading="@showLoading" Failed="@(!State.RowsLoaded && _busy is null)" Retry="InitializeAsync">
@@ -104,8 +104,8 @@
                 {
                     var row = item;
                     <div class="gs-bank-inbox-entry @(row.Status == InboxStatus.Filed ? "is-added" : null) @(_selectMode ? "gs-selecting" : null) @(_selected.Contains(row.Id) ? "gs-selected" : null) @(CanOpenRow(row) ? "is-clickable" : null)" data-selection-id="@(_selectMode ? row.Id.ToString() : null)"
-                         role="@(CanOpenRow(row) ? "button" : null)"
-                         tabindex="@(CanOpenRow(row) ? "0" : null)"
+                         role="@(CanOpenRow(row) && !_selectMode ? "button" : null)"
+                         tabindex="@(CanOpenRow(row) && !_selectMode ? "0" : null)"
                          @onclick="@(() => OpenRowAsync(row))" @onkeydown="@(args => OpenRowWithKeyboardAsync(row, args))" @key="row.Id">
                         @if (_selectMode)
                         {
@@ -163,6 +163,11 @@
                                             <div class="gs-inbox-suggestion-copy"><span class="gs-inbox-suggestion-label"><MudIcon Icon="@Icons.Material.Rounded.AutoAwesome" Size="Size.Small" />@Loc["Suggested destination"]</span><strong>@suggestion.Destination</strong></div>
                                             <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true"><MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Disabled="@(_busy == row.Id)" aria-label="@Loc["Review suggested destination: {0}", suggestion.Destination]" OnClick="@(() => AddToGroupAsync(row))">@Loc["Review"]</MudButton></span>
                                         </div>
+                                    }
+                                    else if (State.SuggestionsPending)
+                                    {
+                                        @* The row's action may still become a suggested match or destination. *@
+                                        <div class="gs-receipt-inbox-shortcut"><span class="gs-inbox-checking" role="status">@Loc["Checking for matches…"]</span></div>
                                     }
                                     else
                                     {
@@ -223,7 +228,6 @@
     private DotNetObjectReference<Inbox>? _selectionReference;
     private readonly HashSet<Guid> _selected = [];
     private bool _selectMode;
-    private string? _bulkResult;
     private void StartSelection() => _selectMode = true;
     private void StopSelection() { _selectMode = false; _selected.Clear(); }
     private void SelectRow(Guid id, bool selected) { if (selected) _selected.Add(id); else _selected.Remove(id); }
@@ -245,10 +249,12 @@
         _busy = Guid.Empty;
         try
         {
-            int done;
-            if (ignore) done = await Bank.IgnoreManyAsync(rows.Select(row => (row.Id, row.Title)).ToArray());
-            else { done = 0; foreach (var row in rows) if (await Bank.RestoreAsync(row.Id, row.Title)) done++; }
-            StopSelection(); _bulkResult = Loc["Finished: {0} updated, {1} skipped, {2} failed.", done, skipped, rows.Length - done].Value;
+            // The command reports what landed; only the rest is said here.
+            var targets = rows.Select(row => (row.Id, row.Title)).ToArray();
+            var done = ignore ? await Bank.IgnoreManyAsync(targets) : await Bank.RestoreManyAsync(targets);
+            StopSelection();
+            if (done > 0 && done < rows.Length) Snackbar.Add(Loc["{0} could not be updated.", rows.Length - done].Value, Severity.Warning);
+            if (skipped > 0) Snackbar.Add(Loc["{0} skipped because they are no longer in this list.", skipped].Value, Severity.Warning);
             await State.RefreshAsync();
         }
         finally { _busy = null; }
@@ -402,7 +408,7 @@
 
     private async Task SetFilterAsync(InboxStatus status)
     {
-        StopSelection(); _bulkResult = null;
+        StopSelection();
         await State.SetFilterAsync(status);
         WriteUrl();
     }

@@ -4,12 +4,12 @@
     <TitleContent><div class="gs-compare-heading"><h2>@Loc["Compare receipts"]</h2><p>@Loc["Compare the receipt details before deciding."]</p></div></TitleContent>
     <DialogContent>
         <div class="gs-compare-grid">
-            @foreach (var entry in new[] { (Row: DeleteRow, Label: Loc["Inbox receipt"].Value), (Row: KeepRow, Label: Loc["Matching receipt"].Value) })
+            @foreach (var entry in new[] { (Row: DeleteRow, Label: Loc["This receipt"].Value), (Row: KeepRow, Label: Loc["Possible duplicate"].Value) })
             {
                 <div class="gs-compare-choice">
                 <ReceiptComparisonSide Label="@entry.Label" Name="@(entry.Row.MerchantDisplayName ?? entry.Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
                     Date="@entry.Row.Receipt.PurchaseDate" Total="@entry.Row.Receipt.Total" Currency="@entry.Row.Currency"
-                    Detail="@(entry.Row.ExpenseName is { } expense ? Loc["Added to: {0}", expense].Value : null)"
+                    Detail="@Detail(entry.Row)"
                     ReceiptId="@entry.Row.Id" ExpenseId="@entry.Row.ExpenseId" Attachments="@entry.Row.Attachments" Bill="@ReceiptComparisonSide.FromInbox(entry.Row)" />
                 @if (entry.Row.ExpenseId is null)
                 {
@@ -29,4 +29,11 @@
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse DeleteRow { get; set; } = null!;
     [Parameter, EditorRequired] public ReceiptInboxResponse KeepRow { get; set; } = null!;
+    // Both sides are inbox receipts, so say where each one came from: that is what tells them apart.
+    private string Detail(ReceiptInboxResponse row)
+    {
+        var file = row.Attachments.FirstOrDefault();
+        var source = file is null ? Loc["Manual entry"].Value : file.ContentType == "application/pdf" ? "PDF" : Loc["Photo"].Value;
+        return row.ExpenseName is { } expense ? $"{source} · {Loc["Added to: {0}", expense].Value}" : source;
+    }
 }

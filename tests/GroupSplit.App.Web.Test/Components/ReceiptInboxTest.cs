@@ -144,8 +144,8 @@ public class ReceiptInboxTest : ComponentTest
         var page = Render<ReceiptInbox>();
         page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
         var review = page.FindAll("button").Single(x => x.TextContent.Contains("Compare receipts")).ClickAsync(new MouseEventArgs());
-        dialog.WaitForAssertion(() => Assert.Contains("Inbox receipt", dialog.Markup));
-        Assert.Contains("Matching receipt", dialog.Markup);
+        dialog.WaitForAssertion(() => Assert.Contains("This receipt", dialog.Markup));
+        Assert.Contains("Possible duplicate", dialog.Markup);
         Assert.DoesNotContain("first.pdf", dialog.Markup);
         Assert.DoesNotContain("second.pdf", dialog.Markup);
         Assert.Empty(dialog.FindAll(".gs-pdf-preview, img"));
@@ -317,7 +317,7 @@ public class ReceiptInboxTest : ComponentTest
     }
 
     [Fact]
-    public void Waits_for_both_suggestions_and_expense_matches_before_showing_receipts()
+    public void Shows_receipts_at_once_and_holds_their_action_until_matches_and_suggestions_are_in()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
         {
@@ -334,12 +334,14 @@ public class ReceiptInboxTest : ComponentTest
         client.Setup(x => x.SuggestReceiptInboxFilingsAsync(It.IsAny<ReceiptInboxSuggestionsRequest>(), It.IsAny<CancellationToken>())).Returns(suggestions.Task);
         Services.AddSingleton(client.Object);
         var page = Render<ReceiptInbox>();
-        Assert.DoesNotContain("Shop", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("Shop", page.Markup));
+        Assert.Contains("Checking for matches", page.Markup);
+        Assert.DoesNotContain("Add to group", page.Markup);
         matches.SetResult([new ReceiptExpenseCandidate(Guid.NewGuid(), "Groceries", 10m, "USD", new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero))]);
-        Assert.DoesNotContain("Shop", page.Markup);
+        Assert.Contains("Checking for matches", page.Markup);
         suggestions.SetResult([]);
         page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
-        Assert.Contains("Shop", page.Markup);
+        Assert.DoesNotContain("Checking for matches", page.Markup);
         Assert.DoesNotContain("Add to group", page.Markup);
     }
 
@@ -362,6 +364,31 @@ public class ReceiptInboxTest : ComponentTest
 
         page.WaitForAssertion(() => Assert.Contains("Groceries", page.Markup));
         Assert.DoesNotContain("Add to group", page.Markup);
+    }
+
+    [Fact]
+    public void A_matching_expense_wins_over_an_unconfirmed_lookalike()
+    {
+        var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD", new SaveReceiptRequest
+        {
+            MerchantName = "Shop",
+            Total = 10m,
+            PurchaseDate = new DateOnly(2026, 11, 4)
+        }, [])
+        {
+            PossibleDuplicates = [new ReceiptDuplicateCandidate(Guid.NewGuid(), null)]
+        };
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([receipt]);
+        client.Setup(x => x.MatchReceiptInboxAsync(receipt.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ReceiptExpenseCandidate(Guid.NewGuid(), "Painkillers", 10m, "USD", new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero))]);
+        Services.AddSingleton(client.Object);
+
+        var page = Render<ReceiptInbox>();
+
+        page.WaitForAssertion(() => Assert.Contains("Painkillers", page.Markup));
+        Assert.DoesNotContain("Compare receipts", page.Markup);
+        Assert.Contains("Possible duplicate receipt", page.Markup);
     }
 
     [Fact]
@@ -414,7 +441,7 @@ public class ReceiptInboxTest : ComponentTest
     }
 
     [Fact]
-    public void Suggestion_is_shown_with_receipt_after_loading()
+    public void A_receipt_is_shown_at_once_and_its_suggestion_when_it_arrives()
     {
         var receipt = new ReceiptInboxResponse(Guid.NewGuid(), null, "USD",
             new SaveReceiptRequest
@@ -431,8 +458,10 @@ public class ReceiptInboxTest : ComponentTest
             .Returns(pending.Task);
 
         var page = Render<ReceiptInbox>();
-        Assert.DoesNotContain("Amazon", page.Markup);
+        page.WaitForAssertion(() => Assert.Contains("Amazon", page.Markup));
+        Assert.Contains("Checking for matches", page.Markup);
         pending.SetResult([new ReceiptInboxSuggestion(receipt.Id, new FilingDestinationSuggestion(Guid.NewGuid(), "Home", false, Guid.NewGuid(), "Groceries", .95))]);
         page.WaitForAssertion(() => Assert.Contains("Home · Groceries", page.Markup));
+        Assert.DoesNotContain("Checking for matches", page.Markup);
     }
 }

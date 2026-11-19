@@ -5941,7 +5941,16 @@
   <data name="Restore selected" xml:space="preserve"><value>Restore selected</value></data>
   <data name="Select receipt" xml:space="preserve"><value>Select receipt</value></data>
   <data name="Ignore selected receipts?" xml:space="preserve"><value>Ignore selected receipts?</value></data>
-  <data name="Finished: {0} updated, {1} skipped, {2} failed." xml:space="preserve"><value>Finished: {0} updated, {1} skipped, {2} failed.</value></data>
+  <data name="Divided by the group's rule {0}." xml:space="preserve"><value>Divided by the group's rule {0}.</value></data>
+  <data name="Checking for matches…" xml:space="preserve"><value>Checking for matches…</value></data>
+  <data name="This receipt" xml:space="preserve"><value>This receipt</value></data>
+  <data name="{0} receipts ignored." xml:space="preserve"><value>{0} receipts ignored.</value></data>
+  <data name="{0} receipts restored." xml:space="preserve"><value>{0} receipts restored.</value></data>
+  <data name="{0} receipts deleted." xml:space="preserve"><value>{0} receipts deleted.</value></data>
+  <data name="{0} transactions restored." xml:space="preserve"><value>{0} transactions restored.</value></data>
+  <data name="{0} could not be updated." xml:space="preserve"><value>{0} could not be updated.</value></data>
+  <data name="{0} skipped because they are no longer in this list." xml:space="preserve"><value>{0} skipped because they are no longer in this list.</value></data>
+  <data name="Could not restore them." xml:space="preserve"><value>Could not restore them.</value></data>
   <data name="Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Compare both receipts before deciding. Deleting this receipt also deletes its original files and cannot be undone.</value></data>
   <data name="This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase." xml:space="preserve"><value>This expense already has a receipt. Compare the receipts before deciding whether this is the same purchase.</value></data>
   <data name="Inbox receipt" xml:space="preserve"><value>Inbox receipt</value></data>
@@ -5962,7 +5971,6 @@
   <data name="Open original" xml:space="preserve"><value>Open original</value></data>
   <data name="No original receipt file available." xml:space="preserve"><value>No original receipt file available.</value></data>
   <data name="Deleting this receipt also deletes its original files and cannot be undone." xml:space="preserve"><value>Deleting this receipt also deletes its original files and cannot be undone.</value></data>
-  <data name="Matching receipt" xml:space="preserve"><value>Matching receipt</value></data>
   <data name="Delete this receipt" xml:space="preserve"><value>Delete this receipt</value></data>
   <data name="Attached to an expense; this receipt will be kept." xml:space="preserve"><value>Attached to an expense; this receipt will be kept.</value></data>
   <data name="Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone." xml:space="preserve"><value>Select the receipt to delete. The other receipt will be kept. Deletion also removes its original files and cannot be undone.</value></data>

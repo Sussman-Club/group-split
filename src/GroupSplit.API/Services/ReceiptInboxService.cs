@@ -40,12 +40,21 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         return expenses.Select(e =>
         {
             var receipt = e.Receipt;
+            var merchant = e.Merchant?.Name ?? e.Name;
+            var day = DateOnly.FromDateTime(e.DateTime.UtcDateTime);
             var source = receipt is null
                 ? new ReceiptInboxResponse(e.Id, e.Id, e.Currency,
-                    new SaveReceiptRequest { MerchantName = e.Merchant?.Name ?? e.Name, PurchaseDate = DateOnly.FromDateTime(e.DateTime.UtcDateTime), Total = e.Amount }, [])
+                    new SaveReceiptRequest { MerchantName = merchant, PurchaseDate = day, Total = e.Amount }, [])
                 : Response(receipt) with { Currency = e.Currency };
             return source with
             {
+                // An itemized bill entered in the app carries no merchant or date of its own;
+                // the expense it belongs to has both.
+                Receipt = source.Receipt with
+                {
+                    MerchantName = string.IsNullOrWhiteSpace(source.Receipt.MerchantName) ? merchant : source.Receipt.MerchantName,
+                    PurchaseDate = source.Receipt.PurchaseDate ?? day
+                },
                 ExpenseId = e.Id,
                 ExpenseName = e.Name,
                 ExpenseOnly = receipt?.OwnerUserId != user.User.Id,
