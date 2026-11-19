@@ -55,10 +55,15 @@
         </MudButton>
     </MudStack>
 
+    @* A named rule is said by the button, and the division below says it again; the
+       automatic hint would claim the category decides, which is not the case. *@
+    @if (NamedRule is null)
+    {
     <div class="gs-split-mode-hint" aria-live="polite">
         <MudIcon Icon="@ModeIcon" Size="Size.Small" aria-hidden="true" />
         <span>@ModeHint</span>
     </div>
+    }
 
     @if (!Members.Any())
     {
@@ -564,7 +569,7 @@
 
     private string ModeHint => Chosen switch
     {
-        Mode.Automatic => NamedRule is { } rule ? Loc["Divided by the group's rule {0}.", rule].Value : Loc["Use the category's split, or the group default when it is uncategorized."].Value,
+        Mode.Automatic => Loc["Use the category's split, or the group default when it is uncategorized."].Value,
         Mode.Even => Loc["Divide the total evenly across everyone in the group."].Value,
         Mode.AllForOne => Loc["Choose one person to cover the whole expense."].Value,
         Mode.ByBill => Loc["Assign receipt items, then split from those assignments."].Value,

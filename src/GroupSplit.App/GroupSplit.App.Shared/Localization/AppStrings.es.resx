@@ -5941,7 +5941,6 @@
   <data name="Restore selected" xml:space="preserve"><value>Restaurar seleccionados</value></data>
   <data name="Select receipt" xml:space="preserve"><value>Seleccionar recibo</value></data>
   <data name="Ignore selected receipts?" xml:space="preserve"><value>¿Ignorar los recibos seleccionados?</value></data>
-  <data name="Divided by the group's rule {0}." xml:space="preserve"><value>Se reparte con la regla del grupo {0}.</value></data>
   <data name="Checking for matches…" xml:space="preserve"><value>Buscando coincidencias…</value></data>
   <data name="This receipt" xml:space="preserve"><value>Este recibo</value></data>
   <data name="{0} receipts ignored." xml:space="preserve"><value>{0} recibos ignorados.</value></data>

@@ -407,11 +407,15 @@ public sealed class FilingSuggester(
         // Built-in rules are left out: the even and by-the-bill ones say nothing about what
         // an expense was, and the per-member ones are named after members. The personal
         // group divides nothing, so its rules are no answer either. A rule some category
-        // divides by is already on offer through that category.
+        // divides by is already on offer through that category. A rule a bill's lines divide
+        // by ("Items: Ana") shares out lines rather than standing for a kind of expense, and
+        // is usually named after the people it gives them to.
         var rules = await dbContext.Set<SplitRule>()
             .Where(rule => !rule.BuiltIn && rule.Group.Id != me && mine.Contains(rule.Group.Id)
                            && !dbContext.Set<Category>().Any(category => category.ArchivedAt == null
-                                                                        && category.DefaultSplitRuleId == rule.Id))
+                                                                        && category.DefaultSplitRuleId == rule.Id)
+                           && !dbContext.Set<ReceiptItem>().Any(item => item.SplitRuleVersion != null
+                                                                       && item.SplitRuleVersion.SplitRuleId == rule.Id))
             .OrderBy(rule => rule.Group.Name)
             .ThenBy(rule => rule.Name)
             .Select(rule => new

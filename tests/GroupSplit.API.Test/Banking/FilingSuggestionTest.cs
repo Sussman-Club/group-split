@@ -162,6 +162,25 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task A_rule_a_bills_lines_divide_by_is_not_offered()
+    {
+        var (group, _) = await Home();
+        var lines = await GymRule(group.Id, "Items: Ana");
+        var version = await DbContext.Set<SplitRuleVersion>().SingleAsync(v => v.SplitRuleId == lines, Ct);
+        var receipt = new Receipt { OwnerUserId = GetService<ICurrentUser>().User.Id, Currency = "USD", Subtotal = 5m, Total = 5m };
+        receipt.Items.Add(new ReceiptItem { Name = "Milk", NormalizedName = "milk", UnitPrice = 5m, TotalPrice = 5m, SplitRuleVersionId = version.Id });
+        DbContext.Add(receipt);
+        await DbContext.SaveChangesAsync(Ct);
+        var row = await Row(30m);
+        _model.Answer("Home · Groceries", 0.9);
+
+        await Suggest(row);
+
+        var asked = Assert.Single(_model.Asked);
+        Assert.DoesNotContain(asked.Options.Keys, option => option.Contains("Items: Ana"));
+    }
+
+    [Fact]
     public async Task Accepting_a_rule_suggestion_files_by_that_rule_and_no_category()
     {
         var (group, _) = await Home();
@@ -490,12 +509,12 @@ public class FilingSuggestionTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     /// <summary>A rule the group wrote for itself that no category divides by: all on the caller.</summary>
-    private async Task<Guid> GymRule(Guid groupId)
+    private async Task<Guid> GymRule(Guid groupId, string name = "Ana's gym")
     {
         var rule = await GetService<ISplitRuleService>().Create(new CreateSplitRuleRequest
         {
             GroupId = groupId,
-            Name = "Ana's gym",
+            Name = name,
             Definition = new PercentSplitRuleDto
             {
                 Percentages = new Dictionary<Guid, decimal> { [GetService<ICurrentUser>().User.Id] = 100 }
