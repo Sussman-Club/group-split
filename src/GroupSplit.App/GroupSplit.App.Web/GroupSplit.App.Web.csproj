@@ -12,8 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.1-preview.1.26506.6" />
-    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.1" />
+    <PackageReference Include="Aspire.Keycloak.Authentication" Version="17.0.0-preview.1.26567.5" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="17.0.0" />
     <!-- User access token management for the OIDC handler, which ships SaveTokens and no
          way to keep what it saved current. Apache-2.0, and distinct from Duende.BFF, which
          is under Duende's own licence and would replace this app's whole BFF. -->
@@ -26,7 +26,7 @@
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Web.Client\GroupSplit.App.Web.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup>

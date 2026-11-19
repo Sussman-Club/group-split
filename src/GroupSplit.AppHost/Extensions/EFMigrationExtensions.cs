@@ -1,6 +1,7 @@
 using Aspire.Hosting.EntityFrameworkCore;
+using Aspire.Hosting.Dotnet;
 
-#pragma warning disable ASPIREDOTNETTOOL, ASPIRECSHARPAPPS001
+#pragma warning disable ASPIREDOTNETTOOL
 
 namespace GroupSplit.AppHost.Extensions;
 
@@ -15,7 +16,7 @@ public static class EFMigrationExtensions
             bool optional = false,
             string? dbContextTypeName = null,
             Action<IResourceBuilder<DotnetToolResource>>? configureToolResource = null,
-            Action<IResourceBuilder<ProjectResource>>? configureProjectResource = null)
+            Action<IResourceBuilder<DotnetProjectResource>>? configureProjectResource = null)
         {
             return builder.ApplicationBuilder.AddEFMigrationsProject(name, projectPath, dbContextTypeName,
                     tool =>
@@ -35,7 +36,7 @@ public static class EFMigrationExtensions
             string projectPath,
             string? dbContextTypeName = null,
             Action<IResourceBuilder<DotnetToolResource>>? configureToolResource = null,
-            Action<IResourceBuilder<ProjectResource>>? configureProjectResource = null)
+            Action<IResourceBuilder<DotnetProjectResource>>? configureProjectResource = null)
         {
             var internalResourceName = name + "-internal";
 
@@ -44,13 +45,13 @@ public static class EFMigrationExtensions
             // and other resources interact with. Keep it out of the default resource list; it stays
             // reachable via the dashboard's "show hidden" toggle and `aspire describe --include-hidden`.
             var resourceBuilder = builder
-                .AddCSharpApp(name, projectPath)
+                .AddDotnetProject(name, projectPath)
                 .WithExplicitStart()
                 .WithHidden();
 
             var migrations = dbContextTypeName is null
-                ? resourceBuilder.AddEFMigrations(internalResourceName, configureToolResource)
-                : resourceBuilder.AddEFMigrations(internalResourceName, dbContextTypeName, configureToolResource);
+                ? ((IResourceBuilder<IDotnetProgramResource>)resourceBuilder).AddEFMigrations(internalResourceName, configureToolResource)
+                : ((IResourceBuilder<IDotnetProgramResource>)resourceBuilder).AddEFMigrations(internalResourceName, dbContextTypeName, configureToolResource);
 
             configureProjectResource?.Invoke(resourceBuilder);
 

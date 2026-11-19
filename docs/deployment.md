@@ -63,7 +63,7 @@ tag on a commit that never shipped.
    than after the images exist. A feature switch that is off is a notice; one that is on but
    missing its credentials is a failure.
 3. Claims the release version and writes its tag.
-4. Pins the Aspire CLI to the version the AppHost SDK declares, so the CLI and the
+4. Pins the Aspire CLI to the version the AppHost package declares, so the CLI and the
    evaluated model agree.
 5. Maps the allowlisted GitHub environment values to `Parameters__*`, then removes the
    GitHub-facing names before the build starts.

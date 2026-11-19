@@ -71,7 +71,8 @@ public static class DeploymentExtensions
         public IResourceBuilder<T> WithFiles(
             string sourcePath,
             string targetPath,
-            bool escapeComposeInterpolation = false)
+            bool escapeComposeInterpolation = false,
+            Func<string, bool>? includeFile = null)
         {
             var source = Path.Combine(resource.ApplicationBuilder.AppHostDirectory, sourcePath);
 
@@ -104,6 +105,11 @@ public static class DeploymentExtensions
 
             foreach (var path in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
             {
+                if (includeFile is not null && !includeFile(path))
+                {
+                    continue;
+                }
+
                 var directory = Path.GetRelativePath(source, Path.GetDirectoryName(path)!)
                     .Replace('\\', '/');
 
