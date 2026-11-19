@@ -39,5 +39,11 @@ public sealed class ProjectResourceRegistrationTest
         var seeder = builder.Resources.Single(r => r.Name == "seeder");
         Assert.Contains(seeder.Annotations.OfType<ResourceCommandAnnotation>(),
             command => command.Name == SeederCommandNames.ResetAndSeed);
+
+        foreach (var name in new[] { "plaid-redirect-uri", "bank-key-certificate", "push-webbaseurl" })
+        {
+            var parameter = Assert.IsType<ParameterResource>(builder.Resources.Single(r => r.Name == name));
+            Assert.False(parameter.Required, $"{name} must not block startup when omitted.");
+        }
     }
 }

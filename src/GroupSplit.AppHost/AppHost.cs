@@ -67,6 +67,9 @@ var cache = builder.AddRedis("cache")
 var accountDeletionSecret = builder.AddAccountDeletionSecret();
 
 var keycloak = builder.AddKeycloak("keycloak")
+    // Aspire 17 defaults to Keycloak 26.8, whose Admin API requires a new client scope.
+    // Keep the previous image until existing realms and the account-deletion client migrate.
+    .WithImageTag("26.6")
     .WithGoogleSignIn()
     .WithAccountDeletionSecret(accountDeletionSecret)
     .WithPostgres(keycloakDb)

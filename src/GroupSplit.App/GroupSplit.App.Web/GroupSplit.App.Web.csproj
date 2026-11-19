@@ -26,7 +26,7 @@
     <ProjectReference Include="..\..\GroupSplit.ServiceDefaults\GroupSplit.ServiceDefaults.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Shared\GroupSplit.App.Shared.csproj" />
     <ProjectReference Include="..\GroupSplit.App.Web.Client\GroupSplit.App.Web.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup>
