@@ -32,7 +32,7 @@ for name in $parameters; do
 done
 
 # Run push and Compose preparation together. Separate runs can stamp different release tags.
-aspire do release-compose --environment production --non-interactive
+aspire do release-compose --environment production --non-interactive --output-path "$output_dir"
 
 # Pin each image to the digest CI pushed before the files leave the runner.
 image_variables=(API_IMAGE WEB_IMAGE MCP_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)

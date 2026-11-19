@@ -8,9 +8,9 @@
 
     <ItemGroup>
         <PackageReference Include="FirebaseAdmin" Version="3.5.0" />
-        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.1-preview.1.26506.6" />
-        <PackageReference Include="Aspire.OpenAI" Version="13.6.1-preview.1.26506.6" />
-        <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.6.1" />
+        <PackageReference Include="Aspire.Keycloak.Authentication" Version="17.0.0-preview.1.26567.5" />
+        <PackageReference Include="Aspire.OpenAI" Version="17.0.0-preview.1.26567.5" />
+        <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="17.0.0" />
         <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.102.1" />
         <PackageReference Include="AWSSDK.S3" Version="4.0.104.1" />
         <PackageReference Include="Going.Plaid" Version="6.68.0" />
@@ -28,9 +28,6 @@
         <!-- The filters, sort maps and DTO projections that back the endpoints are internal;
              the tests exercise them directly rather than only through HTTP. -->
         <InternalsVisibleTo Include="GroupSplit.API.Test" />
-        <!-- And to the Aspire suite, which runs the same projections and sort maps against
-             a real Postgres: the in-memory provider the unit tests use cannot tell a query
-             that translates from one that does not. -->
         <InternalsVisibleTo Include="GroupSplit.AppHost.Test" />
     </ItemGroup>
 

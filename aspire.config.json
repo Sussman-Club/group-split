@@ -1,5 +1,8 @@
 {
   "appHost": {
     "path": "src/GroupSplit.AppHost/GroupSplit.AppHost.csproj"
+  },
+  "sdk": {
+    "version": "17.0.0"
   }
 }

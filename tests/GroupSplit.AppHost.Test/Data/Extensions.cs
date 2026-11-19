@@ -12,7 +12,7 @@ namespace GroupSplit.AppHost.Test.Data;
 public static class Extensions
 {
     private static readonly ConditionalWeakTable<AppHostFixture,
-            ConcurrentDictionary<string, object?>>
+            ConcurrentDictionary<string, Lazy<object?>>>
         AppHostMemberCache = [];
 
     /// <summary>
@@ -33,12 +33,10 @@ public static class Extensions
             var memberCache = AppHostMemberCache
                 .GetOrAdd(appHost, []);
 
+            // ConcurrentDictionary may invoke its value factory more than once. Starting
+            // the seeder inside that factory can reset the database while other tests run.
             var methodResult = memberCache.GetOrAdd(memberName,
-                static (_, funcWithArgs) => funcWithArgs.factory(funcWithArgs.args), new
-                {
-                    factory,
-                    args
-                });
+                _ => new Lazy<object?>(() => factory(args), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
             return (T?)methodResult!; // This is very hard to properly annotate with nullability.
         }

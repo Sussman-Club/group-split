@@ -7,14 +7,14 @@ public static class OptionalParameterExtensions
     extension(IDistributedApplicationBuilder builder)
     {
         /// <summary>
-        /// Declares a parameter whose omitted value is represented by the empty string.
-        /// Empty is the application's null/absent value for optional deployment settings.
+        /// Declares an optional parameter. Aspire 17 represents an omitted or empty value
+        /// as null; consumers treat null and the empty string as absent.
         /// </summary>
         public IResourceBuilder<ParameterResource> AddOptionalParameter(
             string name,
             string defaultValue = "",
             bool secret = false)
-            => builder.AddParameter(name, new ConstantDefault(defaultValue), secret: secret);
+            => builder.AddParameter(name, new ConstantDefault(defaultValue), secret: secret).AsOptional();
     }
 
     private sealed class ConstantDefault(string value) : ParameterDefault
