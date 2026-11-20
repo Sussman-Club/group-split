@@ -19,9 +19,6 @@ parameters="
   BANK_KEY_CERTIFICATE
   PUSH_ENABLED PUSH_PROJECT_ID FIREBASE_SERVICE_ACCOUNT_BASE64
   WEBPUSH_APIKEY WEBPUSH_PROJECTID WEBPUSH_MESSAGINGSENDERID WEBPUSH_APPID WEBPUSH_VAPIDKEY PUSH_WEBBASEURL
-  RECEIPT_TRANSCRIPTION_PROVIDER
-  VERYFI_ENABLED VERYFI_CLIENT_ID VERYFI_USERNAME VERYFI_API_KEY
-  VERYFI_LOG_RAW_RESPONSES
   AZURE_OPENAI_ENABLED AZURE_OPENAI_ENDPOINT AZURE_OPENAI_MODEL AZURE_OPENAI_API_KEY
   AZURE_OPENAI_DECISION_DEPLOYMENT
 "
@@ -35,7 +32,7 @@ for name in $parameters; do
 done
 
 # Run push and Compose preparation together. Separate runs can stamp different release tags.
-aspire do release-compose --environment production --non-interactive
+aspire do release-compose --environment production --non-interactive --output-path "$output_dir"
 
 # Pin each image to the digest CI pushed before the files leave the runner.
 image_variables=(API_IMAGE WEB_IMAGE MCP_IMAGE MIGRATIONS_INTERNAL_IMAGE REALM_SETTINGS_IMAGE)

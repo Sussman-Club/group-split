@@ -13,8 +13,7 @@ public interface IReceiptTranscriptionService
 
 /// <summary>
 /// The boundary around a document-understanding provider. Implementations know their own
-/// wire protocol; nothing outside this interface needs to know whether the first provider
-/// is Veryfi or a later replacement.
+/// wire protocol; nothing outside this interface depends on its implementation.
 /// </summary>
 public interface IReceiptTranscriptionProvider
 {
@@ -42,6 +41,7 @@ public sealed record TranscribedReceipt(
 {
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
+    public string? ObservedFingerprint { get; init; }
 }
 
 public sealed record TranscribedReceiptItem(
@@ -114,6 +114,7 @@ public sealed class ReceiptTranscriptionService(
             Total = transcription.Total,
             MerchantName = transcription.MerchantName,
             PurchaseDate = transcription.PurchaseDate,
+            ObservedFingerprint = transcription.ObservedFingerprint,
             Items = transcription.Items.Select((item, index) => new ReceiptItemInput
             {
                 Name = item.Name,

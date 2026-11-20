@@ -27,6 +27,8 @@ public class AppContextPostgreSqlFactory
         var optionsBuilder = new DbContextOptionsBuilder<PostgreSqlAppDbContext>();
 
         var connectionString = config.GetConnectionString("DefaultConnection")
+                               // Aspire's migration bundle publishes the database reference under its resource name.
+                               ?? config.GetConnectionString("db")
                                ?? "Host=localhost;Port=5432;Database=my_db;Username=my_user;Password=my_password";
 
         optionsBuilder.UseNpgsql(connectionString, b => b.MigrationsAssembly(Assembly.GetAssembly(typeof(AppContextPostgreSqlFactory))!));

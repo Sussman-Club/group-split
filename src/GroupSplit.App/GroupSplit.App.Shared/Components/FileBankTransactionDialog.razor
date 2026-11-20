@@ -198,6 +198,7 @@
                                  EvenRuleId="@_evenRuleId"
                                  SplitRuleId="@_splitRuleId"
                                  SplitRuleIdChanged="@OnSplitRuleChangedAsync"
+                                 RuleName="@_groupRules.FirstOrDefault(rule => rule.Id == _splitRuleId)?.Name"
                                  Preview="@_preview"
                                  PreviewError="@_previewError"
                                  Awaiting="@_awaiting"
@@ -320,6 +321,7 @@
 
     /// <summary>The rule this row is to be divided by, when the person named one.</summary>
     private Guid? _splitRuleId;
+    private IReadOnlyList<SplitRuleResponse> _groupRules = [];
 
     /// <inheritdoc cref="CreateTransactionDialog.MemberRulesOf"/>
     private IReadOnlyList<SplitRuleResponse> _memberRules = [];
@@ -397,7 +399,7 @@
 
     private string CategoryHint => !_chosen
         ? Loc["Pick a group first."].Value
-        : _suggestion is { } suggestion && _categoryId == suggestion.CategoryId && SuggestionFits(suggestion)
+        : _suggestion is { CategoryId: not null } suggestion && _categoryId == suggestion.CategoryId && SuggestionFits(suggestion)
             ? Loc["Suggested for this payment. Change it if it is not right."].Value
         : Row.CategoryLabel is { Length: > 0 } label
             ? Loc["Your bank called this \"{0}\".", label].Value
@@ -472,6 +474,7 @@
         _categories = [];
         _members = [];
         _memberRules = [];
+        _groupRules = [];
         _evenRuleId = null;
 
         if (_groupId is not { } groupId)
@@ -535,6 +538,14 @@
         }).ToList();
         _memberRules = CreateTransactionDialog.MemberRulesOf(listed, _members);
         _evenRuleId = listed?.FirstOrDefault(rule => rule.DividesEvenly)?.Id;
+        _groupRules = listed ?? [];
+
+        // A suggestion that names one of this group's rules rather than a category.
+        if (_suggestion is { SplitRuleId: { } suggestedRule } suggestion && SuggestionFits(suggestion)
+            && _groupRules.Any(rule => rule.Id == suggestedRule))
+        {
+            _splitRuleId = suggestedRule;
+        }
 
         // The bank's own category, matched against what this group already uses. Only a
         // suggestion, and only when a name happens to line up: whatever is selected when
@@ -622,6 +633,11 @@
         {
             return suggested;
         }
+
+        // The suggestion is a rule because no category fitted; guessing one from the bank's
+        // label would put a category's division back over it.
+        if (_suggestion is { SplitRuleId: not null } ruleOnly && SuggestionFits(ruleOnly))
+            return null;
 
         if (Row.CategoryLabel is not { Length: > 0 } label)
             return null;

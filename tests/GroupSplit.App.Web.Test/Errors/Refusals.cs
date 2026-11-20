@@ -17,7 +17,7 @@ internal static class Refusals
     /// <summary>What the API writes with.</summary>
     private static readonly JsonSerializerOptions Api = new(JsonSerializerDefaults.Web);
 
-    public static ApiException<ProblemDetails> Of(int status, string code)
+    public static ApiException<ProblemDetails> Of(int status, string code, IReadOnlyDictionary<string, object?>? extensions = null)
     {
         var members = new Dictionary<string, object?>
         {
@@ -28,6 +28,10 @@ internal static class Refusals
             ["code"] = code,
             ["traceId"] = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
         };
+        foreach (var (name, value) in extensions ?? new Dictionary<string, object?>())
+        {
+            members[name] = value;
+        }
 
         var problem = JsonSerializer.Deserialize<ProblemDetails>(
             JsonSerializer.Serialize(members, Api), GroupSplitSerializer.Options)!;

@@ -5,6 +5,8 @@ using GroupSplit.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Components;
 using Moq;
+using MudBlazor;
+using Microsoft.AspNetCore.Components.Web;
 
 namespace GroupSplit.App.Web.Test.Components;
 
@@ -54,6 +56,70 @@ public class ReceiptInboxReviewTest : ComponentTest
             client.Verify(x => x.MatchReceiptInboxAsync(first, It.IsAny<CancellationToken>()), Times.Once);
             Assert.Contains("Current expense", page.Markup);
         });
+    }
+
+    [Fact]
+    public async Task Comparing_a_filed_receipt_opens_both_sides_and_keep_both_deletes_nothing()
+    {
+        var id = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+        var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Inbox copy" }, [])
+        { PossibleDuplicates = [new ReceiptDuplicateCandidate(otherId, Guid.NewGuid())] };
+        var other = new ReceiptInboxResponse(otherId, Guid.NewGuid(), "USD", new SaveReceiptRequest { MerchantName = "Filed copy" }, []);
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
+        client.Setup(x => x.GetReceiptInboxAsync(otherId, It.IsAny<CancellationToken>())).ReturnsAsync(other);
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Compare receipts", page.Markup));
+        var pending = page.FindAll("button").Single(button => button.TextContent.Trim() == "Compare receipts").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("Filed copy", dialogs.Markup));
+        Assert.Contains("Inbox copy", dialogs.Markup);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Contains("Keep both")).ClickAsync(new MouseEventArgs());
+        await pending;
+        client.Verify(x => x.DeleteReceiptInboxAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Expense_duplicate_review_shows_itemized_bills_without_original_files()
+    {
+        var id = Guid.NewGuid();
+        var expense = Guid.NewGuid();
+        var firstFile = Guid.NewGuid();
+        var secondFile = Guid.NewGuid();
+        var row = new ReceiptInboxResponse(id, null, "USD", new SaveReceiptRequest { MerchantName = "Store", Total = 12, Subtotal = 12, Items = [new ReceiptItemInput { Name = "Inbox item", UnitPrice = 12, TotalPrice = 12 }] },
+            [new ReceiptAttachmentResponse(firstFile, null, null, id, "inbox.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.GetReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(row);
+        client.Setup(x => x.MatchReceiptInboxAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync([new ReceiptExpenseCandidate(expense, "Store", 12, "USD", DateTimeOffset.UtcNow, HasReceipt: true)]);
+        var receipts = new Mock<IReceiptCommands>();
+        receipts.Setup(x => x.GetAsync(expense, It.IsAny<CancellationToken>())).ReturnsAsync(new ReceiptResponse(Guid.NewGuid(), expense, 12, 0, 0, 12, 0, false, false,
+            [new ReceiptItemResponse(Guid.NewGuid(), "Existing item", 12, 1, 12, 0, null, null, null)]));
+        Services.AddSingleton(receipts.Object);
+        ReceiptAttachments.Setup(x => x.GetAsync(expense, It.IsAny<CancellationToken>())).ReturnsAsync([new ReceiptAttachmentResponse(secondFile, expense, null, null, "existing.jpg", "image/jpeg", 1, DateTimeOffset.UtcNow)]);
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInboxReview>(parameters => parameters.Add(p => p.Id, id));
+        page.WaitForAssertion(() => Assert.Contains("Possible duplicate receipt", page.Markup));
+        var pending = page.FindAll("button").Single(button => button.TextContent.Trim() == "Review").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Equal(2, dialogs.FindAll(".gs-itemized-slip").Count));
+        Assert.Contains("Inbox item", dialogs.Markup);
+        Assert.Contains("Existing item", dialogs.Markup);
+        Assert.DoesNotContain("inbox.jpg", dialogs.Markup);
+        Assert.Empty(dialogs.FindAll(".gs-pdf-preview, .gs-compare-original"));
+        ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Never);
+        var controls = dialogs.FindAll("button").Where(button => button.TextContent.Trim() == "See original").ToArray();
+        Assert.Equal(2, controls.Length);
+        await controls[0].ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("inbox.jpg", dialogs.Markup));
+        Assert.DoesNotContain("existing.jpg", dialogs.Markup);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "See original").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Contains("existing.jpg", dialogs.Markup));
+        ReceiptAttachments.Verify(x => x.GetAsync(expense, It.IsAny<CancellationToken>()), Times.Once);
+        await dialogs.FindAll("button").Single(button => button.TextContent.Trim() == "Cancel").ClickAsync(new MouseEventArgs());
+        await pending;
     }
 
     [Fact]

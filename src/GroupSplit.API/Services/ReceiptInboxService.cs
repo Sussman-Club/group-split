@@ -26,9 +26,46 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     public async Task<IReadOnlyList<ReceiptInboxResponse>> List(CancellationToken ct) =>
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && !r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct, classify: true);
-    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct) =>
-        await WithDuplicates((await Owned().Where(r => r.ExpenseId != null).Include(r => r.Expense).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
-            .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
+    public async Task<IReadOnlyList<ReceiptInboxResponse>> ListAdded(CancellationToken ct)
+    {
+        var groups = db.Entry(user.User).Collection(u => u.Groups).Query();
+        var expenses = await db.Set<Expense>().AsNoTracking()
+            .Where(e => (e.UserId == user.User.Id || groups.Any(g => g.Id == e.GroupId)) &&
+                (e.Receipt != null || e.ReceiptAttachments.Any()))
+            .Include(e => e.Merchant)
+            .Include(e => e.Receipt)!.ThenInclude(r => r!.Items)
+            .Include(e => e.Receipt)!.ThenInclude(r => r!.Merchant)
+            .Include(e => e.ReceiptAttachments)
+            .AsSplitQuery().ToListAsync(ct);
+        return expenses.Select(e =>
+        {
+            var receipt = e.Receipt;
+            var merchant = e.Merchant?.Name ?? e.Name;
+            var day = DateOnly.FromDateTime(e.DateTime.UtcDateTime);
+            var source = receipt is null
+                ? new ReceiptInboxResponse(e.Id, e.Id, e.Currency,
+                    new SaveReceiptRequest { MerchantName = merchant, PurchaseDate = day, Total = e.Amount }, [])
+                : Response(receipt) with { Currency = e.Currency };
+            return source with
+            {
+                // An itemized bill entered in the app carries no merchant or date of its own;
+                // the expense it belongs to has both.
+                Receipt = source.Receipt with
+                {
+                    MerchantName = string.IsNullOrWhiteSpace(source.Receipt.MerchantName) ? merchant : source.Receipt.MerchantName,
+                    PurchaseDate = source.Receipt.PurchaseDate ?? day
+                },
+                ExpenseId = e.Id,
+                ExpenseName = e.Name,
+                ExpenseOnly = receipt?.OwnerUserId != user.User.Id,
+                MerchantId = receipt?.MerchantId ?? e.MerchantId,
+                MerchantDisplayName = receipt?.Merchant?.Name ?? e.Merchant?.Name,
+                MerchantLogoUrl = receipt?.Merchant?.LogoUrl ?? e.Merchant?.LogoUrl,
+                Attachments = e.ReceiptAttachments.OrderByDescending(a => a.UploadedAt)
+                    .Select(a => new ReceiptAttachmentResponse(a.Id, a.ExpenseId, null, a.ReceiptId, a.FileName, a.ContentType, a.Length, a.UploadedAt)).ToArray()
+            };
+        }).OrderByDescending(r => r.Receipt.PurchaseDate).ThenBy(r => r.Id).ToArray();
+    }
     public async Task<IReadOnlyList<ReceiptInboxResponse>> ListIgnored(CancellationToken ct) =>
         await WithDuplicates((await Owned().Where(r => r.ExpenseId == null && r.IsIgnored).Include(r => r.Items).Include(r => r.Attachments).Include(r => r.Merchant)
             .OrderByDescending(r => r.PurchaseDate).ThenBy(r => r.Id).ToListAsync(ct)), ct);
@@ -62,20 +99,26 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
     {
         var dates = receipts.Where(r => r.PurchaseDate != null && r.Total > 0 && !string.IsNullOrWhiteSpace(r.MerchantName))
             .Select(r => r.PurchaseDate!.Value).Distinct().ToArray();
-        if (dates.Length == 0)
+        var fingerprints = receipts.SelectMany(r => new[] { r.ImportFingerprint, r.ObservedFingerprint })
+            .Where(value => value is not null).Distinct().ToArray();
+        if (dates.Length == 0 && fingerprints.Length == 0)
         {
             return receipts.Select(Response).ToArray();
         }
 
-        var candidates = await Owned().Where(r => r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0)
-            .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName }).ToListAsync(ct);
+        var candidates = await Owned().Where(r => (r.PurchaseDate != null && dates.Contains(r.PurchaseDate.Value) && r.Total > 0) ||
+                (r.ImportFingerprint != null && fingerprints.Contains(r.ImportFingerprint)) ||
+                (r.ObservedFingerprint != null && fingerprints.Contains(r.ObservedFingerprint)))
+            .Select(r => new { r.Id, r.ExpenseId, r.IsIgnored, r.PurchaseDate, r.Total, r.Currency, r.MerchantName, r.ImportFingerprint, r.ObservedFingerprint }).ToListAsync(ct);
         var responses = receipts.Select(r => Response(r) with
         {
             PossibleDuplicates = candidates
-            .Where(c => c.Id != r.Id && c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
+            .Where(c => c.Id != r.Id && ((r.ObservedFingerprint != null && (r.ObservedFingerprint == c.ObservedFingerprint || r.ObservedFingerprint == c.ImportFingerprint)) ||
+                (r.ImportFingerprint != null && r.ImportFingerprint == c.ObservedFingerprint) ||
+                (c.PurchaseDate == r.PurchaseDate && c.Total == r.Total &&
                 !string.IsNullOrWhiteSpace(r.MerchantName) && !string.IsNullOrWhiteSpace(c.MerchantName) &&
                 string.Equals(c.Currency, r.Currency, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))
+                string.Equals(c.MerchantName.Trim(), r.MerchantName.Trim(), StringComparison.OrdinalIgnoreCase))))
             .Select(c => new ReceiptDuplicateCandidate(c.Id, c.ExpenseId)).ToArray()
         }).ToArray();
         if (!classify)
@@ -132,6 +175,32 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             throw new ConflictException(ErrorCodes.ReceiptInvalid, "Receipt details have already been added. Review the receipt before changing them.");
         }
 
+        // Printed PDFs differ byte for byte, and importers older than the retailer identity
+        // send none, so the identity read from the receipt is the last chance to catch a
+        // re-import. The new copy holds nothing yet, so remove it and point at the original.
+        if (details.ObservedFingerprint is { Length: 64 } observed && observed.All(Uri.IsHexDigit))
+        {
+            observed = observed.ToUpperInvariant();
+            var original = await Owned()
+                .Where(r => r.Id != id && (r.ImportFingerprint == observed || r.ObservedFingerprint == observed))
+                .OrderBy(r => r.ExpenseId == null).ThenBy(r => r.Id)
+                .Select(r => new { r.Id, r.ExpenseId }).FirstOrDefaultAsync(ct);
+            if (original is not null)
+            {
+                var keys = existing.Attachments.Select(a => a.ObjectKey).ToArray();
+                files.Enqueue(keys);
+                db.RemoveRange(existing.Attachments);
+                db.Remove(existing);
+                await db.SaveChangesAsync(ct);
+                await files.DeleteAsync(keys, "Could not delete a re-imported receipt source.", ct);
+                // Importers show this detail as is, so it says what happened in a few words.
+                throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
+                        original.ExpenseId is null ? "Already in your inbox, skipped." : "Already in an expense, skipped.")
+                    .WithExtension("receiptId", original.ExpenseId is null ? original.Id : null)
+                    .WithExtension("expenseId", original.ExpenseId);
+            }
+        }
+
         return await SaveCore(id, new SaveReceiptInboxRequest { Currency = existing.Currency, Receipt = details }, ct);
     }
     private async Task<ReceiptInboxResponse> SaveCore(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)
@@ -177,6 +246,10 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 throw new ValidationException(ErrorCodes.ReceiptInvalid, "Choose split rules after filing into a group.");
             }
 
+            if (importingDetails && input.ObservedFingerprint is { Length: 64 } fingerprint && fingerprint.All(Uri.IsHexDigit))
+            {
+                r.ObservedFingerprint = fingerprint.ToUpperInvariant();
+            }
             r.MerchantName = input.MerchantName?.Trim();
             r.PurchaseDate = input.PurchaseDate;
             r.Subtotal = input.Subtotal;
@@ -440,6 +513,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
         {
             MerchantName = r.MerchantName,
             PurchaseDate = r.PurchaseDate,
+            ObservedFingerprint = r.ObservedFingerprint,
             Subtotal = r.Subtotal,
             Tax = r.Tax,
             Tip = r.Tip,

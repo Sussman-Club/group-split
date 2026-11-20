@@ -67,6 +67,10 @@ public interface IBankCommands
     /// <returns>How many were ignored.</returns>
     Task<int> IgnoreManyAsync(IReadOnlyList<(Guid Id, string Title)> rows, CancellationToken ct = default);
 
+    /// <summary>Puts ignored rows back in the inbox, the same way <see cref="IgnoreManyAsync"/> takes them out.</summary>
+    /// <returns>How many were restored.</returns>
+    Task<int> RestoreManyAsync(IReadOnlyList<(Guid Id, string Title)> rows, CancellationToken ct = default);
+
     /// <summary>
     /// Files several rows as the caller's own expenses -- in their personal group, owed to nobody.
     /// </summary>

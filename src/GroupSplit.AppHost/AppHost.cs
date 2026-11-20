@@ -1,6 +1,5 @@
 using GroupSplit.AppHost.Extensions;
 using Microsoft.Extensions.Configuration;
-using Projects;
 using Scalar.Aspire;
 using OpenAIExtensions = GroupSplit.AppHost.Extensions.OpenAIExtensions;
 
@@ -45,10 +44,6 @@ var azureOpenAiReceiptModel = azureOpenAi.WithModel(
 var azureOpenAiFilingModel = azureOpenAi.WithFoundryModel(
     "filing-suggestions", azureOpenAiParameters.DecisionDeployment);
 
-// Veryfi remains SaaS-managed; this external resource gives its API calls a named dependency in
-// the Aspire dashboard without routing or persisting receipt content there.
-var veryfi = builder.AddExternalService("veryfi", new Uri("https://api.veryfi.com"));
-
 // Plaid is SaaS-managed too. The API client selects Sandbox or Production from Plaid__Environment;
 // this external resource is the local dashboard dependency and uses Plaid's Sandbox endpoint.
 var plaid = builder.AddExternalService("plaid", new Uri("https://sandbox.plaid.com"));
@@ -68,6 +63,9 @@ var cache = builder.AddRedis("cache")
 var accountDeletionSecret = builder.AddAccountDeletionSecret();
 
 var keycloak = builder.AddKeycloak("keycloak")
+    // Aspire 17 defaults to Keycloak 26.8, whose Admin API requires a new client scope.
+    // Keep the previous image until existing realms and the account-deletion client migrate.
+    .WithImageTag("26.6")
     .WithGoogleSignIn()
     .WithAccountDeletionSecret(accountDeletionSecret)
     .WithPostgres(keycloakDb)
@@ -105,7 +103,6 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     .WithReference(db)
     .WithReference(keycloak)
     .WithReference(storage)
-    .WithReference(veryfi)
     .WithReference(plaid)
     .WithReference(azureOpenAiReceiptModel)
     .WithReference(azureOpenAiFilingModel)
@@ -118,7 +115,6 @@ var api = builder.AddDotnetProject("api", "../GroupSplit.API")
     // In both modes: locally the credentials come from user secrets and default to nothing,
     // which leaves the API running with bank sync reported as off.
     .WithPlaid()
-    .WithVeryfiReceiptTranscription()
     .WithAzureOpenAIReceiptTranscription(azureOpenAiParameters)
     // Deleting an account deletes its Keycloak login, through a client that can manage users
     // in the app's realm and do nothing else.
@@ -234,7 +230,7 @@ if (builder.ExecutionContext.IsRunMode)
         .WaitFor(api);
 
     builder
-        .AddSeeder<GroupSplit_Seeder>("seeder")
+        .AddSeeder("seeder", "../GroupSplit.Seeder")
         .WaitFor(db)
         .WithReference(db)
         .WithKeycloakSeeding(keycloak)

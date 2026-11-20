@@ -48,7 +48,7 @@ model and the design decisions that still hold.
 ## Quick start
 
 You need the .NET 10 SDK (`global.json` pins 10.0.100 and rolls forward), Docker running, the
-[Aspire CLI](https://aspire.dev) 13.6 to match the AppHost SDK, and a trusted ASP.NET Core
+[Aspire CLI](https://aspire.dev) 17.0 to match the AppHost package, and a trusted ASP.NET Core
 development certificate (`aspire certs trust`).
 
 ```bash
@@ -134,7 +134,7 @@ Operating it:
 - Keycloak for sign-in
 - Aspire 13.6 for local orchestration and for publishing to Docker Compose
 - Redis, RustFS
-- Plaid for bank data; Veryfi or Azure OpenAI for reading receipts
+- Plaid for bank data; Azure OpenAI for reading receipts
 - xUnit v3, bUnit, Moq and Playwright for tests
 
 ## C# formatting

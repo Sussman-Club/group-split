@@ -75,8 +75,17 @@ public class MembershipDepartureTest(AppHostFixture appHost) : IAsyncLifetime
     {
         using var scope = _services!.CreateScope();
 
+        // Other integration tests create and delete accounts concurrently. Select only
+        // stable demo accounts instead of racing a temporary browser-test user.
+        Guid[] seeded =
+        [
+            Guid.Parse("94F67FC0-F549-46ED-AD81-D6DF79225396"),
+            Guid.Parse("B2C1F8E1-8B2A-4E77-9A29-8F0E570A4F64"),
+            Guid.Parse("0D1AC8AE-709C-4C4C-8F0F-0C7E951B3A52")
+        ];
+
         return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<User>()
-            .Where(user => user.Email != null)
+            .Where(user => seeded.Contains(user.Id))
             .OrderBy(user => user.Email)
             .Select(user => user.Id)
             .Take(count)

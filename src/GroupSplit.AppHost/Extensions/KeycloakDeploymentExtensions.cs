@@ -60,7 +60,10 @@ public static class KeycloakDeploymentExtensions
         {
             return keycloak
                 .WithFiles("Assets/keycloak/realms.json", "/opt/keycloak/data/import/realms.json")
-                .WithFiles("Assets/keycloak/themes", "/opt/keycloak/themes/group-split")
+                // Compose inline configs are text only. The inherited Keycloak theme supplies
+                // its own favicon when the custom binary icon is omitted in publish mode.
+                .WithFiles("Assets/keycloak/themes", "/opt/keycloak/themes/group-split",
+                    includeFile: path => !path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
                 // Production mode serves HTTPS only unless plain HTTP is opted into. TLS is
                 // terminated upstream, so Keycloak speaks plain HTTP and learns the original
                 // scheme and host from the forwarded headers the proxy sets.

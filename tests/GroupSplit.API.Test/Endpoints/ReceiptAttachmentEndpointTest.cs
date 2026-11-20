@@ -298,6 +298,118 @@ public class ReceiptAttachmentEndpointTest : IAsyncLifetime
         Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
     }
 
+    [Fact]
+    public async Task Added_inbox_shows_expense_files_and_itemized_receipts_once_and_respects_access()
+    {
+        var expenseId = await CreateExpense();
+        var upload = await Client.PostAsync($"/transactions/{expenseId}/receipt-attachments", FileContent("direct.pdf", "application/pdf"), Ct);
+        upload.EnsureSuccessStatusCode();
+        var attachment = (await upload.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        var initial = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var fileOnly = Assert.Single(initial!, row => row.ExpenseId == expenseId);
+        Assert.True(fileOnly.ExpenseOnly);
+        Assert.Equal(attachment.Id, Assert.Single(fileOnly.Attachments).Id);
+        using var other = _host.ClientForAnotherUser();
+        Assert.DoesNotContain((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct))!, row => row.ExpenseId == expenseId);
+
+        var receipt = new SaveReceiptRequest
+        {
+            MerchantName = "Market",
+            Subtotal = 10m,
+            Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+        };
+        (await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", receipt, Json, Ct)).EnsureSuccessStatusCode();
+        var after = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var combined = Assert.Single(after!, row => row.ExpenseId == expenseId);
+        Assert.True(combined.ExpenseOnly);
+        Assert.Equal("Market", combined.Receipt.MerchantName);
+        Assert.Equal(attachment.Id, Assert.Single(combined.Attachments).Id);
+    }
+
+    [Fact]
+    public async Task Added_inbox_names_and_dates_an_itemized_bill_after_its_expense()
+    {
+        var expenseId = await CreateExpense();
+        var bill = new SaveReceiptRequest
+        {
+            Subtotal = 10m,
+            Total = 10m,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 10m, TotalPrice = 10m }]
+        };
+        (await Client.PutAsJsonAsync($"/transactions/{expenseId}/receipt", bill, Json, Ct)).EnsureSuccessStatusCode();
+
+        var added = await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox/added", Json, Ct);
+        var row = Assert.Single(added!, row => row.ExpenseId == expenseId);
+        Assert.Equal("Dinner", row.Receipt.MerchantName);
+        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow), row.Receipt.PurchaseDate);
+    }
+
+    [Fact]
+    public async Task Retailer_identity_deduplicates_different_files_per_user_and_keeps_filed_receipts()
+    {
+        var fingerprint = new string('a', 64);
+        var firstId = Guid.NewGuid();
+        using var first = FileContent("first.pdf", "application/pdf");
+        first.Add(new StringContent(fingerprint), "importFingerprint");
+        var created = await Client.PostAsync($"/receipts/inbox/{firstId}/files", first, Ct);
+        created.EnsureSuccessStatusCode();
+        var saved = (await created.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        var nextId = Guid.NewGuid();
+        using var retry = new MultipartFormDataContent();
+        var changed = new ByteArrayContent([9, 8, 7]);
+        changed.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        retry.Add(changed, "file", "different.pdf");
+        retry.Add(new StringContent(fingerprint.ToUpperInvariant()), "importFingerprint");
+        var repeated = await Client.PostAsync($"/receipts/inbox/{nextId}/files", retry, Ct);
+        repeated.EnsureSuccessStatusCode();
+        var existing = (await repeated.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!;
+        Assert.Equal(firstId, existing.ReceiptId);
+        Assert.Equal(saved.Id, existing.Id);
+        Assert.Single((await Client.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
+
+        using var other = _host.ClientForAnotherUser();
+        using var otherFile = FileContent("other.pdf", "application/pdf");
+        otherFile.Add(new StringContent(fingerprint), "importFingerprint");
+        var otherId = Guid.NewGuid();
+        (await other.PostAsync($"/receipts/inbox/{otherId}/files", otherFile, Ct)).EnsureSuccessStatusCode();
+        Assert.Single((await other.GetFromJsonAsync<List<ReceiptInboxResponse>>("/receipts/inbox", Json, Ct))!);
+
+        var fileRequest = new FileReceiptInboxRequest { NewExpense = new CreateTransactionRequest { Name = "Purchase", Amount = 10m, Currency = "USD", DateTime = DateTimeOffset.UtcNow } };
+        (await Client.PostAsJsonAsync($"/receipts/inbox/{firstId}/file", fileRequest, Json, Ct)).EnsureSuccessStatusCode();
+        using var afterFiling = FileContent("again.pdf", "application/pdf");
+        afterFiling.Add(new StringContent(fingerprint), "importFingerprint");
+        Assert.Equal(HttpStatusCode.Conflict, (await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", afterFiling, Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Identical_retry_teaches_an_existing_receipt_its_retailer_identity()
+    {
+        var receiptId = Guid.NewGuid();
+        (await Client.PostAsync($"/receipts/inbox/{receiptId}/files", FileContent("old.pdf", "application/pdf"), Ct)).EnsureSuccessStatusCode();
+        var fingerprint = new string('b', 64);
+        using var retry = FileContent("retry.pdf", "application/pdf");
+        retry.Add(new StringContent(fingerprint), "importFingerprint");
+        (await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", retry, Ct)).EnsureSuccessStatusCode();
+        using var changed = new MultipartFormDataContent();
+        var file = new ByteArrayContent([5, 6, 7]);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        changed.Add(file, "file", "changed.pdf");
+        changed.Add(new StringContent(fingerprint), "importFingerprint");
+        var response = await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", changed, Ct);
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(receiptId, (await response.Content.ReadFromJsonAsync<ReceiptAttachmentResponse>(Json, Ct))!.ReceiptId);
+    }
+
+    [Fact]
+    public async Task Invalid_retailer_identity_is_refused_before_upload()
+    {
+        using var form = FileContent("receipt.pdf", "application/pdf");
+        form.Add(new StringContent("not-a-hash"), "importFingerprint");
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostAsync($"/receipts/inbox/{Guid.NewGuid()}/files", form, Ct)).StatusCode);
+        _storage.Verify(storage => storage.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private async Task<Guid> CreateExpense(decimal amount = 10m)
     {
         var response = await Client.PostAsJsonAsync("/transactions", new CreateTransactionRequest

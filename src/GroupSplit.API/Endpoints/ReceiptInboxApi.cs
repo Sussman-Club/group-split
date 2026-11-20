@@ -71,7 +71,7 @@ public static class ReceiptInboxApi
         group.MapPost("/inbox/{receiptId:guid}/file", async (Guid receiptId, FileReceiptInboxRequest request, ReceiptInboxService service, CancellationToken ct) => Results.Ok(await service.File(receiptId, request, ct)))
             .WithName("FileReceiptInbox").Produces<ReceiptInboxResponse>();
 
-        group.MapPost("/inbox/{receiptId:guid}/files", async (Guid receiptId, IFormFile file, IReceiptAttachmentService service, CancellationToken ct) => Results.Ok(await service.UploadDraft(receiptId, file, ct)))
+        group.MapPost("/inbox/{receiptId:guid}/files", async (Guid receiptId, IFormFile file, HttpRequest request, IReceiptAttachmentService service, CancellationToken ct) => Results.Ok(await service.UploadDraft(receiptId, file, ct, request.Form["importFingerprint"].FirstOrDefault())))
             .WithName("UploadInboxReceiptFile").Produces<ReceiptAttachmentResponse>().Accepts<IFormFile>("multipart/form-data").DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(ReceiptAttachmentsApi.MaximumRequestLength));
 

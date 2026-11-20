@@ -228,7 +228,7 @@ describe state your machine already holds: the Keycloak admin, and the generated
 cache and storage passwords, which have to match the data volumes a normal run has
 initialised. The fixture fills the Keycloak admin in only where nothing else has.
 
-Every provider parameter (Azure OpenAI, Veryfi, Google sign-in, Plaid) is set by
+Every provider parameter (Azure OpenAI, Google sign-in, Plaid) is set by
 `AppHostFixture.Parameters` and passed on the AppHost's command line. That is the last
 source the host loads, so it outranks appsettings, user secrets and `Parameters__…`
 environment variables, and a local run never reaches a real provider on your key. Until PR
