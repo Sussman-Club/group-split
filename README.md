@@ -134,7 +134,7 @@ Operating it:
 - Keycloak for sign-in
 - Aspire 13.6 for local orchestration and for publishing to Docker Compose
 - Redis, RustFS
-- Plaid for bank data; Veryfi or Azure OpenAI for reading receipts
+- Plaid for bank data; Azure OpenAI for reading receipts
 - xUnit v3, bUnit, Moq and Playwright for tests
 
 ## C# formatting

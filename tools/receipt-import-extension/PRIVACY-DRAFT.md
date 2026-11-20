@@ -19,6 +19,8 @@ prints the displayed receipt into a PDF. These PDFs can include customer,
 membership or masked payment information. For Costco online orders, the
 extension generates a summary from the order date, items, prices and totals.
 
+For duplicate prevention the extension hashes the store order identifier or, for warehouse receipts when available, the warehouse, terminal, transaction number and purchase time. It sends the resulting fingerprint to GroupSplit with the receipt; the raw identifiers used for the fingerprint are not sent separately. The fingerprint is stored under the user's account.
+
 The extension creates each PDF in the browser and uploads it to the signed-in
 GroupSplit inbox when you select the import action. It does not download a copy to your device.
 GroupSplit reads new attachments to suggest receipt details and stores uploaded

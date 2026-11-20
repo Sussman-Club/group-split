@@ -206,6 +206,7 @@
                                      EvenRuleId="@_evenRuleId"
                                      SplitRuleId="@_model.SplitRuleId"
                                      SplitRuleIdChanged="@OnSplitRuleChangedAsync"
+                                     RuleName="@_lineRules.FirstOrDefault(rule => rule.Id == _model.SplitRuleId)?.Name"
                                      ShowByBill="true"
                                      DraftBill="true"
                                      Bill="@_draftBill"
@@ -606,9 +607,20 @@
         var groupId = suggestion.IsPersonal ? (Guid?)null : suggestion.GroupId;
         if (groupId != _groupId)
             await OnGroupPickedAsync(groupId);
-        if (_categories.Any(category => category.Id == suggestion.CategoryId))
-            await OnCategoryPickedAsync(suggestion.CategoryId);
+        await ApplySuggestedDestinationAsync(suggestion);
         _filingSuggestion = null;
+    }
+
+    /// <summary>
+    /// A suggestion about the group already chosen: its category, or -- when no category
+    /// fitted and it names one of the group's rules instead -- that rule.
+    /// </summary>
+    private async Task ApplySuggestedDestinationAsync(FilingDestinationSuggestion suggestion)
+    {
+        if (suggestion.CategoryId is { } categoryId && _categories.Any(category => category.Id == categoryId))
+            await OnCategoryPickedAsync(categoryId);
+        else if (suggestion.SplitRuleId is { } ruleId && _lineRules.Any(rule => rule.Id == ruleId))
+            await OnSplitRuleChangedAsync(ruleId);
     }
 
     /// <summary>
@@ -740,9 +752,8 @@
             }
         }
         await OpenAsync();
-        if (InboxSuggestion is { } suggestion && (suggestion.IsPersonal ? _groupId is null : _groupId == suggestion.GroupId)
-            && _categories.Any(category => category.Id == suggestion.CategoryId))
-            await OnCategoryPickedAsync(suggestion.CategoryId);
+        if (InboxSuggestion is { } suggestion && (suggestion.IsPersonal ? _groupId is null : _groupId == suggestion.GroupId))
+            await ApplySuggestedDestinationAsync(suggestion);
         if (InboxReceipt is not null)
         {
             await ApplyDefaultReceiptRuleAsync();

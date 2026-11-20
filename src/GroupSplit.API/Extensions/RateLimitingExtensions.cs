@@ -22,7 +22,7 @@ public sealed class ApiRateLimits
 
     /// <summary>
     /// Reading a receipt, from a fresh upload, an expense's attachment or an inbox row's.
-    /// Each one is a paid call to Veryfi or Azure OpenAI.
+    /// Each one is a paid call to Azure OpenAI.
     /// </summary>
     public RateLimit Transcription { get; set; } = new() { PermitLimit = 500, Window = TimeSpan.FromHours(1) };
     /// <summary>Suggestion batches are limited separately from receipt transcription.</summary>

@@ -803,6 +803,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<Guid?>("ExpenseId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ImportFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsIgnored")
                         .HasColumnType("boolean");
 
@@ -812,6 +816,10 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Property<string>("MerchantName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ObservedFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uuid");
@@ -843,6 +851,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("MerchantId");
 
                     b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("OwnerUserId", "ImportFingerprint")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerUserId", "ObservedFingerprint");
 
                     b.ToTable("Receipt");
                 });

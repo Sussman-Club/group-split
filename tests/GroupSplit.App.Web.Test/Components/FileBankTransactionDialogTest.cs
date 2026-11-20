@@ -274,6 +274,36 @@ public class FileBankTransactionDialogTest : ComponentTest
         Assert.Equal(Fuel, answer?.Request?.CategoryId);
     }
 
+    /// <summary>
+    /// A suggestion naming one of the group's rules instead of a category files by that
+    /// rule, says so in the split control, and does not guess a category from the bank.
+    /// </summary>
+    [Fact]
+    public async Task A_suggested_rule_arrives_preselected_without_a_category()
+    {
+        var gym = new SplitRuleResponse(Guid.NewGuid(), Trip.Id, "Ana's gym");
+        var rules = new Mock<ISplitRuleCommands>();
+        rules.Setup(r => r.ForGroupAsync(Trip.Id, It.IsAny<CancellationToken>())).ReturnsAsync([gym]);
+        Services.AddSingleton(rules.Object);
+        var suggested = Row with
+        {
+            ProviderCategory = "FUEL",
+            Suggestion = new FilingSuggestionResponse(Row.Id, Trip.Id, Trip.Name, false, null, null, 0.9, gym.Id, gym.Name)
+        };
+
+        var (provider, reference) = await OpenAsync(suggested);
+
+        provider.WaitForAssertion(() => Assert.Contains("Ana's gym", provider.Markup));
+        await provider.FindAll("button").First(button => button.TextContent.Trim() == "Add expense")
+            .ClickAsync(new MouseEventArgs());
+
+        var answer = await reference.GetReturnValueAsync<FileBankTransactionDialog.Answer>();
+
+        Assert.Equal(Trip.Id, answer?.Request?.GroupId);
+        Assert.Equal(gym.Id, answer?.Request?.SplitRuleId);
+        Assert.Null(answer?.Request?.CategoryId);
+    }
+
     /// <summary>A group picked by hand wins over the suggestion's category.</summary>
     [Fact]
     public async Task Picking_another_group_by_hand_leaves_the_suggestion_behind()

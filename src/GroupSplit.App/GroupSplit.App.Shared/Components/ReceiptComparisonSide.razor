@@ -1,0 +1,77 @@
+@using GroupSplit.Shared
+@inject NavigationManager Nav
+@inject GroupSplit.App.Shared.Services.Commands.IReceiptAttachmentCommands Files
+
+<section class="gs-compare-side" aria-label="@Label">
+    <header class="gs-compare-side-header">
+        <span class="gs-compare-label">@Label</span>
+        @if (Bill is not { Items.Count: > 0 }) { <h3>@Name</h3> }
+        <div class="gs-compare-meta"><span>@(Date?.ToString("MMM d, yyyy") ?? Loc["Date unavailable"].Value)</span><strong>@Total.ToString("N2") @Currency</strong></div>
+        @if (!string.IsNullOrWhiteSpace(Detail)) { <span class="gs-compare-detail">@Detail</span> }
+        @if ((Attachments?.Count ?? 0) > 0 || ExpenseId is not null && Attachments is null)
+        {
+            <div class="gs-compare-original-toggle"><MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_loadingFiles" aria-expanded="@_showOriginals" OnClick="ToggleOriginals">@(_showOriginals ? Loc["Hide original"] : Loc["See original"])</MudButton></div>
+        }
+    </header>
+    @if (_showOriginals)
+    {
+        @if (_loadingFiles) { <p class="gs-compare-empty" role="status">@Loc["Loading original…"]</p> }
+        else if (_files.Count == 0) { <p class="gs-compare-empty">@Loc["No original receipt file available."]</p> }
+        else
+        {
+            @foreach (var file in _files)
+            {
+                var url = Source(file.Id);
+                <div class="gs-compare-original" @key="file.Id">
+                    <div class="gs-compare-file"><span>@file.FileName</span><a href="@url" target="_blank" rel="noopener noreferrer">@Loc["Open original"]</a></div>
+                    <ReceiptPreview Url="@url" ContentType="@file.ContentType" FileName="@file.FileName" />
+                </div>
+            }
+        }
+    }
+    @if (Loading)
+    {
+        <p class="gs-compare-empty" role="status">@Loc["Loading receipt…"]</p>
+    }
+    else if (Bill is { Items.Count: > 0 } bill)
+    {
+        <div class="gs-compare-slip"><BillSheet Receipt="bill" Title="@Name" /></div>
+    }
+    else
+    {
+        <p class="gs-compare-empty">@Loc["No itemized receipt details available."]</p>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public DateOnly? Date { get; set; }
+    [Parameter] public decimal Total { get; set; }
+    [Parameter] public string Currency { get; set; } = "";
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public ReceiptResponse? Bill { get; set; }
+    [Parameter] public Guid ReceiptId { get; set; }
+    [Parameter] public Guid? ExpenseId { get; set; }
+    [Parameter] public IReadOnlyList<ReceiptAttachmentResponse>? Attachments { get; set; }
+    private IReadOnlyList<ReceiptAttachmentResponse> _files = [];
+    private bool _showOriginals, _loadingFiles, _filesLoaded;
+    private async Task ToggleOriginals()
+    {
+        _showOriginals = !_showOriginals;
+        if (!_showOriginals || _filesLoaded) return;
+        _loadingFiles = true;
+        try { _files = Attachments ?? (ExpenseId is { } id ? await Files.GetAsync(id) : []); _filesLoaded = true; }
+        finally { _loadingFiles = false; }
+    }
+    private string Source(Guid id) => ExpenseId is { } expenseId
+        ? Nav.BaseUri + $"api/transactions/{expenseId}/receipt-attachments/{id}?inline=true"
+        : Nav.BaseUri + $"api/receipts/inbox/{ReceiptId}/files/{id}";
+    public static ReceiptResponse FromInbox(ReceiptInboxResponse row) =>
+        new(row.Id, row.ExpenseId ?? Guid.Empty, row.Receipt.Subtotal, row.Receipt.Tax, row.Receipt.Tip, row.Receipt.Total, 0, false, false,
+            row.Receipt.Items.Select(item => new ReceiptItemResponse(item.Id ?? Guid.NewGuid(), item.Name, item.UnitPrice, item.Quantity,
+                item.TotalPrice, item.TaxAmount, null, null, null)
+            { NormalizedName = item.NormalizedName ?? string.Empty, Description = item.Description, TaxRate = item.TaxRate, IsTaxable = item.IsTaxable }).ToList())
+        { MerchantName = row.Receipt.MerchantName, PurchaseDate = row.Receipt.PurchaseDate };
+}

@@ -21,6 +21,8 @@ public record SaveReceiptRequest
     [StringLength(128)]
     public string? MerchantName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
+    [RegularExpression("^[a-fA-F0-9]{64}$")]
+    public string? ObservedFingerprint { get; init; }
 }
 
 public record ReceiptItemInput

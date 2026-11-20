@@ -350,6 +350,16 @@ bank's description and categories, the amount and date, the account, what the ca
 ten charges from the same merchant were filed under, and the receipt's merchant and item
 names when the client sends them. Member names are not sent.
 
+After the categories come the split rules a shared group wrote for itself, labelled
+`Group · rule Name`, for an expense no category fits but one of the group's rules does (a gym
+membership in a group with a "Ana's gym" rule and no Gym category). A rule that some live
+category divides by is left out, since that category already offers it, and so are the
+built-in rules: the even and by-the-bill ones say nothing about what an expense was, and the
+per-member ones are named after members. A rule answer comes back with `splitRuleId` and
+`splitRuleName` and no category, the filing dialogs preselect that rule and leave the category
+empty, and filing sends `SplitRuleId` without a `CategoryId`. Earlier charges filed by a rule
+alone count as history for that rule.
+
 It answers with one option and a confidence. The answer is dropped when it is `cannot tell`,
 when the confidence is under 0.6, or when it is not one of the options sent. A failed or slow
 call (10 seconds) is dropped too, so the inbox looks as it did before suggestions existed.

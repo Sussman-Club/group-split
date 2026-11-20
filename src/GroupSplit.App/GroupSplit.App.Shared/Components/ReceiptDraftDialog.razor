@@ -357,6 +357,7 @@
                 Total = _total,
                 MerchantName = _merchantName,
                 PurchaseDate = _purchaseDate is { } date ? DateOnly.FromDateTime(date) : null,
+                ObservedFingerprint = Transcription?.Receipt.ObservedFingerprint,
                 Items = _items.Select(item => new ReceiptItemInput
                 {
                     Id = item.Id,

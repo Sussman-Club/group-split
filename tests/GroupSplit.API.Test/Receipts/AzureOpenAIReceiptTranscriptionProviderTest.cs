@@ -300,7 +300,6 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ReceiptTranscription:Provider"] = "AzureOpenAI",
                 ["AzureOpenAI:Enabled"] = "false"
             })
             .Build();
@@ -319,11 +318,11 @@ public sealed class AzureOpenAIReceiptTranscriptionProviderTest
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ReceiptTranscription:Provider"] = "AzureOpenAI",
                 ["AzureOpenAI:Enabled"] = "true"
             })
             .Build();
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddReceiptTranscription(configuration);
         services.AddKeyedSingleton<IChatClient>(
             "receipt-transcription",

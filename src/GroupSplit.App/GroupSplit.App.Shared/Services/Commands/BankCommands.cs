@@ -159,6 +159,15 @@ public sealed class BankCommands(
                 : UiText.Format($"{done} transactions ignored."),
             UiText.Get("Could not ignore them."));
 
+    public Task<int> RestoreManyAsync(IReadOnlyList<(Guid Id, string Title)> rows,
+        CancellationToken ct = default) =>
+        ManyAsync(rows.Count,
+            index => inbox.RestoreBankTransactionAsync(rows[index].Id, ct),
+            done => done == 1
+                ? UiText.Format($"{rows[0].Title} is back in your inbox.")
+                : UiText.Format($"{done} transactions restored."),
+            UiText.Get("Could not restore them."));
+
     /// <remarks>
     /// No <c>FileAnyway</c>, and deliberately not as an option. Asserting that the same
     /// money really was paid twice is a claim about the world, and nothing that files rows

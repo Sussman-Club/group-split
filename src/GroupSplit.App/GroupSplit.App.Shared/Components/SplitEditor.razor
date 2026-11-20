@@ -55,10 +55,15 @@
         </MudButton>
     </MudStack>
 
+    @* A named rule is said by the button, and the division below says it again; the
+       automatic hint would claim the category decides, which is not the case. *@
+    @if (NamedRule is null)
+    {
     <div class="gs-split-mode-hint" aria-live="polite">
         <MudIcon Icon="@ModeIcon" Size="Size.Small" aria-hidden="true" />
         <span>@ModeHint</span>
     </div>
+    }
 
     @if (!Members.Any())
     {
@@ -185,7 +190,7 @@
 
     private string ChosenLabel => Chosen switch
     {
-        Mode.Automatic => Loc["Category default"].Value, Mode.Even => Loc["Copy.Sentence.Evenly"].Value, Mode.AllForOne => Loc["One person"].Value,
+        Mode.Automatic => NamedRule ?? Loc["Category default"].Value, Mode.Even => Loc["Copy.Sentence.Evenly"].Value, Mode.AllForOne => Loc["One person"].Value,
         Mode.ByBill => Loc["Receipt items"].Value, _ => Loc["Custom amounts"].Value
     };
     private async Task ChooseSplitAsync()
@@ -375,6 +380,15 @@
     [Parameter] public Guid? SplitRuleId { get; set; }
 
     [Parameter] public EventCallback<Guid?> SplitRuleIdChanged { get; set; }
+
+    /// <summary>
+    /// The name of <see cref="SplitRuleId"/> when it is a rule none of the choices stands
+    /// for -- one a group wrote for itself, named by a filing suggestion -- so the control
+    /// says which rule divides it rather than "category default".
+    /// </summary>
+    [Parameter] public string? RuleName { get; set; }
+
+    private string? NamedRule => Chosen is Mode.Automatic && SplitRuleId is not null && RuleName is { Length: > 0 } name ? name : null;
 
     /// <summary>
     /// The stated division, or null to leave it to the dialog. Null is not "no shares"; it

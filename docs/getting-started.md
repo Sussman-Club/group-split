@@ -71,7 +71,7 @@ The dashboard lists these resources:
 | Scalar | The API reference, wired to `api` |
 | `seeder` | Fills the app database and the realm with demo data. Explicit start; see below |
 | `app` | The MAUI client on a Windows device, built when started. Explicit start |
-| `veryfi`, `plaid`, `azure-openai` | External services, so their calls appear as named dependencies in traces. Nothing of theirs runs locally |
+| `plaid`, `azure-openai` | External services, so their calls appear as named dependencies in traces. Nothing of theirs runs locally |
 | `webhook-tunnel` | Present only when `WebhookTunnel` is on; see [docs/bank-sync.md](bank-sync.md) |
 
 The web app is the `web` resource's `https` URL. Use that one: Keycloak refuses a sign-in
@@ -169,15 +169,6 @@ app asks for one, on linking or through "Sync now", and the nightly sweep catche
 
 ### Receipt transcription
 
-Two providers can read a receipt. Veryfi takes four values:
-
-```bash
-dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:veryfi-enabled true
-dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:veryfi-client-id <id>
-dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:veryfi-username <username>
-dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:veryfi-api-key <key>
-```
-
 Azure OpenAI takes four, and the endpoint is the v1 base URL:
 
 ```bash
@@ -186,9 +177,6 @@ dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-model <deployment name>
 dotnet user-secrets set --project src/GroupSplit.AppHost Parameters:azure-openai-api-key <key>
 ```
-
-`receipt-transcription-provider` picks one, `Veryfi` or `AzureOpenAI`. Left empty, the API
-uses Veryfi if all four of its values are set, and Azure OpenAI if it is enabled.
 
 ### Google sign-in
 

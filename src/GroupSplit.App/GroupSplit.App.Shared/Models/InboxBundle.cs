@@ -19,7 +19,7 @@ public sealed record InboxBundle(IReadOnlyList<BankTransactionResponse> Rows)
                 row.AccountId, row.Currency,
                 row.PaymentChannel, row.City, row.ProviderCategoryDetailed,
                 row.SpentOn.Year, row.SpentOn.Month,
-                row.Suggestion!.GroupId, row.Suggestion.CategoryId, row.Suggestion.IsPersonal
+                row.Suggestion!.GroupId, row.Suggestion.CategoryId, row.Suggestion.SplitRuleId, row.Suggestion.IsPersonal
             })
             .Where(group => group.Count() > 1)
             .Select(group => new InboxBundle([.. group]))];

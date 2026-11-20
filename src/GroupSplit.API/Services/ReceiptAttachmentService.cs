@@ -13,7 +13,7 @@ namespace GroupSplit.API.Services;
 
 public interface IReceiptAttachmentService
 {
-    Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default);
+    Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default, string? importFingerprint = null);
     Task<ReceiptAttachmentDownload> DownloadDraft(Guid receiptId, Guid attachmentId, CancellationToken ct = default);
     Task<IReadOnlyList<ReceiptAttachmentResponse>> List(Guid expenseId, CancellationToken ct = default);
     Task<ReceiptAttachmentResponse> Upload(Guid expenseId, IFormFile file, CancellationToken ct = default);
@@ -68,10 +68,30 @@ public sealed class ReceiptAttachmentService(
         return ToResponse(attachment);
     }
 
-    public async Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default)
+    public async Task<ReceiptAttachmentResponse> UploadDraft(Guid receiptId, IFormFile file, CancellationToken ct = default, string? importFingerprint = null)
     {
         await using var lease = await accountData.Acquire(currentUser.User.Id, ct: ct);
         var contentType = Validate(file);
+        if (importFingerprint is not null && (importFingerprint.Length != 64 || !importFingerprint.All(Uri.IsHexDigit)))
+        {
+            throw new ValidationException(ErrorCodes.ReceiptAttachmentInvalid, "Invalid retailer receipt identity.");
+        }
+        importFingerprint = importFingerprint?.ToUpperInvariant();
+        if (importFingerprint is not null)
+        {
+            var known = await db.Set<Receipt>().Include(r => r.Attachments)
+                .FirstOrDefaultAsync(r => r.OwnerUserId == currentUser.User.Id && r.ImportFingerprint == importFingerprint, ct);
+            if (known is not null)
+            {
+                if (known.ExpenseId is null && known.Attachments.FirstOrDefault() is { } original)
+                {
+                    return ToResponse(original);
+                }
+                throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
+                    "This retailer receipt was already imported. Review the existing receipt or expense.")
+                    .WithExtension("expenseId", known.ExpenseId);
+            }
+        }
         await using var hashStream = file.OpenReadStream();
         var hash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(hashStream, ct));
         var key = $"private/{currentUser.User.Id:N}/{hash}";
@@ -82,6 +102,12 @@ public sealed class ReceiptAttachmentService(
             // A retry opens the existing private draft rather than creating another one.
             if (existing.Receipt is { ExpenseId: null } draft && draft.OwnerUserId == currentUser.User.Id)
             {
+                // Associate older byte-identical imports with their retailer identity on retry.
+                if (importFingerprint is not null && draft.ImportFingerprint is null)
+                {
+                    draft.ImportFingerprint = importFingerprint;
+                    await db.SaveChangesAsync(ct);
+                }
                 // The content hash identifies the same bytes. Restore the object as well as
                 // returning its existing metadata if storage was cleared independently.
                 await using var retryStream = file.OpenReadStream();
@@ -101,7 +127,7 @@ public sealed class ReceiptAttachmentService(
         var receipt = await db.Set<Receipt>().FirstOrDefaultAsync(r => r.Id == receiptId, ct);
         if (receipt is null)
         {
-            db.Add(new Receipt { Id = receiptId, OwnerUserId = currentUser.User.Id, Subtotal = 0, Total = 0 });
+            db.Add(new Receipt { Id = receiptId, OwnerUserId = currentUser.User.Id, ImportFingerprint = importFingerprint, Subtotal = 0, Total = 0 });
         }
         else if (receipt.OwnerUserId != currentUser.User.Id || receipt.ExpenseId != null)
         {

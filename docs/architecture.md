@@ -86,7 +86,7 @@ sides use the ones in `GroupSplit.Shared`. A changed endpoint therefore reaches 
 expects: resources added with `Add*`, shaped with `With*`, wired with `WithReference` and
 `WaitFor`. Every mode shares Postgres with two databases (`db` for the app, `keycloak-db`),
 RustFS storage with the `receipts` bucket, Redis for the web app's sessions, Keycloak, the
-`realm-settings` worker, the EF migrations, the API and the web app, plus Veryfi, Plaid and
+`realm-settings` worker, the EF migrations, the API and the web app, plus Plaid and
 Azure OpenAI as external dependencies of the API.
 
 The start order is the wiring. The API waits for the database, storage and Keycloak, and for
@@ -123,7 +123,7 @@ pair of extension methods next to the code that owns it:
 Only run mode adds the MAUI head, the demo seeder, the local realm reset, Scalar,
 Mailpit and the webhook tunnel. Publish mode adds the deployment-only parameters listed in
 [Deployment parameters](deployment.md#deployment-parameters); the integration parameters
-(Plaid, Veryfi, Azure OpenAI, Google sign-in) are declared in both. `PublishAs*` calls,
+(Plaid, Azure OpenAI, Google sign-in) are declared in both. `PublishAs*` calls,
 which Aspire ignores in run mode, stay on the shared chain where they read as part of the
 resource's definition.
 
@@ -435,7 +435,7 @@ A `Receipt` is the itemised bill of one expense: subtotal, tax, tip and total, a
 `ReceiptItem` lines, each with a price, a quantity, its tax and the version that divides it.
 A `ReceiptAttachment` is a photo or PDF in the RustFS `receipts` bucket, referenced by
 object key; it can hang off a bank row before that row becomes an expense. Reading a file
-into a bill goes to Veryfi or Azure OpenAI, picked by `ReceiptTranscription:Provider`, and is
+into a bill goes to Azure OpenAI, and is
 off when neither is configured.
 
 ### Merchants

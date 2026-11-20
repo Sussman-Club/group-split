@@ -251,10 +251,6 @@ which falls back to its default.
 | `plaid-env` | variable `PLAID_ENV` | no, defaults to `Sandbox` | Which Plaid environment to talk to: `Sandbox` or `Production`. |
 | `plaid-redirect-uri` | variable `PLAID_REDIRECT_URI` | no | Optional. Where an OAuth bank returns to; empty keeps Plaid's popup flow. See [Linking a bank that redirects](#linking-a-bank-that-redirects). |
 | `bank-key-certificate` | secret `BANK_KEY_CERTIFICATE` | when bank sync is enabled, or whenever both Plaid credentials are set | PKCS#12 certificate, base64 encoded, that encrypts the bank access-token key ring. Missing then fails the publish, and outside Development the API refuses to start with Plaid configured and no certificate. Empty is only for local development. See [The bank access-token key ring](#the-bank-access-token-key-ring). |
-| `receipt-transcription-provider` | secret `RECEIPT_TRANSCRIPTION_PROVIDER` | no, empty preserves legacy fallback | Explicit provider selection: `Veryfi` or `AzureOpenAI`. |
-| `veryfi-enabled` | variable `VERYFI_ENABLED` | no, defaults to `false` | Whether receipt attachments can be transcribed through Veryfi. |
-| `veryfi-client-id`, `veryfi-username`, `veryfi-api-key` | secrets `VERYFI_CLIENT_ID`, `VERYFI_USERNAME`, `VERYFI_API_KEY` | when Veryfi is enabled | Veryfi API credentials. Missing while enabled fails the publish. |
-| `veryfi-log-raw-responses` | variable `VERYFI_LOG_RAW_RESPONSES` | no, defaults to `false` | Logs Veryfi's whole response for an investigation, at Debug, so the API's `GroupSplit.API.Services.ReceiptTranscription.Veryfi` category has to be lowered to Debug too before anything is written. Leave both off outside debugging. |
 | `azure-openai-enabled` | variable `AZURE_OPENAI_ENABLED` | no, defaults to `false` | Whether Azure OpenAI receipt transcription is enabled. |
 | `azure-openai-endpoint`, `azure-openai-model` | secrets `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL` | when Azure OpenAI is enabled | The v1 base URL and deployment/model name. The AppHost puts them in the `receipt-transcription` model reference. |
 | `azure-openai-api-key` | secret `AZURE_OPENAI_API_KEY` | when Azure OpenAI is enabled | Azure OpenAI API key. |
@@ -283,10 +279,9 @@ and receipt deployment with Aspire's `AddOpenAI("azure-openai")` and `WithModel(
 and gives the API that model reference. Aspire then injects
 `ConnectionStrings__receipt-transcription` containing `Endpoint`, `Key`, and `Model`; the API
 does not receive those values as separate environment variables. The API's
-`AddReceiptTranscription` binds the selector options through the .NET options pattern and resolves
-the selected provider from DI when the request scope is created.
-A reading is one attempt with a two-minute budget (`ReceiptTranscription:Timeout`), whichever
-provider it goes to: Veryfi's HTTP client runs its own resilience pipeline in place of the
+`AddReceiptTranscription` binds the options through the .NET options pattern and resolves
+the provider from DI when the request scope is created.
+A reading has a two-minute budget (`ReceiptTranscription:Timeout`): the OpenAI client uses one attempt rather than the
 standard handler the service defaults add, which would retry the POST and give up after 30 s,
 and the OpenAI client's own retries are turned off. Running out of time answers the retryable
 `RECEIPT_TRANSCRIPTION_PROVIDER_UNAVAILABLE` 502.

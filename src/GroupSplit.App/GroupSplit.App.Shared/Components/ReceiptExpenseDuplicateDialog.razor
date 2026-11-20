@@ -1,0 +1,34 @@
+@using GroupSplit.Shared
+@inject IDialogService Dialogs
+@inject GroupSplit.App.Shared.Services.LocalClock Clock
+@inject GroupSplit.App.Shared.Services.Commands.IReceiptCommands Receipts
+
+<MudDialog Class="gs-compare-dialog">
+    <TitleContent><div class="gs-compare-heading"><h2>@Loc["Possible duplicate receipt"]</h2><p>@Loc["Compare the receipt details before deciding."]</p></div></TitleContent>
+    <DialogContent>
+        <div class="gs-compare-grid">
+            <ReceiptComparisonSide Label="@Loc["Inbox receipt"].Value" Name="@(Row.MerchantDisplayName ?? Row.Receipt.MerchantName ?? Loc["Receipt"].Value)"
+                Date="@Row.Receipt.PurchaseDate" Total="@Row.Receipt.Total" Currency="@Row.Currency" ReceiptId="@Row.Id" Attachments="@Row.Attachments" Bill="@ReceiptComparisonSide.FromInbox(Row)" />
+            <ReceiptComparisonSide Label="@Loc["Existing expense"].Value" Name="@(_receipt?.MerchantName ?? Match.Name)" Date="@(_receipt?.PurchaseDate ?? Clock.Day(Match.DateTime))"
+                Total="@(_receipt?.Total ?? Match.Amount)" Currency="@Match.Currency" ExpenseId="@Match.Id" Loading="@_loading" Bill="@_receipt" />
+        </div>
+        <MudButton OnClick="OpenExpense">@Loc["View expense"]</MudButton>
+        <p class="gs-compare-warning">@Loc["Deleting the inbox receipt also deletes its original files and cannot be undone. The existing expense and its receipt will be kept."]</p>
+    </DialogContent>
+    <DialogActions><MudButton OnClick="@(() => Dialog.Cancel())">@Loc["Cancel"]</MudButton><MudButton OnClick="@(() => Dialog.Close(DialogResult.Ok(false)))">@Loc["Not the same"]</MudButton><MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@Loc["Delete inbox receipt"]</MudButton></DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptInboxResponse Row { get; set; } = null!;
+    [Parameter, EditorRequired] public ReceiptExpenseCandidate Match { get; set; } = null!;
+    private ReceiptResponse? _receipt;
+    private bool _loading = true;
+    protected override async Task OnInitializedAsync()
+    {
+        try { _receipt = await Receipts.GetAsync(Match.Id); }
+        finally { _loading = false; }
+    }
+    private Task OpenExpense() => Dialogs.ShowAsync<TransactionDetailsDialog>(Loc["Transaction Details"].Value,
+        new DialogParameters<TransactionDetailsDialog> { { x => x.TransactionId, Match.Id } },
+        new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+}

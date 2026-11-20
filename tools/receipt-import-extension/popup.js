@@ -321,12 +321,13 @@ function validAppOrigin(value) {
 
 // Executes only in the explicitly connected GroupSplit tab. The browser sends the
 // existing session cookie; no credentials or access tokens enter the extension.
-async function uploadToInbox(base64, fileName, expectedOrigin, receipt = null) {
+async function uploadToInbox(base64, fileName, expectedOrigin, receipt = null, importFingerprint = null) {
   if (location.origin !== expectedOrigin || location.pathname !== '/inbox/receipts')
     throw new Error('The GroupSplit tab navigated away.');
   const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
   const body = new FormData();
   body.append('file', new Blob([bytes], { type: 'application/pdf' }), fileName);
+  if (importFingerprint) body.append('importFingerprint', importFingerprint);
   const receiptId = crypto.randomUUID();
   const response = await fetch(`/api/receipts/inbox/${receiptId}/files`, {
     method: 'POST', body, credentials: 'same-origin', redirect: 'error'
@@ -370,7 +371,13 @@ async function uploadToInbox(base64, fileName, expectedOrigin, receipt = null) {
       });
       if (!saved.ok) {
         let detail = '';
-        try { const problem = await saved.json(); detail = problem.detail || problem.title || ''; } catch { }
+        try {
+          const problem = await saved.json();
+          // The receipt's content named an order already imported; GroupSplit removed this copy.
+          if (saved.status === 409 && problem.code === 'RECEIPT_SOURCE_ALREADY_IMPORTED')
+            return { ok: true, alreadyImported: true, detailsSaved: false };
+          detail = problem.detail || problem.title || '';
+        } catch { }
         return { ok: true, alreadyImported: false, detailsSaved: false, detail: detail || `Saving details failed (${saved.status}).` };
       }
       return { ok: true, alreadyImported: false, detailsSaved: true };
@@ -391,6 +398,15 @@ async function readImportedReceiptDates(expectedOrigin) {
   const lists = await Promise.all(responses.map(response => response.json()));
   if (lists.some(list => !Array.isArray(list))) throw new Error('Unexpected inbox response.');
   return lists.flatMap(list => list.flatMap(row => (row.attachments || []).map(file => file.fileName)));
+}
+
+// Say only what happened: counts that are zero are left out.
+function importSummary(imported, duplicates, failures) {
+  const parts = [];
+  if (imported) parts.push(`${imported} added to your inbox.`);
+  if (duplicates) parts.push(`${duplicates} already in your inbox, skipped.`);
+  if (failures.length) parts.push(`${failures.length} need${failures.length === 1 ? 's' : ''} attention: ${failures.join(' ')}`);
+  return parts.join(' ') || 'No receipts imported.';
 }
 
 function latestImportedDate(filenames, retailer, todayValue) {
@@ -814,16 +830,42 @@ async function cleanupReceipt() {
   return { closed: true };
 }
 
-async function uploadReceiptFile(data, fileName, receipt = null) {
+async function uploadReceiptFile(data, fileName, receipt = null, importFingerprint = null) {
   await chrome.tabs.get(inbox.tabId);
   const page = await execute(inbox.tabId, tabLocation);
   if (page?.origin !== inbox.origin || page.pathname !== '/inbox/receipts')
     throw new Error('Return to your GroupSplit receipts inbox and start the import again.');
   const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId: inbox.tabId }, world: 'ISOLATED', func: uploadToInbox, args: [data, fileName, inbox.origin, receipt]
+    target: { tabId: inbox.tabId }, world: 'ISOLATED', func: uploadToInbox, args: [data, fileName, inbox.origin, receipt, importFingerprint]
   });
   if (!result?.ok) throw new Error(result?.detail || `Upload failed (${result?.status || 'no response'}).`);
   return result;
+}
+
+// Hash the retailer identity before it leaves the store context. Namespaces keep
+// the distinct order types separate; raw order and membership numbers are not sent.
+async function importFingerprint(kind, identity) {
+  if (!identity) return null;
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`groupsplit:${kind}:v1:${identity}`));
+  return [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+// Warehouse transaction numbers repeat, so only use them with warehouse, terminal,
+// and the full printed date and time. Missing or ambiguous data is never guessed.
+async function warehouseFingerprint() {
+  if (location.origin !== 'https://www.costco.com' || !document.getElementById('groupsplit-receipt-print-style')) return null;
+  const panel = document.querySelector('[data-groupsplit-print]');
+  if (!panel || document.querySelectorAll('[data-groupsplit-print]').length !== 1) return null;
+  const text = panel.innerText.replace(/\s+/g, ' ');
+  const matches = [...text.matchAll(/\bP\d+\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2})\s+Whse:\s*(\d+)\s+Trm:\s*(\d+)\s+Trn:\s*(\d+)\b/gi)];
+  if (matches.length !== 1) return null;
+  const [, date, time, warehouse, terminal, transaction] = matches[0];
+  const [month, day, year] = date.split('/').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+  const identity = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}:${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${Number(warehouse)}:${Number(terminal)}:${Number(transaction)}`;
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('groupsplit:costco-warehouse:v1:' + identity));
+  return [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 
 function verifyAmazonInvoice(expectedOrderId) {
@@ -1231,14 +1273,16 @@ $('download').addEventListener('click', async () => {
           const row = selection.rows[i];
           const { pdf, receipt } = row.summary;
           const fileName = `${receipt?.merchantName || 'Amazon'}-${row.date}-${i + 1}.pdf`;
-          const result = await uploadReceiptFile(pdf, fileName, receipt);
+          const identity = selection.retailer === 'amazon' ? new URL(row.url).searchParams.get('orderID') : row.id;
+          const fingerprint = await importFingerprint(selection.retailer, identity);
+          const result = await uploadReceiptFile(pdf, fileName, receipt, fingerprint);
           saved++;
           if (result.alreadyImported) duplicates++; else imported++;
           if (!result.alreadyImported && !result.detailsSaved)
             failures.push(`Order ${i + 1}: ${result.detail || 'The receipt was uploaded, but its details need review.'}`);
         } catch (error) { failures.push(`Order ${i + 1}: ${error.message}`); }
       }
-      status.textContent = `${saved} receipts uploaded, ${imported} new, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+      status.textContent = importSummary(imported, duplicates, failures);
       if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
       selection = null;
       $('download').hidden = true;
@@ -1277,7 +1321,8 @@ $('download').addEventListener('click', async () => {
         if (!result?.data) throw new Error('The browser did not produce a PDF.');
         const fileName = `Costco-${row.date}-${row.periodIndex + 1}-${row.pageIndex + 1}-${row.index + 1}.pdf`;
         try {
-          const upload = await uploadReceiptFile(result.data, fileName);
+          const fingerprint = await execute(tab.id, warehouseFingerprint);
+          const upload = await uploadReceiptFile(result.data, fileName, null, fingerprint);
           saved++;
           if (upload.alreadyImported) duplicates++; else imported++;
           if (!upload.alreadyImported && !upload.detailsSaved)
@@ -1288,7 +1333,7 @@ $('download').addEventListener('click', async () => {
         if (cleanup?.closed === false) throw new Error('The Costco receipt did not close. Close it before retrying.');
       }
     }
-    status.textContent = `${saved} uploaded, ${imported} imported, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+    status.textContent = importSummary(imported, duplicates, failures);
     if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
     selection = null;
     $('download').hidden = true;
