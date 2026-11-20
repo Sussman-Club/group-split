@@ -140,7 +140,8 @@ public class SettlementService(
     IGroupParticipants participants,
     AppDbContext context,
     TimeProvider clock,
-    PushNotificationQueue notifications) : ISettlementService
+    PushNotificationQueue notifications,
+    IAccountDataGuard accountData) : ISettlementService
 {
     private async Task NotifySettlements(CancellationToken ct)
     {
@@ -157,6 +158,10 @@ public class SettlementService(
     public async Task<SettleUpResponse> SettleUp(Guid groupId, SettleUpRequest request,
         CancellationToken cancellationToken = default)
     {
+        // Balances are read after the lock, so a second press waits for the first one's
+        // repayments and is then told there is nothing left, rather than paying it again.
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: cancellationToken);
+
         // Scoped to the caller's own groups, so a group they are not in is not found rather
         // than empty -- an empty answer here would read as "already settled".
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
@@ -345,6 +350,9 @@ public class SettlementService(
         CancellationToken cancellationToken = default)
     {
         var caller = userContext.User;
+
+        // As in SettleUp: a second press waits, then finds nothing outstanding.
+        await using var lease = await accountData.Acquire(caller.Id, ct: cancellationToken);
 
         if (request.UserId == caller.Id)
         {
