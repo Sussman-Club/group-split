@@ -12,7 +12,10 @@ namespace GroupSplit.API.Services;
 
 public interface IAccountDataGuard
 {
-    /// <summary>Serializes account deletion with bank linking and receipt uploads across API instances.</summary>
+    /// <summary>
+    /// Serializes one account's writes across API instances: account deletion, bank linking,
+    /// receipt uploads and filing, filing bank rows, and settling up.
+    /// </summary>
     Task<IAsyncDisposable> Acquire(Guid userId, bool allowDeleted = false, CancellationToken ct = default);
 }
 

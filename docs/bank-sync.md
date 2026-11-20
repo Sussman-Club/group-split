@@ -291,7 +291,9 @@ splits-must-sum rule come from there and are not written twice.
 [`InboxService`](../src/GroupSplit.API/Services/Banking/InboxService.cs) adds only the guards
 that make sense for imported money, and then the link:
 
-- A row already filed is `BANK_TRANSACTION_ALREADY_FILED` (409).
+- A row already filed is `BANK_TRANSACTION_ALREADY_FILED` (409). That includes the second of
+  two requests sent at once: filing and linking hold the caller's account lock, so the second
+  waits for the first and then finds the row filed.
 - A credit is `BANK_TRANSACTION_IS_CREDIT` (422).
 - A row in a currency other than the group's is `CURRENCY_MISMATCH` (409), carrying both
   currencies. The person's Personal group takes any currency, since nothing sums it with
