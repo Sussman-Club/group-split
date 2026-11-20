@@ -637,7 +637,17 @@ else if (_rows is not null)
                         await Errors.TryAsync(async () =>
                         {
                             var draft = await Client.TranscribeInboxReceiptAsync(singleReceiptId.Value, uploaded.Id);
-                            await Client.SaveExtractedInboxReceiptAsync(singleReceiptId.Value, draft.Receipt);
+                            try
+                            {
+                                await Client.SaveExtractedInboxReceiptAsync(singleReceiptId.Value, draft.Receipt);
+                            }
+                            catch (Exception exception) when (ApiErrors.IsApiFailure(exception) &&
+                                                              ApiErrors.Read(exception) is { Code: GroupSplit.Shared.Errors.ErrorCodes.ReceiptSourceAlreadyImported } duplicate)
+                            {
+                                // The API removed this copy; open the receipt that was already here.
+                                alreadyExists = true;
+                                singleReceiptId = duplicate.Extension<Guid?>("receiptId");
+                            }
                         }, Loc["Could not read the receipt. You can review it and enter the details manually."].Value);
                     }
                 }, Loc["Could not upload receipt: {0}", file.Name].Value);

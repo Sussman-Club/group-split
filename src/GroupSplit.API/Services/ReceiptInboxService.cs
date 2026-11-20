@@ -175,6 +175,32 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
             throw new ConflictException(ErrorCodes.ReceiptInvalid, "Receipt details have already been added. Review the receipt before changing them.");
         }
 
+        // Printed PDFs differ byte for byte, and importers older than the retailer identity
+        // send none, so the identity read from the receipt is the last chance to catch a
+        // re-import. The new copy holds nothing yet, so remove it and point at the original.
+        if (details.ObservedFingerprint is { Length: 64 } observed && observed.All(Uri.IsHexDigit))
+        {
+            observed = observed.ToUpperInvariant();
+            var original = await Owned()
+                .Where(r => r.Id != id && (r.ImportFingerprint == observed || r.ObservedFingerprint == observed))
+                .OrderBy(r => r.ExpenseId == null).ThenBy(r => r.Id)
+                .Select(r => new { r.Id, r.ExpenseId }).FirstOrDefaultAsync(ct);
+            if (original is not null)
+            {
+                var keys = existing.Attachments.Select(a => a.ObjectKey).ToArray();
+                files.Enqueue(keys);
+                db.RemoveRange(existing.Attachments);
+                db.Remove(existing);
+                await db.SaveChangesAsync(ct);
+                await files.DeleteAsync(keys, "Could not delete a re-imported receipt source.", ct);
+                // Importers show this detail as is, so it says what happened in a few words.
+                throw new ConflictException(ErrorCodes.ReceiptSourceAlreadyImported,
+                        original.ExpenseId is null ? "Already in your inbox, skipped." : "Already in an expense, skipped.")
+                    .WithExtension("receiptId", original.ExpenseId is null ? original.Id : null)
+                    .WithExtension("expenseId", original.ExpenseId);
+            }
+        }
+
         return await SaveCore(id, new SaveReceiptInboxRequest { Currency = existing.Currency, Receipt = details }, ct);
     }
     private async Task<ReceiptInboxResponse> SaveCore(Guid id, SaveReceiptInboxRequest request, CancellationToken ct)

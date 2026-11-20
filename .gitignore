@@ -503,3 +503,16 @@ firebase-service-account*.json
 .claude/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Local database backups and packaged extension builds
+*.dump
+build/local-backups/
+/tools/*.zip
+/plugin.json
+# Local scratch in build/: PR and issue drafts, patches and one-off fixtures
+build/*.md
+build/*.txt
+build/*.patch
+build/*.html
+build/*.css
+build/switch-fixture/

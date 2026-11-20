@@ -297,6 +297,27 @@ test('saves extracted details only for a newly uploaded receipt', async () => {
   assert.deepEqual(JSON.parse(requests[1].options.body), receipt);
 });
 
+test('summarises an import with only the counts that happened', () => {
+  const context = page('');
+  assert.equal(context.importSummary(0, 4, []), '4 already in your inbox, skipped.');
+  assert.equal(context.importSummary(2, 1, ['Order 3: Could not read it.']),
+    '2 added to your inbox. 1 already in your inbox, skipped. 1 needs attention: Order 3: Could not read it.');
+});
+
+test('counts a receipt GroupSplit recognises from its content as already imported', async () => {
+  const context = page('');
+  context.location.origin = 'https://groupsplit.example';
+  context.location.pathname = '/inbox/receipts';
+  Object.assign(context, { atob, Uint8Array, FormData, Blob });
+  context.crypto = { randomUUID: () => '11111111-1111-4111-8111-111111111111' };
+  context.fetch = async url => url.endsWith('/files')
+    ? { ok: true, json: async () => ({ receiptId: '11111111-1111-4111-8111-111111111111' }) }
+    : { ok: false, status: 409, json: async () => ({ code: 'RECEIPT_SOURCE_ALREADY_IMPORTED', detail: 'Already imported.' }) };
+  const result = await context.uploadToInbox('JVBERg==', 'receipt.pdf', context.location.origin, { merchantName: 'Amazon' });
+  assert.equal(result.ok, true);
+  assert.equal(result.alreadyImported, true);
+});
+
 test('keeps a successfully uploaded file when saving extracted details fails', async () => {
   const context = page('');
   context.location.origin = 'https://groupsplit.example';

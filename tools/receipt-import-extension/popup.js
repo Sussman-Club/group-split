@@ -371,7 +371,13 @@ async function uploadToInbox(base64, fileName, expectedOrigin, receipt = null, i
       });
       if (!saved.ok) {
         let detail = '';
-        try { const problem = await saved.json(); detail = problem.detail || problem.title || ''; } catch { }
+        try {
+          const problem = await saved.json();
+          // The receipt's content named an order already imported; GroupSplit removed this copy.
+          if (saved.status === 409 && problem.code === 'RECEIPT_SOURCE_ALREADY_IMPORTED')
+            return { ok: true, alreadyImported: true, detailsSaved: false };
+          detail = problem.detail || problem.title || '';
+        } catch { }
         return { ok: true, alreadyImported: false, detailsSaved: false, detail: detail || `Saving details failed (${saved.status}).` };
       }
       return { ok: true, alreadyImported: false, detailsSaved: true };
@@ -392,6 +398,15 @@ async function readImportedReceiptDates(expectedOrigin) {
   const lists = await Promise.all(responses.map(response => response.json()));
   if (lists.some(list => !Array.isArray(list))) throw new Error('Unexpected inbox response.');
   return lists.flatMap(list => list.flatMap(row => (row.attachments || []).map(file => file.fileName)));
+}
+
+// Say only what happened: counts that are zero are left out.
+function importSummary(imported, duplicates, failures) {
+  const parts = [];
+  if (imported) parts.push(`${imported} added to your inbox.`);
+  if (duplicates) parts.push(`${duplicates} already in your inbox, skipped.`);
+  if (failures.length) parts.push(`${failures.length} need${failures.length === 1 ? 's' : ''} attention: ${failures.join(' ')}`);
+  return parts.join(' ') || 'No receipts imported.';
 }
 
 function latestImportedDate(filenames, retailer, todayValue) {
@@ -1267,7 +1282,7 @@ $('download').addEventListener('click', async () => {
             failures.push(`Order ${i + 1}: ${result.detail || 'The receipt was uploaded, but its details need review.'}`);
         } catch (error) { failures.push(`Order ${i + 1}: ${error.message}`); }
       }
-      status.textContent = `${saved} receipts uploaded, ${imported} new, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+      status.textContent = importSummary(imported, duplicates, failures);
       if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
       selection = null;
       $('download').hidden = true;
@@ -1318,7 +1333,7 @@ $('download').addEventListener('click', async () => {
         if (cleanup?.closed === false) throw new Error('The Costco receipt did not close. Close it before retrying.');
       }
     }
-    status.textContent = `${saved} uploaded, ${imported} imported, ${duplicates} already in your inbox, ${failures.length} need attention. ${failures.join(' ')}`;
+    status.textContent = importSummary(imported, duplicates, failures);
     if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
     selection = null;
     $('download').hidden = true;

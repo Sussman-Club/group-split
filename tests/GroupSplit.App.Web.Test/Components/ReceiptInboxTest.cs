@@ -4,6 +4,8 @@ using GroupSplit.App.Shared.Components;
 using GroupSplit.App.Shared.Models;
 using GroupSplit.App.Shared.Services.Commands;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
+using GroupSplit.App.Web.Test.Errors;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -112,6 +114,33 @@ public class ReceiptInboxTest : ComponentTest
         client.Verify(x => x.TranscribeInboxReceiptAsync(It.IsAny<Guid>(), attachmentId, It.IsAny<CancellationToken>()), Times.Once);
         client.Verify(x => x.SaveExtractedInboxReceiptAsync(It.IsAny<Guid>(), details, It.IsAny<CancellationToken>()), Times.Once);
         Assert.Contains("/inbox/receipts/", Services.GetRequiredService<NavigationManager>().Uri);
+    }
+
+    [Fact]
+    public async Task Uploading_a_receipt_read_as_one_already_imported_opens_the_original()
+    {
+        var attachmentId = Guid.NewGuid();
+        var original = Guid.NewGuid();
+        var details = new SaveReceiptRequest { MerchantName = "Amazon", Total = 19.34m };
+        var client = new Mock<IReceiptsClient>();
+        client.Setup(x => x.ListReceiptInboxAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        client.Setup(x => x.UploadInboxReceiptFileAsync(It.IsAny<Guid>(), It.IsAny<FileParameter>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, FileParameter _, CancellationToken _) => new ReceiptAttachmentResponse(attachmentId, null, null, id, "receipt.pdf", "application/pdf", 1, DateTimeOffset.UtcNow));
+        client.Setup(x => x.TranscribeInboxReceiptAsync(It.IsAny<Guid>(), attachmentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiptDraftResponse("test", details));
+        client.Setup(x => x.SaveExtractedInboxReceiptAsync(It.IsAny<Guid>(), details, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Refusals.Of(409, ErrorCodes.ReceiptSourceAlreadyImported, new Dictionary<string, object?> { ["receiptId"] = original }));
+        Services.AddSingleton(client.Object);
+        var dialogs = Render<MudDialogProvider>();
+        var page = Render<ReceiptInbox>();
+
+        await page.Find(".gs-fab").ClickAsync(new MouseEventArgs());
+        dialogs.WaitForAssertion(() => Assert.Single(dialogs.FindComponents<ReceiptFilePicker>()));
+        await dialogs.InvokeAsync(() => dialogs.FindComponent<ReceiptFilePicker>().Instance.FileChanged.InvokeAsync(
+            new Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs(
+                [new BufferedBrowserFile("receipt.pdf", "application/pdf", DateTimeOffset.UtcNow, [1])])));
+
+        Assert.EndsWith($"/inbox/receipts/{original}", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
     [Theory]

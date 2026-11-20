@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 
 namespace GroupSplit.API.Test.Endpoints;
 
@@ -60,6 +61,45 @@ public sealed class ReceiptObservedFingerprintEndpointTest
         (await host.Client.PutAsJsonAsync($"/receipts/inbox/{uploaded}", details, TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         var row = await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{uploaded}", TestContext.Current.CancellationToken);
         Assert.Equal(imported, Assert.Single(row!.PossibleDuplicates).Id);
+    }
+
+    [Fact]
+    public async Task A_reprinted_receipt_read_as_an_imported_order_is_refused_and_removed()
+    {
+        await using var host = await ApiEndpointHost.StartAsync();
+        var ct = TestContext.Current.CancellationToken;
+        var fingerprint = new string('c', 64);
+        var details = new SaveReceiptRequest
+        {
+            MerchantName = "Amazon",
+            ObservedFingerprint = fingerprint,
+            Subtotal = 1,
+            Total = 1,
+            Items = [new ReceiptItemInput { Name = "Item", UnitPrice = 1, TotalPrice = 1 }]
+        };
+        async Task<HttpResponseMessage> Import(Guid id, byte[] bytes)
+        {
+            using var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(bytes);
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+            form.Add(file, "file", "Amazon-2026-11-02-1.pdf");
+            (await host.Client.PostAsync($"/receipts/inbox/{id}/files", form, ct)).EnsureSuccessStatusCode();
+            return await host.Client.PutAsJsonAsync($"/receipts/inbox/{id}/extracted", details, ct);
+        }
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        (await Import(first, [1, 2, 3])).EnsureSuccessStatusCode();
+
+        // A second print of the same order has different bytes, so only its content says so.
+        var refused = await Import(second, [1, 2, 4]);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, refused.StatusCode);
+        var problem = await refused.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>(ct);
+        Assert.Equal(ErrorCodes.ReceiptSourceAlreadyImported, problem!.Extensions["code"]!.ToString());
+        Assert.Equal(first.ToString(), problem.Extensions["receiptId"]!.ToString());
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, (await host.Client.GetAsync($"/receipts/inbox/{second}", ct)).StatusCode);
+        var kept = await host.Client.GetFromJsonAsync<ReceiptInboxResponse>($"/receipts/inbox/{first}", ct);
+        Assert.Empty(kept!.PossibleDuplicates);
     }
 
 }
