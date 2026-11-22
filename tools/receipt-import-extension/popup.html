@@ -44,6 +44,11 @@
       </div>
       <button id="find" class="button button-primary" type="button">Find receipts</button>
       <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="import-result" class="import-result" role="status" aria-live="polite" hidden>
+        <p id="result-summary"></p>
+        <ul id="result-failures" class="result-failures"></ul>
+        <button id="open-inbox" class="button button-secondary" type="button" hidden>Open inbox</button>
+      </div>
       <ul id="receipts" class="receipt-results" aria-label="Receipts to review"></ul>
       <button id="download" class="button button-primary" type="button" hidden>Import receipts</button>
     </section>

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, 'popup.js'), 'utf8');
 
-function page(rowText, href = 'https://example.test/?tab=1') {
+function page(rowText, href = 'https://example.test/?tab=1', globals = {}) {
   const body = {};
   const action = { textContent: 'View Receipt', offsetWidth: 1 };
   const row = {
@@ -24,7 +24,7 @@ function page(rowText, href = 'https://example.test/?tab=1') {
       return controls.get(id);
     }
   };
-  const context = vm.createContext({ document, URL, location: { href }, setTimeout });
+  const context = vm.createContext({ document, URL, location: { href }, setTimeout, ...globals });
   vm.runInContext(source, context);
   return context;
 }
@@ -299,9 +299,77 @@ test('saves extracted details only for a newly uploaded receipt', async () => {
 
 test('summarises an import with only the counts that happened', () => {
   const context = page('');
-  assert.equal(context.importSummary(0, 4, []), '4 already in your inbox, skipped.');
+  assert.equal(context.importSummary(0, 4, []), 'Nothing new to add. 4 already in your inbox, skipped.');
   assert.equal(context.importSummary(2, 1, ['Order 3: Could not read it.']),
-    '2 added to your inbox. 1 already in your inbox, skipped. 1 needs attention: Order 3: Could not read it.');
+    '2 added to your inbox. 1 already in your inbox, skipped. 1 needs attention:');
+  assert.equal(context.importSummary(0, 0, []), 'No receipts imported.');
+});
+
+// An Amazon import whose uploads answer as given, and what the result block ends up showing.
+async function importAmazon(uploads) {
+  const context = page('');
+  const control = id => context.document.getElementById(id);
+  const failures = [];
+  control('result-failures').replaceChildren = (...items) => failures.splice(0, failures.length, ...items.map(item => item.textContent));
+  context.document.createElement = () => ({});
+  context.chrome = { tabs: { sendMessage: async () => {} } };
+  context.testUploads = uploads;
+  vm.runInContext(`
+    inbox = { tabId: 7, origin: 'https://groupsplit.sussman.win' };
+    activeCostcoTab = async () => ({ id: 3 });
+    importFingerprint = async () => 'fingerprint';
+    uploadReceiptFile = async () => { const next = testUploads.shift(); if (next.throws) throw new Error(next.throws); return next; };
+    selection = { retailer: 'amazon', tabId: 3, rows: testUploads.map((_, i) => ({
+      label: 'Amazon order placed 2026-11-0' + (i + 1), date: '2026-11-0' + (i + 1),
+      url: 'https://www.amazon.com/gp/css/summary/print.html?orderID=11' + i, summary: { pdf: 'JVBERg==', receipt: null } })) };`, context);
+  await control('download').click();
+  return { status: control('status').textContent, summary: control('result-summary').textContent, failures,
+    shown: !control('import-result').hidden, inboxOffered: !control('open-inbox').hidden };
+}
+
+test('importing an order already in the inbox says nothing new and offers the inbox', async () => {
+  const result = await importAmazon([{ ok: true, alreadyImported: true }]);
+  assert.equal(result.summary, 'Nothing new to add. 1 already in your inbox, skipped.');
+  assert.equal(result.status, '');
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.shown, true);
+  assert.equal(result.inboxOffered, true);
+});
+
+test('lists each receipt that needs attention on its own line with what to do next', async () => {
+  const result = await importAmazon([
+    { ok: true, alreadyImported: false, detailsSaved: true },
+    { ok: true, alreadyImported: false, detailsSaved: false, detail: 'Saving details failed (500).' },
+    { throws: 'Upload failed (503).' }
+  ]);
+  assert.equal(result.summary, '2 added to your inbox. 2 need attention:');
+  assert.deepEqual(result.failures, [
+    'Amazon order placed 2026-11-02: Saving details failed (500). It is in your inbox; check its details there.',
+    'Amazon order placed 2026-11-03: Upload failed (503). Find receipts again to retry it.'
+  ]);
+});
+
+test('an import where nothing reached the inbox does not offer it', async () => {
+  const result = await importAmazon([{ throws: 'Upload failed (503).' }]);
+  assert.equal(result.summary, '1 needs attention:');
+  assert.equal(result.inboxOffered, false);
+});
+
+test('opening the inbox from an embedded importer closes it over the inbox', () => {
+  const context = page('', 'https://example.test/?embedded=1', { chrome: { runtime: { sendMessage() {} } } });
+  let posted;
+  context.window = { parent: { postMessage: message => { posted = message; } } };
+  context.document.getElementById('open-inbox').click();
+  assert.equal(posted.type, 'groupsplit-importer-complete');
+});
+
+test('finding receipts again hides the last import result', () => {
+  const context = page('');
+  const result = context.document.getElementById('import-result');
+  result.hidden = false;
+  context.document.getElementById('receipts').replaceChildren = () => {};
+  context.document.getElementById('from').change();
+  assert.equal(result.hidden, true);
 });
 
 test('counts a receipt GroupSplit recognises from its content as already imported', async () => {

@@ -400,13 +400,36 @@ async function readImportedReceiptDates(expectedOrigin) {
   return lists.flatMap(list => list.flatMap(row => (row.attachments || []).map(file => file.fileName)));
 }
 
-// Say only what happened: counts that are zero are left out.
+// Say only what happened: counts that are zero are left out. The failures are listed apart.
 function importSummary(imported, duplicates, failures) {
   const parts = [];
+  if (!imported && duplicates && !failures.length) parts.push('Nothing new to add.');
   if (imported) parts.push(`${imported} added to your inbox.`);
   if (duplicates) parts.push(`${duplicates} already in your inbox, skipped.`);
-  if (failures.length) parts.push(`${failures.length} need${failures.length === 1 ? 's' : ''} attention: ${failures.join(' ')}`);
+  if (failures.length) parts.push(`${failures.length} need${failures.length === 1 ? 's' : ''} attention:`);
   return parts.join(' ') || 'No receipts imported.';
+}
+
+// What to do about a receipt that needs attention, after what went wrong with it.
+const reviewInInbox = 'It is in your inbox; check its details there.';
+const findAgain = 'Find receipts again to retry it.';
+
+// The result of an import on its own, below the progress line: the counts, one line per
+// receipt that needs attention, and the inbox when something reached it.
+function showImportResult(imported, duplicates, failures) {
+  status.textContent = '';
+  $('result-summary').textContent = importSummary(imported, duplicates, failures);
+  $('result-failures').replaceChildren(...failures.map(failure => {
+    const item = document.createElement('li');
+    item.textContent = failure;
+    return item;
+  }));
+  $('open-inbox').hidden = !inbox || imported + duplicates === 0;
+  $('import-result').hidden = false;
+}
+
+function clearImportResult() {
+  $('import-result').hidden = true;
 }
 
 function latestImportedDate(filenames, retailer, todayValue) {
@@ -473,12 +496,17 @@ if (embedded) {
   });
 } else void connectInbox();
 
-$('back-to-inbox').addEventListener('click', async () => {
+async function showInbox() {
   if (inbox) {
     const tab = await chrome.tabs.update(inbox.tabId, { active: true });
     if (Number.isInteger(tab.windowId)) await chrome.windows.update(tab.windowId, { focused: true });
   }
-});
+}
+
+$('back-to-inbox').addEventListener('click', showInbox);
+
+// Embedded, the inbox is the page behind the importer: closing it shows the inbox.
+$('open-inbox').addEventListener('click', () => embedded ? closeCompletedImporter() : showInbox());
 
 $('retailer').addEventListener('change', () => {
   startDateEdited = false;
@@ -494,6 +522,7 @@ $('retailer').addEventListener('change', () => {
   $('buyer-guidance').hidden = $('retailer').value !== 'amazon';
   $('buyer').value = 'all';
   status.textContent = '';
+  clearImportResult();
   $('privacy-note').textContent = $('retailer').value === 'amazon'
     ? 'Amazon PDFs contain the full printable receipt and may include addresses, payment details and order numbers.'
     : costcoPrivacyMessage;
@@ -505,6 +534,7 @@ $('buyer').addEventListener('change', () => {
   selection = null;
   $('receipts').replaceChildren();
   $('download').hidden = true;
+  clearImportResult();
   status.textContent = 'Select Find receipts to apply the recipient filter.';
 });
 
@@ -517,6 +547,7 @@ for (const id of ['from', 'to']) for (const event of ['input', 'change']) $(id).
     updateBuyerOptions([]);
     $('buyer-note').textContent = 'Check recipients to scan the selected dates.';
   }
+  clearImportResult();
   status.textContent = 'Select Find receipts to apply the date range.';
 });
 
@@ -1118,6 +1149,7 @@ $('find').addEventListener('click', async () => {
   selection = null;
   $('download').hidden = true;
   $('receipts').replaceChildren();
+  clearImportResult();
   try {
     const from = $('from').value, to = $('to').value;
     if (!from || !to || from > to) throw new Error('Choose a valid start and end date.');
@@ -1247,7 +1279,7 @@ $('find').addEventListener('click', async () => {
       item.textContent = `Costco receipt ${row.date}`;
       $('receipts').append(item);
     }
-    status.textContent = `${matches.length} warehouse receipt(s) found across ${scanned.length} period(s). ${costcoPrivacyMessage}`;
+    status.textContent = `${matches.length} warehouse receipt(s) found across ${scanned.length} period(s).`;
     $('download').hidden = matches.length === 0;
   } catch (error) { status.textContent = error.message; }
   finally { setImportBusy(false); }
@@ -1279,10 +1311,10 @@ $('download').addEventListener('click', async () => {
           saved++;
           if (result.alreadyImported) duplicates++; else imported++;
           if (!result.alreadyImported && !result.detailsSaved)
-            failures.push(`Order ${i + 1}: ${result.detail || 'The receipt was uploaded, but its details need review.'}`);
-        } catch (error) { failures.push(`Order ${i + 1}: ${error.message}`); }
+            failures.push(`${selection.rows[i].label}: ${result.detail || 'Its details could not be read.'} ${reviewInInbox}`);
+        } catch (error) { failures.push(`${selection.rows[i].label}: ${error.message} ${findAgain}`); }
       }
-      status.textContent = importSummary(imported, duplicates, failures);
+      showImportResult(imported, duplicates, failures);
       if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
       selection = null;
       $('download').hidden = true;
@@ -1326,20 +1358,22 @@ $('download').addEventListener('click', async () => {
           saved++;
           if (upload.alreadyImported) duplicates++; else imported++;
           if (!upload.alreadyImported && !upload.detailsSaved)
-            failures.push(`${fileName}: ${upload.detail || 'Uploaded. Receipt details need review.'}`);
-        } catch (error) { failures.push(`${fileName}: ${error.message}`); }
+            failures.push(`Costco receipt ${row.date}: ${upload.detail || 'Its details could not be read.'} ${reviewInInbox}`);
+        } catch (error) { failures.push(`Costco receipt ${row.date}: ${error.message} ${findAgain}`); }
       } finally {
         const cleanup = await execute(tab.id, cleanupReceipt);
         if (cleanup?.closed === false) throw new Error('The Costco receipt did not close. Close it before retrying.');
       }
     }
-    status.textContent = importSummary(imported, duplicates, failures);
+    showImportResult(imported, duplicates, failures);
     if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
     selection = null;
     $('download').hidden = true;
     if (saved > 0 && failures.length === 0 && duplicates === 0) closeCompletedImporter();
   } catch (error) {
-    status.textContent = `Stopped after ${saved} receipt(s): ${error.message}`;
+    showImportResult(imported, duplicates,
+      [...failures, `The import stopped: ${error.message} Find receipts again to import the rest.`]);
+    if (saved) await chrome.tabs.sendMessage(inbox.tabId, { type: 'receipts-imported' }).catch(() => {});
     selection = null;
     $('download').hidden = true;
   }
