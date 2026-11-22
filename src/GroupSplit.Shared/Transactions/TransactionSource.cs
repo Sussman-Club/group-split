@@ -32,5 +32,11 @@ public enum TransactionSource
     Receipt,
 
     /// <summary>Recorded through the MCP server, by an assistant acting for somebody.</summary>
-    Mcp
+    Mcp,
+
+    /// <summary>
+    /// Created on its day by a repeating expense. Entered by whoever last set that repeating
+    /// expense up or changed it.
+    /// </summary>
+    Schedule
 }

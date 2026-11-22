@@ -37,6 +37,7 @@ public static class Problems
         [ErrorCodes.TransactionNotFound] = "Transaction not found",
         [ErrorCodes.CategoryNotFound] = "Category not found",
         [ErrorCodes.SplitRuleNotFound] = "Split rule not found",
+        [ErrorCodes.RecurringExpenseNotFound] = "Repeating expense not found",
         [ErrorCodes.BankConnectionNotFound] = "Bank connection not found",
         [ErrorCodes.BankTransactionNotFound] = "Imported transaction not found",
         [ErrorCodes.SettlementRequestNotFound] = "Settlement request not found",

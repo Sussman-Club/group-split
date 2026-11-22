@@ -7,6 +7,12 @@ public record CreateTransactionRequest
 {
     /// <summary>The reviewed itemized receipt to validate and save with the new expense.</summary>
     public SaveReceiptRequest? Receipt { get; set; }
+
+    /// <summary>
+    /// Make it repeat from the next occurrence on (#546), or null for a one-off. Saved with the
+    /// expense or not at all. The split preview ignores it.
+    /// </summary>
+    public RepeatExpenseRequest? Repeat { get; set; }
     public Guid? PaidByUserId { get; set; }
 
     /// <summary>

@@ -48,6 +48,21 @@ inbox receipt (otherwise `Manual`). Reads return `enteredByUserId`,
 `enteredByUserName` and `source`, and `group_activity` filters on `enteredBy` and
 `source`.
 
+Repeating expenses (rent, bills, subscriptions) have their own tools:
+`list_recurring_expenses`, `create_recurring_expense`, `repeat_expense`,
+`update_recurring_expense`, `set_recurring_expense_paused` and
+`stop_recurring_expense`. `create_expense` takes `repeat` (`frequency`, and `from`
+for the expense's day in the user's time zone) to save an expense and make it
+repeat in one call. Each occurrence becomes an ordinary expense on its day, with
+source `Schedule`, entered by whoever last set the repeating expense up, changed
+it or resumed it. The `CreateDueRecurringExpenses` job creates them every hour
+through the same code as an expense typed in. A day that is refused, because the
+payer left or the split no longer applies, is not skipped: the listing shows the
+reason in `problem`, and the day is tried again every hour until the cause is fixed,
+for example by changing the payer. If the person it is entered by has left, saving
+it as somebody still in the group fixes it. Changes apply to occurrences still to
+come. Days that pass while one is paused are not created.
+
 ## Configuration
 
 Set `Mcp__Issuer` to the exact HTTPS Keycloak realm issuer and `Mcp__Resource`

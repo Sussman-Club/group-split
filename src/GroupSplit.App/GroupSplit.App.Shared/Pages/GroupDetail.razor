@@ -117,6 +117,7 @@
                         {
                             <a href="@Href("rules")"><MudIcon Icon="@Icons.Material.Rounded.PieChart" /><span><strong>@Loc["Split rules"]</strong><small>@Loc["Choose how expenses are shared"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
                         }
+                        <a href="@Href("repeating")"><MudIcon Icon="@Icons.Material.Rounded.EventRepeat" /><span><strong>@Loc["Repeating expenses"]</strong><small>@Loc["Rent, bills and subscriptions"]</small></span><MudIcon Icon="@Icons.Material.Rounded.ChevronRight" /></a>
                     </nav>
                 </section>
             }
@@ -129,6 +130,10 @@
                         <div class="gs-settings-heading"><h2 id="group-people-title">@Loc["People"]</h2></div>
                         <GroupMembersTab GroupId="@group.Id" UserInfo="@UserInfo" />
                     </section>
+                }
+                else if (SettingsSection == "repeating")
+                {
+                    <GroupRecurringExpenses Group="@group" />
                 }
                 else
                 {
@@ -246,7 +251,7 @@ else if (NotFound)
     /// Which section the URL asks for. The retired names remain aliases: a bookmark to a
     /// group's expenses, members, categories or overview still lands in the same place.
     /// </summary>
-    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "details" or "rules" or "splits" or "categories")
+    private string Current => Group is { IsPersonal: true } && Tab?.ToLowerInvariant() is not ("settings" or "details" or "rules" or "splits" or "categories" or "repeating")
         ? "activity"
         : Tab?.ToLowerInvariant() switch
     {
@@ -255,7 +260,7 @@ else if (NotFound)
         // The older URLs remain useful links. Rules and categories are part of the group's
         // Settings now, under the group's own name and default, rather than a peer of its
         // day-to-day views.
-        "rules" or "splits" or "categories" or "details" or "settings" => "settings",
+        "rules" or "splits" or "categories" or "details" or "settings" or "repeating" => "settings",
         _ => "balances"
     };
 
@@ -287,6 +292,7 @@ else if (NotFound)
         "categories" => "categories",
         "rules" or "splits" when Group is not { IsPersonal: true } => "rules",
         "details" => "details",
+        "repeating" => "repeating",
         _ => "overview"
     };
 

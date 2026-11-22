@@ -189,6 +189,19 @@
                     </div>
                 </details>
 
+                @* Typed in only: a receipt or a bank row is one purchase. *@
+                @if (InboxReceipt is null && InboxSuggestion is null)
+                {
+                    <MudSelect T="RepeatFrequency?" @bind-Value="_repeat" Label="@Loc["Repeats"]" Variant="Variant.Outlined"
+                               data-testid="expense-repeat">
+                        <MudSelectItem T="RepeatFrequency?" Value="@((RepeatFrequency?)null)">@Loc["Doesn't repeat"]</MudSelectItem>
+                        @foreach (var frequency in Enum.GetValues<RepeatFrequency>())
+                        {
+                            <MudSelectItem T="RepeatFrequency?" Value="@((RepeatFrequency?)frequency)">@RepeatCopy.Every(frequency)</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+
                 @if (IsShared)
                 {
                     @if (ShowGuide && _guideStep == 2) { @GuideTip }
@@ -319,6 +332,9 @@
     // that came back as UTC while the offset attached to it below was the browser's, and
     // an expense recorded at 12:38 in New York was stored eight hours ahead.
     private DateTime? _selectedDate;
+
+    /// <summary>How often it comes round again, or null for a one-off (#546).</summary>
+    private RepeatFrequency? _repeat;
     private TimeSpan? _selectedTime;
     private string? _initialDraft;
 
@@ -1078,6 +1094,10 @@
     {
         _model.GroupId = _groupId;
         _model.Receipt = _receipt;
+        // From the day as picked: sent as UTC, local midnight is the day before east of Greenwich.
+        _model.Repeat = _repeat is { } frequency
+            ? new RepeatExpenseRequest(frequency, DateOnly.FromDateTime(_selectedDate ?? Clock.Today))
+            : null;
 
         // Stated only for a personal expense. In a group the API takes the group's own when
         // none is named, and naming the one picked while it was personal would be refused.

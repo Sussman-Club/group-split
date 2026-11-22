@@ -365,6 +365,20 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<RecurringExpense>(entity =>
+        {
+            entity.Property(recurring => recurring.Template).IsRequired();
+            entity.Property(recurring => recurring.Frequency).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(recurring => recurring.NextOn).IsConcurrencyToken();
+            entity.Property(recurring => recurring.Problem).HasMaxLength(512);
+            entity.HasOne(recurring => recurring.Group).WithMany().HasForeignKey(recurring => recurring.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(recurring => recurring.EnteredBy).WithMany().HasForeignKey(recurring => recurring.EnteredById)
+                .OnDelete(DeleteBehavior.Restrict);
+            // The job's question: which are due, among those still running.
+            entity.HasIndex(recurring => new { recurring.StoppedAt, recurring.PausedAt, recurring.NextOn });
+        });
+
         modelBuilder.Entity<Group>(entity =>
         {
             entity.Property(group => group.Name).HasMaxLength(64).IsRequired();

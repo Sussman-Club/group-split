@@ -1,0 +1,146 @@
+@using GroupSplit.Shared
+@using GroupSplit.App.Shared.Services.Commands
+@using GroupSplit.App.Shared.Services.Errors
+@namespace GroupSplit.App.Shared.Components
+@inject IRecurringExpenseCommands Recurring
+@inject IGroupsClient GroupsClient
+@inject ApiErrorPresenter Errors
+@inject IDialogService DialogService
+@inject LocalClock Clock
+
+@* A group's repeating expenses (#546): what comes round next, and pausing, changing or
+   stopping one. The expenses they add are ordinary ones, edited from the activity list. *@
+<section id="group-repeating" class="gs-card gs-card-pad gs-settings-section" aria-labelledby="group-repeating-title">
+    <div class="gs-card-title">
+        <h3 id="group-repeating-title">@Loc["Repeating expenses"]</h3>
+    </div>
+
+    <p class="gs-settings-description">@Loc["Rent, bills and subscriptions, added on their day. To make one, choose how often it repeats when you add the expense."]</p>
+
+    @if (_items is null)
+    {
+        <Waiting Rows="2"/>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="gs-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.EventRepeat"/>
+            <h3>@Loc["Nothing repeats yet"]</h3>
+        </div>
+    }
+    else
+    {
+        <div class="gs-list">
+            @foreach (var item in _items)
+            {
+                <div class="gs-rule" @key="item.Id" data-testid="recurring-expense">
+                    <div class="gs-rule-head">
+                        <span class="title">
+                            <span>@item.Details.Name</span>
+                            @if (item.Paused)
+                            {
+                                <span class="gs-tag neutral">@Loc["Paused"]</span>
+                            }
+                        </span>
+                        <span class="gs-inline" style="gap: 2px">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                           aria-label="@(Loc["Change {0}", item.Details.Name].Value)"
+                                           OnClick="@(() => EditAsync(item))"/>
+                            <MudIconButton Icon="@(item.Paused ? Icons.Material.Outlined.PlayArrow : Icons.Material.Outlined.Pause)" Size="Size.Small"
+                                           aria-label="@(item.Paused ? Loc["Resume {0}", item.Details.Name].Value : Loc["Pause {0}", item.Details.Name].Value)"
+                                           OnClick="@(() => SetPausedAsync(item, !item.Paused))"/>
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                           aria-label="@(Loc["Stop {0}", item.Details.Name].Value)"
+                                           OnClick="@(() => StopAsync(item))"/>
+                        </span>
+                    </div>
+                    <span class="meta">
+                        @item.Details.Amount.ToMoney(item.Details.Currency ?? Group.Currency) · @RepeatCopy.Every(item.Details.Frequency) · @Loc["Paid by {0}", item.PaidByUserName]
+                    </span>
+                    @if (!item.Paused)
+                    {
+                        <span class="meta">@Loc["Next on {0}", item.NextOn.ToString("d MMM yyyy")]</span>
+                    }
+                    @if (item.Problem is { } problem)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" data-testid="recurring-problem">
+                            @Loc["The one on {0} could not be added: {1}", item.NextOn.ToString("d MMM yyyy"), problem]
+                        </MudAlert>
+                    }
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public GroupResponse Group { get; set; } = null!;
+
+    private List<RecurringExpenseResponse>? _items;
+
+    protected override async Task OnParametersSetAsync() =>
+        _items = (await Recurring.ForGroupAsync(Group.Id))?.ToList() ?? [];
+
+    private async Task EditAsync(RecurringExpenseResponse item)
+    {
+        IReadOnlyList<UserInfo> members = [];
+        await Errors.TryAsync(async () => members = [.. await GroupsClient.GetGroupMembersAsync(Group.Id)]);
+
+        var dialog = await DialogService.ShowAsync<RecurringExpenseDialog>(Loc["Change a repeating expense"].Value,
+            new DialogParameters<RecurringExpenseDialog>
+            {
+                { x => x.Details, item.Details },
+                { x => x.Members, members },
+                { x => x.Currency, item.Details.Currency ?? Group.Currency }
+            },
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+
+        // Carried on when it closes rather than awaited here, so the click that opened it is done.
+        _ = SaveWhenClosedAsync(dialog, item);
+    }
+
+    private async Task SaveWhenClosedAsync(IDialogReference dialog, RecurringExpenseResponse item)
+    {
+        if (await dialog.GetReturnValueAsync<RecurringExpenseRequest>() is { } changed &&
+            await Recurring.UpdateAsync(item.Id, changed) is { } updated)
+        {
+            Replace(updated);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SetPausedAsync(RecurringExpenseResponse item, bool paused)
+    {
+        if (await Recurring.SetPausedAsync(item.Id, paused) is { } changed)
+            Replace(changed);
+    }
+
+    private async Task StopAsync(RecurringExpenseResponse item)
+    {
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>(Loc["Stop repeating"].Value,
+            new DialogParameters<ConfirmationDialog>
+            {
+                { x => x.ContentText, Loc["Stop '{0}' for good? The expenses it already added stay.", item.Details.Name].Value },
+                { x => x.ButtonText, Loc["Stop"].Value },
+                { x => x.Color, Color.Error }
+            });
+
+        _ = StopWhenConfirmedAsync(dialog, item);
+    }
+
+    private async Task StopWhenConfirmedAsync(IDialogReference dialog, RecurringExpenseResponse item)
+    {
+        if (await dialog.ConfirmedAsync() && await Recurring.StopAsync(item.Id))
+        {
+            _items?.RemoveAll(candidate => candidate.Id == item.Id);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Replace(RecurringExpenseResponse changed)
+    {
+        var index = _items?.FindIndex(candidate => candidate.Id == changed.Id) ?? -1;
+        if (index >= 0)
+            _items![index] = changed;
+    }
+}

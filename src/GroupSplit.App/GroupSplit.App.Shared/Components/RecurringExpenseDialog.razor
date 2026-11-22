@@ -1,0 +1,64 @@
+@using GroupSplit.Shared
+@namespace GroupSplit.App.Shared.Components
+
+@* Changes a repeating expense's name, amount, payer and how often it comes round. Only the
+   occurrences still to come change; the category and split stay as they were set up. *@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          For="@(() => _model.Name)"
+                          Label="@Loc["Name"]"
+                          Variant="Variant.Outlined"
+                          Immediate="true"/>
+            <DecimalField @bind-Value="_model.Amount"
+                          For="@(() => _model.Amount)"
+                          Label="@Loc["How much?"]"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentText="@MoneyExtensions.CurrencySymbol(Currency)"
+                          HideSpinButtons="true"/>
+            @if (Members.Count > 1)
+            {
+                <MudSelect T="Guid?" @bind-Value="_model.PaidByUserId" Label="@Loc["Who paid?"]" Variant="Variant.Outlined"
+                           data-testid="recurring-payer">
+                    @foreach (var member in Members)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)member.Id)">@member.Label()</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudSelect T="RepeatFrequency" @bind-Value="_model.Frequency" Label="@Loc["Repeats"]" Variant="Variant.Outlined">
+                @foreach (var frequency in Enum.GetValues<RepeatFrequency>())
+                {
+                    <MudSelectItem T="RepeatFrequency" Value="@frequency">@RepeatCopy.Every(frequency)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudText Typo="Typo.body2" Class="gs-muted">@Loc["Expenses it already added stay as they are."]</MudText>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Cancel())">@Loc["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Class="gs-btn-pill" Color="Color.Primary" OnClick="@SubmitAsync">@Loc["Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public RecurringExpenseRequest Details { get; set; } = null!;
+    [Parameter] public IReadOnlyList<UserInfo> Members { get; set; } = [];
+    [Parameter] public string? Currency { get; set; }
+
+    private MudForm _form = null!;
+    private RecurringExpenseRequest _model = null!;
+
+    protected override void OnInitialized() => _model = Details with { };
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+            MudDialog.Close(DialogResult.Ok(_model));
+    }
+}

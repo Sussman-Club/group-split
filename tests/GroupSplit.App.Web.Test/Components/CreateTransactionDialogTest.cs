@@ -1140,6 +1140,45 @@ public class CreateTransactionDialogTest : ComponentTest
         return provider;
     }
 
+    // ---- Repeating (#546) ---------------------------------------------------------------
+
+    /// <summary>
+    /// Sent with the day as picked, not the UTC day of the instant: local midnight is the day
+    /// before in UTC anywhere east of Greenwich.
+    /// </summary>
+    [Fact]
+    public async Task A_repeat_chosen_is_sent_with_the_expense_from_the_day_picked()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>()));
+
+        var repeats = provider.FindComponents<MudSelect<RepeatFrequency?>>()
+            .Single(select => select.Instance.Label == "Repeats");
+        await provider.InvokeAsync(() => repeats.Instance.ValueChanged.InvokeAsync(RepeatFrequency.Monthly));
+
+        var request = await SaveAsync(provider, reference!);
+
+        var clock = Services.GetRequiredService<LocalClock>();
+        Assert.Equal(new RepeatExpenseRequest(RepeatFrequency.Monthly, DateOnly.FromDateTime(clock.Today)), request!.Repeat);
+    }
+
+    [Fact]
+    public async Task An_expense_repeats_only_when_asked()
+    {
+        var provider = Render<MudDialogProvider>();
+        IDialogReference? reference = null;
+        await provider.InvokeAsync(async () =>
+            reference = await Services.GetRequiredService<IDialogService>()
+                .ShowAsync<CreateTransactionDialog>("Add expense", new DialogParameters<CreateTransactionDialog>()));
+
+        var request = await SaveAsync(provider, reference!);
+
+        Assert.Null(request!.Repeat);
+    }
+
     // ---- What it is in (#320) -----------------------------------------------------------
 
     /// <summary>Fills the two fields an expense cannot be saved without, and saves it.</summary>

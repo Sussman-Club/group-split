@@ -5994,4 +5994,82 @@
   <data name="Entered by you" xml:space="preserve">
     <value>Registrado por você</value>
   </data>
+  <data name="Could not load the repeating expenses." xml:space="preserve">
+    <value>Não foi possível carregar as despesas recorrentes.</value>
+  </data>
+  <data name="Could not save the repeating expense." xml:space="preserve">
+    <value>Não foi possível salvar a despesa recorrente.</value>
+  </data>
+  <data name="Stopped. The expenses it already added stay." xml:space="preserve">
+    <value>Interrompida. As despesas que já adicionou continuam.</value>
+  </data>
+  <data name="Could not stop the repeating expense." xml:space="preserve">
+    <value>Não foi possível interromper a despesa recorrente.</value>
+  </data>
+  <data name="That repeating expense no longer exists." xml:space="preserve">
+    <value>Essa despesa recorrente não existe mais.</value>
+  </data>
+  <data name="Every week" xml:space="preserve">
+    <value>Toda semana</value>
+  </data>
+  <data name="Every month" xml:space="preserve">
+    <value>Todo mês</value>
+  </data>
+  <data name="Every year" xml:space="preserve">
+    <value>Todo ano</value>
+  </data>
+  <data name="Repeats" xml:space="preserve">
+    <value>Repete</value>
+  </data>
+  <data name="Doesn&#x27;t repeat" xml:space="preserve">
+    <value>Não se repete</value>
+  </data>
+  <data name="Expenses it already added stay as they are." xml:space="preserve">
+    <value>As despesas que já adicionou continuam como estão.</value>
+  </data>
+  <data name="Repeating expenses" xml:space="preserve">
+    <value>Despesas recorrentes</value>
+  </data>
+  <data name="Rent, bills and subscriptions" xml:space="preserve">
+    <value>Aluguel, contas e assinaturas</value>
+  </data>
+  <data name="Rent, bills and subscriptions, added on their day. To make one, choose how often it repeats when you add the expense." xml:space="preserve">
+    <value>Aluguel, contas e assinaturas, adicionados no dia certo. Para criar uma, escolha com que frequência se repete ao adicionar a despesa.</value>
+  </data>
+  <data name="Nothing repeats yet" xml:space="preserve">
+    <value>Nada se repete ainda</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Pausada</value>
+  </data>
+  <data name="Change {0}" xml:space="preserve">
+    <value>Alterar {0}</value>
+  </data>
+  <data name="Resume {0}" xml:space="preserve">
+    <value>Retomar {0}</value>
+  </data>
+  <data name="Pause {0}" xml:space="preserve">
+    <value>Pausar {0}</value>
+  </data>
+  <data name="Stop {0}" xml:space="preserve">
+    <value>Interromper {0}</value>
+  </data>
+  <data name="Next on {0}" xml:space="preserve">
+    <value>Próxima em {0}</value>
+  </data>
+  <data name="The one on {0} could not be added: {1}" xml:space="preserve">
+    <value>Não foi possível adicionar a de {0}: {1}</value>
+  </data>
+  <data name="Change a repeating expense" xml:space="preserve">
+    <value>Alterar uma despesa recorrente</value>
+  </data>
+  <data name="Stop repeating" xml:space="preserve">
+    <value>Parar de repetir</value>
+  </data>
+  <data name="Stop &#x27;{0}&#x27; for good? The expenses it already added stay." xml:space="preserve">
+    <value>Interromper '{0}' de vez? As despesas que já adicionou continuam.</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>Interromper</value>
+  </data>
 </root>

@@ -210,7 +210,7 @@ public class GroupDetailPageTest : ComponentTest
     {
         var page = Open(Lisbon.Id, "settings");
         var links = page.FindAll(".gs-group-settings-choices a").Select(link => link.GetAttribute("href")).ToArray();
-        Assert.Equal(new[] { $"/groups/{Lisbon.Id}/details", $"/groups/{Lisbon.Id}/people", $"/groups/{Lisbon.Id}/categories", $"/groups/{Lisbon.Id}/rules" }, links);
+        Assert.Equal(new[] { $"/groups/{Lisbon.Id}/details", $"/groups/{Lisbon.Id}/people", $"/groups/{Lisbon.Id}/categories", $"/groups/{Lisbon.Id}/rules", $"/groups/{Lisbon.Id}/repeating" }, links);
     }
 
     [Theory]
