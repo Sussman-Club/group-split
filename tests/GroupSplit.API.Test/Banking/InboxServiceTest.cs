@@ -67,6 +67,18 @@ public class InboxServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
     }
 
     [Fact]
+    public async Task Filing_records_the_expense_as_from_the_bank_entered_by_whoever_filed_it()
+    {
+        var row = await Row(amount: 12.50m);
+
+        var expense = await Inbox.File(row.Id, new FileBankTransactionRequest(), Ct);
+
+        var stored = await DbContext.Set<Expense>().AsNoTracking().SingleAsync(e => e.Id == expense.Id, Ct);
+        Assert.Equal(TransactionSource.Bank, stored.Source);
+        Assert.Equal(GetService<ICurrentUser>().User.Id, stored.EnteredById);
+    }
+
+    [Fact]
     public async Task Filing_an_ignored_bank_row_moves_it_to_filed()
     {
         var row = await Row(amount: 12.50m);

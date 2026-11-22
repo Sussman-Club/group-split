@@ -129,6 +129,12 @@
                         <ExpenseChip ReadOnly="true" Set="true" Label="payer" Lead="paid by"
                                      Value="@($"{(PaidByMe ? Loc["You"].Value : details.PaidByUserName)}{(details.PaidByIsGuest ? $" {ParticipantCopy.GuestMark}" : "")}")" />
                     </div>
+                    @if (EnteredByAThirdParty)
+                    {
+                        <p class="gs-muted" style="margin: 0; font-size: .875rem">
+                            @(details.EnteredByUserId == Me ? Loc["Entered by you"] : Loc["Entered by {0}", details.EnteredByUserName])
+                        </p>
+                    }
                 }
                 else
                 {
@@ -193,6 +199,16 @@
                         <div class="gs-kv-row">
                             <dt>@Loc["Copy.Sentence.Paid_to"]</dt>
                             <dd>@(details.PaidToUserId == Me ? Loc["You"].Value : details.PaidToUserName)</dd>
+                        </div>
+                    }
+
+                    @* Only when it was neither of the two named: a member can record a
+                       repayment between two others, and the row should not read as theirs. *@
+                    @if (EnteredByAThirdParty)
+                    {
+                        <div class="gs-kv-row">
+                            <dt>@Loc["Entered by"]</dt>
+                            <dd>@(details.EnteredByUserId == Me ? Loc["You"].Value : details.EnteredByUserName)</dd>
                         </div>
                     }
 
@@ -394,6 +410,9 @@
         : Loc["Split"].Value;
 
     private bool IsSettlement => details is { Kind: ActivityKind.Transfer };
+
+    private bool EnteredByAThirdParty => details is { } loaded &&
+        EnteredByCopy.ByAThirdParty(loaded.EnteredByUserId, loaded.PaidByUserId, loaded.Kind, loaded.PaidToUserId);
 
     /// <summary>The most of a period's expenses listed here; the rest are counted.</summary>
     private const int PeriodListLimit = 50;

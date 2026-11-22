@@ -232,11 +232,55 @@ public class TransactionDetailsDialogTest : ComponentTest
             It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    // ---- Who entered it ----------------------------------------------------------------
+
+    private void AnExpenseEnteredBy(Guid payer, Guid enteredBy, string enteredByName) =>
+        _transactions
+            .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TransactionDetailsResponse
+            {
+                Id = _expense,
+                Name = "Glovo",
+                Amount = 37.15m,
+                DateTime = new DateTimeOffset(2026, 9, 3, 14, 20, 0, TimeSpan.Zero),
+                PaidByUserName = "Loraine Monteagudo",
+                PaidByUserId = payer,
+                EnteredByUserId = enteredBy,
+                EnteredByUserName = enteredByName,
+                Splits = []
+            });
+
+    /// <summary>
+    /// Recorded by somebody who did not pay: without this the expense reads as though
+    /// Loraine had written it herself.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_somebody_else_recorded_names_who_did()
+    {
+        AnExpenseEnteredBy(payer: Guid.NewGuid(), enteredBy: Guid.NewGuid(), "Omar Rivero");
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Entered by Omar Rivero", dialog.Markup));
+    }
+
+    [Fact]
+    public async Task An_expense_its_payer_recorded_does_not_say_so_twice()
+    {
+        var loraine = Guid.NewGuid();
+        AnExpenseEnteredBy(payer: loraine, enteredBy: loraine, "Loraine Monteagudo");
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Glovo", dialog.Markup));
+        Assert.DoesNotContain("Entered by", dialog.Markup);
+    }
+
     // ---- A settlement ------------------------------------------------------------------
 
     private static readonly Guid Flat = Guid.NewGuid();
 
-    private void ASettlement(SettlementCoverage? coverage)
+    private void ASettlement(SettlementCoverage? coverage, Guid? enteredBy = null)
     {
         _transactions
             .Setup(client => client.GetTransactionAsync(_expense, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
@@ -253,6 +297,8 @@ public class TransactionDetailsDialogTest : ComponentTest
                 PaidByUserName = "Loraine",
                 PaidToUserId = Me,
                 PaidToUserName = "Ana Benitez",
+                EnteredByUserId = enteredBy ?? Me,
+                EnteredByUserName = enteredBy is null ? "Ana Benitez" : "Omar Rivero",
                 Splits = [new TransactionSplitResponse(Me, "Ana Benitez", 50m)],
                 Coverage = coverage
             });
@@ -373,5 +419,31 @@ public class TransactionDetailsDialogTest : ComponentTest
         var dialog = await Open(bill: null);
 
         dialog.WaitForAssertion(() => Assert.Equal(shown, When(dialog)));
+    }
+
+    /// <summary>
+    /// The repayments a third member typed in for two others: the row names Loraine and
+    /// Ana, and neither of them wrote it.
+    /// </summary>
+    [Fact]
+    public async Task A_settlement_neither_party_recorded_names_who_did()
+    {
+        ASettlement(coverage: null, enteredBy: Guid.NewGuid());
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Entered by", dialog.Markup));
+        Assert.Contains("Omar Rivero", dialog.Markup);
+    }
+
+    [Fact]
+    public async Task A_settlement_one_of_its_parties_recorded_does_not_say_so()
+    {
+        ASettlement(coverage: null);
+
+        var dialog = await Open(bill: null);
+
+        dialog.WaitForAssertion(() => Assert.Contains("Loraine", dialog.Markup));
+        Assert.DoesNotContain("Entered by", dialog.Markup);
     }
 }

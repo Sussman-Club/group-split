@@ -1,5 +1,6 @@
 using GroupSplit.AppHost.Test.Base;
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.AppHost.Test.Data;
@@ -41,6 +42,8 @@ public class DataTest(AppHostFixture appHost) : IAsyncLifetime
             DateTime = written,
             Name = "Test",
             User = user,
+            EnteredById = user.Id,
+            Source = TransactionSource.Manual,
             GroupId = user.Id
         };
 

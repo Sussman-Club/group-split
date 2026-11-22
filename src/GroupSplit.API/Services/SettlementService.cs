@@ -140,7 +140,8 @@ public class SettlementService(
     IGroupParticipants participants,
     AppDbContext context,
     TimeProvider clock,
-    PushNotificationQueue notifications) : ISettlementService
+    PushNotificationQueue notifications,
+    IEntryChannel entryChannel) : ISettlementService
 {
     private async Task NotifySettlements(CancellationToken ct)
     {
@@ -191,7 +192,8 @@ public class SettlementService(
         foreach (var payment in payments)
         {
             context.Add(group.SettlementBetween(members[payment.FromUserId], members[payment.ToUserId],
-                payment.Amount, date, description, cutoff?.Through));
+                payment.Amount, date, userContext.User, entryChannel.SourceFor(TransactionSource.Manual),
+                description, cutoff?.Through));
         }
 
         // One save. Half a settling-up would leave somebody looking at a balance that had
@@ -294,6 +296,7 @@ public class SettlementService(
         // belongs to the month it settled, not the one somebody got round to it in.
         context.Add(group.SettlementBetween(from, to, amount,
             (date ?? clock.GetUtcNow()).ToUniversalTime(),
+            userContext.User, entryChannel.SourceFor(TransactionSource.Manual),
             description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
 
         await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id,
@@ -390,7 +393,7 @@ public class SettlementService(
         foreach (var allocation in allocations)
         {
             context.Add(groups[allocation.GroupId].SettlementBetween(from, to, allocation.Amount, date,
-                description, cutoff?.Through));
+                caller, entryChannel.SourceFor(TransactionSource.Manual), description, cutoff?.Through));
         }
 
         // One save for the whole payment. Two groups disagreeing about whether a single

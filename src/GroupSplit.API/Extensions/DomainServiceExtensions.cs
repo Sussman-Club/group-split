@@ -70,6 +70,12 @@ public static class DomainServiceExtensions
             services.AddScoped<IJoinLinkService, JoinLinkService>();
             services.AddScoped<ITransactionService, TransactionService>();
             services.AddScoped<IExpenseProvenance, ExpenseProvenance>();
+            // Configuration and the HTTP context are the host's; a test host may have neither,
+            // and then nothing it writes reads as MCP.
+            services.AddHttpContextAccessor();
+            services.AddScoped<IEntryChannel>(provider => new EntryChannel(
+                provider.GetRequiredService<IHttpContextAccessor>(),
+                provider.GetService<IConfiguration>()?["Mcp:ExchangeClientId"]));
             services.AddSplitRuleServices();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IMerchantService, MerchantService>();

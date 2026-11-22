@@ -210,7 +210,7 @@
                     <span class="gs-feed-copy">
                         <strong>@(entry.Kind is ActivityKind.Transfer ? $"{entry.PaidByUserName} → {entry.PaidToUserName}" : Headline(entry))</strong>
                         <span class="gs-muted">
-                            @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() : Detail(entry))
+                            @(entry.Kind is ActivityKind.Transfer ? Loc["Settlement"].Value + entry.CoversThrough.ThroughSuffix() + entry.EnteredBySuffix() : Detail(entry))
                         </span>
                         <span class="gs-muted gs-feed-mobile-time">@Clock.Day(entry.DateTime).ToString("d MMM yyyy")@if (Clock.TimeOf(entry.DateTime) is { } time) { <text> · @Clock.FormatTime(time)</text> }</span>
                     </span>
@@ -1121,9 +1121,9 @@
     /// same: "Settling up", with no way to tell one from another.
     /// </summary>
     private string Detail(GroupLedgerEntryResponse entry) =>
-        entry.Kind is ActivityKind.Transfer
+        (entry.Kind is ActivityKind.Transfer
             ? (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix()
-            : Loc["{0} paid", entry.PaidByUserName].Value;
+            : Loc["{0} paid", entry.PaidByUserName].Value) + entry.EnteredBySuffix();
 
     private async Task OnDataChangedAsync()
     {

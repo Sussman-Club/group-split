@@ -63,6 +63,12 @@ public static class ActivityProjectionExtensions
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
                            : null,
+                       EnteredByUserId = transaction.EnteredById,
+                       EnteredByUserName = transaction.EnteredBy.FirstName == null && transaction.EnteredBy.LastName == null
+                           ? transaction.EnteredBy.Email ?? ""
+                           : transaction.EnteredBy.FirstName +
+                             (transaction.EnteredBy.LastName != null ? " " + transaction.EnteredBy.LastName : ""),
+                       Source = transaction.Source,
                        CategoryId = transaction is Expense
                            ? ((Expense)transaction).CategoryId
                            : null,
@@ -120,6 +126,8 @@ public static class ActivityProjectionExtensions
                    where (after == null || transaction.DateTime >= after) &&
                          (before == null || transaction.DateTime <= before) &&
                          (filter.PaidBy == null || transaction.UserId == filter.PaidBy) &&
+                         (filter.EnteredBy == null || transaction.EnteredById == filter.EnteredBy) &&
+                         (filter.Source == null || transaction.Source == filter.Source) &&
                          (filter.CategoryId == null ||
                           (transaction is Expense && ((Expense)transaction).CategoryId == filter.CategoryId)) &&
                          (filter.Uncategorized != true ||
@@ -183,6 +191,12 @@ public static class ActivityProjectionExtensions
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
                            : null,
+                       EnteredByUserId = transaction.EnteredById,
+                       EnteredByUserName = transaction.EnteredBy.FirstName == null && transaction.EnteredBy.LastName == null
+                           ? transaction.EnteredBy.Email ?? ""
+                           : transaction.EnteredBy.FirstName +
+                             (transaction.EnteredBy.LastName != null ? " " + transaction.EnteredBy.LastName : ""),
+                       Source = transaction.Source,
                        CategoryId = transaction is Expense
                            ? ((Expense)transaction).CategoryId
                            : null,
@@ -296,6 +310,12 @@ public static class ActivityProjectionExtensions
                                split.User.FirstName +
                                (split.User.LastName != null ? " " + split.User.LastName : "")).FirstOrDefault()
                            : null,
+                       EnteredByUserId = transaction.EnteredById,
+                       EnteredByUserName = transaction.EnteredBy.FirstName == null && transaction.EnteredBy.LastName == null
+                           ? transaction.EnteredBy.Email ?? ""
+                           : transaction.EnteredBy.FirstName +
+                             (transaction.EnteredBy.LastName != null ? " " + transaction.EnteredBy.LastName : ""),
+                       Source = transaction.Source,
                        CategoryId = transaction is Expense
                            ? ((Expense)transaction).CategoryId
                            : null,

@@ -56,6 +56,13 @@ public interface ITransactionService
     ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// <see cref="Create(CreateTransactionRequest, CancellationToken)"/>, for a path that files
+    /// something into an expense and says so: a bank row, a receipt.
+    /// </summary>
+    ValueTask<Expense> Create(CreateTransactionRequest request, TransactionSource source,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// What <paramref name="request"/> would be divided into if it were saved, without
     /// saving it.
     /// </summary>
@@ -137,7 +144,8 @@ public class TransactionService(
     IReceiptService receipts,
     GroupSplit.API.Services.BackgroundJobs.IBackgroundJobQueue backgroundJobs,
     TimeProvider clock,
-    PushNotificationQueue notifications) : ITransactionService
+    PushNotificationQueue notifications,
+    IEntryChannel entryChannel) : ITransactionService
 {
     /// <summary>
     /// The caller's expenses, and only their expenses.
@@ -302,7 +310,10 @@ public class TransactionService(
     /// by it, and otherwise evenly. There is no longer such a thing as a group you cannot
     /// record against, which is what four of the error codes this replaces were for.
     /// </remarks>
-    public async ValueTask<Expense> Create(CreateTransactionRequest request,
+    public ValueTask<Expense> Create(CreateTransactionRequest request, CancellationToken ct = default) =>
+        Create(request, TransactionSource.Manual, ct);
+
+    public async ValueTask<Expense> Create(CreateTransactionRequest request, TransactionSource source,
         CancellationToken ct = default)
     {
         var currentUser = userContext.User;
@@ -338,7 +349,11 @@ public class TransactionService(
             // reaching for the category's. Null is the ordinary expense.
             SplitRuleVersionId = selectedRuleVersionId,
             User = payer,
-            UserId = payer.Id
+            UserId = payer.Id,
+            // The caller, who need not be the payer: PaidByUserId above can name anybody in
+            // the group.
+            EnteredById = currentUser.Id,
+            Source = entryChannel.SourceFor(source)
         };
 
         if (request.Receipt is { } receipt)
@@ -392,7 +407,9 @@ public class TransactionService(
             GroupId = group.Id,
             CategoryId = category?.Id,
             SplitRuleVersionId = selectedRuleVersionId,
-            UserId = payer.Id
+            UserId = payer.Id,
+            EnteredById = currentUser.Id,
+            Source = TransactionSource.Manual
         };
 
         if (request.Receipt is { } receipt)
@@ -542,6 +559,8 @@ public class TransactionService(
             GroupId = group.Id,
             CategoryId = category?.Id,
             UserId = payerId,
+            EnteredById = existing.EnteredById,
+            Source = existing.Source,
 
             SplitRuleVersionId = version,
 
@@ -648,6 +667,7 @@ public class TransactionService(
         // per-member split — while every other read here is scoped and List never shows it.
         var transaction = await ScopedTransaction(id)
             .Include(t => t.User)
+            .Include(t => t.EnteredBy)
             .Include(t => t.Group)
             .Include(t => (t as Expense)!.Category)
             .Include(t => t.Merchant)
@@ -695,6 +715,9 @@ public class TransactionService(
             PaidByIsGuest = guests.Contains(transaction.User.Id),
             PaidToUserId = recipientSplit?.UserId,
             PaidToUserName = recipientSplit?.UserName,
+            EnteredByUserId = transaction.EnteredById,
+            EnteredByUserName = People.Display(transaction.EnteredBy),
+            Source = transaction.Source,
             CategoryId = expense?.CategoryId,
             Category = expense?.Category?.Name,
             MerchantId = transaction.MerchantId,

@@ -4,6 +4,7 @@ using GroupSplit.Data.Extensions;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Seeders;
@@ -49,7 +50,8 @@ public class SettlementSeeder(
             return null;
         }
 
-        return group.SettlementBetween(from, to, dto.Amount, dto.DateTime, dto.Description);
+        return group.SettlementBetween(from, to, dto.Amount, dto.DateTime, from, TransactionSource.Manual,
+            dto.Description);
     }
 
     /// <summary>

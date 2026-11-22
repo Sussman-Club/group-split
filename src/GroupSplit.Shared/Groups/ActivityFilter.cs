@@ -23,6 +23,8 @@ namespace GroupSplit.Shared;
 /// Free text, matched anywhere in the name, the note, the category, or either party's
 /// name. Server-side, because what is on screen is one page.
 /// </param>
+/// <param name="EnteredBy">Only what this person recorded, whoever paid it.</param>
+/// <param name="Source">Only what came in this way: typed in, filed from a bank row or a receipt, or through MCP.</param>
 public record ActivityFilter(
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
@@ -30,4 +32,6 @@ public record ActivityFilter(
     string? Search = null,
     Guid? CategoryId = null,
     bool? Uncategorized = null,
-    Guid? PaidBy = null);
+    Guid? PaidBy = null,
+    Guid? EnteredBy = null,
+    TransactionSource? Source = null);

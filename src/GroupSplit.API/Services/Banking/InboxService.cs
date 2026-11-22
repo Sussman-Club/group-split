@@ -195,7 +195,7 @@ public sealed class InboxService(
             // A statement has a date and not an instant. Midnight UTC keeps it the day the
             // bank said, whichever zone it is later read in.
             DateTime = row.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
-        }, ct);
+        }, TransactionSource.Bank, ct);
 
         expense.BankTransaction = row;
         expense.BankTransactionId = row.Id;

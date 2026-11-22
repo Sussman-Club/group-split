@@ -1,4 +1,5 @@
 using GroupSplit.Data.Entities;
+using GroupSplit.Shared;
 
 namespace GroupSplit.Data.Extensions;
 
@@ -39,16 +40,22 @@ public static class TransferExtensions
         /// The last day of activity it settles, when it was worked out through one. See
         /// <see cref="Transfer.CoversThrough"/>.
         /// </param>
+        /// <param name="enteredBy">
+        /// Who is recording it, who need not be either of the two: a member can record a
+        /// repayment between two others. See <see cref="Transaction.EnteredBy"/>.
+        /// </param>
+        /// <param name="source">How it is being recorded. See <see cref="Transaction.Source"/>.</param>
         /// <exception cref="ArgumentException">
         /// <paramref name="from"/> and <paramref name="to"/> are the same person, which is
         /// not a payment.
         /// </exception>
         public Transfer SettlementBetween(User from, User to, decimal amount, DateTimeOffset date,
-            string? description = null, DateOnly? coversThrough = null)
+            User enteredBy, TransactionSource source, string? description = null, DateOnly? coversThrough = null)
         {
             ArgumentNullException.ThrowIfNull(group);
             ArgumentNullException.ThrowIfNull(from);
             ArgumentNullException.ThrowIfNull(to);
+            ArgumentNullException.ThrowIfNull(enteredBy);
 
             if (from == to)
             {
@@ -64,6 +71,8 @@ public static class TransferExtensions
                 Name = "Settlement",
                 Description = description,
                 User = from,
+                EnteredById = enteredBy.Id,
+                Source = source,
                 CoversThrough = coversThrough
             };
 

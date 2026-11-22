@@ -63,10 +63,10 @@ public sealed class GroupTools
         return client.UpdateGroupAsync(groupId, patch, ct);
     }
 
-    [McpServerTool(Name = "group_activity", ReadOnly = true, Destructive = false, Idempotent = true), Description("List expenses and repayments in a group you belong to, newest first.")]
+    [McpServerTool(Name = "group_activity", ReadOnly = true, Destructive = false, Idempotent = true), Description("List expenses and repayments in a group you belong to, newest first. Each row says who entered it and how (Manual, Bank, Receipt or Mcp); enteredBy and source narrow to those.")]
     public static Task<PagedResponseOfGroupLedgerEntryResponse> GroupActivity(GroupsClient client, Guid groupId,
-        DateTimeOffset? from = null, DateTimeOffset? to = null, string? search = null, int page = 1, int? kind = null, Guid? categoryId = null, bool? uncategorized = null, Guid? paidBy = null, string? sortBy = null, bool? sortDescending = null, CancellationToken ct = default) =>
-        client.GetGroupActivityAsync(groupId, from: from, to: to, kind: kind, search: search!, categoryId: categoryId, uncategorized: uncategorized, paidBy: paidBy, sortBy: sortBy!, sortDescending: sortDescending, page: Math.Max(1, page), pageSize: 100, cancellationToken: ct);
+        DateTimeOffset? from = null, DateTimeOffset? to = null, string? search = null, int page = 1, int? kind = null, Guid? categoryId = null, bool? uncategorized = null, Guid? paidBy = null, Guid? enteredBy = null, TransactionSource? source = null, string? sortBy = null, bool? sortDescending = null, CancellationToken ct = default) =>
+        client.GetGroupActivityAsync(groupId, from: from, to: to, kind: kind, search: search!, categoryId: categoryId, uncategorized: uncategorized, paidBy: paidBy, enteredBy: enteredBy, source: source, sortBy: sortBy!, sortDescending: sortDescending, page: Math.Max(1, page), pageSize: 100, cancellationToken: ct);
 
     [McpServerTool(Name = "group_spending", ReadOnly = true, Destructive = false, Idempotent = true), Description("Summarize a group's spending by category.")]
     public static Task<CategorySpendingSummaryResponse> GroupSpending(GroupsClient client, Guid groupId,

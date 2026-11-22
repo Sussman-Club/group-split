@@ -854,6 +854,8 @@ public class BankSyncServiceTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var expense = new Expense
         {
             User = user,
+            EnteredById = user.Id,
+            Source = TransactionSource.Bank,
             Amount = tracked.Amount,
             Currency = tracked.Currency,
             DateTime = tracked.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),

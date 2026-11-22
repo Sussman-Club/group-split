@@ -588,6 +588,20 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Restrict, like the payer. Deleting an account anonymises the row rather than
+            // removing it, so this never fires in practice; if something starts deleting
+            // users, failing loudly beats losing who recorded the group's history.
+            entity.HasOne(transaction => transaction.EnteredBy)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.EnteredById)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(transaction => transaction.Source)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
+
             // Restrict, like the payer: a group's expenses are its history, and nothing
             // deletes a group -- a personal one least of all.
             entity.HasOne(transaction => transaction.Group)

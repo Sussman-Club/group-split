@@ -5,6 +5,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Abstractions;
 using GroupSplit.Seeder.Seeders.Base;
 using GroupSplit.Seeder.Seeders.DTOs;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Seeders;
@@ -72,6 +73,9 @@ public class TransactionSeeder(
             Description = dto.Description,
             DateTime = When(dto),
             User = payer,
+            // Seeded history reads as its payer typed it in, as migrated rows do.
+            EnteredById = payer.Id,
+            Source = TransactionSource.Manual,
             Group = category?.Group
                     ?? await DbContext.Set<Group>().FindAsync([payer.Id], ct)
                     ?? throw new InvalidOperationException(
