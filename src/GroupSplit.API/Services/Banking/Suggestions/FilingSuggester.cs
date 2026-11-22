@@ -17,6 +17,13 @@ namespace GroupSplit.API.Services.Banking.Suggestions;
 public interface IFilingSuggester
 {
     Task<FilingDestinationSuggestion?> SuggestReceipt(SuggestReceiptFilingRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// A guess from a merchant's name alone, for an expense typed in at a place the caller
+    /// has never filed anything at.
+    /// </summary>
+    Task<FilingDestinationSuggestion?> SuggestMerchant(string merchantName, decimal amount, string currency,
+        CancellationToken ct = default);
     /// <summary>
     /// A suggestion for each row that gets one. Rows the model abstains on, or is not
     /// confident enough about, are simply not in the answer.
@@ -153,6 +160,25 @@ public sealed class FilingSuggester(
             Items = request.Receipt.Items.Select(item => item.Name).Take(FilingReceipt.MaxItems).ToArray()
         };
         return await SuggestOne(row, receipt, destinations, [], settings, ct);
+    }
+
+    public async Task<FilingDestinationSuggestion?> SuggestMerchant(string merchantName, decimal amount,
+        string currency, CancellationToken ct = default)
+    {
+        var settings = options.Value;
+        if (!settings.IsConfigured)
+        {
+            return null;
+        }
+
+        var destinations = await DestinationsAsync(ct);
+        if (destinations.Count == 0)
+        {
+            return null;
+        }
+
+        var row = new FilingInput(Guid.Empty, null, amount, currency, merchantName, merchantName);
+        return await SuggestOne(row, null, destinations, [], settings, ct);
     }
 
     private async Task<FilingDestinationSuggestion?> SuggestOne(

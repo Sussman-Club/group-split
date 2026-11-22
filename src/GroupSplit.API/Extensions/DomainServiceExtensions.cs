@@ -73,6 +73,7 @@ public static class DomainServiceExtensions
             services.AddSplitRuleServices();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IMerchantService, MerchantService>();
+            services.AddScoped<IMerchantDefaults, MerchantDefaults>();
             services.AddScoped<MerchantImageService>();
             services.AddScoped<ISplitRuleService, SplitRuleService>();
             services.AddScoped<ISplitRuleRevisions, SplitRuleRevisions>();

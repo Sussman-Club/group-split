@@ -1140,6 +1140,109 @@ public class CreateTransactionDialogTest : ComponentTest
         return provider;
     }
 
+    // ---- Where a merchant's expenses usually go (#548) ----------------------------------
+
+    private static readonly Guid Lidl = Guid.NewGuid();
+    private static readonly Guid Food = Guid.NewGuid();
+
+    /// <summary>Lidl, whose last expense was in Trip under Food -- or a guess, when it is not history.</summary>
+    private void LidlUsually(Guid groupId, bool history = true)
+    {
+        _merchants
+            .Setup(m => m.GetMerchantAsync(Lidl, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MerchantResponse(Lidl, "Lidl", null, DateTimeOffset.UtcNow, 0));
+        _merchants
+            .Setup(m => m.GetMerchantDefaultsAsync(Lidl, It.IsAny<string>(), It.IsAny<double?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MerchantDefaultsResponse(
+                new FilingDestinationSuggestion(groupId, "Trip", false, Food, "Food", history ? 1 : 0.9),
+                history ? Guid.NewGuid() : null,
+                history ? new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero) : null));
+    }
+
+    private async Task<IRenderedComponent<MudDialogProvider>> OpenWithFoodAsync(Guid? groupId)
+    {
+        CategoryResponse[] categories = [new(Food, GroupId, "Food", null, null)];
+        var provider = await OpenAsync(groupId);
+        _categories
+            .Setup(c => c.GetCategoriesAsync(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(categories);
+        _categories
+            .Setup(c => c.GetCategoriesAsAsyncEnumerable(GroupId, It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .Returns(() => categories.ToAsyncEnumerable());
+        return provider;
+    }
+
+    private static Task PickLidl(IRenderedComponent<MudDialogProvider> provider) =>
+        provider.InvokeAsync(() => provider.FindComponent<ExpenseDecisions>().Instance.MerchantIdChanged.InvokeAsync(Lidl));
+
+    [Fact]
+    public async Task A_merchant_with_history_fills_in_its_usual_group_and_category_and_says_so()
+    {
+        LidlUsually(GroupId);
+        var provider = await OpenWithFoodAsync(groupId: null);
+
+        await PickLidl(provider);
+
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        provider.WaitForAssertion(() =>
+        {
+            Assert.Equal(GroupId, decisions.Instance.GroupId);
+            Assert.Equal(Food, decisions.Instance.CategoryId);
+        });
+        Assert.Contains("Filled in from your last expense at Lidl, on 3 Sep 2026",
+            provider.Find("[data-testid=merchant-defaults]").TextContent, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Opened from a group's page, the group is already the person's answer, and a category
+    /// from another group means nothing in it.
+    /// </summary>
+    [Fact]
+    public async Task A_group_already_chosen_is_kept_and_another_groups_history_fills_nothing()
+    {
+        LidlUsually(Guid.NewGuid());
+        var provider = await OpenWithFoodAsync(GroupId);
+
+        await PickLidl(provider);
+
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        provider.WaitForAssertion(() => Assert.Contains("Lidl", provider.Markup, StringComparison.Ordinal));
+        Assert.Equal(GroupId, decisions.Instance.GroupId);
+        Assert.Null(decisions.Instance.CategoryId);
+        Assert.Empty(provider.FindAll("[data-testid=merchant-defaults]"));
+    }
+
+    [Fact]
+    public async Task A_category_already_chosen_is_never_overwritten()
+    {
+        LidlUsually(GroupId);
+        var provider = await OpenWithFoodAsync(GroupId);
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        var mine = Guid.NewGuid();
+        await provider.InvokeAsync(() => decisions.Instance.CategoryIdChanged.InvokeAsync(mine));
+
+        await PickLidl(provider);
+
+        provider.WaitForAssertion(() => Assert.Contains("Lidl", provider.Markup, StringComparison.Ordinal));
+        Assert.Equal(mine, decisions.Instance.CategoryId);
+    }
+
+    /// <summary>The classifier's guess is offered on the button receipts use, never filled in.</summary>
+    [Fact]
+    public async Task Without_history_the_guess_is_offered_and_not_filled_in()
+    {
+        LidlUsually(GroupId, history: false);
+        var provider = await OpenWithFoodAsync(groupId: null);
+
+        await PickLidl(provider);
+
+        provider.WaitForAssertion(() =>
+            Assert.Contains("Use suggested Trip · Food", provider.Markup, StringComparison.Ordinal));
+        var decisions = provider.FindComponent<ExpenseDecisions>();
+        Assert.Null(decisions.Instance.GroupId);
+        Assert.Null(decisions.Instance.CategoryId);
+    }
+
     // ---- What it is in (#320) -----------------------------------------------------------
 
     /// <summary>Fills the two fields an expense cannot be saved without, and saves it.</summary>

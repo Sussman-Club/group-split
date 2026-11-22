@@ -33,6 +33,13 @@ public interface IMerchantCommands
     Task<MerchantResponse?> GetAsync(Guid merchantId, CancellationToken ct = default);
 
     /// <summary>
+    /// Where an expense at this place usually goes: the caller's last one there, or the
+    /// classifier's guess. Null when the read failed, which fills nothing in.
+    /// </summary>
+    Task<MerchantDefaultsResponse?> DefaultsAsync(Guid merchantId, string currency, decimal? amount,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Adds a place by hand, for spending no bank imported.
     /// </summary>
     /// <remarks>

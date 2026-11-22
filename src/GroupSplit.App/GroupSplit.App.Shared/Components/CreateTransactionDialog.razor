@@ -172,6 +172,10 @@
                                   MerchantIdChanged="@OnMerchantChangedAsync"
                                   MerchantName="@_merchantName"
                                   MerchantLogoUrl="@_merchantLogo"/>
+                @if (_filledFrom is { } filledFrom)
+                {
+                    <p class="gs-muted" style="margin: 0; font-size: .875rem" data-testid="merchant-defaults">@filledFrom</p>
+                }
                 @if (ShowGuide && _guideStep == 1) { @GuideTip }
                 <details class="gs-expense-disclosure" open="@_showDetailErrors">
                     <summary>@Loc["Note"]<span>@Loc["Optional"]</span></summary>
@@ -452,6 +456,8 @@
     private async Task OnGroupPickedAsync(Guid? id)
     {
         _filingSuggestion = null;
+        _filledFrom = null;
+        _groupChosen = true;
         _groupId = id;
 
         await OnGroupChangedAsync();
@@ -566,6 +572,7 @@
     private async Task OnCategoryPickedAsync(Guid? id)
     {
         _filingSuggestion = null;
+        _filledFrom = null;
         _model.CategoryId = id;
 
         await OnMoneyChangedAsync();
@@ -722,6 +729,8 @@
         // Opened from the personal group's own page, which names it by its id: inside this
         // dialog personal is the absent group, so it is told apart by that alone.
         _groupId = SelectedGroupId == Login.User?.Id ? null : SelectedGroupId;
+        // Opened from a group's page, the group is the person's answer already.
+        _groupChosen = SelectedGroupId is not null;
 
         var now = Clock.Now;
         _selectedDate = now.Date;
@@ -970,6 +979,7 @@
     private async Task OnMerchantChangedAsync(Guid? merchantId)
     {
         _pendingMerchantName = null;
+        _filledFrom = null;
         _model.MerchantId = merchantId;
 
         if (merchantId is null)
@@ -984,7 +994,64 @@
         _merchantName = merchant?.Name;
         _merchantLogo = merchant?.LogoUrl;
 
+        // A receipt or a bank row brings its own suggestion; this is for an expense typed in.
+        if (InboxReceipt is null && InboxSuggestion is null)
+            await FillFromMerchantAsync(merchantId.Value);
+
         StateHasChanged();
+    }
+
+    /// <summary>True once the group is the person's own answer: picked, or the page it was opened from.</summary>
+    private bool _groupChosen;
+
+    /// <summary>Where the group and category came from, when a merchant's history filled them in.</summary>
+    private string? _filledFrom;
+
+    /// <summary>
+    /// Fills in the group, category and split the person gave this merchant last time, where
+    /// they have not given an answer of their own yet (#548).
+    /// </summary>
+    /// <remarks>
+    /// Only what is still empty: a group picked or opened from stays, and a category or a split
+    /// already chosen stays. A suggestion for another group than the one chosen fills nothing,
+    /// since its category means nothing there. With no history the classifier's guess is
+    /// offered on the button receipts use, never filled in by itself.
+    /// </remarks>
+    private async Task FillFromMerchantAsync(Guid merchantId)
+    {
+        var usual = await Merchants.DefaultsAsync(merchantId, Currency, _model.Amount > 0 ? _model.Amount : null);
+        if (usual?.Destination is not { } destination)
+            return;
+
+        var groupId = destination.IsPersonal ? (Guid?)null : destination.GroupId;
+
+        if (usual.FromExpenseId is null)
+        {
+            if (!_groupChosen && _model.CategoryId is null && _model.SplitRuleId is null && _model.Splits is null)
+                _filingSuggestion = destination;
+            return;
+        }
+
+        if (groupId != _groupId)
+        {
+            if (_groupChosen)
+                return;
+
+            _groupId = groupId;
+            await OnGroupChangedAsync();
+        }
+
+        if (_model.CategoryId is null && destination.CategoryId is { } categoryId &&
+            _categories.Any(category => category.Id == categoryId))
+            _model.CategoryId = categoryId;
+        else if (_model.CategoryId is null && _model.SplitRuleId is null && _model.Splits is null &&
+                 destination.SplitRuleId is { } ruleId && _lineRules.Any(rule => rule.Id == ruleId))
+            _model.SplitRuleId = ruleId;
+
+        _filledFrom = Loc["Filled in from your last expense at {0}, on {1}", _merchantName ?? "",
+            Clock.Day(usual.FromExpenseDate ?? DateTimeOffset.UtcNow).ToString("d MMM yyyy")].Value;
+
+        await OnMoneyChangedAsync();
     }
 
     private async Task OnSplitsChangedAsync(IReadOnlyList<SplitInput>? splits)

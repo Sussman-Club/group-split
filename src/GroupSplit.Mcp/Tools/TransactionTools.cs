@@ -21,9 +21,24 @@ public sealed class TransactionTools
         client.PreviewTransactionSplitsAsync(expense, ct);
 
     [Authorize(Policy = "mcp:write")]
-    [McpServerTool(Name = "create_expense", ReadOnly = false, Destructive = false, Idempotent = false), Description("Record an expense. Supply its name, amount, dateTime, and any group or split details in expense; preview first when the split needs review.")]
-    public static Task<TransactionResponse> CreateExpense(TransactionsClient client, CreateTransactionRequest expense, CancellationToken ct = default) =>
-        client.CreateTransactionAsync(expense, ct);
+    [McpServerTool(Name = "create_expense", ReadOnly = false, Destructive = false, Idempotent = false), Description("Record an expense. Supply its name, amount, dateTime, and any group or split details in expense; preview first when the split needs review. When merchantId is given with no categoryId, splitRuleId or splits, the group, category and split of your last expense at that merchant fill whatever was left out, the group only when groupId is omitted. To keep it personal, pass your own user id as groupId.")]
+    public static async Task<TransactionResponse> CreateExpense(TransactionsClient client, MerchantsClient merchants, CreateTransactionRequest expense, CancellationToken ct = default)
+    {
+        if (expense.MerchantId is { } merchantId && expense.CategoryId is null && expense.SplitRuleId is null && expense.Splits is null)
+        {
+            // History only: the classifier's guess is offered in the app, never filled in.
+            var usual = await merchants.GetMerchantDefaultsAsync(merchantId, cancellationToken: ct);
+            if (usual is { FromExpenseId: not null, Destination: { } destination } &&
+                (expense.GroupId is null || expense.GroupId == destination.GroupId))
+            {
+                expense.GroupId = destination.GroupId;
+                expense.CategoryId = destination.CategoryId;
+                expense.SplitRuleId = destination.SplitRuleId;
+            }
+        }
+
+        return await client.CreateTransactionAsync(expense, ct);
+    }
 
     [Authorize(Policy = "mcp:write")]
     [McpServerTool(Name = "delete_transaction", ReadOnly = false, Destructive = true, Idempotent = false), Description("Permanently delete an expense or settlement after the user confirms. Deleting a settlement changes balances.")]

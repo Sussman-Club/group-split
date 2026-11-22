@@ -28,6 +28,7 @@ public static class MerchantsApi
 
             group.MapListMerchants();
             group.MapGetMerchant();
+            group.MapGetMerchantDefaults();
             group.MapCreateMerchant();
             group.MapUpdateMerchant();
             group.MapDeleteMerchant();
@@ -62,6 +63,27 @@ public static class MerchantsApi
                 .WithName("GetMerchant")
                 .Produces<MerchantResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound);
+        }
+
+        /// <summary>
+        /// Where an expense at this place usually goes, for the expense dialog and the MCP
+        /// tool to fill in when somebody names the place and nothing else.
+        /// </summary>
+        /// <remarks>
+        /// Rate-limited like the other suggestions: with no history it asks the classifier.
+        /// </remarks>
+        private RouteHandlerBuilder MapGetMerchantDefaults()
+        {
+            return group.MapGet("/{id:guid}/defaults", async (
+                    Guid id,
+                    string? currency,
+                    decimal? amount,
+                    IMerchantDefaults defaults,
+                    CancellationToken ct) => Results.Ok(await defaults.For(id, currency, amount, ct)))
+                .WithName("GetMerchantDefaults")
+                .Produces<MerchantDefaultsResponse>()
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .RateLimitedAs(ApiRateLimitPolicies.Suggestions);
         }
 
         private RouteHandlerBuilder MapCreateMerchant()

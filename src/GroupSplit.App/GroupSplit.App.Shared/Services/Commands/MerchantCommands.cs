@@ -64,6 +64,24 @@ public sealed class MerchantCommands(
         }
     }
 
+    public async Task<MerchantDefaultsResponse?> DefaultsAsync(Guid merchantId, string currency, decimal? amount,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return await merchants.GetMerchantDefaultsAsync(merchantId, currency, (double?)amount, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // A suggestion that could not be read is one not made: the fields stay as they are.
+            return null;
+        }
+    }
+
     public async Task<MerchantResponse?> CreateAsync(string name, CancellationToken ct = default)
     {
         MerchantResponse? created = null;
