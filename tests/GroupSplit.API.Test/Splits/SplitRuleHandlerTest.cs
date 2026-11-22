@@ -33,6 +33,8 @@ public class SplitRuleHandlerTest
     private static Expense Spending(decimal amount, Guid payerId) => new()
     {
         UserId = payerId,
+        EnteredById = payerId,
+        Source = TransactionSource.Manual,
         Amount = amount,
         Name = "Dinner",
         DateTime = DateTimeOffset.UnixEpoch

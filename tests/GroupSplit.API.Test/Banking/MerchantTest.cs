@@ -363,6 +363,8 @@ public class MerchantTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
         var expense = new Expense
         {
             User = user,
+            EnteredById = user.Id,
+            Source = TransactionSource.Manual,
             GroupId = user.Id,
             Amount = amount,
             Currency = "USD",

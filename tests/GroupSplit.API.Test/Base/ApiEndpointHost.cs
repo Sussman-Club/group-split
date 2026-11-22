@@ -97,6 +97,18 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         return client;
     }
 
+    /// <summary>
+    /// <see cref="Client"/>'s user, with a token issued to <paramref name="authorizedParty"/>:
+    /// what a request through the MCP server looks like once its token has been exchanged.
+    /// </summary>
+    public HttpClient ClientIssuedTo(string authorizedParty)
+    {
+        var client = _app.GetTestServer().CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.SubjectHeader, Subject);
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.AuthorizedPartyHeader, authorizedParty);
+        return client;
+    }
+
     /// <summary>A client with no credentials at all.</summary>
     public HttpClient AnonymousClient() => _app.GetTestServer().CreateClient();
 
@@ -212,6 +224,12 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
         /// <summary>The email claim, when a test needs one other than the subject's own.</summary>
         public const string EmailHeader = "X-Test-Email";
 
+        /// <summary>
+        /// The <c>azp</c> claim: the client a token was issued to, which is how the API tells a
+        /// token the MCP server exchanged.
+        /// </summary>
+        public const string AuthorizedPartyHeader = "X-Test-Azp";
+
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue(SubjectHeader, out var subject)
@@ -231,6 +249,11 @@ internal sealed class ApiEndpointHost : IAsyncDisposable
                     new Claim(ClaimTypes.Email, email)
                 ],
                 SchemeName);
+
+            if (Request.Headers.TryGetValue(AuthorizedPartyHeader, out var authorizedParty))
+            {
+                identity.AddClaim(new Claim("azp", authorizedParty.ToString()));
+            }
 
             if (Request.Headers.TryGetValue("X-Test-Realm-Access", out var realmAccess))
             {

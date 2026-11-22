@@ -488,6 +488,10 @@ public static class TransactionApi
                        PaidByUserId = transaction.User.Id,
                        PaidByUserName = transaction.User.FirstName +
                                         (transaction.User.LastName != null ? " " + transaction.User.LastName : ""),
+                       EnteredByUserId = transaction.EnteredById,
+                       EnteredByUserName = transaction.EnteredBy.FirstName +
+                                           (transaction.EnteredBy.LastName != null ? " " + transaction.EnteredBy.LastName : ""),
+                       Source = transaction.Source,
                        CategoryId = transaction.CategoryId,
                        Category = transaction.Category != null ? transaction.Category.Name : null,
                        MerchantId = transaction.MerchantId,

@@ -1,6 +1,7 @@
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Seeder.Seeders;
+using GroupSplit.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.Seeder.Test.Seeding;
@@ -16,6 +17,8 @@ public class ReceiptInboxSeederTest
         {
             Id = Guid.Parse("d0000005-0000-4000-8000-000000000005"),
             UserId = Guid.NewGuid(),
+            EnteredById = Guid.NewGuid(),
+            Source = TransactionSource.Manual,
             GroupId = Guid.NewGuid(),
             Name = "Painkillers",
             Amount = 9.35m,

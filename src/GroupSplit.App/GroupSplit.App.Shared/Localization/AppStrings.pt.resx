@@ -5982,4 +5982,16 @@
   <data name="Selected receipt actions" xml:space="preserve"><value>Ações para os recibos selecionados</value></data>
   <data name="Selected transaction actions" xml:space="preserve"><value>Ações para as transações selecionadas</value></data>
   <data name="See original" xml:space="preserve"><value>Ver original</value></data>
+  <data name=" · entered by {0}" xml:space="preserve">
+    <value> · registrado por {0}</value>
+  </data>
+  <data name="Entered by" xml:space="preserve">
+    <value>Registrado por</value>
+  </data>
+  <data name="Entered by {0}" xml:space="preserve">
+    <value>Registrado por {0}</value>
+  </data>
+  <data name="Entered by you" xml:space="preserve">
+    <value>Registrado por você</value>
+  </data>
 </root>

@@ -52,7 +52,7 @@ public class StaffOperationsSchemaTest(AppHostFixture appHost)
             var group = new Group { Name = "Verification" };
             db.Add(group);
             db.Add(account);
-            var expense = new Expense { UserId = user.Id, Group = group, Amount = 12.34m, Currency = "USD", Name = "Purchase", DateTime = DateTimeOffset.UtcNow, MerchantId = source.Id };
+            var expense = new Expense { UserId = user.Id, EnteredById = user.Id, Source = TransactionSource.Manual, Group = group, Amount = 12.34m, Currency = "USD", Name = "Purchase", DateTime = DateTimeOffset.UtcNow, MerchantId = source.Id };
             var row = new BankTransaction { Account = account, ProviderTransactionId = "verify-row", Date = DateOnly.FromDateTime(DateTime.UtcNow), Amount = 12.34m, Description = "Purchase", RawJson = "{}", ImportedAt = DateTimeOffset.UtcNow, MerchantId = source.Id };
             db.Add(expense);
             db.Add(row);

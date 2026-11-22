@@ -26,7 +26,8 @@ public class SettlementRequestService(
     ISettlementService settlements,
     AppDbContext context,
     TimeProvider clock,
-    PushNotificationQueue notifications) : ISettlementRequestService
+    PushNotificationQueue notifications,
+    IEntryChannel entryChannel) : ISettlementRequestService
 {
     private const int TokenBytes = 32;
 
@@ -105,7 +106,8 @@ public class SettlementRequestService(
             }
 
             context.Add(group.SettlementBetween(recipient, requester, part.RequestedAmount, now,
-                "Settlement request", settlementRequest.Through));
+                recipient, entryChannel.SourceFor(TransactionSource.Manual), "Settlement request",
+                settlementRequest.Through));
         }
 
         settlementRequest.ResolvedAt = now;

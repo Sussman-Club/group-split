@@ -17,7 +17,7 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1533,6 +1533,9 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasMaxLength(13)
                         .HasColumnType("character varying(13)");
 
+                    b.Property<Guid>("EnteredById")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -1543,6 +1546,11 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.Property<Guid?>("SplitRuleVersionId")
                         .HasColumnType("uuid");
@@ -1558,6 +1566,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.HasIndex("DateTime");
 
                     b.HasIndex("Discriminator");
+
+                    b.HasIndex("EnteredById");
 
                     b.HasIndex("MerchantId");
 
@@ -2250,6 +2260,12 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .HasForeignKey("GroupSplit.Data.Entities.Transaction", "BankTransactionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("GroupSplit.Data.Entities.User", "EnteredBy")
+                        .WithMany()
+                        .HasForeignKey("EnteredById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("GroupSplit.Data.Entities.Group", "Group")
                         .WithMany()
                         .HasForeignKey("GroupId")
@@ -2273,6 +2289,8 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                         .IsRequired();
 
                     b.Navigation("BankTransaction");
+
+                    b.Navigation("EnteredBy");
 
                     b.Navigation("Group");
 

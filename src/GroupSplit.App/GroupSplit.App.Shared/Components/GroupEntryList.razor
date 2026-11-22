@@ -83,11 +83,13 @@
     private string Detail(GroupLedgerEntryResponse entry)
     {
         if (entry.Kind is ActivityKind.Transfer)
-            return (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix();
+            return (entry.Description is { Length: > 0 } note ? note : Loc["Settling up"].Value) + entry.CoversThrough.ThroughSuffix()
+                + entry.EnteredBySuffix();
 
         var said = Loc["{0} paid", entry.PaidByUserName].Value;
 
-        return entry.Share is { } share ? Loc["{0} · your share {1}", said, share.ToMoney()].Value : said;
+        return (entry.Share is { } share ? Loc["{0} · your share {1}", said, share.ToMoney()].Value : said)
+            + entry.EnteredBySuffix();
     }
 
     /// <summary>

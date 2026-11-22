@@ -36,6 +36,18 @@ Each call exchanges the authenticated user's access token for an API-audience
 token and calls the API using the shared generated client. The API resolves the
 user and enforces its own role and group authorization.
 
+Every expense and repayment records who entered it and how: `Manual`, `Bank`,
+`Receipt` or `Mcp`. The API marks a transaction `Mcp` when the request's token
+has the exchange client as its `azp` claim, which Keycloak sets on every token it
+exchanges for the MCP server. This holds even when the agent filed a bank row or
+a receipt; the link to the row is still kept. The API reads the client ID from
+`Mcp__ExchangeClientId`, which Aspire passes to it from the same parameter. Without
+it, nothing is marked `Mcp`. Transactions recorded before this change have their
+payer as the person who entered them, and a source taken from a linked bank row or
+inbox receipt (otherwise `Manual`). Reads return `enteredByUserId`,
+`enteredByUserName` and `source`, and `group_activity` filters on `enteredBy` and
+`source`.
+
 ## Configuration
 
 Set `Mcp__Issuer` to the exact HTTPS Keycloak realm issuer and `Mcp__Resource`

@@ -1,3 +1,5 @@
+using GroupSplit.Shared;
+
 namespace GroupSplit.Data.Entities;
 
 /// <summary>
@@ -30,6 +32,28 @@ public abstract class Transaction : Entity
     public virtual User User { get; set; } = null!;
 
     public Guid UserId { get; set; }
+
+    /// <summary>
+    /// Who recorded it, which is not always who paid.
+    /// </summary>
+    /// <remarks>
+    /// A member can record an expense somebody else paid, or a repayment between two other
+    /// members, and before this the row said nothing about who had. Whoever was signed in
+    /// when it was written; an edit by somebody else does not change it.
+    /// <para>
+    /// Rows written before it existed say their payer, which is what the old rules
+    /// guaranteed for a repayment and the likeliest answer for an expense.
+    /// </para>
+    /// </remarks>
+    public virtual User EnteredBy { get; set; } = null!;
+
+    public required Guid EnteredById { get; set; }
+
+    /// <summary>
+    /// How it came to be recorded: typed in, filed from a bank row or a receipt, or through
+    /// MCP. See <see cref="TransactionSource"/>.
+    /// </summary>
+    public required TransactionSource Source { get; set; }
 
     /// <summary>
     /// The group this belongs to.

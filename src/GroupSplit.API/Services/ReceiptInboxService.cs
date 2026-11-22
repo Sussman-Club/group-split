@@ -460,7 +460,7 @@ public sealed class ReceiptInboxService(AppDbContext db, ICurrentUser user, IAcc
                 input.Receipt = null;
             }
 
-            expense = await transactions.Create(input, ct);
+            expense = await transactions.Create(input, TransactionSource.Receipt, ct);
             if (expense.Receipt is { } prepared)
             {
                 var sourceItems = r.Items.OrderBy(item => item.Position).ToArray();

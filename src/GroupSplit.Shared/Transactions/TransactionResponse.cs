@@ -41,6 +41,18 @@ public record TransactionResponse
     }
     public Guid? PaidToUserId { get; set; }
     public string? PaidToUserName { get; set; }
+
+    /// <summary>
+    /// Who recorded it, which need not be who paid: a member can record an expense somebody
+    /// else paid, or a repayment between two others. Rows from before this was kept say
+    /// their payer.
+    /// </summary>
+    public Guid EnteredByUserId { get; set; }
+
+    public string EnteredByUserName { get; set; } = "";
+
+    /// <summary>How it came to be recorded. See <see cref="TransactionSource"/>.</summary>
+    public TransactionSource Source { get; set; }
     /// <summary>What it was filed under, or null for an expense filed under nothing.</summary>
     public Guid? CategoryId { get; set; }
 

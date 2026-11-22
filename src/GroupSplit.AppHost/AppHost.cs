@@ -142,6 +142,10 @@ var mcp = builder.AddDotnetProject("mcp", "../GroupSplit.Mcp")
     .WaitFor(keycloak)
     .WithHealthEndpoints();
 
+// The API names the client a token was exchanged by to tell what was recorded through MCP:
+// an exchanged token's azp is this client, and nobody else's is.
+api.WithEnvironment("Mcp__ExchangeClientId", mcpExchangeClientId);
+
 var web = builder.AddDotnetProject("web", "../GroupSplit.App/GroupSplit.App.Web")
     .WithReference(keycloak)
     .WithReference(mcp)

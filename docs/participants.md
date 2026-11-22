@@ -36,6 +36,11 @@ has no power the others lack. Any member may add guests, issue, replace or stop 
 link, make or revoke the join link, record any repayment, and remove any other member or
 guest. The one asymmetry is that you cannot remove yourself: that is leaving.
 
+Because any member can record an expense somebody else paid, or a repayment between two
+others, every transaction keeps who entered it. Details and group activity name them when
+they are neither the payer nor, on a repayment, whoever was paid. Rows from before this was
+kept say their payer.
+
 A personal group, the one whose id is its owner's user id, has its owner as its only member.
 It refuses everything that needs a second person (guests, join links, split rules,
 settlements, leaving and archiving) with 409 `PERSONAL_GROUP_NOT_SHARED`, so the table below

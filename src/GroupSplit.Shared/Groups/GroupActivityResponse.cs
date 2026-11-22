@@ -67,6 +67,17 @@ public record GroupActivityResponse
 
     public string? PaidToUserName { get; init; }
 
+    /// <summary>
+    /// Who recorded it. See <see cref="TransactionResponse.EnteredByUserId"/>. Worth showing
+    /// when it is neither the payer nor, on a transfer, whoever was paid.
+    /// </summary>
+    public Guid EnteredByUserId { get; init; }
+
+    public string EnteredByUserName { get; init; } = "";
+
+    /// <summary>How it came to be recorded. See <see cref="TransactionSource"/>.</summary>
+    public TransactionSource Source { get; init; }
+
     /// <summary>What the expense was filed under, when it was an expense filed under anything.</summary>
     public Guid? CategoryId { get; init; }
 

@@ -96,10 +96,12 @@ public class GroupLedgerTabTest : ComponentTest
         _groups
             .Setup(client => client.GetGroupActivityAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<int?>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<bool?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
+                It.IsAny<TransactionSource?>(), It.IsAny<string>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .Returns(async (Guid _, DateTimeOffset? _, DateTimeOffset? _, int? kind, string search, Guid? _,
-                bool? _, Guid? _, string sortBy, bool? descending, int? page, int? _, CancellationToken _) =>
+                bool? _, Guid? _, Guid? _, TransactionSource? _, string sortBy, bool? descending, int? page, int? _,
+                CancellationToken _) =>
             {
                 _kinds.Add(kind);
                 _orders.Add((sortBy, descending));
@@ -807,6 +809,23 @@ public class GroupLedgerTabTest : ComponentTest
 
         Assert.NotEmpty(_kinds);
         Assert.All(_kinds, Assert.Null);
+    }
+
+    /// <summary>
+    /// A row somebody recorded for others says who; one its own people recorded does not
+    /// repeat a name already on it.
+    /// </summary>
+    [Fact]
+    public void A_row_a_third_member_recorded_names_who_entered_it()
+    {
+        var third = Transfer(Guid.NewGuid()) with { EnteredByUserId = Guid.NewGuid(), EnteredByUserName = "Sofía" };
+        var own = Expense(Guid.NewGuid(), "Lunch");
+        _entries = [third, own with { EnteredByUserId = own.PaidByUserId, EnteredByUserName = "Omar" }];
+
+        var tab = Render();
+
+        tab.WaitForAssertion(() => Assert.Contains("entered by Sofía", tab.Markup, StringComparison.Ordinal));
+        Assert.DoesNotContain("entered by Omar", tab.Markup, StringComparison.Ordinal);
     }
 
     /// <summary>
