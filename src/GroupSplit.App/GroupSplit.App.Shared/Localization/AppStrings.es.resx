@@ -5982,4 +5982,7 @@
   <data name="Selected receipt actions" xml:space="preserve"><value>Acciones para los recibos seleccionados</value></data>
   <data name="Selected transaction actions" xml:space="preserve"><value>Acciones para las transacciones seleccionadas</value></data>
   <data name="See original" xml:space="preserve"><value>Ver original</value></data>
+  <data name="Filled in from your last expense at {0}, on {1}" xml:space="preserve">
+    <value>Rellenado con tu último gasto en {0}, del {1}</value>
+  </data>
 </root>

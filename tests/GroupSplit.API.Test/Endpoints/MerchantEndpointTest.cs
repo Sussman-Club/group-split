@@ -51,6 +51,26 @@ public class MerchantEndpointTest : IAsyncLifetime
     private static async Task<string?> Code(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<JsonElement>(Json, Ct)).GetProperty("code").GetString();
 
+    /// <summary>
+    /// Where an expense at a place usually goes is the caller's own history there, and a place
+    /// another account has been is not found, the same as reading it is (#548).
+    /// </summary>
+    [Fact]
+    public async Task A_places_defaults_are_my_last_expense_there_and_nobody_elses()
+    {
+        var merchant = await SpentAt(_host.Client, "Dr. Ruiz Psychiatry");
+        var stranger = _host.ClientForAnotherUser();
+
+        var mine = await _host.Client.GetFromJsonAsync<MerchantDefaultsResponse>(
+            $"/merchants/{merchant.Id}/defaults?currency=USD&amount=80", Json, Ct);
+        Assert.NotNull(mine!.FromExpenseId);
+        Assert.True(mine.Destination!.IsPersonal);
+
+        var theirs = await stranger.GetAsync($"/merchants/{merchant.Id}/defaults", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, theirs.StatusCode);
+        Assert.Equal(ErrorCodes.MerchantNotFound, await Code(theirs));
+    }
+
     [Fact]
     public async Task A_place_only_another_account_has_been_is_not_in_my_listing()
     {

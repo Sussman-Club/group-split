@@ -36,6 +36,12 @@ Each call exchanges the authenticated user's access token for an API-audience
 token and calls the API using the shared generated client. The API resolves the
 user and enforces its own role and group authorization.
 
+`create_expense` given a `merchantId` and no `categoryId`, `splitRuleId` or
+`splits` fills them from the user's last expense at that merchant (see
+[bank-sync.md](bank-sync.md#suggested-group-and-category)). It fills the group only
+when `groupId` is omitted. To record a personal expense regardless, pass the user's
+own id as `groupId`.
+
 ## Configuration
 
 Set `Mcp__Issuer` to the exact HTTPS Keycloak realm issuer and `Mcp__Resource`

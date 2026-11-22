@@ -381,6 +381,17 @@ are cached in Redis for seven days. The cache key hashes the row, offered destin
 descriptions), relevant filing history, receipt details, deployment and confidence threshold, so
 any change naturally asks the model again. Model failures are never cached.
 
+An expense typed in by hand gets the same help from its merchant (#548).
+`GET /merchants/{id}/defaults` answers with the caller's most recent expense at that merchant
+in a group they still belong to: its group, its category if that is not archived, and,
+when it had no category, a rule it chose for itself. Only when there is no such expense does
+it ask the model, using the merchant's name and the amount. The expense dialog fills in history
+only where the person has not answered yet (a group opened from or picked, a category, a split),
+and says which expense the values came from. A guess from the model is offered on the "Use
+suggested" button and never filled in. The MCP `create_expense` tool fills from history in the
+same way when it is given a merchant and no category, rule or splits. It sets the group only
+when none was given.
+
 The `azure-openai` resource is a Microsoft Foundry account reached by its key. The AppHost
 models Decision-1 on it as a Foundry model, `filing-suggestions`, named by the parameter
 `azure-openai-decision-deployment`, and the API
