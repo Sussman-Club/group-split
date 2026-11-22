@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Group;
@@ -108,6 +109,32 @@ public class GroupSettleTest(ApiTestFixture fixture) : ApiUnitTest(fixture)
 
         Assert.Equal(endOfSeptember, transfer.DateTime);
         Assert.Equal("bank transfer, ref 4821", transfer.Description);
+    }
+
+    /// <summary>
+    /// The same repayment sent twice in a row (a double click) is written once (issue 321).
+    /// </summary>
+    [Fact]
+    public async Task Settle_TheSameRepaymentTwice_IsRecordedOnce()
+    {
+        var group = await GetService<IGroupService>().CreateGroup(
+            new CreateGroupRequest { Name = "Settle Group" },
+            TestContext.Current.CancellationToken);
+
+        var otherUser = await CreateNewUser();
+
+        await JoinGroup(group.Id, otherUser);
+
+        var request = new SettleRequest { UserId = otherUser.Id, Amount = 50 };
+
+        await GetService<ISettlementService>().Settle(group.Id, request, TestContext.Current.CancellationToken);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() =>
+            GetService<ISettlementService>().Settle(group.Id, request, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ErrorCodes.SettlementAlreadyRecorded, refused.Code);
+        Assert.Equal(1, await DbContext.Set<Transfer>()
+            .CountAsync(transfer => transfer.GroupId == group.Id, TestContext.Current.CancellationToken));
     }
 
     /// <summary>

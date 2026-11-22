@@ -405,8 +405,10 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired();
 
             // A group's rules are picked from a list by name, so two with the same name
-            // are two the member cannot tell apart.
-            entity.HasIndex(rule => new { rule.GroupId, rule.Name }).IsUnique();
+            // are two the member cannot tell apart -- "Dani" and "dani" included. The unique
+            // index is on (GroupId, lower(Name)), which EF cannot express, so it lives in the
+            // CaseInsensitiveNames migration under the name IX_SplitRule_GroupId_Name that the
+            // services catch.
         });
 
         modelBuilder.Entity<SplitRuleVersion>(entity =>
@@ -534,8 +536,11 @@ public partial class AppDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.NoAction);
 
             // Inherited from the constraint Rule carried on (GroupId, Category), which is
-            // the same statement now that the label has a table of its own.
-            entity.HasIndex(category => new { category.GroupId, category.Name }).IsUnique();
+            // the same statement now that the label has a table of its own, and since made
+            // case-insensitive: "Food" and "food" are one category. The unique index is on
+            // (GroupId, lower(Name)), which EF cannot express, so it lives in the
+            // CaseInsensitiveNames migration under the name IX_Category_GroupId_Name that
+            // CategoryService catches.
         });
 
         modelBuilder.Entity<TransactionSplit>(entity =>

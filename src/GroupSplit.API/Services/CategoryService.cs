@@ -4,6 +4,7 @@ using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
 using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GroupSplit.API.Services;
 
@@ -77,7 +78,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         };
 
         dbContext.Add(category);
-        await dbContext.SaveChangesAsync(ct);
+        await SaveNamed(request.Name, ct);
 
         return category;
     }
@@ -97,7 +98,7 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
         // this touches.
         category.DefaultSplitRule = await RuleOf(category.Group, request.DefaultSplitRuleId, ct);
 
-        await dbContext.SaveChangesAsync(ct);
+        await SaveNamed(request.Name, ct);
 
         return category;
     }
@@ -184,8 +185,36 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
 
         if (taken)
         {
-            throw new ConflictException(ErrorCodes.CategoryNameTaken,
-                $"This group already has a category called \"{name}\".");
+            throw NameTaken(name);
         }
     }
+
+    /// <summary>
+    /// Saves a category whose name was checked above. Two requests with the same name can
+    /// both pass that check; the second then meets the unique index, and gets the same answer
+    /// the check gives rather than a 500.
+    /// </summary>
+    private async Task SaveNamed(string name, CancellationToken ct)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_Category_GroupId_Name"
+            })
+        {
+            // The failed insert or rename is still tracked, and any later save on this
+            // context would try it again. Forget it, as a retry does.
+            dbContext.StartOver(userContext.User);
+
+            throw NameTaken(name);
+        }
+    }
+
+    private static ConflictException NameTaken(string name) =>
+        new(ErrorCodes.CategoryNameTaken, $"This group already has a category called \"{name}\".");
 }

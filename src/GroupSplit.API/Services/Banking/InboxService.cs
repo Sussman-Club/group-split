@@ -99,7 +99,8 @@ public sealed class InboxService(
     AppDbContext dbContext,
     ITransactionService transactions,
     IDuplicateMatcher matcher,
-    IFilingSuggester suggester) : IInboxService
+    IFilingSuggester suggester,
+    IAccountDataGuard accountData) : IInboxService
 {
     public Task<IQueryable<BankTransaction>> List(InboxFilter? filter, CancellationToken ct = default)
     {
@@ -145,6 +146,10 @@ public sealed class InboxService(
 
     public async Task<Expense> File(Guid id, FileBankTransactionRequest request, CancellationToken ct = default)
     {
+        // Held across both saves, and the row read after it: a second request for the same
+        // row (two tabs, a bulk run, an agent's retry) waits here and then finds it filed,
+        // instead of passing the check too and adding a second expense.
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -243,6 +248,8 @@ public sealed class InboxService(
 
     public async Task<Expense> Link(Guid id, LinkBankTransactionRequest request, CancellationToken ct = default)
     {
+        // The same lock as File, so a link racing a filing of the same row waits for it.
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -373,6 +380,9 @@ public sealed class InboxService(
 
     public async Task Ignore(Guid id, CancellationToken ct = default)
     {
+        // The same lock as File: an Ignore racing a filing would otherwise read the row as
+        // new and save Ignored over Filed, and restoring it then lets it be filed again.
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -387,6 +397,7 @@ public sealed class InboxService(
 
     public async Task Restore(Guid id, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Ignored)

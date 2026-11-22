@@ -150,6 +150,7 @@ public static class ErrorMessages
             "One of the shares names someone who is neither a member nor a guest of this group.",
         [ErrorCodes.SettlementWithSelf] = "You cannot settle up with yourself.",
         [ErrorCodes.SettlementNothingToSettle] = "You are already square with everybody in this group.",
+        [ErrorCodes.SettlementAlreadyRecorded] = "This repayment was just recorded. If it was a second payment, add a note to tell them apart.",
         [ErrorCodes.SettlementRequestNotFound] = "This settlement request could not be found. Check the link with the person who sent it.",
         [ErrorCodes.SettlementRequestNotOpen] = "This settlement request has changed or is no longer open. Refresh to see its status.",
         [ErrorCodes.CategoryNameTaken] = "This group already has a category with that name.",
