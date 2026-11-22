@@ -3,6 +3,7 @@ using GroupSplit.API.Errors;
 using GroupSplit.API.Extensions;
 using GroupSplit.API.Services;
 using GroupSplit.API.Services.Banking;
+using GroupSplit.API.Services.RecurringExpenses;
 using GroupSplit.Data;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
@@ -281,9 +282,21 @@ public static class TransactionApi
             return group.MapPost(string.Empty, async (
                     CreateTransactionRequest request,
                     ITransactionService transactionService,
+                    IRecurringExpenseService recurring,
+                    AppDbContext context,
                     CancellationToken ct) =>
                 {
+                    // An expense asked to repeat is saved repeating or not at all, so a retry
+                    // after a failure cannot leave a second copy of it behind.
+                    await using var both = request.Repeat is null ? null : await context.Database.BeginTransactionAsync(ct);
+
                     var transaction = await transactionService.Create(request, ct);
+                    if (request.Repeat is { } repeat)
+                    {
+                        await recurring.Repeat(transaction.Id, repeat, ct);
+                        await both!.CommitAsync(ct);
+                    }
+
                     var transactions = await transactionService.Get(transaction.Id, ct);
                     var transactionResponse = await transactions.SelectDto().FirstOrDefaultAsync(ct);
                     return Results.Ok(transactionResponse);

@@ -995,6 +995,58 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.ToTable("ReceiptMatchDismissal");
                 });
 
+            modelBuilder.Entity("GroupSplit.Data.Entities.RecurringExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EnteredById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("NextOn")
+                        .IsConcurrencyToken()
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("PausedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("StoppedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Template")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnteredById");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("StoppedAt", "PausedAt", "NextOn");
+
+                    b.ToTable("RecurringExpense");
+                });
+
             modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2085,6 +2137,25 @@ namespace GroupSplit.Data.PostgreSQL.Migrations.Migrations
                     b.Navigation("Expense");
 
                     b.Navigation("Receipt");
+                });
+
+            modelBuilder.Entity("GroupSplit.Data.Entities.RecurringExpense", b =>
+                {
+                    b.HasOne("GroupSplit.Data.Entities.User", "EnteredBy")
+                        .WithMany()
+                        .HasForeignKey("EnteredById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GroupSplit.Data.Entities.Group", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EnteredBy");
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("GroupSplit.Data.Entities.SettlementRequest", b =>

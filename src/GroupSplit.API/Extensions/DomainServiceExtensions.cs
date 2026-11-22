@@ -3,6 +3,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Services.BackgroundJobs;
 using GroupSplit.API.Services.PersonalData;
 using GroupSplit.API.Services.Push;
+using GroupSplit.API.Services.RecurringExpenses;
 using GroupSplit.Jobs;
 using GroupSplit.Jobs.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -57,8 +58,10 @@ public static class DomainServiceExtensions
                     .AddJobHandler<SendPushNotification, SendPushNotificationHandler>()
                     .AddJobHandler<SweepPendingLoginDeletions, SweepPendingLoginDeletionsHandler>()
                     .AddJobHandler<SweepStaffActivity, SweepStaffActivityHandler>()
+                    .AddJobHandler<CreateDueRecurringExpenses, CreateDueRecurringExpensesHandler>()
                 .JobsBuilder
                     .Scheduler.Add(new SweepPendingLoginDeletions(), SweepPendingLoginDeletionsHandler.Schedule)
+                    .Add(new CreateDueRecurringExpenses(), CreateDueRecurringExpensesHandler.Schedule)
                     .Add(new SweepStaffActivity(), JobSchedule.Every(TimeSpan.FromHours(1), DateTimeOffset.UtcNow.AddMinutes(1)));
             services.AddScoped<IGroupService, GroupService>();
             services.AddScoped<IGroupJoiner, GroupJoiner>();
@@ -69,6 +72,7 @@ public static class DomainServiceExtensions
             services.AddScoped<IGuestService, GuestService>();
             services.AddScoped<IJoinLinkService, JoinLinkService>();
             services.AddScoped<ITransactionService, TransactionService>();
+            services.AddScoped<IRecurringExpenseService, RecurringExpenseService>();
             services.AddScoped<IExpenseProvenance, ExpenseProvenance>();
             // Configuration and the HTTP context are the host's; a test host may have neither,
             // and then nothing it writes reads as MCP.
@@ -119,6 +123,7 @@ public static class DomainServiceExtensions
             routes.MapCategoriesApi();
             routes.MapSplitRulesApi();
             routes.MapMerchantsApi();
+            routes.MapRecurringExpensesApi();
             routes.MapBankConnectionsApi();
             routes.MapInboxApi();
             routes.MapSupportReportsApi();

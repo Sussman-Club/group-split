@@ -84,6 +84,7 @@ public static class ErrorMessages
         [ErrorCodes.SupportTicketChanged] = "This ticket changed. Refresh it before trying again.",
         [ErrorCodes.InvalidSupportReport] = "Check your support report and try again.",
         [ErrorCodes.SplitRuleNotFound] = "That split rule no longer exists.",
+        [ErrorCodes.RecurringExpenseNotFound] = "That repeating expense no longer exists.",
 
         // A bill is the exception rather than the rule, so this reads as a statement about
         // the expense rather than as something having gone missing.

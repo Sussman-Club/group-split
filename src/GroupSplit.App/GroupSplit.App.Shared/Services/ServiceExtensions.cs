@@ -48,6 +48,7 @@ public static class ServiceExtensions
             services.TryAddScoped<ICategoryCommands, CategoryCommands>();
             services.TryAddScoped<ISplitRuleCommands, SplitRuleCommands>();
             services.TryAddScoped<IMerchantCommands, MerchantCommands>();
+            services.TryAddScoped<IRecurringExpenseCommands, RecurringExpenseCommands>();
             services.TryAddScoped<IReceiptCommands, ReceiptCommands>();
             services.TryAddScoped<IReceiptAttachmentCommands, ReceiptAttachmentCommands>();
 
@@ -89,6 +90,7 @@ public static class ServiceExtensions
             services.AddApiClient<ICategoriesClient, CategoriesClient>();
             services.AddApiClient<ISplitRulesClient, SplitRulesClient>();
             services.AddApiClient<IMerchantsClient, MerchantsClient>();
+            services.AddApiClient<IRecurring_expensesClient, Recurring_expensesClient>();
             // OCR has a two-minute provider budget. Leave time for upload and the
             // response too, on native, browser, and server-side clients alike.
             services.AddApiClient<IReceiptsClient, ReceiptsClient>()

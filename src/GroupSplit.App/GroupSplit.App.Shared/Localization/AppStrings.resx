@@ -5994,4 +5994,82 @@
   <data name="Entered by you" xml:space="preserve">
     <value>Entered by you</value>
   </data>
+  <data name="Could not load the repeating expenses." xml:space="preserve">
+    <value>Could not load the repeating expenses.</value>
+  </data>
+  <data name="Could not save the repeating expense." xml:space="preserve">
+    <value>Could not save the repeating expense.</value>
+  </data>
+  <data name="Stopped. The expenses it already added stay." xml:space="preserve">
+    <value>Stopped. The expenses it already added stay.</value>
+  </data>
+  <data name="Could not stop the repeating expense." xml:space="preserve">
+    <value>Could not stop the repeating expense.</value>
+  </data>
+  <data name="That repeating expense no longer exists." xml:space="preserve">
+    <value>That repeating expense no longer exists.</value>
+  </data>
+  <data name="Every week" xml:space="preserve">
+    <value>Every week</value>
+  </data>
+  <data name="Every month" xml:space="preserve">
+    <value>Every month</value>
+  </data>
+  <data name="Every year" xml:space="preserve">
+    <value>Every year</value>
+  </data>
+  <data name="Repeats" xml:space="preserve">
+    <value>Repeats</value>
+  </data>
+  <data name="Doesn&#x27;t repeat" xml:space="preserve">
+    <value>Doesn't repeat</value>
+  </data>
+  <data name="Expenses it already added stay as they are." xml:space="preserve">
+    <value>Expenses it already added stay as they are.</value>
+  </data>
+  <data name="Repeating expenses" xml:space="preserve">
+    <value>Repeating expenses</value>
+  </data>
+  <data name="Rent, bills and subscriptions" xml:space="preserve">
+    <value>Rent, bills and subscriptions</value>
+  </data>
+  <data name="Rent, bills and subscriptions, added on their day. To make one, choose how often it repeats when you add the expense." xml:space="preserve">
+    <value>Rent, bills and subscriptions, added on their day. To make one, choose how often it repeats when you add the expense.</value>
+  </data>
+  <data name="Nothing repeats yet" xml:space="preserve">
+    <value>Nothing repeats yet</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="Change {0}" xml:space="preserve">
+    <value>Change {0}</value>
+  </data>
+  <data name="Resume {0}" xml:space="preserve">
+    <value>Resume {0}</value>
+  </data>
+  <data name="Pause {0}" xml:space="preserve">
+    <value>Pause {0}</value>
+  </data>
+  <data name="Stop {0}" xml:space="preserve">
+    <value>Stop {0}</value>
+  </data>
+  <data name="Next on {0}" xml:space="preserve">
+    <value>Next on {0}</value>
+  </data>
+  <data name="The one on {0} could not be added: {1}" xml:space="preserve">
+    <value>The one on {0} could not be added: {1}</value>
+  </data>
+  <data name="Change a repeating expense" xml:space="preserve">
+    <value>Change a repeating expense</value>
+  </data>
+  <data name="Stop repeating" xml:space="preserve">
+    <value>Stop repeating</value>
+  </data>
+  <data name="Stop &#x27;{0}&#x27; for good? The expenses it already added stay." xml:space="preserve">
+    <value>Stop '{0}' for good? The expenses it already added stay.</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
 </root>

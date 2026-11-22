@@ -40,6 +40,7 @@ public static class ErrorCodes
     public const string TransactionNotFound = "TRANSACTION_NOT_FOUND";
     public const string CategoryNotFound = "CATEGORY_NOT_FOUND";
     public const string SplitRuleNotFound = "SPLIT_RULE_NOT_FOUND";
+    public const string RecurringExpenseNotFound = "RECURRING_EXPENSE_NOT_FOUND";
     public const string GroupInvitationNotFound = "GROUP_INVITATION_NOT_FOUND";
 
     /// <summary>

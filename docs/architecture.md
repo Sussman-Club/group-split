@@ -308,6 +308,7 @@ Everything on it today runs in the API:
 | `SweepPendingBankLinks` | Every five minutes | Finds bank links interrupted before they were stored |
 | `CompletePendingBankLink`, `AbandonPendingBankLink` | The pending-link sweep | Finishes such a link, or gives it up |
 | `SweepPendingLoginDeletions` | Every five minutes | Retries deleting the Keycloak login of an account already deleted here |
+| `CreateDueRecurringExpenses` | Every hour, at seven past | Creates each repeating expense's occurrences whose day has come |
 
 Each job carries an id and nothing else, and its handler reads the row afresh. A job that
 runs late, twice, or after somebody else finished the work is then a no-op, and the sweeps

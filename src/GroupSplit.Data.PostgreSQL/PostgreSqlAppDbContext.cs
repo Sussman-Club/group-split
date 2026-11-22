@@ -129,5 +129,7 @@ public class PostgreSqlAppDbContext(DbContextOptions<PostgreSqlAppDbContext> opt
             entity.Property(row => row.RawJson).HasColumnType("jsonb");
         });
 
+        modelBuilder.Entity<RecurringExpense>().Property(recurring => recurring.Template).HasColumnType("jsonb");
+
     }
 }
