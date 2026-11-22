@@ -171,6 +171,138 @@ public class DoubleSubmitTest(AppHostFixture appHost) : IAsyncLifetime
         Assert.True(_beforeInsert.Fired);
     }
 
+    [Fact(Timeout = 120_000)]
+    public async Task Ignoring_a_bank_row_while_it_is_filed_leaves_it_filed()
+    {
+        var (userId, rowId) = await NewBankRow();
+
+        using var first = await As(userId);
+        using var second = await As(userId);
+        Task? overtaking = null;
+
+        _beforeInsert.Arm("Transaction", async () =>
+        {
+            overtaking = Service<IInboxService>(second).Ignore(rowId, Ct);
+            await Task.WhenAny(overtaking, Task.Delay(Overtake, Ct));
+        });
+
+        var outcomes = await Outcomes(Service<IInboxService>(first).File(rowId, new FileBankTransactionRequest(), Ct),
+            () => overtaking);
+
+        AssertOneRefused(outcomes, ErrorCodes.BankTransactionAlreadyFiled);
+
+        using var check = _services.CreateScope();
+        Assert.Equal(BankTransactionStatus.Filed, await Service<AppDbContext>(check).Set<BankTransaction>()
+            .Where(row => row.Id == rowId).Select(row => row.Status).SingleAsync(Ct));
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task Both_ends_settling_up_at_once_record_the_repayment_once()
+    {
+        var (payer, debtor) = await TwoPeople();
+        var groupId = await GroupOf(payer, debtor);
+
+        using (var scope = await As(payer))
+        {
+            await Service<ITransactionService>(scope).Create(new CreateTransactionRequest
+            {
+                GroupId = groupId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = payer
+            }, Ct);
+        }
+
+        using var debtorScope = await As(debtor);
+        using var payerScope = await As(payer);
+        Task<SettleUpResponse>? overtaking = null;
+
+        _beforeInsert.Arm("Transaction", async () =>
+        {
+            overtaking = Service<ISettlementService>(payerScope).SettleUp(groupId, new SettleUpRequest(), Ct);
+            await Task.WhenAny(overtaking, Task.Delay(Overtake, Ct));
+        });
+
+        var outcomes = await Outcomes(
+            Service<ISettlementService>(debtorScope).SettleUp(groupId, new SettleUpRequest(), Ct),
+            () => overtaking);
+
+        AssertOneRefused(outcomes, ErrorCodes.SettlementNothingToSettle);
+
+        using var check = _services.CreateScope();
+        var repaid = await Service<AppDbContext>(check).Set<Transfer>()
+            .Where(transfer => transfer.GroupId == groupId)
+            .SumAsync(transfer => transfer.Amount, Ct);
+        Assert.Equal(50m, repaid);
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task Paying_part_of_a_debt_twice_at_once_records_it_once()
+    {
+        var (payer, debtor) = await TwoPeople();
+        var groupId = await GroupOf(payer, debtor);
+
+        using (var scope = await As(payer))
+        {
+            await Service<ITransactionService>(scope).Create(new CreateTransactionRequest
+            {
+                GroupId = groupId,
+                Name = "Dinner",
+                Amount = 100m,
+                DateTime = DateTimeOffset.UtcNow,
+                PaidByUserId = payer
+            }, Ct);
+        }
+
+        var payment = new SettleRequest
+        {
+            UserId = payer,
+            Amount = 20m,
+            Direction = SettlementDirection.YouPaidThem
+        };
+
+        using var first = await As(debtor);
+        using var second = await As(debtor);
+        Task? overtaking = null;
+
+        _beforeInsert.Arm("Transaction", async () =>
+        {
+            overtaking = Service<ISettlementService>(second).Settle(groupId, payment, Ct);
+            await Task.WhenAny(overtaking, Task.Delay(Overtake, Ct));
+        });
+
+        var outcomes = await Outcomes(Service<ISettlementService>(first).Settle(groupId, payment, Ct),
+            () => overtaking);
+
+        AssertOneRefused(outcomes, ErrorCodes.SettlementAlreadyRecorded);
+
+        using var check = _services.CreateScope();
+        var repaid = await Service<AppDbContext>(check).Set<Transfer>()
+            .Where(transfer => transfer.GroupId == groupId)
+            .SumAsync(transfer => transfer.Amount, Ct);
+        Assert.Equal(20m, repaid);
+    }
+
+    [Fact(Timeout = 120_000)]
+    public async Task Two_categories_differing_only_in_case_at_once_answer_name_taken()
+    {
+        var (owner, _) = await TwoPeople();
+        var groupId = await GroupOf(owner);
+
+        using var first = await As(owner);
+        using var second = await As(owner);
+
+        _beforeInsert.Arm("Category", () => Service<ICategoryService>(second)
+            .Create(new CreateCategoryRequest { GroupId = groupId, Name = "groceries" }, Ct));
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Service<ICategoryService>(first)
+            .Create(new CreateCategoryRequest { GroupId = groupId, Name = "Groceries" }, Ct));
+
+        Assert.Equal(ErrorCodes.CategoryNameTaken, refused.Code);
+        Assert.True(_beforeInsert.Fired);
+    }
+
     /// <summary>
     /// What both requests came to. The second exists only once the first has reached its
     /// insert, which is why it is read through a function.

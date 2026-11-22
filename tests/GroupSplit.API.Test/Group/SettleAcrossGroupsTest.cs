@@ -3,6 +3,7 @@ using GroupSplit.API.Services;
 using GroupSplit.API.Test.Base;
 using GroupSplit.Data.Entities;
 using GroupSplit.Shared;
+using GroupSplit.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 
 namespace GroupSplit.API.Test.Group;
@@ -415,6 +416,62 @@ public class SettleAcrossGroupsTest(ApiTestFixture fixture) : ApiUnitTest(fixtur
         var plan = await Settlements().GetPlan(Ct);
 
         Assert.Equal(whenItMoved, plan.LastSettled);
+    }
+
+    /// <summary>
+    /// Paying part of a debt twice in a row (a double click) writes it once. The second
+    /// request still finds money owed, so only the repeat check stops it (issue 321).
+    /// </summary>
+    [Fact]
+    public async Task APartialPaymentSentTwice_IsRecordedOnce()
+    {
+        var friend = await CreateNewUser();
+
+        var home = await GroupWith("Home", friend);
+        await Expense(home, 200, paidBy: friend);
+
+        var payment = new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 40,
+            Direction = SettlementDirection.YouPaidThem
+        };
+
+        await Settlements().SettleWithPerson(payment, Ct);
+
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => Settlements().SettleWithPerson(payment, Ct));
+
+        Assert.Equal(ErrorCodes.SettlementAlreadyRecorded, refused.Code);
+        Assert.Equal(-60, await BalanceOf(home, Me.Id));
+    }
+
+    /// <summary>
+    /// A real second payment of the same amount goes through once a note tells it apart.
+    /// </summary>
+    [Fact]
+    public async Task ASecondPaymentWithItsOwnNote_IsRecorded()
+    {
+        var friend = await CreateNewUser();
+
+        var home = await GroupWith("Home", friend);
+        await Expense(home, 200, paidBy: friend);
+
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 40,
+            Direction = SettlementDirection.YouPaidThem
+        }, Ct);
+
+        await Settlements().SettleWithPerson(new SettleWithPersonRequest
+        {
+            UserId = friend.Id,
+            Amount = 40,
+            Direction = SettlementDirection.YouPaidThem,
+            Description = "second transfer"
+        }, Ct);
+
+        Assert.Equal(-20, await BalanceOf(home, Me.Id));
     }
 
     // ---- setup -----------------------------------------------------------------------

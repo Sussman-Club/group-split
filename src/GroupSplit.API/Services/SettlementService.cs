@@ -160,7 +160,11 @@ public class SettlementService(
     {
         // Balances are read after the lock, so a second press waits for the first one's
         // repayments and is then told there is nothing left, rather than paying it again.
-        await using var lease = await accountData.Acquire(userContext.User.Id, ct: cancellationToken);
+        // Everybody in the group is locked, not only the caller: the other end of each
+        // repayment settling up at the same moment would otherwise read the same balance
+        // and pay the same debt from their side.
+        var everybody = await participants.IdsOf(groupId, cancellationToken);
+        await using var lease = await accountData.Acquire(userContext.User.Id, everybody, cancellationToken);
 
         // Scoped to the caller's own groups, so a group they are not in is not found rather
         // than empty -- an empty answer here would read as "already settled".
@@ -266,6 +270,11 @@ public class SettlementService(
         decimal amount, DateTimeOffset? date, string? description, DateOnly? coversThrough,
         CancellationToken cancellationToken)
     {
+        // Both ends of the payment, so a second press waits for the first and then meets
+        // RefuseRepeat below.
+        await using var lease = await accountData.Acquire(userContext.User.Id, [fromUserId, toUserId],
+            cancellationToken);
+
         // Scoped to the caller's own groups, as everywhere else: a group they are not in is
         // not found, rather than one they can write repayments into.
         var group = await (await groups.GetGroupById(groupId, cancellationToken))
@@ -297,9 +306,12 @@ public class SettlementService(
         //
         // The stated date, or now. A payment made on the 30th and typed in on the 3rd
         // belongs to the month it settled, not the one somebody got round to it in.
-        context.Add(group.SettlementBetween(from, to, amount,
-            (date ?? clock.GetUtcNow()).ToUniversalTime(),
-            description?.Trim() is { Length: > 0 } note ? note : null, coversThrough));
+        var when = (date ?? clock.GetUtcNow()).ToUniversalTime();
+        var note = description?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
+
+        await RefuseRepeat(from.Id, to.Id, amount, when, note, coversThrough, group.Id, cancellationToken);
+
+        context.Add(group.SettlementBetween(from, to, amount, when, note, coversThrough));
 
         await SettlementRequestResolution.ResolveMatching(context, clock, from.Id, to.Id,
             [new GroupDebt(groupId, group.Name, amount)], cancellationToken);
@@ -308,6 +320,44 @@ public class SettlementService(
 
         return (from, to);
     }
+
+    /// <summary>
+    /// Refuses a repayment identical to one written within a minute of it: the same two
+    /// people, amount, note and period. That is a double submit, not a second payment.
+    /// </summary>
+    /// <remarks>
+    /// The lock alone does not catch it when the amount is stated: paying 40 of 100 twice
+    /// finds 60 still owed the second time, and would write a second 40. A payment spread
+    /// over several groups is written with one date, so it is compared by its total at that
+    /// date. A genuine second payment of the same amount within the minute is refused too,
+    /// and the message says how to record it.
+    /// </remarks>
+    /// <param name="groupId">The group the repayment is in, or null for one spread over several.</param>
+    private async Task RefuseRepeat(Guid fromUserId, Guid toUserId, decimal amount, DateTimeOffset date,
+        string? description, DateOnly? coversThrough, Guid? groupId, CancellationToken ct)
+    {
+        var earliest = date - RepeatWindow;
+        var latest = date + RepeatWindow;
+
+        var totals = await context.Set<Transfer>()
+            .Where(transfer => transfer.UserId == fromUserId
+                               && transfer.Splits.Any(split => split.UserId == toUserId)
+                               && (groupId == null || transfer.GroupId == groupId)
+                               && transfer.DateTime >= earliest && transfer.DateTime <= latest
+                               && transfer.Description == description
+                               && transfer.CoversThrough == coversThrough)
+            .GroupBy(transfer => transfer.DateTime)
+            .Select(payment => payment.Sum(transfer => transfer.Amount))
+            .ToListAsync(ct);
+
+        if (totals.Contains(amount))
+        {
+            throw new ConflictException(ErrorCodes.SettlementAlreadyRecorded,
+                "This repayment was just recorded. If it was a second payment, add a note to tell them apart.");
+        }
+    }
+
+    private static readonly TimeSpan RepeatWindow = TimeSpan.FromMinutes(1);
 
     public Task<SettlementPlanResponse> GetPlan(CancellationToken cancellationToken = default) =>
         GetPlan(null, cancellationToken);
@@ -351,8 +401,9 @@ public class SettlementService(
     {
         var caller = userContext.User;
 
-        // As in SettleUp: a second press waits, then finds nothing outstanding.
-        await using var lease = await accountData.Acquire(caller.Id, ct: cancellationToken);
+        // Both ends, as in SettleUp. A second press waits for the first, then finds nothing
+        // outstanding when the first paid it all, or meets RefuseRepeat when it paid part.
+        await using var lease = await accountData.Acquire(caller.Id, [request.UserId], cancellationToken);
 
         if (request.UserId == caller.Id)
         {
@@ -377,6 +428,16 @@ public class SettlementService(
                          ? "There is nothing outstanding between the two of you in that direction."
                          : $"There is nothing outstanding between the two of you in that direction for everything through {cutoff.Through:d MMM yyyy}.");
 
+        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
+        var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
+
+        var (fromUserId, toUserId) = request.Direction is SettlementDirection.YouPaidThem
+            ? (caller.Id, request.UserId)
+            : (request.UserId, caller.Id);
+
+        await RefuseRepeat(fromUserId, toUserId, request.Amount, date, description, cutoff?.Through, null,
+            cancellationToken);
+
         var allocations = person.Allocate(request.Amount);
 
         var groups = await context.Set<Group>()
@@ -387,9 +448,6 @@ public class SettlementService(
         var other = await context.Set<User>()
                         .FirstOrDefaultAsync(user => user.Id == request.UserId, cancellationToken)
                     ?? throw new NotFoundException(ErrorCodes.UserNotFound, "That person was not found.");
-
-        var date = (request.Date ?? clock.GetUtcNow()).ToUniversalTime();
-        var description = request.Description?.Trim() is { Length: > 0 } note ? note : null;
 
         var (from, to) = request.Direction is SettlementDirection.YouPaidThem
             ? (caller, other)

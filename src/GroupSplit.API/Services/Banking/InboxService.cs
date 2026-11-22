@@ -380,6 +380,9 @@ public sealed class InboxService(
 
     public async Task Ignore(Guid id, CancellationToken ct = default)
     {
+        // The same lock as File: an Ignore racing a filing would otherwise read the row as
+        // new and save Ignored over Filed, and restoring it then lets it be filed again.
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Filed)
@@ -394,6 +397,7 @@ public sealed class InboxService(
 
     public async Task Restore(Guid id, CancellationToken ct = default)
     {
+        await using var lease = await accountData.Acquire(userContext.User.Id, ct: ct);
         var row = await Existing(id, ct);
 
         if (row.Status == BankTransactionStatus.Ignored)

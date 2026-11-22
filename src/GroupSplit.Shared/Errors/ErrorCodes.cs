@@ -112,6 +112,12 @@ public static class ErrorCodes
     public const string SettlementWithPendingInvitee = "SETTLEMENT_WITH_PENDING_INVITEE";
 
     public const string SettlementNothingToSettle = "SETTLEMENT_NOTHING_TO_SETTLE";
+
+    /// <summary>
+    /// The same repayment -- same two people, amount, note and period -- was recorded within
+    /// a minute of this one, so it was not written again.
+    /// </summary>
+    public const string SettlementAlreadyRecorded = "SETTLEMENT_ALREADY_RECORDED";
     public const string SettlementRequestNotOpen = "SETTLEMENT_REQUEST_NOT_OPEN";
 
     /// <summary>

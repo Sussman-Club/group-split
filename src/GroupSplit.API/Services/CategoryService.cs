@@ -207,6 +207,10 @@ public class CategoryService(ICurrentUser userContext, AppDbContext dbContext, T
                 ConstraintName: "IX_Category_GroupId_Name"
             })
         {
+            // The failed insert or rename is still tracked, and any later save on this
+            // context would try it again. Forget it, as a retry does.
+            dbContext.StartOver(userContext.User);
+
             throw NameTaken(name);
         }
     }

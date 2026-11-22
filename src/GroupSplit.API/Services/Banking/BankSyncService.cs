@@ -74,6 +74,7 @@ public sealed class BankSyncService(
     IMerchantDirectory merchants,
     TimeProvider clock,
     PushNotificationQueue notifications,
+    IAccountDataGuard accountData,
     ILogger<BankSyncService> logger) : IBankSyncService
 {
     /// <summary>
@@ -222,21 +223,26 @@ public sealed class BankSyncService(
             return SyncOutcome.Interrupted;
         }
 
-        await DropPhantomsAsync(connection, suspects, attempt, ct);
-
-        connection.Cursor = cursor;
-        connection.LastSyncedAt = clock.GetUtcNow();
-
-        // The catch-up run is over, so the licence to match on appearance ends with it. Only
-        // on a completed run: one that was interrupted has not seen the whole history yet,
-        // and the rows it did not reach still have to be recognised next time.
-        if (rekeying is not null)
+        // Under the owner's lock, as each page is: a phantom read as new here must not be
+        // filed before it is deleted.
+        await using (await accountData.Acquire(connection.UserId, allowDeleted: true, ct: ct))
         {
-            connection.AccountsRekeyed = false;
-            rekeying.Report(connection.Id);
-        }
+            await DropPhantomsAsync(connection, suspects, attempt, ct);
 
-        await dbContext.SaveChangesAsync(ct);
+            connection.Cursor = cursor;
+            connection.LastSyncedAt = clock.GetUtcNow();
+
+            // The catch-up run is over, so the licence to match on appearance ends with it. Only
+            // on a completed run: one that was interrupted has not seen the whole history yet,
+            // and the rows it did not reach still have to be recognised next time.
+            if (rekeying is not null)
+            {
+                connection.AccountsRekeyed = false;
+                rekeying.Report(connection.Id);
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+        }
 
         return SyncOutcome.Completed;
     }
@@ -360,6 +366,14 @@ public sealed class BankSyncService(
     private async Task ApplyAsync(BankConnection connection, Dictionary<string, LinkedAccount> accounts,
         Rekeying? rekeying, Attempt attempt, SyncPage page, CancellationToken ct)
     {
+        // The owner's account lock, which filing and linking hold across both their saves.
+        // Without it a page could delete or supersede a row between a filing's expense and
+        // its link, leaving an expense with no bank row, or a posted row free to be filed
+        // twice. The page's rows are read after it, so one filed while this waited is seen as
+        // filed -- unless an earlier page of this run already loaded it, which is tracked.
+        // Only around the writes: the provider is not called while it is held.
+        await using var lease = await accountData.Acquire(connection.UserId, allowDeleted: true, ct: ct);
+
         var index = await PageIndex.LoadAsync(dbContext, accounts, page, ct);
 
         // A row this page already names by id is spoken for, whichever order the page lists
