@@ -14,7 +14,9 @@ you need to sign in, go to that tab, sign in, and return to the importer.
 For Costco, the importer selects the chosen warehouse or online view when
 you find receipts.
 Review the list before importing receipts as PDFs to the
-inbox. Keep the GroupSplit tab open and signed in.
+inbox. Keep the GroupSplit tab open and signed in. An order already in the
+inbox is skipped, and the result lists each receipt that needs attention with
+what to do about it.
 
 For each store, the suggested start date is the purchase date of the newest
 matching previously imported receipt, including that date. If no matching

@@ -63,6 +63,11 @@ select { appearance: none; padding-right: 38px; background-image: url("select-ch
 .status, .connection { color: var(--secondary); font-size: .82rem; }
 .status:not(:empty), .connection:not(:empty) { margin-top: 14px; }
 .connection:not(:empty) { padding-left: 12px; border-left: 2px solid var(--teal); }
+.import-result { margin-top: 14px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink); font-size: .86rem; }
+.import-result p { font-weight: 650; }
+.result-failures { display: grid; gap: 6px; padding-left: 18px; margin: 0; color: var(--secondary); font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
+.result-failures:not(:empty) { margin-top: 8px; }
+.import-result .button { margin-top: 12px; }
 .receipt-results { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
 .receipt-results:not(:empty) { margin: 16px 0; }
 .receipt-results li { padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink); font-size: .83rem; line-height: 1.5; overflow-wrap: anywhere; }
